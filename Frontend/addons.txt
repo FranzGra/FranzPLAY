@@ -1,0 +1,6 @@
+tailwindcss
+@tailwindcss/vite
+lucide-react
+react-router-dom
+plyr
+react-easy-crop

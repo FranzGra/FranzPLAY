@@ -1,0 +1,148 @@
+services:
+  # --- FRONTEND (React) ---
+  frontend:
+    build: ./Frontend
+    container_name: FRONTEND_React
+    working_dir: /app
+    volumes:
+      - ./Frontend/React:/app
+      - ./Frontend/addons.txt:/app/addons.txt
+      - /app/node_modules      # Volume anonimo per node_modules
+      - npm_cache:/root/.npm   # Cache
+    environment:
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    restart: always
+
+  # --- PROXY & WEB SERVER (Nginx) ---
+  nginx:
+    build: ./Docker_Config/nginx
+    container_name: WEB_SERVER
+    ports:
+      - "80:80"
+      - "443:443"
+    links:
+      - php
+      - frontend
+    volumes:
+      - ./Backend/api/:/var/www/api/    # Mappa le API PHP
+      - ./Backend/sessioni/:/var/www/sessioni/
+      - ${PERCORSO_VIDEO}:/media/video  # Mappa i video per lo streaming
+    depends_on:
+      - frontend
+      - php
+    restart: on-failure:3
+
+  # --- BACKEND (PHP) ---
+  php:
+    build: ./Docker_Config/php
+    container_name: BACKEND_PHP
+    expose:
+      - 9000
+    links:
+      - mysql
+      - redis
+    volumes:
+      - ./Backend/api/:/var/www/api/    # Mappa le API PHP per l'esecuzione
+      - ./Backend/sessioni/:/var/www/sessioni/
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_HOST: mysql
+    restart: on-failure:5
+
+  # --- DATABASE (MySQL) ---
+  mysql:
+    image: mysql:latest
+    container_name: DATABASE_MySQL
+    volumes:
+      - dati_database:/var/lib/mysql
+      - ./Docker_Config/DBMS_Iniziale/:/docker-entrypoint-initdb.d
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    restart: on-failure:5
+
+  # --- CACHE (Redis) ---
+  redis:
+    image: redis:alpine
+    container_name: CACHE_Redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  # --- TOOLS (PhpMyAdmin) ---
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: TOOLS_PhpMyAdmin
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - 8080:80
+    restart: always
+
+  # --- AUTOMATION (Python) ---
+  python_watcher:
+    build: ./Docker_Config/Python
+    container_name: AUTO_Watcher
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=mysql
+      - WATCH_DIR=/percorsoVideo
+    volumes:
+      - ./Backend/python_server:/app    # Mappa gli script Python
+      - ${PERCORSO_VIDEO}:/percorsoVideo
+    command: ["python3", "/app/watcher.py"]
+    depends_on:
+      - mysql
+    restart: always
+
+  python_worker_meta:
+    build: ./Docker_Config/Python
+    container_name: AUTO_Worker_Meta
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=mysql
+      - WATCH_DIR=/percorsoVideo
+    volumes:
+      - ./Backend/python_server:/app
+      - ${PERCORSO_VIDEO}:/percorsoVideo
+    command: ["python3", "/app/worker_metadata.py"]
+    depends_on:
+      - mysql
+    restart: always
+
+  python_worker_assets:
+    build: ./Docker_Config/Python
+    container_name: AUTO_Worker_Assets
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=mysql
+      - WATCH_DIR=/percorsoVideo
+    volumes:
+      - ./Backend/python_server:/app
+      - ${PERCORSO_VIDEO}:/percorsoVideo
+    command: ["python3", "/app/worker_assets.py"]
+    depends_on:
+      - mysql
+    restart: always
+
+volumes:
+  npm_cache:
+  dati_database:
+    driver: local
+  redis_data:
+    driver: local
