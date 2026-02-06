@@ -60,24 +60,7 @@ export const apiRequest = async (endpoint, method = 'GET', body = null) => {
     }
 };
 
-/**
- * @deprecated USATA SOLO NEL VECCHIO SISTEMA. USARE fetchVideosRest.
- * Funzione Legacy RPC.
- */
-export const fetchVideos = async (action, extraParams = {}) => {
-    console.warn("⚠️ [DEPRECATO] fetchVideos chiamato. Migrare a fetchVideosRest.");
-    const formData = new FormData();
-    formData.append('action', action);
 
-    Object.keys(extraParams).forEach(key => {
-        if (extraParams[key] !== null && extraParams[key] !== undefined) {
-            formData.append(key, extraParams[key]);
-        }
-    });
-
-    const res = await apiRequest('/video.php', 'POST', formData);
-    return res.dati || [];
-};
 
 /**
  * Recupera la lista video (RESTful).
