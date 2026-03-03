@@ -41,10 +41,10 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
  * Recupero parametri di connessione.
  * In ambiente Docker, l'host è solitamente il nome del servizio container ('mysql').
  */
-$hostname = getenv('MYSQL_HOST') ?: 'mysql';
-$username = getenv('MYSQL_USER') ?: 'root';
-$password = getenv('MYSQL_PASSWORD') ?: '';
-$db_name = getenv('MYSQL_DATABASE') ?: 'FranzTube_DBMS';
+$hostname = trim(getenv('MYSQL_HOST') ?: 'mysql');
+$username = trim(getenv('MYSQL_USER') ?: 'root');
+$password = trim(getenv('MYSQL_PASSWORD') ?: '');
+$db_name = trim(getenv('MYSQL_DATABASE') ?: 'FranzPLAY_DBMS');
 
 try {
     // Inizializzazione connessione
@@ -66,12 +66,14 @@ try {
     // Gestione errore critico di connessione
     error_log("❌ [DATABASE CONNECTION ERROR] " . $e->getMessage());
 
+    $debugMessage = $e->getMessage(); // Cattura messaggio reale per debug
+
     // Se è disponibile la funzione di risposta standard, usiamola
     if (function_exists('inviaRisposta')) {
-        inviaRisposta(false, "Il servizio database è momentaneamente offline.", 500);
+        inviaRisposta(false, "Il servizio database è momentaneamente offline. Dettaglio: " . $debugMessage, 500);
     } else {
         http_response_code(500);
-        die(json_encode(["successo" => false, "messaggio" => "Errore fatale: Database offline."]));
+        die(json_encode(["successo" => false, "messaggio" => "Errore fatale: Database offline. " . $debugMessage]));
     }
 }
 
@@ -106,10 +108,27 @@ function executePreparedQuery($query, $types = "", $params = [])
         }
 
         $stmt->execute();
-        return $stmt->get_result();
+        $result = $stmt->get_result();
+
+        // Cattura righe modificate per query non-SELECT (es. DELETE/UPDATE)
+        global $last_affected_rows;
+        $last_affected_rows = $stmt->affected_rows;
+
+        // Se get_result restituisce false, potrebbe essere una query non-SELECT (es. INSERT) o un errore.
+        // Verifichiamo se c'è un errore reale.
+        if ($result === false) {
+            if ($stmt->errno !== 0) {
+                throw new Exception($stmt->error);
+            }
+            return true; // Successo per query non-SELECT (INSERT, UPDATE, DELETE)
+        }
+
+        return $result;
 
     } catch (Exception $e) {
         error_log("❌ [SQL EXECUTE ERROR] " . $e->getMessage() . " | Query: $query");
+        global $last_db_error;
+        $last_db_error = $e->getMessage();
         return false;
     }
 }

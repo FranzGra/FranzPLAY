@@ -3,20 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { Lock, Trash2, Camera, Loader2, Save, AlertCircle, CheckCircle, Pencil, X, Check, Shield, Palette, Check as CheckIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ImageCropper from '../components/ImageCropper';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
-// Palette predefinita per scelta rapida
-const COLOR_PRESETS = [
-    { name: 'Red', value: '#dc2626' },    // Default
-    { name: 'Orange', value: '#ea580c' },
-    { name: 'Purple', value: '#7c3aed' },
-    { name: 'Blue', value: '#2563eb' },
-    { name: 'Golden', value: '#ca8a04' },
-    { name: 'Cyan', value: '#0891b2' },
-    { name: 'Deep Teal', value: '#0d9488' },
-    { name: 'Indigo', value: '#4f46e5' },
-];
+import ThemeTab from '../components/profile/ThemeTab';
+import SecurityTab from '../components/profile/SecurityTab';
+import DangerZoneTab from '../components/profile/DangerZoneTab';
 
 export default function Profile() {
+    useDocumentTitle('Il mio Profilo');
     const { user, refreshUser, logout, updateLocalTheme } = useAuth();
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
@@ -85,8 +79,8 @@ export default function Profile() {
         try {
             const res = await fetch('/api/profilo.php', { method: 'POST', body: formData });
             const data = await res.json();
-            if (data.successo) { showMessage('success', 'Immagine aggiornata!'); refreshUser(); }
-            else showMessage('error', data.messaggio);
+            if (data.success) { showMessage('success', 'Immagine aggiornata!'); refreshUser(); }
+            else showMessage('error', data.message);
         } catch (err) { showMessage('error', "Errore upload"); }
         finally { setLoading(false); }
     };
@@ -100,8 +94,8 @@ export default function Profile() {
         try {
             const res = await fetch('/api/profilo.php', { method: 'POST', body: formData });
             const data = await res.json();
-            if (data.successo) { showMessage('success', 'Username aggiornato!'); refreshUser(); setIsEditingName(false); }
-            else showMessage('error', data.messaggio);
+            if (data.success) { showMessage('success', 'Username aggiornato!'); refreshUser(); setIsEditingName(false); }
+            else showMessage('error', data.message);
         } catch (err) { showMessage('error', "Errore aggiornamento"); }
         finally { setLoading(false); }
     };
@@ -118,8 +112,8 @@ export default function Profile() {
         try {
             const res = await fetch('/api/profilo.php', { method: 'POST', body: formData });
             const data = await res.json();
-            if (data.successo) { showMessage('success', 'Password modificata!'); setPasswords({ current: '', new: '', confirm: '' }); }
-            else showMessage('error', data.messaggio);
+            if (data.success) { showMessage('success', 'Password modificata!'); setPasswords({ current: '', new: '', confirm: '' }); }
+            else showMessage('error', data.message);
         } catch (err) { showMessage('error', "Errore password"); }
         finally { setLoading(false); }
     };
@@ -132,12 +126,10 @@ export default function Profile() {
         try {
             const res = await fetch('/api/profilo.php', { method: 'POST', body: formData });
             const data = await res.json();
-            if (data.successo) { logout(); navigate('/login'); }
-            else { showMessage('error', data.messaggio); setLoading(false); }
+            if (data.success) { logout(); navigate('/login'); }
+            else { showMessage('error', data.message); setLoading(false); }
         } catch (err) { showMessage('error', "Errore eliminazione"); setLoading(false); }
     };
-
-    useEffect(() => { document.title = 'Il mio Profilo - FranzTube'; }, []);
 
     return (
         <main className="pt-24 md:pt-32 pb-10 w-full px-4 md:px-0 md:max-w-[90%] xl:max-w-[80%] mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen">
@@ -200,17 +192,17 @@ export default function Profile() {
                                     </button>
                                 </div>
                                 {/* Badge Admin (Solo se admin) */}
-                                {user?.isAdmin && (
+                                {user?.isAdmin ? (
                                     <div className="inline-flex items-center gap-1.5 bg-[var(--primary-color)]/10 text-[var(--primary-color)] text-[10px] px-2.5 py-1 rounded-full border border-[var(--primary-color)]/20 font-black uppercase tracking-wider">
                                         <Shield className="h-3 w-3" /> Admin
                                     </div>
-                                )}
+                                ) : null}
                             </div>
                         )}
                     </div>
 
                     {/* 3. TASTO ADMIN COORDINATO (Desktop: Lato, Mobile: Centralo in basso se non in edit) */}
-                    {user?.isAdmin && !isEditingName && (
+                    {user?.isAdmin && !isEditingName ? (
                         <div className="flex justify-center md:block">
                             <button
                                 onClick={() => navigate('/admin')}
@@ -225,16 +217,16 @@ export default function Profile() {
                                 </div>
                             </button>
                         </div>
-                    )}
+                    ) : null}
                 </div>
             </div>
 
-            {message && (
+            {message ? (
                 <div className={`p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 shadow-lg ${message.type === 'success' ? 'bg-green-950/50 text-green-400 border border-green-800' : 'bg-red-950/50 text-red-400 border border-red-800'}`}>
                     {message.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
                     <span className="font-medium">{message.text}</span>
                 </div>
-            )}
+            ) : null}
 
             {/* NAVIGATION TABS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8">
@@ -257,153 +249,41 @@ export default function Profile() {
 
                     {/* --- CONTENUTO TAB: TEMI --- */}
                     {activeTab === 'themes' && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                            <div>
-                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <Palette className="text-[var(--primary-color)]" /> Personalizza FranzTube
-                                </h2>
-                                <p className="text-sm text-zinc-500 mt-1">Scegli il colore principale dell'interfaccia. Le modifiche sono salvate automaticamente.</p>
-                            </div>
-
-                            {/* Palette Preset */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                {COLOR_PRESETS.map((preset) => (
-                                    <button
-                                        key={preset.value}
-                                        onClick={() => handleThemeChange(preset.value)}
-                                        className={`
-                                    relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 group
-                                    ${selectedColor === preset.value
-                                                ? 'bg-zinc-800 border-[var(--primary-color)] ring-1 ring-[var(--primary-color)]'
-                                                : 'bg-zinc-950 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700'}
-                                `}
-                                    >
-                                        <div
-                                            className="h-8 w-8 rounded-full shadow-lg border border-white/10 flex items-center justify-center"
-                                            style={{ backgroundColor: preset.value }}
-                                        >
-                                            {selectedColor === preset.value && <CheckIcon className="h-5 w-5 text-white drop-shadow-md" />}
-                                        </div>
-                                        <span className="text-sm font-medium text-zinc-300">{preset.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Color Picker Custom */}
-                            <div className="pt-4 border-t border-zinc-800/50">
-                                <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3 block">Colore Personalizzato</label>
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                                    <div className="relative h-12 w-full max-w-[200px] rounded-xl overflow-hidden border border-zinc-700 ring-2 ring-transparent focus-within:ring-[var(--primary-color)] transition-all">
-                                        <input
-                                            type="color"
-                                            value={selectedColor}
-                                            onChange={(e) => handleThemeChange(e.target.value)}
-                                            className="absolute -top-2 -left-2 w-[150%] h-[150%] cursor-pointer border-none p-0 m-0"
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-2 w-full max-w-[200px]">
-                                        <span className="text-zinc-500 font-mono text-lg font-bold">#</span>
-                                        <input
-                                            type="text"
-                                            value={selectedColor.replace('#', '')}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                // Accetta solo caratteri hex validi
-                                                if (/^[0-9A-F]{0,6}$/i.test(val)) {
-                                                    if (val.length === 6) {
-                                                        handleThemeChange('#' + val);
-                                                    } else {
-                                                        setSelectedColor('#' + val);
-                                                    }
-                                                }
-                                            }}
-                                            onBlur={(e) => {
-                                                // Se il codice non è di 6 cifre, torna al colore precedente (prevenzione stati invalidi)
-                                                if (selectedColor.length !== 7) {
-                                                    setSelectedColor(user?.themeColor || '#dc2626');
-                                                }
-                                            }}
-                                            className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] transition-all w-full"
-                                            placeholder="FFFFFF"
-                                            maxLength={6}
-                                        />
-                                    </div>
-                                    <div className="hidden sm:block text-zinc-600 font-mono text-xs uppercase">
-                                        Inserisci codice hex manuale
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Preview Live */}
-                            <div className="mt-8 p-4 bg-zinc-950 rounded-xl border border-zinc-800">
-                                <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider font-bold">Anteprima Live</p>
-                                <div className="flex items-center gap-4">
-                                    <button className="bg-[var(--primary-color)] text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-[var(--primary-color)]/20">
-                                        Bottone Primario
-                                    </button>
-                                    <span className="text-[var(--primary-color)] font-semibold">Testo Colorato</span>
-                                    <div className="h-6 w-6 rounded-full border-2 border-[var(--primary-color)]"></div>
-                                </div>
-                            </div>
-                        </div>
+                        <ThemeTab
+                            user={user}
+                            selectedColor={selectedColor}
+                            setSelectedColor={setSelectedColor}
+                            handleThemeChange={handleThemeChange}
+                        />
                     )}
 
-                    {/* --- TAB SICUREZZA (Codice esistente) --- */}
+                    {/* --- TAB SICUREZZA --- */}
                     {activeTab === 'security' && (
-                        <form onSubmit={handleUpdatePassword} className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                            <div>
-                                <h2 className="text-xl font-bold text-white">Modifica Password</h2>
-                                <p className="text-sm text-zinc-500 mt-1">Aggiorna la password per mantenere il tuo account sicuro.</p>
-                            </div>
-                            <div className="space-y-4 pt-2">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Password Attuale</label>
-                                    <input type="password" value={passwords.current} onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] transition-all placeholder:text-zinc-700" placeholder="••••••••" />
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Nuova Password</label>
-                                        <input type="password" value={passwords.new} onChange={(e) => setPasswords({ ...passwords, new: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] transition-all placeholder:text-zinc-700" placeholder="••••••••" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Conferma Password</label>
-                                        <input type="password" value={passwords.confirm} onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] transition-all placeholder:text-zinc-700" placeholder="••••••••" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="pt-2">
-                                <button type="submit" disabled={loading} className="bg-white text-black px-6 py-2.5 rounded-xl font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2 shadow-lg shadow-white/5 disabled:opacity-50">
-                                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Aggiorna Password
-                                </button>
-                            </div>
-                        </form>
+                        <SecurityTab
+                            passwords={passwords}
+                            setPasswords={setPasswords}
+                            handleUpdatePassword={handleUpdatePassword}
+                            loading={loading}
+                        />
                     )}
 
-                    {/* --- TAB DANGER (Codice esistente) --- */}
+                    {/* --- TAB DANGER --- */}
                     {activeTab === 'danger' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                            <div>
-                                <h2 className="text-xl font-bold text-red-500">Eliminazione Account</h2>
-                                <p className="text-sm text-zinc-400 mt-1">Attenzione: questa operazione rimuoverà permanentemente tutti i tuoi dati.</p>
-                            </div>
-                            <div className="bg-red-950/10 border border-red-900/30 p-4 rounded-xl">
-                                <p className="text-zinc-300 text-sm leading-relaxed">Una volta eliminato l'account, non sarà possibile tornare indietro. Perderai l'accesso alla cronologia, ai video salvati e ai commenti pubblicati.</p>
-                            </div>
-                            <button onClick={handleDeleteAccount} disabled={loading} className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 transition-colors flex items-center gap-2 shadow-lg shadow-red-900/20 disabled:opacity-50">
-                                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Elimina Definitivamente
-                            </button>
-                        </div>
+                        <DangerZoneTab
+                            handleDeleteAccount={handleDeleteAccount}
+                            loading={loading}
+                        />
                     )}
                 </div>
             </div>
 
-            {cropImage && (
+            {cropImage ? (
                 <ImageCropper
                     imageSrc={cropImage}
                     onCropComplete={handleCropComplete}
                     onCancel={() => setCropImage(null)}
                 />
-            )}
+            ) : null}
         </main>
     );
 }

@@ -28,13 +28,15 @@
 
 // Include bootstrap, database e controlli di sicurezza admin
 require_once 'check_admin.php';
+require_once 'cache.php';
 
 // Disabilita visualizzazione errori a schermo per non rompere il JSON
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 // Costanti di sistema
-$BASE_VIDEO_PATH = '/percorsoVideo';
+// FIX: Usa variabile d'ambiente o fallback a path standard
+$BASE_VIDEO_PATH = getenv('WATCH_DIR') ?: '/percorsoVideo';
 
 
 // ============================================================================
@@ -74,7 +76,7 @@ try {
             $offset = (int) ($_POST['offset'] ?? 0);
             $query_search = $_POST['query'] ?? '';
 
-            $sql = "SELECT v.id, v.Titolo, v.percorso_copertina, v.Likes, c.Nome as Nome_Categoria 
+            $sql = "SELECT v.id, v.Titolo, v.percorso_copertina, v.percorso_anteprima, v.Likes, c.Nome as Nome_Categoria, v.id_Categoria 
                     FROM Video v LEFT JOIN Categorie c ON v.id_Categoria = c.id ";
             $params = [];
             $types = "";
@@ -130,6 +132,8 @@ try {
                 [$titolo, $id_cat, $id]
             );
 
+            global $Cache;
+            $Cache->flush();
             inviaRisposta(true, 'Informazioni video aggiornate con successo');
             break;
 
@@ -189,10 +193,109 @@ try {
                 $db_path = '/' . ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
 
                 executePreparedQuery("UPDATE Video SET percorso_copertina = ? WHERE id = ?", "si", [$db_path, $id_video]);
+                global $Cache;
+                $Cache->flush();
                 inviaRisposta(true, 'Copertina caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
             } else {
                 throw new Exception("Errore durante lo spostamento del file caricato");
             }
+            break;
+
+        case 'rimuovi_copertina':
+            $id = (int) ($_POST['id_video'] ?? 0);
+
+            $res = executePreparedQuery("SELECT percorso_copertina FROM Video WHERE id = ?", "i", [$id]);
+            $video = $res->fetch_assoc();
+
+            if (!$video)
+                throw new Exception("Video non trovato");
+
+            if ($video['percorso_copertina'] && $video['percorso_copertina'] != 'mancante') {
+                // Normalizzazione path per Windows/Unix
+                $clean_path = ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video['percorso_copertina']), DIRECTORY_SEPARATOR);
+                $full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . $clean_path;
+
+                if (file_exists($full_path)) {
+                    if (!@unlink($full_path)) {
+                        error_log("⚠️ Errore eliminazione copertina: $full_path");
+                    }
+                }
+            }
+
+            executePreparedQuery("UPDATE Video SET percorso_copertina = NULL WHERE id = ?", "i", [$id]);
+            global $Cache;
+            $Cache->flush();
+            inviaRisposta(true, 'Copertina rimossa (in coda per rigenerazione)');
+            break;
+
+        case 'upload_anteprima':
+            $id_video = (int) ($_POST['id_video'] ?? 0);
+            if (!isset($_FILES['file_anteprima']))
+                throw new Exception("File anteprima mancante");
+
+            $res = executePreparedQuery("SELECT v.percorso_file FROM Video v WHERE v.id = ?", "i", [$id_video]);
+            $info = $res->fetch_assoc();
+
+            if (!$info)
+                throw new Exception("Video non trovato (ID: $id_video)");
+
+            $video_rel_dir = trim(dirname($info['percorso_file']), '.\\/');
+            $base_path = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $BASE_VIDEO_PATH), DIRECTORY_SEPARATOR);
+            $target_dir = $base_path . ($video_rel_dir ? DIRECTORY_SEPARATOR . $video_rel_dir : '');
+
+            if (!file_exists($target_dir))
+                throw new Exception("Percorso non trovato su disco: $target_dir");
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime = finfo_file($finfo, $_FILES['file_anteprima']['tmp_name']);
+            finfo_close($finfo);
+
+            $allowed_mimes = ['video/mp4', 'video/webm', 'image/gif', 'image/webp'];
+            if (!in_array($mime, $allowed_mimes))
+                throw new Exception("Formato anteprima non supportato: $mime");
+
+            $ext_map = ['video/mp4' => 'mp4', 'video/webm' => 'webm', 'image/gif' => 'gif', 'image/webp' => 'webp'];
+            $ext = $ext_map[$mime];
+
+            $filename_no_ext = pathinfo($info['percorso_file'], PATHINFO_FILENAME);
+            $new_filename = $filename_no_ext . "_preview." . $ext;
+            $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
+
+            if (move_uploaded_file($_FILES['file_anteprima']['tmp_name'], $target_file)) {
+                $db_rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $video_rel_dir);
+                $db_path = '/' . ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
+
+                executePreparedQuery("UPDATE Video SET percorso_anteprima = ? WHERE id = ?", "si", [$db_path, $id_video]);
+                global $Cache;
+                $Cache->flush();
+                inviaRisposta(true, 'Anteprima caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
+            } else {
+                throw new Exception("Errore durante lo spostamento del file caricato");
+            }
+            break;
+
+        case 'rimuovi_anteprima':
+            $id = (int) ($_POST['id_video'] ?? 0);
+
+            $res = executePreparedQuery("SELECT percorso_anteprima FROM Video WHERE id = ?", "i", [$id]);
+            $video = $res->fetch_assoc();
+
+            if (!$video)
+                throw new Exception("Video non trovato");
+
+            if ($video['percorso_anteprima'] && $video['percorso_anteprima'] != 'mancante') {
+                $clean_path = ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video['percorso_anteprima']), DIRECTORY_SEPARATOR);
+                $full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . $clean_path;
+
+                if (file_exists($full_path)) {
+                    @unlink($full_path);
+                }
+            }
+
+            executePreparedQuery("UPDATE Video SET percorso_anteprima = NULL WHERE id = ?", "i", [$id]);
+            global $Cache;
+            $Cache->flush();
+            inviaRisposta(true, 'Anteprima rimossa');
             break;
 
         case 'elimina_video':
@@ -223,6 +326,8 @@ try {
                 }
             }
 
+            global $Cache;
+            $Cache->flush();
             inviaRisposta(true, 'Video ed elementi correlati (file/anteprime) rimossi');
             break;
 
@@ -242,7 +347,25 @@ try {
                 throw new Exception("Il nome della categoria è obbligatorio");
 
             executePreparedQuery("UPDATE Categorie SET Nome = ? WHERE id = ?", "si", [$nome, $id]);
+            global $Cache;
+            $Cache->flush();
             inviaRisposta(true, 'Categoria aggiornata con successo');
+            break;
+
+        case 'salva_colore_categoria':
+            $id = (int) ($_POST['id_categoria'] ?? 0);
+            $colore = $_POST['colore'] ?? '';
+            // Se stringa vuota o non valorizzato, verrà salvato come NULL nel DB tramite gestione intelligente se facciamo un if.
+
+            if (empty($colore)) {
+                executePreparedQuery("UPDATE Categorie SET Colore_Default = NULL WHERE id = ?", "i", [$id]);
+            } else {
+                executePreparedQuery("UPDATE Categorie SET Colore_Default = ? WHERE id = ?", "si", [$colore, $id]);
+            }
+
+            global $Cache;
+            $Cache->flush();
+            inviaRisposta(true, 'Colore categoria aggiornato con successo');
             break;
 
         case 'upload_sfondo_categoria':
@@ -284,17 +407,48 @@ try {
                 $db_rel_path = ltrim($cat['Percorso'], '/');
                 $db_path = '/' . $db_rel_path . '/' . $new_filename;
                 executePreparedQuery("UPDATE Categorie SET Immagine_Sfondo = ? WHERE id = ?", "si", [$db_path, $id]);
+                global $Cache;
+                $Cache->flush();
                 inviaRisposta(true, 'Sfondo categoria aggiornato', 200, ['nuovo_path' => $db_path]);
             } else {
                 throw new Exception("Errore nel salvataggio fisico del file");
             }
             break;
 
+        case 'rimuovi_sfondo_categoria':
+            $id = (int) ($_POST['id_categoria'] ?? 0);
+
+            $res = executePreparedQuery("SELECT Immagine_Sfondo FROM Categorie WHERE id = ?", "i", [$id]);
+            $cat = $res->fetch_assoc();
+
+            if (!$cat)
+                throw new Exception("Categoria non trovata");
+
+            if ($cat['Immagine_Sfondo']) {
+                $path = ltrim($cat['Immagine_Sfondo'], '/');
+                // Path fisico completo
+                $full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+
+                if (file_exists($full_path)) {
+                    if (!@unlink($full_path)) {
+                        // Logghiamo l'errore ma procediamo col DB update se possibile, 
+                        // oppure lanciamo eccezione. Qui scegliamo di pulire il DB comunque o di avvisare.
+                        error_log("⚠️ Impossibile eliminare fisicamente lo sfondo: $full_path");
+                    }
+                }
+            }
+
+            executePreparedQuery("UPDATE Categorie SET Immagine_Sfondo = NULL WHERE id = ?", "i", [$id]);
+            global $Cache;
+            $Cache->flush();
+            inviaRisposta(true, 'Sfondo rimosso con successo');
+            break;
+
 
         // --- GESTIONE UTENTI ---
 
         case 'lista_utenti':
-            $res = $database->query("SELECT id, Nome_Utente, ultimo_Accesso, Admin FROM Utenti ORDER BY id ASC");
+            $res = $database->query("SELECT id, Nome_Utente, ultimo_Accesso, Admin, Immagine_Profilo FROM Utenti ORDER BY id ASC");
             inviaRisposta(true, 'Lista utenti caricata', 200, ['dati' => $res->fetch_all(MYSQLI_ASSOC)]);
             break;
 
@@ -307,6 +461,7 @@ try {
             inviaRisposta(true, 'Permessi utente aggiornati');
             break;
 
+
         case 'elimina_utente':
             $id = (int) $_POST['id_utente'];
             if ($id == $_SESSION['id_utente'])
@@ -316,6 +471,88 @@ try {
             inviaRisposta(true, 'Utente eliminato definitivamente');
             break;
 
+        case 'aggiungi_utente':
+            $username = trim($_POST['username'] ?? '');
+            $password = $_POST['password'] ?? '';
+            $is_admin = isset($_POST['is_admin']) && $_POST['is_admin'] === 'true' ? 1 : 0;
+
+            if (empty($username) || empty($password)) {
+                throw new Exception("Username e Password sono obbligatori.");
+            }
+
+            // Verifica se l'utente esiste già
+            $stmt = $database->prepare("SELECT id FROM Utenti WHERE Nome_Utente = ?");
+            $stmt->bind_param("s", $username);
+            $stmt->execute();
+            if ($stmt->fetch()) {
+                $stmt->close();
+                throw new Exception("Username già esistente.");
+            }
+            $stmt->close();
+
+            // Hash della password
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+            // Inserimento utente
+            $stmt = $database->prepare("INSERT INTO Utenti (Nome_Utente, Password, Admin, ultimo_Accesso) VALUES (?, ?, ?, NULL)");
+            $stmt->bind_param("ssi", $username, $hashed_password, $is_admin);
+            $stmt->execute();
+            $stmt->close();
+
+            inviaRisposta(true, 'Utente creato con successo');
+            break;
+
+        case 'reset_password_utente':
+            $target_id = $_POST['id_utente'] ?? null;
+            $new_password = $_POST['nuova_password'] ?? '';
+
+            if (!$target_id || empty($new_password)) {
+                inviaRisposta(false, "ID utente e Nuova Password sono obbligatori.", 400);
+            }
+
+            if (strlen($new_password) < 4) {
+                inviaRisposta(false, 'La password deve avere almeno 4 caratteri.', 400);
+            }
+
+            // Eseguiamo l'hash
+            $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+
+            if (executePreparedQuery("UPDATE Utenti SET Password = ? WHERE id = ?", "si", [$hashed_password, $target_id])) {
+                inviaRisposta(true, "Password dell'utente reimpostata con successo.", 200);
+            } else {
+                throw new Exception("Errore durante l'aggiornamento della password.");
+            }
+            break;
+
+        case 'lista_accessi':
+            $res = $database->query("SELECT id, indirizzo_Ip, data_ora_tentativo, successo, Nome_Utente FROM Accessi ORDER BY data_ora_tentativo DESC LIMIT 500");
+            inviaRisposta(true, 'Lista accessi caricata', 200, ['dati' => $res->fetch_all(MYSQLI_ASSOC)]);
+            break;
+
+        case 'salva_impostazioni_globali':
+            $tema = $_POST['tema_default'] ?? null;
+            if ($tema) {
+                // Valida colore esadecimale (semplice)
+                if (preg_match('/^#[a-f0-9]{6}$/i', $tema)) {
+                    $descrizione = 'Colore primario di default per schermata Login e utenti senza personalizzazione';
+                    executePreparedQuery(
+                        "INSERT INTO Impostazioni (Chiave_Impostazione, Valore_Impostazione, Descrizione) VALUES ('colore_tema_default', ?, ?) ON DUPLICATE KEY UPDATE Valore_Impostazione = ?",
+                        "sss",
+                        [$tema, $descrizione, $tema]
+                    );
+
+                    // Pulisci Cache per ricaricare le info la prossima volta
+                    if (isset($Cache) && is_object($Cache)) {
+                        $Cache->delete('impostazioni_globali');
+                    }
+                    inviaRisposta(true, 'Impostazioni salvate con successo');
+                } else {
+                    inviaRisposta(false, 'Colore Hex non valido', 400);
+                }
+            } else {
+                inviaRisposta(false, 'Nessun dato da salvare', 400);
+            }
+            break;
 
         // --- DIAGNOSTICA SERVER ---
 
@@ -344,6 +581,27 @@ try {
             ];
 
             inviaRisposta(true, 'Statistiche server aggiornate', 200, ['dati' => $stats]);
+            break;
+
+        case 'salva_logo':
+            require_once 'cache.php';
+            global $Cache;
+
+            $primo = trim($_POST['logo_part_1'] ?? '');
+            $secondo = trim($_POST['logo_part_2'] ?? '');
+
+            if (empty($primo) || empty($secondo)) {
+                throw new Exception("Entrambe le parti del logo sono obbligatorie");
+            }
+
+            executePreparedQuery("INSERT INTO Impostazioni (Chiave_Impostazione, Valore_Impostazione) VALUES ('logo_part_1', ?) ON DUPLICATE KEY UPDATE Valore_Impostazione = ?", "ss", [$primo, $primo]);
+            executePreparedQuery("INSERT INTO Impostazioni (Chiave_Impostazione, Valore_Impostazione) VALUES ('logo_part_2', ?) ON DUPLICATE KEY UPDATE Valore_Impostazione = ?", "ss", [$secondo, $secondo]);
+
+            if (isset($Cache) && is_object($Cache)) {
+                $Cache->delete('impostazioni_logo');
+            }
+
+            inviaRisposta(true, 'Logo aggiornato con successo');
             break;
 
         default:

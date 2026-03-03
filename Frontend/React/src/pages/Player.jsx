@@ -7,6 +7,7 @@ import Comments from '../components/Comments';
 
 import { apiRequest, fetchVideoDetailsRest } from '../services/api';
 import { getAssetUrl } from '../services/helpers';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 /**
  * ============================================================================
@@ -28,6 +29,8 @@ export default function Player() {
     const [isSaved, setIsSaved] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
 
+    useDocumentTitle(video ? video.Titolo : 'Player');
+
     // FETCH DATI VIDEO
     useEffect(() => {
         const fetchVideoDetails = async () => {
@@ -36,7 +39,7 @@ export default function Player() {
                 // Recupera dettagli completi (inclusi stati utente like/save)
                 const response = await fetchVideoDetailsRest(id);
 
-                if (response.successo && response.video) {
+                if (response.success && response.video) {
                     const v = response.video;
                     setVideo(v);
 
@@ -44,9 +47,6 @@ export default function Player() {
                     setLikes(parseInt(v.Likes || 0));
                     setIsLiked(v.is_liked);
                     setIsSaved(v.is_saved);
-
-                    // Titolo Pagina Browser
-                    document.title = `${v.Titolo} - FranzTube`;
                 } else {
                     // Stop Redirect: Mostra UI errore
                     console.error("Video response invalid or missing:", response);
@@ -59,9 +59,6 @@ export default function Player() {
         };
 
         if (id) fetchVideoDetails();
-
-        // Cleanup title
-        return () => { document.title = 'FranzTube'; };
     }, [id, navigate]);
 
     // --- HANDLERS INTERAZIONI (Optimistic UI Updates) ---
@@ -90,7 +87,7 @@ export default function Player() {
     const handleShare = async () => {
         const url = window.location.href;
         const title = video?.Titolo || 'Guarda video';
-        const text = `Guarda "${video?.Titolo}" su FranzTube`;
+        const text = `Guarda "${video?.Titolo}" su FranzPLAY`;
 
         // Usa Native Share API se disponibile (Mobile)
         if (navigator.share) {

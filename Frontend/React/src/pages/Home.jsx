@@ -4,80 +4,16 @@ import { Loader2, Search, Sparkles, History, Bookmark, ThumbsUp, Clock, ChevronD
 import VideoCard from '../components/VideoCard';
 import { fetchVideosRest, apiRequest } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
-/**
- * ============================================================================
- * Componente: HomeSection
- * ============================================================================
- * Rendering di una "striscia" di video (es. Continua a guardare).
- */
-const HomeSection = ({ id, title, icon: Icon, videos, loading, linkAll, onRemoveVideo, isOpen, onToggle }) => {
+import HomeSection from '../components/HomeSection';
 
-  // Nascondi sezioni vuote (tranne durante il caricamento)
-  if (!loading && videos.length === 0) return null;
-
-  return (
-    <div className={`transition-all duration-500 ease-in-out border-b border-zinc-900/30 last:border-0 my-0 pt-2 ${isOpen ? 'pb-6' : 'pb-2'}`}>
-
-      {/* HEADER SEZIONE CLICCABILE */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between cursor-pointer group select-none rounded-xl p-2 -mx-2 hover:bg-zinc-900/40 active:bg-zinc-900/60 transition-all duration-300 focus:outline-none focus:ring-1 focus:ring-white/10"
-      >
-        <div className="flex items-center gap-3 sm:gap-4">
-          <div className={`p-2 rounded-lg bg-zinc-900 transition-all duration-300 ${isOpen ? 'text-white scale-100' : 'text-zinc-600 scale-90 opacity-50'}`}>
-            <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
-          </div>
-          <h3 className={`font-bold text-left transition-all duration-300 ${isOpen ? 'text-xl sm:text-2xl text-white' : 'text-lg text-zinc-600'}`}>
-            {title}
-          </h3>
-        </div>
-        <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180 text-zinc-400' : 'text-zinc-700'}`} />
-      </button>
-
-      {/* CONTENUTO COLLAPSIBLE */}
-      <div className={`grid transition-all duration-500 ease-in-out overflow-hidden ${isOpen ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}`}>
-        <div className="min-h-0">
-          {loading ? (
-            // Skeleton Loading
-            <div className="flex gap-4 overflow-hidden">
-              {[1, 2, 3, 4].map(i => <div key={i} className="aspect-video w-64 bg-zinc-900 rounded-xl animate-pulse flex-shrink-0" />)}
-            </div>
-          ) : (
-            <>
-              {linkAll && (
-                <div className="flex justify-end mb-2">
-                  <Link to={linkAll} className="text-sm text-zinc-400 hover:text-white font-medium hover:underline transition-colors flex items-center gap-1 p-2">
-                    Vedi tutti <ChevronDown className="h-3 w-3 -rotate-90" />
-                  </Link>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-                {videos.map((video, index) => (
-                  // Nascondi alcuni video su schermi piccoli per non intasare
-                  <div key={`${id}-${video.id}`} className={index === 3 ? "hidden lg:block" : index === 4 ? "hidden xl:block" : "block"}>
-                    <VideoCard video={video} onRemove={onRemoveVideo ? () => onRemoveVideo(video.id) : null} />
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
- * ============================================================================
- * Pagina: Home
- * ============================================================================
- */
 export default function Home() {
   const { user, updateHomePreferences } = useAuth();
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('q');
+
+  useDocumentTitle(searchQuery ? `Cerca: "${searchQuery}"` : 'Home');
 
   // Stato Sezioni Orizzontali
   const [continueWatching, setContinueWatching] = useState([]);
@@ -117,12 +53,6 @@ export default function Home() {
     setAllPage(0);
     setAllVideos([]);
     setAllHasMore(true);
-
-    if (searchQuery) {
-      document.title = `Cerca: "${searchQuery}" - FranzTube`;
-    } else {
-      document.title = 'Home - FranzTube';
-    }
   }, [searchQuery]);
 
   // CARICAMENTO SEZIONI (Solo se non si cerca)
@@ -226,14 +156,14 @@ export default function Home() {
             <Sparkles className="text-yellow-500 fill-yellow-500/20 h-6 w-6 sm:h-8 sm:w-8" />
             <div>
               <h2 className="text-xl sm:text-3xl font-bold text-white">Esplora Libreria</h2>
-              <p className="text-zinc-400 text-sm sm:text-base">Benvenuto su FranzTube</p>
+              <p className="text-zinc-400 text-sm sm:text-base">Benvenuto su FranzPLAY</p>
             </div>
           </>
         )}
       </div>
 
       {/* SEZIONI ORIZZONTALI (Solo Home) */}
-      {!searchQuery && (
+      {!searchQuery ? (
         <div className="space-y-2 animate-in fade-in slide-in-from-bottom-8 duration-700">
           <HomeSection
             id="history"
@@ -274,17 +204,17 @@ export default function Home() {
             onToggle={() => handleToggleSection('recent')}
           />
         </div>
-      )}
+      ) : null}
 
       {/* FEED PRINCIPALE */}
       <div className="pt-8">
-        {!searchQuery && (
+        {!searchQuery ? (
           <div className="mb-6 flex items-center gap-3">
             <h3 className="text-xl sm:text-2xl font-bold text-white pl-4 border-l-4 border-[var(--primary-color)]">
               Tutti i video
             </h3>
           </div>
-        )}
+        ) : null}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
           {allVideos.map((video, index) => (
@@ -295,19 +225,19 @@ export default function Home() {
         </div>
 
         {/* LOADING STATE */}
-        {allLoading && (
+        {allLoading ? (
           <div className="py-12 flex justify-center w-full">
             <Loader2 className="animate-spin text-zinc-500 h-8 w-8" />
           </div>
-        )}
+        ) : null}
 
         {/* EMPTY STATE */}
-        {!allLoading && allVideos.length === 0 && (
+        {!allLoading && allVideos.length === 0 ? (
           <div className="py-24 sm:py-32 flex flex-col items-center justify-center text-zinc-500 border-2 border-dashed border-zinc-800 rounded-3xl mx-4">
             <Search className="h-12 w-12 sm:h-16 sm:w-16 mb-4 opacity-20" />
             <p className="text-lg sm:text-xl font-medium">Nessun video trovato.</p>
           </div>
-        )}
+        ) : null}
       </div>
     </main>
   );

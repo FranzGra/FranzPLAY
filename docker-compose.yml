@@ -26,12 +26,12 @@ services:
       - frontend
     volumes:
       - ./Backend/api/:/var/www/api/    # Mappa le API PHP
-      - ./Backend/sessioni/:/var/www/sessioni/
+      - ./App_Data:/App_Data            # Volume centralizzato dati persistenti
       - ${PERCORSO_VIDEO}:/media/video  # Mappa i video per lo streaming
     depends_on:
       - frontend
       - php
-    restart: on-failure:3
+    restart: always
 
   # --- BACKEND (PHP) ---
   php:
@@ -44,27 +44,29 @@ services:
       - redis
     volumes:
       - ./Backend/api/:/var/www/api/    # Mappa le API PHP per l'esecuzione
-      - ./Backend/sessioni/:/var/www/sessioni/
+      - ./App_Data:/App_Data            # Volume centralizzato dati persistenti
+      - ${PERCORSO_VIDEO}:/percorsoVideo # VIDEO VOLUME MOUNT (Added for Admin functionality)
     environment:
+      WATCH_DIR: /percorsoVideo # Environment variable for path consistency
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_HOST: mysql
-    restart: on-failure:5
+    restart: always
 
   # --- DATABASE (MySQL) ---
   mysql:
     image: mysql:latest
     container_name: DATABASE_MySQL
     volumes:
-      - dati_database:/var/lib/mysql
+      - ./App_Data/Database_Data:/var/lib/mysql
       - ./Docker_Config/DBMS_Iniziale/:/docker-entrypoint-initdb.d
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    restart: on-failure:5
+    restart: always
 
   # --- CACHE (Redis) ---
   redis:
@@ -142,7 +144,6 @@ services:
 
 volumes:
   npm_cache:
-  dati_database:
-    driver: local
+
   redis_data:
     driver: local

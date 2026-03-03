@@ -103,27 +103,29 @@ $use_nginx_accel = getenv('USE_NGINX_ACCEL') !== 'false'; // Default true, ma di
 // o se abbiamo un path base alternativo.
 // Per ora, assumiamo che se la richiesta arriva qui e NON c'è nginx, dobbiamo servire il file.
 
+// Base path dai setting o env
+$base_video_path = getenv('WATCH_DIR') ?: '/percorsoVideo';
+
 // Fallback semplice: se il file esiste in una directory "assets" relativa (setup tipico dev)
 // o se riusciamo a trovarlo. Dato che non conosciamo il path assoluto reale (problema riscontrato in admin.php),
 // proviamo a servire se possibile, altrimenti affidiamoci a X-Accel.
 
-// FIX PER WINDOWS DEV: Sostituiamo X-Accel con readfile se rileviamo ambiente Windows
-// e se riusciamo a determinare il path (che è difficile senza config).
-// MA, se l'utente ha i file in una cartella mappata, readfile fallirà comunque se il path è sbagliato.
-
 // Manteniamo X-Accel per la produzione, ma aggiungiamo un fallback se siamo sicuri di essere in DEV.
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-    // Siamo su Windows. X-Accel-Redirect probabilmente non è supportato a meno di setup complessi.
-    // Proviamo a servire il file direttamente se lo troviamo.
+    // FIX PER WINDOWS DEV: Sostituiamo X-Accel con readfile se rileviamo ambiente Windows
+    // e se riusciamo a determinare il path (che è difficile senza config).
+    // MA, se l'utente ha i file in una cartella mappata, readfile fallirà comunque se il path è sbagliato.
 
-    // Tentativo di localizzazione file (hardcoded per dev environment se i file sono in Backend/assets o simili)
-    // Se non lo troviamo, usciamo.
+    // TENTATIVO DI SALVATAGGIO IN DEV:
+    $full_path = $base_video_path . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file_clean);
 
-    // NOTA: Senza sapere DOVE sono i file su Windows, non possiamo fare readfile().
-    // Lasciamo l'header X-Accel ma aggiungiamo un commento di debug se serve.
-    // L'errore 404/500 sulla dashboard era prioritario.
-
-    header('X-Accel-Redirect: /protected_media/' . $file_clean);
+    if (file_exists($full_path)) {
+        header('Content-Length: ' . filesize($full_path));
+        readfile($full_path);
+    } else {
+        // Fallback disperato: redirigi a Nginx sperando che l'alias funzioni
+        header('X-Accel-Redirect: /protected_media/' . $file_clean);
+    }
 } else {
     // FIX ENCODING: X-Accel-Redirect richiede un URI valido.
     // Se il file contiene spazi o caratteri speciali, vanno encodati (es. "My Video" -> "My%20Video").

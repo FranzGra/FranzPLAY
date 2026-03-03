@@ -34,7 +34,7 @@ if (!isset($_SESSION['id_utente'])) {
 // ============================================================================
 
 try {
-    $query = "SELECT id, Nome, Percorso, Immagine_Sfondo FROM Categorie ORDER BY Nome ASC";
+    $query = "SELECT id, Nome, Percorso, Immagine_Sfondo, Colore_Default FROM Categorie ORDER BY Nome ASC";
 
     // Utilizziamo executePreparedQuery per coerenza con lo standard del progetto
     $res = executePreparedQuery($query);

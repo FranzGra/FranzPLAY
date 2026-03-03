@@ -111,6 +111,18 @@ class Cache
             return false;
         return $this->redis->del($key);
     }
+
+    /**
+     * Svuota completamente l'intero database Redis della cache (Invalidazione globale).
+     * 
+     * @return bool True se svuotato con successo.
+     */
+    public function flush()
+    {
+        if (!$this->enabled)
+            return false;
+        return $this->redis->flushDB();
+    }
 }
 
 

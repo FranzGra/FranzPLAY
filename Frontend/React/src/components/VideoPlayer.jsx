@@ -289,14 +289,16 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     <div className="w-full bg-black rounded-xl shadow-2xl relative z-0 aspect-video group overflow-hidden">
 
       {/* OVERLAY DI CARICAMENTO */}
-      <div
-        className={`absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-500 pointer-events-none ${isInternalLoading && !formatError ? 'opacity-100' : 'opacity-0'}`}
-      >
-        <Loader2 className="h-10 w-10 animate-spin text-[var(--primary-color)]" />
-      </div>
+      {isInternalLoading && !formatError ? (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-500 pointer-events-none opacity-100"
+        >
+          <Loader2 className="h-10 w-10 animate-spin text-[var(--primary-color)]" />
+        </div>
+      ) : null}
 
       {/* ERROR UI PER FORMATI NON SUPPORTATI */}
-      {formatError && (
+      {formatError ? (
         <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-zinc-900/95 backdrop-blur-md p-4 sm:p-6 text-center">
           <div className="bg-red-500/20 p-2 sm:p-3 rounded-full mb-2 sm:mb-4">
             <AlertCircle className="h-6 w-6 sm:h-10 sm:w-10 text-red-500" />
@@ -313,39 +315,12 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
             Torna alla Home
           </a>
         </div>
-      )}
+      ) : null}
 
       {/* STILI INTEGRATI E DINAMICI */}
       <style>{`
         /* Configurazione Variabili Plyr mappate al tema globale */
         .plyr {
-            --plyr-color-main: var(--primary-color, #dc2626);
-            --plyr-video-control-color: #ffffff;
-            --plyr-range-track-height: 6px;
-            --plyr-range-thumb-height: 14px;
-            --plyr-range-thumb-active-scale: 1.2;
-            
-            border-radius: 1rem;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-            font-family: inherit;
-        }
-
-        /* Pulsante Play Centrale */
-        .plyr--video .plyr__control--overlaid {
-            background: var(--plyr-color-main);
-            opacity: 0.9;
-            transition: transform 0.3s ease, background 0.3s ease, filter 0.3s ease;
-        }
-
-        .plyr--video .plyr__control--overlaid:hover {
-            background: var(--plyr-color-main) !important;
-            filter: brightness(0.8);
-            transform: translate(-50%, -50%) scale(1.1) !important;
-        }
-
-        /* Colore Barra Progresso e Volume */
-        .plyr--full-ui input[type=range] {
-            color: var(--plyr-color-main);
         }
 
         /* Fix Fullscreen */

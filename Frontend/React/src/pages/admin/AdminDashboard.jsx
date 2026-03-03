@@ -1,17 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { HardDrive, Cpu, Database, Server, BarChart3, Activity, Clock, ShieldCheck } from 'lucide-react';
+import { HardDrive, Database, Server, Activity, Clock, ShieldCheck, Palette, Check as CheckIcon } from 'lucide-react';
 import { apiRequest } from '../../services/api';
+import { useSettings } from '../../context/SettingsContext';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { COLOR_PRESETS } from '../../components/profile/ThemeTab';
 
 export default function AdminDashboard() {
+    useDocumentTitle('Dashboard Admin');
+    const { logoParts, defaultTheme, fetchSettings } = useSettings();
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const [logo1, setLogo1] = useState(logoParts?.part1 || 'FRANZ');
+    const [logo2, setLogo2] = useState(logoParts?.part2 || 'PLAY');
+    const [isLogoSaving, setIsLogoSaving] = useState(false);
+
+    const [globalTheme, setGlobalTheme] = useState(defaultTheme || '#dc2626');
+    const [isThemeSaving, setIsThemeSaving] = useState(false);
+
+    useEffect(() => {
+        setLogo1(logoParts?.part1 || 'FRANZ');
+        setLogo2(logoParts?.part2 || 'PLAY');
+    }, [logoParts]);
+
+    useEffect(() => {
+        setGlobalTheme(defaultTheme || '#dc2626');
+    }, [defaultTheme]);
 
     useEffect(() => {
         const fetchStats = async () => {
             try {
                 const res = await apiRequest('/admin.php', 'POST', { action: 'stato_server' });
-                if (res.successo) {
-                    setStats(res.dati);
+                if (res.success) {
+                    setStats(res.data || res.dati);
                 }
             } catch (error) {
                 console.error("Errore fetch stats:", error);
@@ -19,8 +41,50 @@ export default function AdminDashboard() {
                 setLoading(false);
             }
         };
+
         fetchStats();
     }, []);
+
+    const handleLogoSubmit = async (e) => {
+        e.preventDefault();
+        setIsLogoSaving(true);
+        try {
+            const formData = new FormData();
+            formData.append('action', 'salva_logo');
+            formData.append('logo_part_1', logo1);
+            formData.append('logo_part_2', logo2);
+
+            const res = await apiRequest('/admin.php', 'POST', formData);
+            if (res.success) {
+                alert('Logo aggiornato con successo');
+                fetchSettings(); // ricarica il logo globalmente nel context
+            }
+        } catch (error) {
+            alert('Errore salvataggio logo');
+        } finally {
+            setIsLogoSaving(false);
+        }
+    };
+
+    const handleThemeSubmit = async (e) => {
+        e.preventDefault();
+        setIsThemeSaving(true);
+        try {
+            const formData = new FormData();
+            formData.append('action', 'salva_impostazioni_globali');
+            formData.append('tema_default', globalTheme);
+
+            const res = await apiRequest('/admin.php', 'POST', formData);
+            if (res.success) {
+                alert('Tema predefinito aggiornato con successo');
+                fetchSettings(); // Forza reload e re-render globale
+            }
+        } catch (error) {
+            alert('Errore salvataggio tema');
+        } finally {
+            setIsThemeSaving(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -53,7 +117,7 @@ export default function AdminDashboard() {
                         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Sistema Operativo</span>
                     </div>
                     <h1 className="text-4xl font-extrabold text-white tracking-tight">Dashboard</h1>
-                    <p className="text-zinc-400 mt-2 font-medium">Monitoring in tempo reale di FranzTube.</p>
+                    <p className="text-zinc-400 mt-2 font-medium">Monitoring in tempo reale di FranzPLAY.</p>
                 </div>
                 <div className="flex gap-4">
                     <div className="glass-card px-4 py-2 rounded-2xl flex items-center gap-2 border-white/5">
@@ -139,36 +203,125 @@ export default function AdminDashboard() {
 
             </div>
 
-            {/* Quick Actions */}
-            <div className="pt-4">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-[2px] bg-primary rounded-full"></div>
-                    <h2 className="text-xl font-black text-white uppercase tracking-wider">Azioni Rapide</h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <button
-                        onClick={() => window.location.href = '/admin/users'}
-                        className="admin-card !p-5 flex items-center gap-4 group active:scale-[0.98]"
-                    >
-                        <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary transition-colors">
-                            <BarChart3 size={20} className="text-primary group-hover:text-white transition-colors" />
-                        </div>
-                        <div className="text-left">
-                            <span className="block font-bold text-white group-hover:text-primary transition-colors">Vedi Utenti</span>
-                            <span className="text-xs text-zinc-500 font-medium tracking-tight">Gestione accessi e permessi</span>
-                        </div>
-                    </button>
+            {/* SETTINGS AREA */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 pt-4 pb-8">
 
-                    <button className="admin-card !p-5 flex items-center gap-4 group cursor-not-allowed opacity-50 grayscale">
-                        <div className="w-12 h-12 bg-zinc-800 rounded-2xl flex items-center justify-center">
-                            <Cpu size={20} className="text-zinc-500" />
-                        </div>
-                        <div className="text-left">
-                            <span className="block font-bold text-zinc-400">Restart Workers</span>
-                            <span className="text-xs text-zinc-600 font-medium tracking-tight">Funzionalità server-side disabilitata</span>
-                        </div>
-                    </button>
+                {/* Logo Settings */}
+                <div className="xl:col-span-1">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-8 h-[2px] bg-primary rounded-full"></div>
+                        <h2 className="text-xl font-black text-white uppercase tracking-wider">Impostazioni Logo</h2>
+                    </div>
+                    <div className="admin-card">
+                        <form onSubmit={handleLogoSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-500 mb-1">Parte 1 (Testo Normale)</label>
+                                <input
+                                    type="text"
+                                    value={logo1}
+                                    onChange={e => setLogo1(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-primary focus:outline-none"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-500 mb-1">Parte 2 (Testo Evidenziato)</label>
+                                <input
+                                    type="text"
+                                    value={logo2}
+                                    onChange={e => setLogo2(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-primary focus:outline-none"
+                                    required
+                                />
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={isLogoSaving}
+                                    className="px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center justify-center disabled:opacity-50 hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all active:scale-95"
+                                >
+                                    {isLogoSaving ? 'Salvataggio...' : 'Salva Logo'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
+
+                {/* Theme Settings */}
+                <div className="xl:col-span-2">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-8 h-[2px] bg-blue-500 rounded-full"></div>
+                        <h2 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <Palette size={20} className="text-blue-500" /> Tema Globale
+                        </h2>
+                    </div>
+                    <div className="admin-card">
+                        <form onSubmit={handleThemeSubmit} className="space-y-4 flex flex-col">
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-zinc-500 mb-2">Colore Predefinito Accesso/App</label>
+                                <p className="text-sm font-medium text-zinc-400 mb-6">
+                                    Questo è il colore base che apparirà nella pagina di Login e verrà applicato agli utenti che non scelgono un colore personalizzato.
+                                </p>
+
+                                <div className="grid grid-cols-4 sm:grid-cols-8 gap-3 mb-8">
+                                    {COLOR_PRESETS.map((preset) => (
+                                        <button
+                                            key={preset.value}
+                                            type="button"
+                                            onClick={() => setGlobalTheme(preset.value)}
+                                            className={`
+                                                relative flex items-center justify-center p-3 rounded-xl border transition-all duration-200 group
+                                                ${globalTheme === preset.value
+                                                    ? 'bg-zinc-800 border-blue-500 ring-1 ring-blue-500'
+                                                    : 'bg-zinc-950 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700'}
+                                            `}
+                                            title={preset.name}
+                                        >
+                                            <div
+                                                className="h-8 w-8 rounded-full shadow-lg border border-white/10 flex items-center justify-center"
+                                                style={{ backgroundColor: preset.value }}
+                                            >
+                                                {globalTheme === preset.value ? <CheckIcon className="h-5 w-5 text-white drop-shadow-md" /> : null}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <label className="block text-xs font-bold text-zinc-500 mb-2">Oppure usa un Colore Personalizzato</label>
+                                <div className="flex flex-col sm:flex-row items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+                                    <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-lg" style={{ backgroundColor: globalTheme, boxShadow: `0 0 20px ${globalTheme}40` }}>
+                                        <input
+                                            type="color"
+                                            value={globalTheme}
+                                            onChange={(e) => setGlobalTheme(e.target.value)}
+                                            className="absolute inset-0 w-[200%] h-[200%] -top-1/2 -left-1/2 cursor-pointer opacity-0"
+                                        />
+                                    </div>
+                                    <div className="flex-1 w-full text-center sm:text-left">
+                                        <span className="block text-xs font-black uppercase text-zinc-500 tracking-wider mb-1">Codice Esadecimale</span>
+                                        <input
+                                            type="text"
+                                            value={globalTheme.toUpperCase()}
+                                            onChange={(e) => setGlobalTheme(e.target.value)}
+                                            className="bg-transparent text-2xl font-black text-white uppercase focus:outline-none w-full tracking-wider text-center sm:text-left"
+                                            placeholder="#DC2626"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={isThemeSaving}
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center disabled:opacity-50 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                                >
+                                    {isThemeSaving ? 'Salvataggio...' : 'Salva Tema Globale'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
             </div>
         </div>
     );

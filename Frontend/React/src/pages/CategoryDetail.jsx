@@ -3,6 +3,7 @@ import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { fetchVideosRest } from '../services/api';
 import { Loader2, Folder, ChevronLeft, LayoutGrid } from 'lucide-react';
 import VideoCard from '../components/VideoCard';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function CategoryDetail() {
     const { id } = useParams();
@@ -38,11 +39,7 @@ export default function CategoryDetail() {
         fetchVideos();
     }, [id]);
 
-    useEffect(() => {
-        if (categoryName) {
-            document.title = `${categoryName} - Categorie - FranzTube`;
-        }
-    }, [categoryName]);
+    useDocumentTitle(categoryName);
 
     return (
         // FIX PADDING LATERALE:

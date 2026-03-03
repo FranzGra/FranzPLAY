@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 
 import getCroppedImg from '../services/canvasUtils';
 
-export default function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
+export default function ImageCropper({ imageSrc, onCropComplete, onCancel, aspect = 1, cropShape = 'round' }) {
     const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
@@ -35,8 +36,8 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden w-full max-w-lg shadow-2xl flex flex-col h-[80vh] md:h-[600px]">
 
                 {/* Header */}
@@ -53,8 +54,8 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
                         image={imageSrc}
                         crop={crop}
                         zoom={zoom}
-                        aspect={1}
-                        cropShape="round"
+                        aspect={aspect}
+                        cropShape={cropShape}
                         showGrid={false}
                         onCropChange={onCropChange}
                         onZoomChange={onZoomChange}
@@ -94,11 +95,12 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
                             disabled={loading}
                             className="flex-1 py-3 px-4 rounded-xl font-bold bg-[var(--primary-color)] text-white hover:opacity-90 transition-opacity shadow-lg shadow-[var(--primary-color)]/20 disabled:opacity-50 flex justify-center items-center gap-2"
                         >
-                            {loading ? 'Elaborazione...' : 'Salva Profilo'}
+                            {loading ? 'Elaborazione...' : 'Salva Immagine'}
                         </button>
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

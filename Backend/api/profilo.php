@@ -89,7 +89,7 @@ try {
         // --- SALVA PREFERENZE HOME ---
         case 'salva_preferenze_home':
             $prefs = $_POST['preferenze'] ?? '{}';
-            
+
             // Validazione basilare JSON
             json_decode($prefs);
             if (json_last_error() !== JSON_ERROR_NONE) {
@@ -141,7 +141,7 @@ try {
             $ext_map = ['image/jpeg' => 'jpg', 'image/jpg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
             $ext = $ext_map[$mime];
 
-            $upload_dir = '/var/www/sessioni/immagini_utenti/';
+            $upload_dir = '/App_Data/User_Images/';
             if (!file_exists($upload_dir))
                 mkdir($upload_dir, 0777, true);
 
@@ -215,7 +215,7 @@ try {
         case 'elimina_profilo_utente':
             // Rimuove fisicamente l'avatar se presente
             if (!empty($_SESSION['immagine_profilo'])) {
-                $img_path = '/var/www/sessioni/immagini_utenti/' . $_SESSION['immagine_profilo'];
+                $img_path = '/App_Data/User_Images/' . $_SESSION['immagine_profilo'];
                 if (file_exists($img_path))
                     @unlink($img_path);
             }

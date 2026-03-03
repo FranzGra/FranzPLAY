@@ -78,7 +78,7 @@ try {
             $link = "http://" . $_SERVER['HTTP_HOST'] . "/reset-password?token=" . $token;
             error_log("\n📧 [SIMULAZIONE INVIO EMAIL RESET] ----------------");
             error_log("A: " . $utente['Email']);
-            error_log("OGGETTO: Recupero Password FranzTube");
+            error_log("OGGETTO: Recupero Password FranzPLAY");
             error_log("LINK: " . $link);
             error_log("--------------------------------------------------\n");
 

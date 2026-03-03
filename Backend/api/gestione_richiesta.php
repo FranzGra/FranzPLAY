@@ -73,7 +73,7 @@ header("Content-Type: application/json; charset=UTF-8");
  * Percorso persistente per i file di sessione (mappato su volume Docker).
  * Garantisce che gli utenti non vengano sloggati al riavvio del container PHP.
  */
-$sessionPath = '/var/www/sessioni/php_sessions';
+$sessionPath = '/App_Data/Sessions';
 
 if (!file_exists($sessionPath)) {
     @mkdir($sessionPath, 0777, true);
@@ -115,18 +115,18 @@ if (session_status() === PHP_SESSION_NONE) {
 /**
  * Invia una risposta JSON strutturata e termina l'esecuzione.
  * 
- * @param bool   $successo  Esito dell'operazione.
- * @param string $messaggio Testo da mostrare all'utente o loggare a frontend.
+ * @param bool   $success  Esito dell'operazione.
+ * @param string $message Testo da mostrare all'utente o loggare a frontend.
  * @param int    $code      Codice di stato HTTP.
  * @param array  $extra     Dati aggiuntivi (es. liste video, token, ecc).
  */
-function inviaRisposta($successo, $messaggio, $code = 200, $extra = [])
+function inviaRisposta($success, $message, $code = 200, $extra = [])
 {
     http_response_code($code);
 
     $response = [
-        'successo' => (bool) $successo,
-        'messaggio' => (string) $messaggio
+        'success' => (bool) $success,
+        'message' => (string) $message
     ];
 
     if (!empty($extra)) {

@@ -9,6 +9,14 @@ RUN apk add --no-cache pcre-dev $PHPIZE_DEPS \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apk del pcre-dev $PHPIZE_DEPS
-# Imposta permessi per la cartella sessioni/immagini
+# Copia lo script di avvio per i permessi volume
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Imposta permessi per la cartella api (Codice sorgente montato)
 RUN mkdir -p /var/www/api/sessioni/immagini_utenti && \
     chown -R www-data:www-data /var/www/api
+
+# Forza l'esecuzione dello script prima dell'avvio reale
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["php-fpm"]

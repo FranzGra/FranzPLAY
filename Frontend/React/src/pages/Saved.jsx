@@ -3,6 +3,7 @@ import { Loader2, Bookmark, History, ThumbsUp, Layers, Trash2, X } from 'lucide-
 import VideoCard from '../components/VideoCard';
 import { Link } from 'react-router-dom';
 import { fetchVideosRest, apiRequest } from '../services/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function Saved() {
   const [activeTab, setActiveTab] = useState('saved');
@@ -34,8 +35,7 @@ export default function Saved() {
   };
 
   const currentTab = TABS[activeTab];
-
-  useEffect(() => { document.title = 'Libreria - FranzTube'; }, []);
+  useDocumentTitle('Libreria');
 
   useEffect(() => {
     const loadVideos = async () => {
@@ -102,8 +102,8 @@ export default function Saved() {
               key={key}
               onClick={() => setActiveTab(key)}
               className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 border ${activeTab === key
-                  ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white shadow-lg shadow-[var(--primary-color)]/20'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white shadow-lg shadow-[var(--primary-color)]/20'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
                 }`}
             >
               <tab.icon size={16} />

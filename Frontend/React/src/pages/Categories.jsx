@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, Folder, LayoutGrid } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAssetUrl } from '../services/helpers';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const CARD_GRADIENTS = [
   "from-red-600 to-red-950",
@@ -15,18 +16,17 @@ const CARD_GRADIENTS = [
 ];
 
 export default function Categories() {
+  useDocumentTitle('Categorie');
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
-  useEffect(() => { document.title = 'Categorie - FranzTube'; }, []);
 
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const res = await fetch('/api/categorie.php');
         const json = await res.json();
-        if (json.successo) setCategories(json.dati);
+        if (json.success) setCategories(json.data || json.dati);
       } catch (err) {
         console.error("Errore categorie:", err);
       } finally {
@@ -82,7 +82,7 @@ export default function Categories() {
                   </>
                 ) : (
                   <>
-                    <div className={`absolute inset-0 bg-gradient-to-br ${gradientClass} opacity-100`} />
+                    <div className={`absolute inset-0 bg-gradient-to-br ${cat.Colore_Default || gradientClass} opacity-100 transition-colors duration-500`} />
                     <div className="absolute inset-0 opacity-50 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
                     <Folder className="absolute -right-4 -bottom-8 h-32 w-32 sm:h-45 sm:w-45 text-white/10 -rotate-12 group-hover:-bottom-0 group-hover:-right-0 group-hover:h-40 group-hover:w-40 group-hover:rotate-0 transition-all duration-500" />
                   </>

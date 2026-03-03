@@ -48,9 +48,9 @@ export const apiRequest = async (endpoint, method = 'GET', body = null) => {
 
         const json = await res.json();
 
-        // Standard Response Check: { successo: false, errore: "..." }
-        if (res.ok && json.successo === false) {
-            throw new Error(json.errore || "Errore generico dal server.");
+        // Standard Response Check: { success: false, message: "..." }
+        if (!res.ok || (json && json.success === false)) {
+            throw new Error(json.message || json.errore || "Errore generico dal server.");
         }
 
         return json;
@@ -87,13 +87,12 @@ export const fetchVideosRest = async (params = {}) => {
     const endpoint = `/videos.php?${searchParams.toString()}`;
     const res = await apiRequest(endpoint, 'GET');
 
-    // FIX: Il backend ritorna { successo: true, dati: [...] }
-    // Home.jsx si aspetta un array diretto.
-    if (res && res.dati && Array.isArray(res.dati)) {
-        return res.dati;
+    // FIX: Il backend ritorna { success: true, data/dati: [...] }
+    if (res && res.success) {
+        return res.data || res.dati || [];
     }
 
-    // Fallback se il backend dovesse cambiare o per endpoint legacy
+    // Fallback disperato legacy
     return Array.isArray(res) ? res : [];
 };
 

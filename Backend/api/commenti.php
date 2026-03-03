@@ -99,7 +99,8 @@ try {
             if (executePreparedQuery($sql, "iis", [$id_utente, $id_video, $testo])) {
                 inviaRisposta(true, 'Commento pubblicato con successo!');
             } else {
-                throw new Exception("Errore DB durante l'inserimento del commento.");
+                global $last_db_error;
+                throw new Exception("Errore DB durante l'inserimento: " . ($last_db_error ?? 'Sconosciuto'));
             }
             break;
 
@@ -112,8 +113,9 @@ try {
             $admin_flag = $is_admin ? 1 : 0;
 
             $res = executePreparedQuery($sql, "iii", [$id_commento, $id_utente, $admin_flag]);
+            global $last_affected_rows;
 
-            if ($database->affected_rows > 0) {
+            if ($last_affected_rows > 0) {
                 inviaRisposta(true, 'Commento rimosso.');
             } else {
                 inviaRisposta(false, 'Non hai l\'autorizzazione per eliminare questo commento o il commento non esiste.', 403);

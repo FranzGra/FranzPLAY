@@ -107,14 +107,14 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
           />
 
           {/* 2. Video Anteprima (Lazy loaded) */}
-          {hasLoaded && (
+          {hasLoaded ? (
             <video
               ref={videoRef}
               src={previewSrc}
               muted loop playsInline preload="none"
               className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isPlaying ? 'opacity-100' : 'opacity-0'}`}
             />
-          )}
+          ) : null}
 
           {/* Badge Durata */}
           <div className={`absolute bottom-1.5 right-1.5 bg-black/80 px-1.5 py-1 rounded-md text-xs font-bold text-white tracking-wide transition-opacity duration-200 ${isPlaying ? 'opacity-0' : 'opacity-100'}`}>
@@ -129,7 +129,7 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
           )}
 
           {/* Bottone Rimuovi (opzionale) */}
-          {onRemove && (
+          {onRemove ? (
             <button
               onClick={handleRemoveClick}
               className={`
@@ -145,7 +145,7 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
                 Rimuovi
               </span>
             </button>
-          )}
+          ) : null}
         </div>
 
         {/* METADATI */}

@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 // --- CONTESTI E COMPONENTI ---
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SettingsProvider } from './context/SettingsContext';
 import Navbar from './components/Navbar';
 import PageTransition from './components/PageTransition';
 
@@ -23,6 +24,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminVideos = lazy(() => import('./pages/admin/AdminVideos'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminCategories = lazy(() => import('./pages/admin/AdminCategories'));
+const AdminAccessi = lazy(() => import('./pages/admin/AdminAccessi'));
 
 /**
  * COMPONENTE: ScrollToTop
@@ -93,39 +95,42 @@ export default function App() {
   );
 
   return (
-    <AuthProvider>
-      <Router>
-        <ScrollToTop />
-        <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /></div>}>
-          <Routes>
-            {/* 1. ADMIN ROUTES - Independent Layout */}
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="videos" element={<AdminVideos />} />
-              <Route path="users" element={<AdminUsers />} />
-              <Route path="categories" element={<AdminCategories />} />
-            </Route>
+    <SettingsProvider>
+      <AuthProvider>
+        <Router>
+          <ScrollToTop />
+          <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /></div>}>
+            <Routes>
+              {/* 1. ADMIN ROUTES - Independent Layout */}
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="videos" element={<AdminVideos />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="categories" element={<AdminCategories />} />
+                <Route path="accessi" element={<AdminAccessi />} />
+              </Route>
 
-            {/* 2. USER ROUTES - Wrapped in Main Layout */}
-            <Route element={<LayoutOutlet />}>
-              {/* PUBLIC */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+              {/* 2. USER ROUTES - Wrapped in Main Layout */}
+              <Route element={<LayoutOutlet />}>
+                {/* PUBLIC */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
 
-              {/* PROTECTED */}
-              <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-              <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
-              <Route path="/category/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
-              <Route path="/watch/:id" element={<ProtectedRoute><Player /></ProtectedRoute>} />
-              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/saved" element={<ProtectedRoute><Saved /></ProtectedRoute>} />
+                {/* PROTECTED */}
+                <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
+                <Route path="/category/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
+                <Route path="/watch/:id" element={<ProtectedRoute><Player /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/saved" element={<ProtectedRoute><Saved /></ProtectedRoute>} />
 
-              {/* FALLBACK */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </Suspense>
-      </Router>
-    </AuthProvider>
+                {/* FALLBACK */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </Router>
+      </AuthProvider>
+    </SettingsProvider>
   );
 }

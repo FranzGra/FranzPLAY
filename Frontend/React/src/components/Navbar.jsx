@@ -1,19 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { Search, LayoutGrid, Library, LogOut, Settings, ChevronDown, X } from 'lucide-react'; // Changed Bookmark -> Library
+import { apiRequest } from '../services/api';
 
 export default function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
+  const { logoParts } = useSettings();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  
+
   const profileRef = useRef(null);
-  const inputRef = useRef(null); 
+  const inputRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const showSearch = location.pathname === '/' || location.pathname === '/saved';
@@ -22,7 +25,7 @@ export default function Navbar() {
   useEffect(() => {
     const urlQuery = searchParams.get('q') || '';
     if (location.pathname === '/' && urlQuery !== searchQuery) {
-       setSearchQuery(urlQuery);
+      setSearchQuery(urlQuery);
     }
   }, [location.pathname, searchParams]);
 
@@ -59,7 +62,7 @@ export default function Navbar() {
   const handleClearSearch = () => {
     setSearchQuery('');
     if (location.pathname === '/' && searchParams.get('q')) navigate('/');
-    setIsSearchOpen(false); 
+    setIsSearchOpen(false);
   };
 
   const handleLogout = async () => {
@@ -86,10 +89,10 @@ export default function Navbar() {
   // --- STILI BOTTONI ---
   // Modificato padding e font size per far stare il testo su mobile
   const navBtnBase = "inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-all duration-200 h-9 px-2 sm:px-4 py-2 text-xs sm:text-sm focus:outline-none active:scale-95";
-  
-  const getBtnClass = (route) => isActive(route) 
-    ? "bg-zinc-800 text-white shadow-sm ring-1 ring-white/10" 
-    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"; 
+
+  const getBtnClass = (route) => isActive(route)
+    ? "bg-zinc-800 text-white shadow-sm ring-1 ring-white/10"
+    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white";
 
   const glassStyle = "bg-zinc-900/80 backdrop-blur-xl border border-white/10 shadow-lg shadow-black/30";
 
@@ -98,20 +101,20 @@ export default function Navbar() {
       <div className="fixed top-2 sm:top-4 left-0 right-0 z-50 flex flex-col items-center px-2 sm:px-4 pointer-events-none">
 
         {/* --- NAVBAR --- */}
-        <nav 
+        <nav
           className="relative pointer-events-auto flex w-full max-w-7xl items-center justify-between gap-1 sm:gap-2 rounded-3xl border border-zinc-800 bg-zinc-950/95 backdrop-blur p-2 shadow-2xl z-20"
         >
 
           {/* LOGO */}
-          <Link 
-            to="/" 
-            className="ml-1 sm:ml-2 mr-1 flex-shrink-0 group flex items-center gap-2 focus:outline-none rounded-lg p-1 active:scale-95 transition-transform" 
+          <Link
+            to="/"
+            className="ml-1 sm:ml-2 mr-1 flex-shrink-0 group flex items-center gap-2 focus:outline-none rounded-lg p-1 active:scale-95 transition-transform"
             onClick={() => setSearchQuery('')}
           >
             <div className="flex items-center tracking-tighter text-sm md:text-xl select-none">
-              <span className="font-bold text-white mr-1">FRANZ</span>
+              <span className="font-bold text-white mr-1">{logoParts.part1}</span>
               <div className="bg-[var(--primary-color)] text-white font-bold px-1.5 py-0.5 rounded-[6px] shadow-lg shadow-[var(--primary-color)]/20 leading-none pb-1 pt-1">
-                TUBE
+                {logoParts.part2}
               </div>
             </div>
           </Link>
@@ -122,7 +125,7 @@ export default function Navbar() {
               <div className="relative w-full group">
                 <Search className="absolute left-4 top-3 h-5 w-5 text-zinc-500 group-focus-within:text-[var(--primary-color)] transition-colors" />
                 <input
-                  ref={inputRef} 
+                  ref={inputRef}
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -130,11 +133,11 @@ export default function Navbar() {
                   placeholder="Cerca video..."
                   className="w-full h-11 rounded-full border border-zinc-800 bg-zinc-900 px-4 pl-12 pr-10 text-sm text-zinc-100 focus:outline-none focus:bg-zinc-950 focus:border-[var(--primary-color)] focus:ring-1 focus:ring-[var(--primary-color)] transition-all placeholder:text-zinc-600"
                 />
-                {searchQuery && (
+                {searchQuery ? (
                   <button onClick={() => setSearchQuery('')} className="absolute right-3 top-3 text-zinc-500 hover:text-white transition-colors focus:outline-none">
                     <X className="h-5 w-5" />
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           ) : (
@@ -143,28 +146,28 @@ export default function Navbar() {
 
           {/* MENU AZIONI */}
           <div className="flex items-center gap-1 sm:gap-1 flex-shrink-0">
-            
+
             {/* CATEGORIE (Testo visibile) */}
             <Link to="/categories" className={`${navBtnBase} ${getBtnClass('/categories')}`}>
-              <LayoutGrid className="mr-1.5 sm:mr-2 h-4 w-4" /> 
+              <LayoutGrid className="mr-1.5 sm:mr-2 h-4 w-4" />
               <span>Categorie</span>
             </Link>
-            
+
             {/* LIBRERIA (Testo visibile, ex Salvati) */}
-            {user && (
+            {user ? (
               <Link to="/saved" className={`${navBtnBase} ${getBtnClass('/saved')}`}>
-                <Library className="mr-1.5 sm:mr-2 h-4 w-4" /> 
+                <Library className="mr-1.5 sm:mr-2 h-4 w-4" />
                 <span>Libreria</span>
               </Link>
-            )}
+            ) : null}
 
             <div className="h-5 w-[1px] bg-zinc-800 mx-1 hidden sm:block"></div>
-            
+
             {/* PROFILO UTENTE */}
             {user && (
               <div className="relative" ref={profileRef}>
-                <button 
-                  onClick={() => setIsProfileOpen(!isProfileOpen)} 
+                <button
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className={`flex items-center gap-2 px-1 sm:px-2 py-1.5 rounded-2xl transition-all duration-200 focus:outline-none ${isActive('/profile') ? 'bg-zinc-800 text-white ring-1 ring-white/10' : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-white'}`}
                 >
                   <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-zinc-800 overflow-hidden ring-2 ring-zinc-900 flex items-center justify-center">
@@ -174,16 +177,16 @@ export default function Navbar() {
                   <ChevronDown className={`hidden lg:block h-3 w-3 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                {isProfileOpen && (
+                {isProfileOpen ? (
                   <div className="absolute right-0 top-15 w-48 origin-top-right rounded-xl border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl ring-1 ring-white/5 animate-in fade-in zoom-in-95 duration-200 z-50">
                     <Link to="/profile" className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white" onClick={() => setIsProfileOpen(false)}>
-                        <Settings className="mr-2 h-4 w-4" /> Impostazioni
+                      <Settings className="mr-2 h-4 w-4" /> Impostazioni
                     </Link>
                     <button className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-950/30 hover:text-red-400 transition-colors" onClick={handleLogout}>
-                        <LogOut className="mr-2 h-4 w-4" /> Esci
+                      <LogOut className="mr-2 h-4 w-4" /> Esci
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
             )}
           </div>
@@ -192,7 +195,7 @@ export default function Navbar() {
         {/* --- MOBILE SEARCH BAR (Separata per non affollare la navbar) --- */}
         {showSearch && (
           <div className="md:hidden w-full max-w-md mt-4 relative z-10 pointer-events-auto flex items-center justify-center gap-3">
-            <div 
+            <div
               onClick={() => !isSearchOpen && setIsSearchOpen(true)}
               className={`
                   ${glassStyle} flex items-center overflow-hidden transition-all duration-500 cubic-bezier(0.32, 0.72, 0, 1)
@@ -200,35 +203,35 @@ export default function Navbar() {
               `}
             >
               <Search className="h-5 w-5 text-zinc-400 flex-shrink-0" />
-              
+
               <span className={`font-medium text-zinc-300 text-sm whitespace-nowrap overflow-hidden transition-all duration-300 ${isSearchOpen ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100 ml-2'}`}>
-                  Cerca
+                Cerca
               </span>
 
-              <input 
-                  ref={inputRef} 
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Cerca..." 
-                  className={`bg-transparent border-none text-white placeholder:text-zinc-500 focus:ring-0 text-base h-full focus:outline-none transition-all duration-300 ${isSearchOpen ? 'flex-1 opacity-100 ml-3 pointer-events-auto' : 'w-0 opacity-0 ml-0 pointer-events-none'}`}
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Cerca..."
+                className={`bg-transparent border-none text-white placeholder:text-zinc-500 focus:ring-0 text-base h-full focus:outline-none transition-all duration-300 ${isSearchOpen ? 'flex-1 opacity-100 ml-3 pointer-events-auto' : 'w-0 opacity-0 ml-0 pointer-events-none'}`}
               />
-              
-              {isSearchOpen && searchQuery && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setSearchQuery(''); inputRef.current.focus(); }} 
-                    className="p-1 text-zinc-500 hover:text-white flex-shrink-0"
-                  >
-                      <X className="h-4 w-4 bg-zinc-800 rounded-full p-0.5" />
-                  </button>
-              )}
+
+              {isSearchOpen && searchQuery ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSearchQuery(''); inputRef.current.focus(); }}
+                  className="p-1 text-zinc-500 hover:text-white flex-shrink-0"
+                >
+                  <X className="h-4 w-4 bg-zinc-800 rounded-full p-0.5" />
+                </button>
+              ) : null}
             </div>
 
             <div className={`transition-all duration-500 cubic-bezier(0.32, 0.72, 0, 1) overflow-hidden ${isSearchOpen ? 'w-12 opacity-100 scale-100' : 'w-0 opacity-0 scale-0'}`}>
-               <button onClick={handleClearSearch} className={`${glassStyle} h-12 w-12 rounded-full flex items-center justify-center text-zinc-300 hover:text-white active:scale-90`}>
-                  <X className="h-6 w-6" />
-               </button>
+              <button onClick={handleClearSearch} className={`${glassStyle} h-12 w-12 rounded-full flex items-center justify-center text-zinc-300 hover:text-white active:scale-90`}>
+                <X className="h-6 w-6" />
+              </button>
             </div>
           </div>
         )}

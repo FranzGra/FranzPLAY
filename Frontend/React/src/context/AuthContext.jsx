@@ -11,31 +11,22 @@ export const AuthProvider = ({ children }) => {
   const applyTheme = (color) => {
     if (!color) return;
     document.documentElement.style.setProperty('--primary-color', color);
-    // Salviamo anche in localStorage per evitare flash bianchi al riavvio (opzionale ma consigliato)
+    // Salviamo in localStorage per evitare flash o perdite cache
     localStorage.setItem('franz_theme', color);
   };
 
   // --- HELPER: FORMATTAZIONE DATI ---
-  const formatUser = (data) => {
-    const userData = data.user || data.utente || data;
+  const formatUser = (userData) => {
     if (!userData) return null;
 
-    const rawUsername = userData.username || userData.Nome_Utente || userData.nome_utente;
-    const rawAvatar = userData.avatar || userData.Immagine_Profilo || userData.immagine_profilo;
-    const rawAdmin = userData.isAdmin || userData.Admin || userData.amministratore;
-    // Recupera il colore dal DB o usa il default
-    const rawTheme = userData.themeColor || userData.colore_theme || '#dc2626';
-    // Recupera preferenze home
-    const rawHomePrefs = userData.homePreferences || userData.preferenze_home || {};
-
     return {
-      username: rawUsername || "Utente",
-      avatar: rawAvatar
-        ? (rawAvatar.startsWith('http') || rawAvatar.startsWith('/') ? rawAvatar : `/img_utenti/${rawAvatar}`)
+      username: userData.username || "Utente",
+      avatar: userData.avatar
+        ? (userData.avatar.startsWith('http') || userData.avatar.startsWith('/') ? userData.avatar : `/img_utenti/${userData.avatar}`)
         : null,
-      isAdmin: Boolean(rawAdmin),
-      themeColor: rawTheme,
-      homePreferences: rawHomePrefs
+      isAdmin: Boolean(userData.isAdmin),
+      themeColor: userData.themeColor || null,
+      homePreferences: userData.homePreferences || {}
     };
   };
 
@@ -51,21 +42,24 @@ export const AuthProvider = ({ children }) => {
 
       const data = await apiRequest('/profilo.php', 'POST', formData);
 
-      if (data && data.successo) {
-        const formattedUser = formatUser(data);
+      if (data && data.success) {
+        const formattedUser = formatUser(data.user);
         setUser(formattedUser);
 
         // 🛠️ FIX: Applica il colore dell'utente, non uno statico
         if (formattedUser.themeColor) {
           applyTheme(formattedUser.themeColor);
+        } else {
+          // Usa il tema default se l'utente non ne ha uno
+          applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626');
         }
       } else {
         setUser(null);
-        applyTheme('#dc2626'); // Reset al rosso default se non loggato
+        applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626'); // Reset al globale default se non loggato
       }
     } catch (error) {
       setUser(null);
-      applyTheme('#dc2626');
+      applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626');
     } finally {
       setLoading(false);
     }
@@ -76,14 +70,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await apiRequest('/login.php', 'POST', { username, password }, false);
 
-      if (data.successo) {
-        const formattedUser = formatUser(data);
+      if (data.success) {
+        const formattedUser = formatUser(data.user);
         setUser(formattedUser);
         // Applica subito il tema appena ricevuto dal login
         applyTheme(formattedUser.themeColor);
         return { success: true };
       } else {
-        return { success: false, message: data.messaggio || "Errore Login" };
+        return { success: false, message: data.message || "Errore Login" };
       }
     } catch (error) {
       return { success: false, message: error.message || "Errore di connessione" };
@@ -95,8 +89,8 @@ export const AuthProvider = ({ children }) => {
     try {
       await apiRequest('/logout.php');
       setUser(null);
-      applyTheme('#dc2626'); // Reset al tema base
       localStorage.removeItem('franz_theme');
+      applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626'); // Reset al tema globale
     } catch (error) {
       console.error("Errore Logout:", error);
     }

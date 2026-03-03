@@ -1,9 +1,9 @@
 -- ============================================================================
--- FranzTube - Schema Database MySQL
+-- FranzPLAY - Schema Database MySQL
 -- ============================================================================
 -- 
 -- DESCRIZIONE:
--- Schema completo del database per la piattaforma di video streaming FranzTube.
+-- Schema completo del database per la piattaforma di video streaming FranzPLAY.
 -- Include tabelle per video, utenti, categorie, interazioni e sistema anti-spam.
 --
 -- CHARSET: utf8mb4 (supporta emoji e caratteri speciali)
@@ -37,7 +37,10 @@ INSERT IGNORE INTO `Impostazioni` (`Chiave_Impostazione`, `Valore_Impostazione`,
 ('default_Minutaggio_Copertina', '3', 'Minuto da cui estrarre copertina auto-generata (in minuti)'),
 ('default_Minutaggio_Anteprima', '8', 'Minuto da cui iniziare anteprima auto-generata (in minuti)'),
 ('durata_Anteprima', '10', 'Durata clip anteprima in secondi'),
-('giorni_Durata_Cookies', '30', 'Durata validità cookie sessione in giorni');
+('giorni_Durata_Cookies', '30', 'Durata validità cookie sessione in giorni'),
+('logo_part_1', 'FRANZ', 'Prima parte del logo testuale nella Navbar'),
+('logo_part_2', 'PLAY', 'Seconda parte evidenziata del logo testuale nella Navbar'),
+('colore_tema_default', '#dc2626', 'Colore primario di default per schermata Login e utenti senza personalizzazione');
 
 
 -- ============================================================================
@@ -57,7 +60,8 @@ CREATE TABLE IF NOT EXISTS `Categorie` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `Nome` VARCHAR(255) NOT NULL COMMENT 'Nome categoria visualizzato (es. "Azione")',
     `Percorso` VARCHAR(255) NOT NULL UNIQUE COMMENT 'Percorso relativo cartella (es. "Azione")',
-    `Immagine_Sfondo` VARCHAR(255) DEFAULT NULL UNIQUE COMMENT 'Path immagine sfondo categoria (opzionale)'
+    `Immagine_Sfondo` VARCHAR(255) DEFAULT NULL UNIQUE COMMENT 'Path immagine sfondo categoria (opzionale)',
+    `Colore_Default` VARCHAR(50) DEFAULT NULL COMMENT 'Classe Tailwind css per gradiente colore fallback'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Categorie video (mappate da filesystem)';
 
 
@@ -154,9 +158,7 @@ CREATE TABLE IF NOT EXISTS `Utenti` (
 -- Utenti predefiniti (CAMBIARE PASSWORD IN PRODUZIONE!)
 INSERT IGNORE INTO `Utenti` (`Nome_Utente`, `Password`, `Admin`) VALUES
 ('admin', '$2y$10$oH/wfvGqW71.yjD8ozrNzui/ooRODRtqbNJcERi2fYnpwz7RSG6Mi', TRUE),   -- Password: admin
-('Franz', '$2y$10$YLP2fURaliF6IJsxRwyMzOoQ7hbabVEeXyMBhG9bhN5qSJwvZdABC', TRUE),  -- Password: franz
-('Matteo', '$2y$10$K5RX6ix/ACVy3bdpcVA3vuMhRGwdatEODXVf1hHE26zzWx/yCy3pe', FALSE); -- Password: matteo
-
+('Franz', '$2y$10$YLP2fURaliF6IJsxRwyMzOoQ7hbabVEeXyMBhG9bhN5qSJwvZdABC', TRUE);  -- Password: franz
 
 -- ============================================================================
 -- TABELLA: Like

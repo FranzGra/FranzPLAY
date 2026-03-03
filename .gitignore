@@ -1,2 +1,21 @@
+# Data & Sessions
 testVideo/
 sessioni/
+Dati_Database/
+App_Data/
+
+# Env files
+.env
+**/.env
+
+# Scripts
+Avvia_Containers.bat
+Stop_Containers.bat
+resetta_ambiente_docker.bat
+
+# Context & LLM Markdown files
+*.md
+!README.md
+!Frontend/React/README.md
+CONTENUTO *
+**/CONTENUTO *
