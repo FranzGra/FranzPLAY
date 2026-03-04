@@ -17,7 +17,8 @@ export const SettingsProvider = ({ children }) => {
 
       // Controllo se il database è offline / non inizializzato (errore 500)
       if (statusRes === null || statusRes?.success === false) {
-        if (statusRes?.avviso?.includes("offline") || statusRes?.avviso?.includes("Connessione rifiutata") || statusRes?.avviso?.includes("Unknown database") || statusRes?.avviso?.includes("Base di dati sconosciuta") || statusRes?.avviso?.includes("Errore verifica stato sistema")) {
+        const errorMsg = statusRes?.message || statusRes?.messaggio || statusRes?.avviso || "";
+        if (errorMsg.includes("offline") || errorMsg.includes("Connessione rifiutata") || errorMsg.includes("Unknown database") || errorMsg.includes("Base di dati sconosciuta") || errorMsg.includes("Errore verifica stato sistema") || errorMsg.includes("doesn't exist")) {
           setDbOffline(true);
           return;
         }

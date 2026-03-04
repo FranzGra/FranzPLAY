@@ -10,6 +10,9 @@ App_Data/
 
 # Scripts
 Avvia_Containers.bat
+avvia_containers.sh
+resetta_ambiente_docker.sh
+stop_containers.sh
 Stop_Containers.bat
 resetta_ambiente_docker.bat
 
