@@ -10,9 +10,6 @@ pause
 docker-compose down --volumes
 docker-compose rm -fsv
 
-echo Rimozione file locali del database in corso (App_Data\Database_Data)...
-if exist "App_Data\Database_Data" rmdir /S /Q "App_Data\Database_Data"
-
 docker-compose build
 docker-compose up -d
 docker-compose up -d

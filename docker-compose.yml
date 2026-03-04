@@ -61,7 +61,7 @@ services:
     tmpfs:
       - /var/run/mysqld
     volumes:
-      - ./App_Data/Database_Data:/var/lib/mysql
+      - database_volume:/var/lib/mysql
       - ./Docker_Config/DBMS_Iniziale/:/docker-entrypoint-initdb.d
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -148,4 +148,7 @@ volumes:
   npm_cache:
 
   redis_data:
+    driver: local
+
+  database_volume:
     driver: local

@@ -2,7 +2,8 @@
 testVideo/
 sessioni/
 Dati_Database/
-App_Data/
+App_Data/*
+!App_Data/.gitkeep
 
 # Env files
 .env
