@@ -51,6 +51,10 @@ Per configurare da zero il progetto sul tuo computer/server e avviarlo per la pr
    MYSQL_DATABASE=FranzPLAY_DBMS
    MYSQL_USER=tuo_username
    MYSQL_PASSWORD=tua_password
+
+   # Configurazione Percorsi
+   # Sostituisci questo percorso con la cartella reale del tuo server dove hai i video
+   PERCORSO_VIDEO="./testVideo"
    ```
 
 3. **Crea la cartella per ospitare i tuoi Video**
@@ -85,6 +89,7 @@ Dopo la configurazione iniziale, puoi operare agilmente attraverso i file Batch:
 *   `resetta_ambiente_docker.bat`: **Attenzione**, questo script arresta i container ed elimina sia le immagini che i *Volumi* associati, **cancellando l'intero database!** Usare con cautela.
 
 ## 📂 Struttura Cartelle
+*   `/App_Data`: Volume centralizzato contenente tutti i dati persistenti (Database MariaDB, file generati, ecc).
 *   `/Frontend`: Codice sorgente React.
 *   `/Backend/api`: Endpoint PHP (API).
 *   `/Backend/python_server`: Script di automazione (Watcher, Workers).
