@@ -148,12 +148,40 @@ export default function App() {
 import { useSettings } from './context/SettingsContext';
 
 const SettingsGuard = ({ children }) => {
-  const { needsSetup, loading } = useSettings();
+  const { needsSetup, loading, dbOffline } = useSettings();
 
   if (loading) {
     return (
       <div className="min-h-dvh bg-zinc-950 flex items-center justify-center text-zinc-500">
         <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  // Seleziona la lingua o mostra un messaggio bilingue forte, dato che è critico.
+  if (dbOffline) {
+    return (
+      <div className="min-h-dvh w-full bg-zinc-950 flex flex-col items-center justify-center text-center p-6 text-zinc-100">
+        <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-8 max-w-lg shadow-2xl backdrop-blur-sm">
+          <h1 className="text-3xl font-bold text-red-500 mb-4 tracking-tight">Database Offline</h1>
+          <p className="text-lg text-zinc-300 mb-6 leading-relaxed">
+            FranzPLAY non riesce a connettersi al Database oppure quest'ultimo non è stato inizializzato correttamente.
+          </p>
+          <div className="bg-zinc-900/50 rounded-xl p-6 text-left border border-zinc-800 space-y-4">
+            <h3 className="font-semibold text-zinc-100">Come risolvere il problema:</h3>
+            <ol className="list-decimal list-inside text-sm text-zinc-400 space-y-2">
+              <li>Assicurati di aver creato il file <code className="bg-zinc-800 text-red-400 px-1.5 py-0.5 rounded">.env</code> nella directory principale (puoi duplicare <code className="text-red-400">.env.example</code>).</li>
+              <li>Chiudi i container e pulisci i volumi sporchi lanciando lo script <code className="bg-zinc-800 text-blue-400 px-1.5 py-0.5 rounded">resetta_ambiente_docker.bat</code> (su Windows) o cancellando manualmente la cartella <code className="text-blue-400">App_Data/Database_Data</code>.</li>
+              <li>Riavvia i container con <code className="text-blue-400">docker-compose up -d</code>.</li>
+            </ol>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-8 bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-8 rounded-full transition-all active:scale-95"
+          >
+            Riprova Connessione
+          </button>
+        </div>
       </div>
     );
   }

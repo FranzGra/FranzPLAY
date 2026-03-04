@@ -8,11 +8,21 @@ export const SettingsProvider = ({ children }) => {
   const [defaultTheme, setDefaultTheme] = useState(() => localStorage.getItem('franz_default_theme') || '#dc2626');
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [dbOffline, setDbOffline] = useState(false); // Nuovo stato per intercettare assenza di DB (es. mancanza .env)
 
   const fetchSettings = async () => {
     try {
       // 1. Controllo Stato Sistema (Setup Wizard)
       const statusRes = await apiRequest('/status.php', 'GET');
+
+      // Controllo se il database è offline / non inizializzato (errore 500)
+      if (statusRes === null || statusRes?.success === false) {
+        if (statusRes?.avviso?.includes("offline") || statusRes?.avviso?.includes("Connessione rifiutata") || statusRes?.avviso?.includes("Unknown database") || statusRes?.avviso?.includes("Base di dati sconosciuta") || statusRes?.avviso?.includes("Errore verifica stato sistema")) {
+          setDbOffline(true);
+          return;
+        }
+      }
+
       if (statusRes?.success && statusRes?.needsSetup) {
         setNeedsSetup(true);
         // Se ha bisogno del setup, non carichiamo le impostazioni perché
@@ -49,7 +59,7 @@ export const SettingsProvider = ({ children }) => {
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ logoParts, defaultTheme, fetchSettings, loading, needsSetup }}>
+    <SettingsContext.Provider value={{ logoParts, defaultTheme, fetchSettings, loading, needsSetup, dbOffline }}>
       {children}
     </SettingsContext.Provider>
   );
