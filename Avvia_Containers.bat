@@ -11,6 +11,10 @@ if not exist ".env" (
     exit /b 1
 )
 
+if not exist "App_Data\Database_Data" (
+    mkdir "App_Data\Database_Data"
+)
+
 docker-compose up -d
 
 echo.
