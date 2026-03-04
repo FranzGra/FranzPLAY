@@ -62,7 +62,8 @@ try {
         throw new Exception("Il database non risponde al ping di controllo.");
     }
 
-} catch (Exception $e) {
+}
+catch (Exception $e) {
     // Gestione errore critico di connessione
     error_log("❌ [DATABASE CONNECTION ERROR] " . $e->getMessage());
 
@@ -71,7 +72,8 @@ try {
     // Se è disponibile la funzione di risposta standard, usiamola
     if (function_exists('inviaRisposta')) {
         inviaRisposta(false, "Il servizio database è momentaneamente offline. Dettaglio: " . $debugMessage, 500);
-    } else {
+    }
+    else {
         http_response_code(500);
         die(json_encode(["successo" => false, "messaggio" => "Errore fatale: Database offline. " . $debugMessage]));
     }
@@ -81,6 +83,38 @@ try {
 // ============================================================================
 // SEZIONE 3: UTILITY E HELPER SQL (PREPARED STATEMENTS)
 // ============================================================================
+
+/**
+ * Verifica se una tabella specifica esiste nel database attivo.
+ */
+function checkTableExists($tableName)
+{
+    global $database;
+    $res = $database->query("SHOW TABLES LIKE '$tableName'");
+    return ($res && $res->num_rows > 0);
+}
+
+/**
+ * Esegue una serie di query SQL (es. da un file .sql).
+ * Utile per l'inizializzazione del database via backend.
+ */
+function executeMultiQuery($sql)
+{
+    global $database;
+    // Pulisce eventuali commenti MySQL che potrebbero rompere multi_query
+    $sql = preg_replace('/--.*$/m', '', $sql);
+
+    if ($database->multi_query($sql)) {
+        do {
+            // Svuota i risultati per permettere la query successiva
+            if ($result = $database->store_result()) {
+                $result->free();
+            }
+        } while ($database->more_results() && $database->next_result());
+        return true;
+    }
+    return false;
+}
 
 /**
  * Esegue una query SQL utilizzando i Prepared Statements per prevenire SQL Injection.
@@ -125,7 +159,8 @@ function executePreparedQuery($query, $types = "", $params = [])
 
         return $result;
 
-    } catch (Exception $e) {
+    }
+    catch (Exception $e) {
         error_log("❌ [SQL EXECUTE ERROR] " . $e->getMessage() . " | Query: $query");
         global $last_db_error;
         $last_db_error = $e->getMessage();
