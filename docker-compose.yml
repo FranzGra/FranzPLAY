@@ -45,6 +45,7 @@ services:
     volumes:
       - ./Backend/api/:/var/www/api/    # Mappa le API PHP per l'esecuzione
       - ./App_Data:/App_Data            # Volume centralizzato dati persistenti
+      - ./Docker_Config:/var/www/Docker_Config # Mappa configurazioni per init DB
       - ${PERCORSO_VIDEO}:/percorsoVideo # VIDEO VOLUME MOUNT (Added for Admin functionality)
     environment:
       WATCH_DIR: /percorsoVideo # Environment variable for path consistency

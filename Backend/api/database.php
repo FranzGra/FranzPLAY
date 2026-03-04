@@ -62,7 +62,8 @@ try {
         throw new Exception("Il database non risponde al ping di controllo.");
     }
 
-} catch (Exception $e) {
+}
+catch (Exception $e) {
     // Gestione errore critico di connessione
     error_log("❌ [DATABASE CONNECTION ERROR] " . $e->getMessage());
 
@@ -71,7 +72,8 @@ try {
     // Se è disponibile la funzione di risposta standard, usiamola
     if (function_exists('inviaRisposta')) {
         inviaRisposta(false, "Il servizio database è momentaneamente offline. Dettaglio: " . $debugMessage, 500);
-    } else {
+    }
+    else {
         http_response_code(500);
         die(json_encode(["successo" => false, "messaggio" => "Errore fatale: Database offline. " . $debugMessage]));
     }
@@ -81,6 +83,47 @@ try {
 // ============================================================================
 // SEZIONE 3: UTILITY E HELPER SQL (PREPARED STATEMENTS)
 // ============================================================================
+
+/**
+ * Verifica se una tabella specifica esiste nel database attivo.
+ */
+function checkTableExists($tableName)
+{
+    global $database;
+    $res = $database->query("SHOW TABLES LIKE '$tableName'");
+    return ($res && $res->num_rows > 0);
+}
+
+/**
+ * Esegue una serie di query SQL (es. da un file .sql).
+ * Utile per l'inizializzazione del database via backend.
+ */
+function executeMultiQuery($sql)
+{
+    global $database;
+
+    // 1. Rimuove i commenti -- (SQL standard)
+    $sql = preg_replace('/--.*$/m', '', $sql);
+    
+    // 2. Rimuove i commenti /* ... */ (C-style)
+    $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
+    
+    // 3. Splitta per ';' stando attenti a non splittare dentro i commenti (già rimossi)
+    // Usiamo explode poiché lo schema è semplice e non ha ';' dentro stringhe/JSON.
+    $queries = explode(';', $sql);
+    
+    foreach ($queries as $query) {
+        $query = trim($query);
+        if (empty($query)) continue;
+        
+        if (!$database->query($query)) {
+            error_log("❌ [AUTO-INIT SQL ERROR] " . $database->error . " | SQL: " . substr($query, 0, 150) . "...");
+            return false;
+        }
+    }
+
+    return true;
+}
 
 /**
  * Esegue una query SQL utilizzando i Prepared Statements per prevenire SQL Injection.
@@ -125,7 +168,8 @@ function executePreparedQuery($query, $types = "", $params = [])
 
         return $result;
 
-    } catch (Exception $e) {
+    }
+    catch (Exception $e) {
         error_log("❌ [SQL EXECUTE ERROR] " . $e->getMessage() . " | Query: $query");
         global $last_db_error;
         $last_db_error = $e->getMessage();

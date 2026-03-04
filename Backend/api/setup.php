@@ -21,15 +21,38 @@ require_once 'cache.php';
 global $database;
 global $Cache;
 
-// 1. VERIFICA SICUREZZA: Controlla che il setup sia effettivamente necessario
+// 1. VERIFICA SICUREZZA E STATO SISTEMA
 try {
-    $res = $database->query("SELECT COUNT(*) as num_utenti FROM Utenti");
-    $row = $res->fetch_assoc();
-    if ((int) $row['num_utenti'] > 0) {
-        inviaRisposta(false, "Sistema già configurato. Accesso al setup negato.", 403);
+    // Controlliamo se esiste la tabella utenti
+    $tableExists = checkTableExists('Utenti');
+
+    if ($tableExists) {
+        $res = $database->query("SELECT COUNT(*) as num_utenti FROM Utenti");
+        $row = $res->fetch_assoc();
+        if ((int)$row['num_utenti'] > 0) {
+            inviaRisposta(false, "Sistema già configurato. Accesso al setup negato.", 403);
+        }
     }
-} catch (Exception $e) {
-    inviaRisposta(false, "Errore verifica stato sistema: " . $e->getMessage(), 500);
+    else {
+        // LA TABELLA NON ESISTE: DOBBIAMO INIZIALIZZARE IL DATABASE
+        // Leggiamo lo schema SQL dal file mappato nel container
+        $sqlPath = '/var/www/Docker_Config/DBMS_Iniziale/DBMS.sql';
+
+        if (!file_exists($sqlPath)) {
+            throw new Exception("File di inizializzazione database non trovato in $sqlPath. Verifica il mount dei volumi.");
+        }
+
+        $sql = file_get_contents($sqlPath);
+        if (!executeMultiQuery($sql)) {
+            throw new Exception("Errore durante l'inizializzazione dello schema database.");
+        }
+
+        // Piccolo delay per dare tempo a MySQL/MariaDB di stabilizzare le tabelle appena create
+        usleep(500000);
+    }
+}
+catch (Exception $e) {
+    inviaRisposta(false, "Errore verifica/inizializzazione sistema: " . $e->getMessage(), 500);
 }
 
 // 2. LETTURA DATI
@@ -81,7 +104,8 @@ try {
     $database->commit();
     inviaRisposta(true, "Configurazione iniziale completata con successo.", 200);
 
-} catch (Exception $e) {
+}
+catch (Exception $e) {
     $database->rollback();
     error_log("❌ [SETUP ERROR] " . $e->getMessage());
     inviaRisposta(false, "Errore durante il salvataggio della configurazione: " . $e->getMessage(), 500);
