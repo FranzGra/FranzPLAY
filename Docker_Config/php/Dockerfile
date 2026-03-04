@@ -11,7 +11,9 @@ RUN apk add --no-cache pcre-dev $PHPIZE_DEPS \
     && apk del pcre-dev $PHPIZE_DEPS
 # Copia lo script di avvio per i permessi volume
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN apk add --no-cache dos2unix \
+    && dos2unix /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh
 
 # Imposta permessi per la cartella api (Codice sorgente montato)
 RUN mkdir -p /var/www/api/sessioni/immagini_utenti && \

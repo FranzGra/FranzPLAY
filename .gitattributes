@@ -1,0 +1,3 @@
+# Disabilita l'auto-conversione CRLF su file di script Bash
+*.sh text eol=lf
+*.bat text eol=crlf
