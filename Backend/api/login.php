@@ -62,23 +62,29 @@ if (empty($nome_utente) || empty($password)) {
 // ============================================================================
 
 try {
-    // 1. CONTROLLO BAN ATTIVO
-    $stmt = $database->prepare(
-        "SELECT bloccato_fino_a FROM Spammers WHERE Nome_Utente = ? AND bloccato_fino_a > NOW()"
-    );
-    $stmt->bind_param('s', $nome_utente);
-    $stmt->execute();
-    $stmt->bind_result($fine_blocco);
+    // 1. CONTROLLO BAN ATTIVO (Solo se la tabella esiste)
+    if (checkTableExists('Spammers')) {
+        $stmt = $database->prepare(
+            "SELECT bloccato_fino_a FROM Spammers WHERE Nome_Utente = ? AND bloccato_fino_a > NOW()"
+        );
+        $stmt->bind_param('s', $nome_utente);
+        $stmt->execute();
+        $stmt->bind_result($fine_blocco);
 
-    if ($stmt->fetch()) {
+        if ($stmt->fetch()) {
+            $stmt->close();
+            $secondi_rimanenti = strtotime($fine_blocco) - time();
+            error_log("⚠️ [LOGIN SECURITY] Tentativo su account bloccato: $nome_utente (IP: $ip_address)");
+            inviaRisposta(false, "Account temporaneamente bloccato per troppi tentativi. Riprova tra $secondi_rimanenti secondi.", 429);
+        }
         $stmt->close();
-        $secondi_rimanenti = strtotime($fine_blocco) - time();
-        error_log("⚠️ [LOGIN SECURITY] Tentativo su account bloccato: $nome_utente (IP: $ip_address)");
-        inviaRisposta(false, "Account temporaneamente bloccato per troppi tentativi. Riprova tra $secondi_rimanenti secondi.", 429);
     }
-    $stmt->close();
 
     // 2. RECUPERO DATI UTENTE
+    if (!checkTableExists('Utenti')) {
+        throw new Exception("Tabella Utenti non trovata. Inizializzazione necessaria.");
+    }
+
     $stmt = $database->prepare(
         "SELECT id, Nome_Utente, Password, Admin, Immagine_Profilo, colore_Tema FROM Utenti WHERE Nome_Utente = ?"
     );
@@ -91,49 +97,53 @@ try {
     // 3. VERIFICA PASSWORD
     $login_successo = ($utente && password_verify($password, $utente['Password']));
 
-    // 4. REGISTRAZIONE ACCESSO (LOGGING DB)
-    $stmt = $database->prepare(
-        "INSERT INTO Accessi (indirizzo_Ip, successo, Nome_Utente, data_ora_tentativo) VALUES (?, ?, ?, NOW())"
-    );
-    $successo_int = $login_successo ? 1 : 0;
-    $stmt->bind_param('sis', $ip_address, $successo_int, $nome_utente);
-    $stmt->execute();
-    $stmt->close();
-
-    // 5. GESTIONE FALLIMENTO E RATE LIMITING
-    if (!$login_successo) {
-        // Conta i fallimenti recenti per questo username
+    // 4. REGISTRAZIONE ACCESSO (Solo se la tabella esiste)
+    if (checkTableExists('Accessi')) {
         $stmt = $database->prepare(
-            "SELECT COUNT(*) FROM Accessi WHERE Nome_Utente = ? AND successo = 0 AND data_ora_tentativo > DATE_SUB(NOW(), INTERVAL 30 SECOND)"
+            "INSERT INTO Accessi (indirizzo_Ip, successo, Nome_Utente, data_ora_tentativo) VALUES (?, ?, ?, NOW())"
         );
-        $stmt->bind_param('s', $nome_utente);
+        $successo_int = $login_successo ? 1 : 0;
+        $stmt->bind_param('sis', $ip_address, $successo_int, $nome_utente);
         $stmt->execute();
-        $stmt->bind_result($tentativi_falliti);
-        $stmt->fetch();
         $stmt->close();
 
-        // Se supera i 3 tentativi, applica il ban
-        if ($tentativi_falliti >= 3) {
+        // 5. GESTIONE FALLIMENTO E RATE LIMITING
+        if (!$login_successo) {
+            // Conta i fallimenti recenti per questo username
             $stmt = $database->prepare(
-                "INSERT INTO Spammers (Nome_Utente, indirizzo_Ip, bloccato_fino_a) 
-                 VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 SECOND)) 
-                 ON DUPLICATE KEY UPDATE indirizzo_Ip = VALUES(indirizzo_Ip), bloccato_fino_a = DATE_ADD(NOW(), INTERVAL 30 SECOND)"
+                "SELECT COUNT(*) FROM Accessi WHERE Nome_Utente = ? AND successo = 0 AND data_ora_tentativo > DATE_SUB(NOW(), INTERVAL 30 SECOND)"
             );
-            $stmt->bind_param('ss', $nome_utente, $ip_address);
+            $stmt->bind_param('s', $nome_utente);
             $stmt->execute();
+            $stmt->bind_result($tentativi_falliti);
+            $stmt->fetch();
             $stmt->close();
 
-            error_log("🚨 [SECURITY BAN] Username bloccato: $nome_utente (IP: $ip_address)");
-            inviaRisposta(false, 'Troppi tentativi falliti. Accesso bloccato per 30 secondi.', 429);
-        }
+            // Se supera i 3 tentativi e la tabella Spammers esiste, applica il ban
+            if ($tentativi_falliti >= 3 && checkTableExists('Spammers')) {
+                $stmt = $database->prepare(
+                    "INSERT INTO Spammers (Nome_Utente, indirizzo_Ip, bloccato_fino_a) 
+                     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 SECOND)) 
+                     ON DUPLICATE KEY UPDATE indirizzo_Ip = VALUES(indirizzo_Ip), bloccato_fino_a = DATE_ADD(NOW(), INTERVAL 30 SECOND)"
+                );
+                $stmt->bind_param('ss', $nome_utente, $ip_address);
+                $stmt->execute();
+                $stmt->close();
 
+                error_log("🚨 [SECURITY BAN] Username bloccato: $nome_utente (IP: $ip_address)");
+                inviaRisposta(false, 'Troppi tentativi falliti. Accesso bloccato per 30 secondi.', 429);
+            }
+        }
+    }
+
+    if (!$login_successo) {
         inviaRisposta(false, 'Credenziali di accesso non valide', 401);
     }
 
     // 6. LOGIN RIUSCITO: INIZIALIZZAZIONE SESSIONE
     $_SESSION['id_utente'] = $utente['id'];
     $_SESSION['nome_utente'] = $utente['Nome_Utente'];
-    $_SESSION['amministratore'] = (bool) $utente['Admin'];
+    $_SESSION['amministratore'] = (bool)$utente['Admin'];
     $_SESSION['immagine_profilo'] = $utente['Immagine_Profilo'];
     $_SESSION['colore_theme'] = $utente['colore_Tema'] ?? '#ff6923';
 
@@ -153,12 +163,13 @@ try {
         'user' => [
             'username' => $utente['Nome_Utente'],
             'avatar' => $utente['Immagine_Profilo'],
-            'isAdmin' => (bool) $utente['Admin'],
+            'isAdmin' => (bool)$utente['Admin'],
             'themeColor' => $utente['colore_Tema'] ?? '#ff6923'
         ]
     ]);
 
-} catch (Exception $e) {
+}
+catch (Exception $e) {
     error_log("❌ [LOGIN CRITICAL ERROR] " . $e->getMessage());
     inviaRisposta(false, "Errore durante il processo di login.", 500);
 }

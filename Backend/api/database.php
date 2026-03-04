@@ -101,19 +101,28 @@ function checkTableExists($tableName)
 function executeMultiQuery($sql)
 {
     global $database;
-    // Pulisce eventuali commenti MySQL che potrebbero rompere multi_query
-    $sql = preg_replace('/--.*$/m', '', $sql);
 
-    if ($database->multi_query($sql)) {
-        do {
-            // Svuota i risultati per permettere la query successiva
-            if ($result = $database->store_result()) {
-                $result->free();
-            }
-        } while ($database->more_results() && $database->next_result());
-        return true;
+    // 1. Rimuove i commenti -- (SQL standard)
+    $sql = preg_replace('/--.*$/m', '', $sql);
+    
+    // 2. Rimuove i commenti /* ... */ (C-style)
+    $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
+    
+    // 3. Splitta per ';' stando attenti a non splittare dentro i commenti (già rimossi)
+    // Usiamo explode poiché lo schema è semplice e non ha ';' dentro stringhe/JSON.
+    $queries = explode(';', $sql);
+    
+    foreach ($queries as $query) {
+        $query = trim($query);
+        if (empty($query)) continue;
+        
+        if (!$database->query($query)) {
+            error_log("❌ [AUTO-INIT SQL ERROR] " . $database->error . " | SQL: " . substr($query, 0, 150) . "...");
+            return false;
+        }
     }
-    return false;
+
+    return true;
 }
 
 /**
