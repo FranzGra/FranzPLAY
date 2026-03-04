@@ -56,8 +56,10 @@ services:
 
   # --- DATABASE (MySQL) ---
   mysql:
-    image: mysql:latest
+    image: mariadb:latest
     container_name: DATABASE_MySQL
+    tmpfs:
+      - /var/run/mysqld
     volumes:
       - ./App_Data/Database_Data:/var/lib/mysql
       - ./Docker_Config/DBMS_Iniziale/:/docker-entrypoint-initdb.d

@@ -598,7 +598,7 @@ try {
             executePreparedQuery("INSERT INTO Impostazioni (Chiave_Impostazione, Valore_Impostazione) VALUES ('logo_part_2', ?) ON DUPLICATE KEY UPDATE Valore_Impostazione = ?", "ss", [$secondo, $secondo]);
 
             if (isset($Cache) && is_object($Cache)) {
-                $Cache->delete('impostazioni_logo');
+                $Cache->delete('impostazioni_globali');
             }
 
             inviaRisposta(true, 'Logo aggiornato con successo');

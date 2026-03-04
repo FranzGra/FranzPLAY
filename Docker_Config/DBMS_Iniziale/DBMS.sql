@@ -155,10 +155,8 @@ CREATE TABLE IF NOT EXISTS `Utenti` (
     INDEX idx_utenti_email (`Email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Account utenti con profili personalizzati';
 
--- Utenti predefiniti (CAMBIARE PASSWORD IN PRODUZIONE!)
-INSERT IGNORE INTO `Utenti` (`Nome_Utente`, `Password`, `Admin`) VALUES
-('admin', '$2y$10$oH/wfvGqW71.yjD8ozrNzui/ooRODRtqbNJcERi2fYnpwz7RSG6Mi', TRUE),   -- Password: admin
-('Franz', '$2y$10$YLP2fURaliF6IJsxRwyMzOoQ7hbabVEeXyMBhG9bhN5qSJwvZdABC', TRUE);  -- Password: franz
+-- Utenti predefiniti RIMOSSI per supportare l'Initial Setup Wizard
+-- In precedenza qui venivano creati gli utenti admin e Franz di default.
 
 -- ============================================================================
 -- TABELLA: Like

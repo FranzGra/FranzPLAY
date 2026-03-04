@@ -7,9 +7,20 @@ export const SettingsProvider = ({ children }) => {
   const [logoParts, setLogoParts] = useState({ part1: 'FRANZ', part2: 'PLAY' });
   const [defaultTheme, setDefaultTheme] = useState(() => localStorage.getItem('franz_default_theme') || '#dc2626');
   const [loading, setLoading] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   const fetchSettings = async () => {
     try {
+      // 1. Controllo Stato Sistema (Setup Wizard)
+      const statusRes = await apiRequest('/status.php', 'GET');
+      if (statusRes?.success && statusRes?.needsSetup) {
+        setNeedsSetup(true);
+        // Se ha bisogno del setup, non carichiamo le impostazioni perché
+        // non ce ne sono, usiamo i valori di default dello state.
+        return;
+      }
+
+      // 2. Fetch Impostazioni normali
       const res = await apiRequest('/impostazioni.php', 'GET');
       if (res?.success) {
         const data = res.data || res.dati || {};
@@ -38,7 +49,7 @@ export const SettingsProvider = ({ children }) => {
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ logoParts, defaultTheme, fetchSettings, loading }}>
+    <SettingsContext.Provider value={{ logoParts, defaultTheme, fetchSettings, loading, needsSetup }}>
       {children}
     </SettingsContext.Provider>
   );

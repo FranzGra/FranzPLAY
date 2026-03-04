@@ -26,6 +26,9 @@ const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminCategories = lazy(() => import('./pages/admin/AdminCategories'));
 const AdminAccessi = lazy(() => import('./pages/admin/AdminAccessi'));
 
+// --- WIZARD (Lazy Loaded) ---
+const SetupWizard = lazy(() => import('./pages/SetupWizard'));
+
 /**
  * COMPONENTE: ScrollToTop
  * Descrizione: Resetta lo scroll a (0,0) al cambio rotta.
@@ -96,41 +99,76 @@ export default function App() {
 
   return (
     <SettingsProvider>
-      <AuthProvider>
-        <Router>
-          <ScrollToTop />
-          <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /></div>}>
-            <Routes>
-              {/* 1. ADMIN ROUTES - Independent Layout */}
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminDashboard />} />
-                <Route path="videos" element={<AdminVideos />} />
-                <Route path="users" element={<AdminUsers />} />
-                <Route path="categories" element={<AdminCategories />} />
-                <Route path="accessi" element={<AdminAccessi />} />
-              </Route>
+      <SettingsGuard>
+        <AuthProvider>
+          <Router>
+            <ScrollToTop />
+            <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /></div>}>
+              <Routes>
+                {/* 1. ADMIN ROUTES - Independent Layout */}
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<AdminDashboard />} />
+                  <Route path="videos" element={<AdminVideos />} />
+                  <Route path="users" element={<AdminUsers />} />
+                  <Route path="categories" element={<AdminCategories />} />
+                  <Route path="accessi" element={<AdminAccessi />} />
+                </Route>
 
-              {/* 2. USER ROUTES - Wrapped in Main Layout */}
-              <Route element={<LayoutOutlet />}>
-                {/* PUBLIC */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                {/* 2. USER ROUTES - Wrapped in Main Layout */}
+                <Route element={<LayoutOutlet />}>
+                  {/* PUBLIC */}
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
 
-                {/* PROTECTED */}
-                <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-                <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
-                <Route path="/category/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
-                <Route path="/watch/:id" element={<ProtectedRoute><Player /></ProtectedRoute>} />
-                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/saved" element={<ProtectedRoute><Saved /></ProtectedRoute>} />
+                  {/* PROTECTED */}
+                  <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                  <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
+                  <Route path="/category/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
+                  <Route path="/watch/:id" element={<ProtectedRoute><Player /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/saved" element={<ProtectedRoute><Saved /></ProtectedRoute>} />
 
-                {/* FALLBACK */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </Suspense>
-        </Router>
-      </AuthProvider>
+                  {/* FALLBACK */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </Suspense>
+          </Router>
+        </AuthProvider>
+      </SettingsGuard>
     </SettingsProvider>
   );
 }
+
+/**
+ * COMPONENTE: SettingsGuard
+ * Descrizione: Blocca il rendering dell'app se il backend segnala
+ * che il setup iniziale (Wizard) non è ancora stato completato.
+ */
+import { useSettings } from './context/SettingsContext';
+
+const SettingsGuard = ({ children }) => {
+  const { needsSetup, loading } = useSettings();
+
+  if (loading) {
+    return (
+      <div className="min-h-dvh bg-zinc-950 flex items-center justify-center text-zinc-500">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (needsSetup) {
+    return (
+      <Suspense fallback={
+        <div className="h-screen w-full flex items-center justify-center bg-zinc-950">
+          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        </div>
+      }>
+        <SetupWizard />
+      </Suspense>
+    );
+  }
+
+  return children;
+};
