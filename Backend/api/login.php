@@ -140,12 +140,17 @@ try {
         inviaRisposta(false, 'Credenziali di accesso non valide', 401);
     }
 
+    // Recupero il tema di default globale dal DB
+    $res_default = $database->query("SELECT Valore_Impostazione FROM Impostazioni WHERE Chiave_Impostazione = 'colore_tema_default'");
+    $row_default = $res_default->fetch_assoc();
+    $app_default_theme = $row_default ? $row_default['Valore_Impostazione'] : '#dc2626';
+
     // 6. LOGIN RIUSCITO: INIZIALIZZAZIONE SESSIONE
     $_SESSION['id_utente'] = $utente['id'];
     $_SESSION['nome_utente'] = $utente['Nome_Utente'];
-    $_SESSION['amministratore'] = (bool)$utente['Admin'];
+    $_SESSION['amministratore'] = (bool) $utente['Admin'];
     $_SESSION['immagine_profilo'] = $utente['Immagine_Profilo'];
-    $_SESSION['colore_theme'] = $utente['colore_Tema'] ?? '#ff6923';
+    $_SESSION['colore_theme'] = $utente['colore_Tema'] ?? $app_default_theme;
 
     // Aggiorna timestamp ultimo accesso
     $stmt = $database->prepare("UPDATE Utenti SET ultimo_Accesso = NOW() WHERE id = ?");
@@ -163,13 +168,13 @@ try {
         'user' => [
             'username' => $utente['Nome_Utente'],
             'avatar' => $utente['Immagine_Profilo'],
-            'isAdmin' => (bool)$utente['Admin'],
-            'themeColor' => $utente['colore_Tema'] ?? '#ff6923'
+            'isAdmin' => (bool) $utente['Admin'],
+            'themeColor' => $utente['colore_Tema'], // Return NULL if unset
+            'appDefaultThemeColor' => $app_default_theme
         ]
     ]);
 
-}
-catch (Exception $e) {
+} catch (Exception $e) {
     error_log("❌ [LOGIN CRITICAL ERROR] " . $e->getMessage());
     inviaRisposta(false, "Errore durante il processo di login.", 500);
 }

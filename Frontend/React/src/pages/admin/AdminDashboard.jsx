@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { HardDrive, Database, Server, Activity, Clock, ShieldCheck, Palette, Check as CheckIcon } from 'lucide-react';
+import { HardDrive, Database, Server, Activity, Clock, ShieldCheck, Palette, Check as CheckIcon, AlertCircle, CheckCircle } from 'lucide-react';
 import { apiRequest } from '../../services/api';
 import { useSettings } from '../../context/SettingsContext';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
@@ -18,6 +18,13 @@ export default function AdminDashboard() {
 
     const [globalTheme, setGlobalTheme] = useState(defaultTheme || '#dc2626');
     const [isThemeSaving, setIsThemeSaving] = useState(false);
+
+    const [message, setMessage] = useState(null);
+
+    const showMessage = (type, text) => {
+        setMessage({ type, text });
+        setTimeout(() => setMessage(null), 4000);
+    };
 
     useEffect(() => {
         setLogo1(logoParts?.part1 || 'FRANZ');
@@ -56,11 +63,11 @@ export default function AdminDashboard() {
 
             const res = await apiRequest('/admin.php', 'POST', formData);
             if (res.success) {
-                alert('Logo aggiornato con successo');
+                showMessage('success', 'Logo aggiornato con successo');
                 fetchSettings(); // ricarica il logo globalmente nel context
             }
         } catch (error) {
-            alert('Errore salvataggio logo');
+            showMessage('error', 'Errore salvataggio logo');
         } finally {
             setIsLogoSaving(false);
         }
@@ -76,11 +83,11 @@ export default function AdminDashboard() {
 
             const res = await apiRequest('/admin.php', 'POST', formData);
             if (res.success) {
-                alert('Tema predefinito aggiornato con successo');
+                showMessage('success', 'Tema predefinito aggiornato con successo');
                 fetchSettings(); // Forza reload e re-render globale
             }
         } catch (error) {
-            alert('Errore salvataggio tema');
+            showMessage('error', 'Errore salvataggio tema');
         } finally {
             setIsThemeSaving(false);
         }
@@ -126,6 +133,13 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             </div>
+
+            {message ? (
+                <div className={`p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 shadow-lg ${message.type === 'success' ? 'bg-green-950/50 text-green-400 border border-green-800' : 'bg-red-950/50 text-red-400 border border-red-800'}`}>
+                    {message.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+                    <span className="font-medium">{message.text}</span>
+                </div>
+            ) : null}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

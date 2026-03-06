@@ -10,6 +10,9 @@ export const COLOR_PRESETS = [
     { name: 'Cyan', value: '#0891b2' },
     { name: 'Deep Teal', value: '#0d9488' },
     { name: 'Indigo', value: '#4f46e5' },
+    { name: 'Pink', value: '#db2777' },
+    { name: 'Emerald', value: '#10b981' },
+    { name: 'Slate', value: '#64748b' },
 ];
 
 export default function ThemeTab({ user, selectedColor, setSelectedColor, handleThemeChange }) {
@@ -24,6 +27,20 @@ export default function ThemeTab({ user, selectedColor, setSelectedColor, handle
 
             {/* Palette Preset */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <button
+                    onClick={() => handleThemeChange('')}
+                    className={`
+                    relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 group
+                    ${!selectedColor
+                            ? 'bg-zinc-800 border-zinc-500 ring-1 ring-zinc-500'
+                            : 'bg-zinc-950 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700'}
+                `}
+                >
+                    <div className="h-8 w-8 rounded-full shadow-lg border border-white/10 flex items-center justify-center bg-zinc-800">
+                        {!selectedColor ? <CheckIcon className="h-5 w-5 text-white drop-shadow-md" /> : <Palette className="h-4 w-4 text-zinc-400" />}
+                    </div>
+                    <span className="text-sm font-medium text-zinc-300">Predefinito App</span>
+                </button>
                 {COLOR_PRESETS.map((preset) => (
                     <button
                         key={preset.value}
@@ -74,8 +91,8 @@ export default function ThemeTab({ user, selectedColor, setSelectedColor, handle
                                 }
                             }}
                             onBlur={(e) => {
-                                if (selectedColor.length !== 7) {
-                                    setSelectedColor(user?.themeColor || '#dc2626');
+                                if (selectedColor && selectedColor.length !== 7) {
+                                    setSelectedColor(user?.themeColor || '');
                                 }
                             }}
                             className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] transition-all w-full"

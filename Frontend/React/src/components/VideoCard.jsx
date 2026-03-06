@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, ThumbsUp, X } from 'lucide-react';
+import { ThumbsUp, X } from 'lucide-react';
 import { getAssetUrl } from '../services/helpers';
 
 // Helper per calcolo durata
@@ -160,7 +160,6 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
             </span>
 
             <div className="flex items-center gap-3 text-zinc-500 text-xs">
-              <div className="flex items-center gap-1"><Eye className="h-3 w-3" /><span>{video.Views || 0}</span></div>
               <div className="flex items-center gap-1"><ThumbsUp className="h-3 w-3" /><span>{video.Likes || 0}</span></div>
             </div>
           </div>

@@ -71,12 +71,17 @@ try {
                 $_SESSION['nome_utente'] = $row['Nome_Utente'];
                 $_SESSION['immagine_profilo'] = $row['Immagine_Profilo'];
 
+                $res_default = $database->query("SELECT Valore_Impostazione FROM Impostazioni WHERE Chiave_Impostazione = 'colore_tema_default'");
+                $row_default = $res_default->fetch_assoc();
+                $app_default_theme = $row_default ? $row_default['Valore_Impostazione'] : '#dc2626';
+
                 inviaRisposta(true, 'Profilo caricato', 200, [
                     'user' => [
                         'username' => $row['Nome_Utente'],
                         'avatar' => $row['Immagine_Profilo'],
                         'isAdmin' => (bool) $row['Admin'],
-                        'themeColor' => $row['colore_Tema'] ?? '#ff6923',
+                        'themeColor' => $row['colore_Tema'],
+                        'appDefaultThemeColor' => $app_default_theme,
                         'homePreferences' => json_decode($row['preferenze_home'] ?? '{}', true)
                     ]
                 ]);
@@ -107,16 +112,25 @@ try {
         case 'cambia_tema':
             $nuovo_colore = trim($_POST['colore_tema'] ?? '');
 
-            // Validazione colore Hex (#RRGGBB)
-            if (!preg_match('/^#[a-f0-9]{6}$/i', $nuovo_colore)) {
-                inviaRisposta(false, 'Formato colore non valido (richiesto esadecimale es: #FF0000).', 400);
-            }
-
-            if (executePreparedQuery("UPDATE Utenti SET colore_Tema = ? WHERE id = ?", "si", [$nuovo_colore, $id_utente])) {
-                $_SESSION['colore_theme'] = $nuovo_colore;
-                inviaRisposta(true, 'Preferenza tema salvata!', 200, ['themeColor' => $nuovo_colore]);
+            if (empty($nuovo_colore)) {
+                if (executePreparedQuery("UPDATE Utenti SET colore_Tema = NULL WHERE id = ?", "i", [$id_utente])) {
+                    unset($_SESSION['colore_theme']);
+                    inviaRisposta(true, 'Tema ripristinato al colore di default dell\'app.', 200, ['themeColor' => null]);
+                } else {
+                    throw new Exception("Errore durante il ripristino del tema nel database.");
+                }
             } else {
-                throw new Exception("Errore durante l'aggiornamento del tema nel database.");
+                // Validazione colore Hex (#RRGGBB)
+                if (!preg_match('/^#[a-f0-9]{6}$/i', $nuovo_colore)) {
+                    inviaRisposta(false, 'Formato colore non valido (richiesto esadecimale es: #FF0000).', 400);
+                }
+
+                if (executePreparedQuery("UPDATE Utenti SET colore_Tema = ? WHERE id = ?", "si", [$nuovo_colore, $id_utente])) {
+                    $_SESSION['colore_theme'] = $nuovo_colore;
+                    inviaRisposta(true, 'Preferenza tema salvata!', 200, ['themeColor' => $nuovo_colore]);
+                } else {
+                    throw new Exception("Errore durante l'aggiornamento del tema nel database.");
+                }
             }
             break;
 

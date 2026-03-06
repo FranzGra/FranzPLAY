@@ -23,8 +23,8 @@ export default function Profile() {
     const [editUsername, setEditUsername] = useState(user?.username || '');
     const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
 
-    // Stato locale per il color picker (inizializzato con il colore attuale dell'utente)
-    const [selectedColor, setSelectedColor] = useState(user?.themeColor || '#dc2626');
+    // Stato locale per il color picker (inizializzato con il colore attuale dell'utente o vuoto per auto)
+    const [selectedColor, setSelectedColor] = useState(user?.themeColor || '');
     const [cropImage, setCropImage] = useState(null);
 
     const showMessage = (type, text) => {

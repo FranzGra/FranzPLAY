@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom';
 import { apiRequest } from '../../services/api';
 import { getAssetUrl } from '../../services/helpers';
 import ImageCropper from '../../components/ImageCropper';
-import { Search, Trash2, Edit, X, Upload, Check, AlertCircle, ChevronLeft, ChevronRight, Image as ImageIcon, Film, Eye, ThumbsUp, LayoutGrid, List } from 'lucide-react';
+import { Search, Trash2, Edit, X, Upload, Check, AlertCircle, ChevronLeft, ChevronRight, Image as ImageIcon, Film, ThumbsUp, LayoutGrid, List } from 'lucide-react';
 
 export default function AdminVideos() {
     const [videos, setVideos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(0);
+    const [itemsPerPage, setItemsPerPage] = useState(25);
     const [search, setSearch] = useState('');
     const [editingVideo, setEditingVideo] = useState(null);
     const [categories, setCategories] = useState([]);
@@ -32,8 +33,8 @@ export default function AdminVideos() {
         try {
             const res = await apiRequest('/admin.php', 'POST', {
                 action: 'lista_video',
-                limit: 12,
-                offset: currentPage * 12,
+                limit: itemsPerPage,
+                offset: currentPage * itemsPerPage,
                 query: search
             });
             if (res.success) {
@@ -49,7 +50,7 @@ export default function AdminVideos() {
 
     useEffect(() => {
         fetchVideos();
-    }, [page]);
+    }, [page, itemsPerPage]);
 
     const isFirstMount = useRef(true);
 
@@ -228,6 +229,30 @@ export default function AdminVideos() {
                         </button>
                     </div>
 
+                    <div className="relative min-w-[130px] z-20">
+                        <details className="group relative w-full">
+                            <summary className="w-full bg-zinc-900/50 border border-white/5 rounded-2xl py-2.5 px-4 text-zinc-300 focus:outline-none focus:border-white/20 transition-all font-bold text-sm list-none flex justify-between items-center cursor-pointer marker:content-none backdrop-blur-md">
+                                {itemsPerPage} / pag
+                                <ChevronRight className="transition-transform group-open:rotate-90 text-zinc-600 pointer-events-none ml-2" size={16} />
+                            </summary>
+                            <div className="absolute top-full left-0 w-full mt-2 py-2 bg-zinc-900 border border-white/5 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                                {[25, 50, 100, 200].map(val => (
+                                    <div
+                                        key={val}
+                                        className={`px-4 py-2.5 cursor-pointer hover:bg-zinc-800 transition-colors text-sm font-bold ${itemsPerPage === val ? 'text-primary' : 'text-zinc-300'}`}
+                                        onClick={(e) => {
+                                            setItemsPerPage(val);
+                                            setPage(0);
+                                            e.target.closest('details').removeAttribute('open');
+                                        }}
+                                    >
+                                        {val} / pag
+                                    </div>
+                                ))}
+                            </div>
+                        </details>
+                    </div>
+
                     <div className="relative group w-full md:w-80">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" size={18} />
                         <input
@@ -277,7 +302,6 @@ export default function AdminVideos() {
                                             {video.Nome_Categoria || 'NESSUNA'}
                                         </span>
                                         <div className="flex items-center gap-3 text-zinc-500 text-[10px] font-bold">
-                                            <span className="flex items-center gap-1"><Eye size={12} /> {video.Views || 0}</span>
                                             <span className="flex items-center gap-1"><ThumbsUp size={12} /> {video.Likes || 0}</span>
                                         </div>
                                     </div>
@@ -340,7 +364,6 @@ export default function AdminVideos() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-4 text-zinc-500 text-[11px] font-bold">
-                                                    <span className="flex items-center gap-1.5"><Eye size={14} className="opacity-50" /> {video.Views || 0}</span>
                                                     <span className="flex items-center gap-1.5"><ThumbsUp size={14} className="opacity-50" /> {video.Likes || 0}</span>
                                                 </div>
                                             </td>
@@ -373,7 +396,7 @@ export default function AdminVideos() {
 
             {/* Pagination */}
             {
-                !loading && videos.length > 0 && (
+                !loading && videos.length > 0 && (page > 0 || videos.length === itemsPerPage) && (
                     <div className="flex items-center justify-center gap-6 pt-10">
                         <button
                             onClick={() => setPage(p => Math.max(0, p - 1))}
@@ -387,7 +410,7 @@ export default function AdminVideos() {
                         </div>
                         <button
                             onClick={() => setPage(p => p + 1)}
-                            disabled={videos.length < 12}
+                            disabled={videos.length < itemsPerPage}
                             className="w-12 h-12 flex items-center justify-center rounded-2xl bg-zinc-900 border border-white/5 hover:bg-zinc-800 disabled:opacity-20 transition-all active:scale-90 text-white"
                         >
                             <ChevronRight size={20} />

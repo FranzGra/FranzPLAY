@@ -29,11 +29,10 @@ try {
     if ($tableExists) {
         $res = $database->query("SELECT COUNT(*) as num_utenti FROM Utenti");
         $row = $res->fetch_assoc();
-        if ((int)$row['num_utenti'] > 0) {
+        if ((int) $row['num_utenti'] > 0) {
             inviaRisposta(false, "Sistema già configurato. Accesso al setup negato.", 403);
         }
-    }
-    else {
+    } else {
         // LA TABELLA NON ESISTE: DOBBIAMO INIZIALIZZARE IL DATABASE
         // Leggiamo lo schema SQL dal file mappato nel container
         $sqlPath = '/var/www/Docker_Config/DBMS_Iniziale/DBMS.sql';
@@ -50,8 +49,7 @@ try {
         // Piccolo delay per dare tempo a MySQL/MariaDB di stabilizzare le tabelle appena create
         usleep(500000);
     }
-}
-catch (Exception $e) {
+} catch (Exception $e) {
     inviaRisposta(false, "Errore verifica/inizializzazione sistema: " . $e->getMessage(), 500);
 }
 
@@ -89,7 +87,7 @@ try {
 
     // C. Creazione Utente Amministratore
     $hash_password = password_hash($password, PASSWORD_BCRYPT);
-    $sql_utente = "INSERT INTO Utenti (Nome_Utente, Password, Admin) VALUES (?, ?, TRUE)";
+    $sql_utente = "INSERT INTO Utenti (Nome_Utente, Password, Admin, colore_Tema) VALUES (?, ?, TRUE, NULL)";
 
     $success = executePreparedQuery($sql_utente, "ss", [$username, $hash_password]);
     if (!$success) {
@@ -104,8 +102,7 @@ try {
     $database->commit();
     inviaRisposta(true, "Configurazione iniziale completata con successo.", 200);
 
-}
-catch (Exception $e) {
+} catch (Exception $e) {
     $database->rollback();
     error_log("❌ [SETUP ERROR] " . $e->getMessage());
     inviaRisposta(false, "Errore durante il salvataggio della configurazione: " . $e->getMessage(), 500);

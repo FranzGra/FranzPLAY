@@ -87,7 +87,7 @@ try {
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
     // 3. INSERIMENTO NUOVO UTENTE
-    $sql = "INSERT INTO Utenti (Nome_Utente, Password, Email) VALUES (?, ?, ?)";
+    $sql = "INSERT INTO Utenti (Nome_Utente, Password, Email, colore_Tema) VALUES (?, ?, ?, NULL)";
     $stmt = $database->prepare($sql);
     $stmt->bind_param("sss", $username, $password_hash, $emailParam);
 

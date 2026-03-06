@@ -144,7 +144,7 @@ try {
 
             // Recupero informazioni per determinare il percorso di destinazione
             $res = executePreparedQuery(
-                "SELECT v.percorso_file, c.Nome as Nome_Cat FROM Video v LEFT JOIN Categorie c ON v.id_Categoria = c.id WHERE v.id = ?",
+                "SELECT v.percorso_file, v.percorso_copertina, c.Nome as Nome_Cat FROM Video v LEFT JOIN Categorie c ON v.id_Categoria = c.id WHERE v.id = ?",
                 "i",
                 [$id_video]
             );
@@ -153,22 +153,38 @@ try {
             if (!$info)
                 throw new Exception("Video non trovato (ID: $id_video)");
 
-            // La copertina deve stare nella stessa cartella del file video
+            // La copertina deve stare nella cartella copertine_[Categoria]
             $video_rel_dir = dirname($info['percorso_file']);
             if ($video_rel_dir == '.')
                 $video_rel_dir = "";
+
+            $cat_name = $info['Nome_Cat'] ?: 'Generale';
+            $cover_dir_name = 'copertine_' . $cat_name;
+            $video_rel_dir = $video_rel_dir ? $video_rel_dir . '/' . $cover_dir_name : $cover_dir_name;
+
+            // Rimuovi vecchia copertina se esiste per evitare file orfani
+            if ($info['percorso_copertina'] && $info['percorso_copertina'] != 'mancante') {
+                $old_full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $info['percorso_copertina']), DIRECTORY_SEPARATOR);
+                if (file_exists($old_full_path)) {
+                    @unlink($old_full_path);
+                }
+            }
 
             // Normalize slashes
             $video_rel_dir = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video_rel_dir);
             $base_path = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $BASE_VIDEO_PATH);
 
-            $target_dir = $base_path . ($video_rel_dir ? DIRECTORY_SEPARATOR . $video_rel_dir : '');
+            $target_dir = $base_path . DIRECTORY_SEPARATOR . ltrim($video_rel_dir, DIRECTORY_SEPARATOR);
+
+            if (!file_exists($target_dir)) {
+                if (!@mkdir($target_dir, 0777, true)) {
+                    throw new Exception("Impossibile creare la cartella di destinazione: $target_dir");
+                }
+            }
 
             // Validazione cartella e permessi
-            if (!file_exists($target_dir))
-                throw new Exception("Percorso non trovato su disco: $target_dir");
             if (!is_writable($target_dir))
-                throw new Exception("Permessi di scrittura negati nella cartella asset");
+                throw new Exception("Permessi di scrittura negati nella cartella asset: $target_dir");
 
             // Validazione tipo file (MIME)
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -233,18 +249,39 @@ try {
             if (!isset($_FILES['file_anteprima']))
                 throw new Exception("File anteprima mancante");
 
-            $res = executePreparedQuery("SELECT v.percorso_file FROM Video v WHERE v.id = ?", "i", [$id_video]);
+            $res = executePreparedQuery(
+                "SELECT v.percorso_file, v.percorso_anteprima, c.Nome as Nome_Cat FROM Video v LEFT JOIN Categorie c ON v.id_Categoria = c.id WHERE v.id = ?",
+                "i",
+                [$id_video]
+            );
             $info = $res->fetch_assoc();
 
             if (!$info)
                 throw new Exception("Video non trovato (ID: $id_video)");
 
             $video_rel_dir = trim(dirname($info['percorso_file']), '.\\/');
-            $base_path = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $BASE_VIDEO_PATH), DIRECTORY_SEPARATOR);
-            $target_dir = $base_path . ($video_rel_dir ? DIRECTORY_SEPARATOR . $video_rel_dir : '');
 
-            if (!file_exists($target_dir))
-                throw new Exception("Percorso non trovato su disco: $target_dir");
+            $cat_name = $info['Nome_Cat'] ?: 'Generale';
+            $preview_dir_name = 'anteprime_' . $cat_name;
+            $video_rel_dir = $video_rel_dir ? $video_rel_dir . '/' . $preview_dir_name : $preview_dir_name;
+
+            // Rimuovi vecchia anteprima se esiste
+            if ($info['percorso_anteprima'] && $info['percorso_anteprima'] != 'mancante') {
+                $old_full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $info['percorso_anteprima']), DIRECTORY_SEPARATOR);
+                if (file_exists($old_full_path)) {
+                    @unlink($old_full_path);
+                }
+            }
+
+            $video_rel_dir = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video_rel_dir);
+            $base_path = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $BASE_VIDEO_PATH), DIRECTORY_SEPARATOR);
+            $target_dir = $base_path . DIRECTORY_SEPARATOR . ltrim($video_rel_dir, DIRECTORY_SEPARATOR);
+
+            if (!file_exists($target_dir)) {
+                if (!@mkdir($target_dir, 0777, true)) {
+                    throw new Exception("Impossibile creare la cartella di destinazione: $target_dir");
+                }
+            }
 
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mime = finfo_file($finfo, $_FILES['file_anteprima']['tmp_name']);
@@ -258,7 +295,7 @@ try {
             $ext = $ext_map[$mime];
 
             $filename_no_ext = pathinfo($info['percorso_file'], PATHINFO_FILENAME);
-            $new_filename = $filename_no_ext . "_preview." . $ext;
+            $new_filename = $filename_no_ext . "." . $ext;
             $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
 
             if (move_uploaded_file($_FILES['file_anteprima']['tmp_name'], $target_file)) {
@@ -494,7 +531,7 @@ try {
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
             // Inserimento utente
-            $stmt = $database->prepare("INSERT INTO Utenti (Nome_Utente, Password, Admin, ultimo_Accesso) VALUES (?, ?, ?, NULL)");
+            $stmt = $database->prepare("INSERT INTO Utenti (Nome_Utente, Password, Admin, ultimo_Accesso, colore_Tema) VALUES (?, ?, ?, NULL, NULL)");
             $stmt->bind_param("ssi", $username, $hashed_password, $is_admin);
             $stmt->execute();
             $stmt->close();

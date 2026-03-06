@@ -26,6 +26,7 @@ export const AuthProvider = ({ children }) => {
         : null,
       isAdmin: Boolean(userData.isAdmin),
       themeColor: userData.themeColor || null,
+      appDefaultThemeColor: userData.appDefaultThemeColor || null,
       homePreferences: userData.homePreferences || {}
     };
   };
@@ -49,6 +50,8 @@ export const AuthProvider = ({ children }) => {
         // 🛠️ FIX: Applica il colore dell'utente, non uno statico
         if (formattedUser.themeColor) {
           applyTheme(formattedUser.themeColor);
+        } else if (formattedUser.appDefaultThemeColor) {
+          applyTheme(formattedUser.appDefaultThemeColor);
         } else {
           // Usa il tema default se l'utente non ne ha uno
           applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626');
@@ -99,8 +102,12 @@ export const AuthProvider = ({ children }) => {
   // Funzione per aggiornare il tema localmente (es. dal Color Picker del profilo)
   const updateLocalTheme = (newColor) => {
     if (user) {
-      setUser({ ...user, themeColor: newColor }); // Aggiorna lo stato React
-      applyTheme(newColor); // Aggiorna il CSS
+      setUser({ ...user, themeColor: newColor || null }); // Aggiorna lo stato React
+      if (newColor) {
+        applyTheme(newColor); // Aggiorna il CSS
+      } else {
+        applyTheme(user.appDefaultThemeColor || localStorage.getItem('franz_default_theme') || '#dc2626'); // Usa default app se resettato
+      }
     }
   };
 

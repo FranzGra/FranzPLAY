@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS `Utenti` (
     `ResetTokenExpiry` DATETIME DEFAULT NULL COMMENT 'Scadenza token reset',
     `Immagine_Profilo` VARCHAR(255) DEFAULT NULL COMMENT 'Filename avatar',
     `ultimo_Accesso` DATETIME NULL DEFAULT NULL,
-    `colore_Tema` VARCHAR(7) DEFAULT '#dc2626',
+    `colore_Tema` VARCHAR(7) DEFAULT NULL,
     `preferenze_home` JSON DEFAULT NULL COMMENT 'JSON preferenze sezioni home (es. collapsed/expanded)',
     `Admin` BOOLEAN DEFAULT FALSE,
     

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ThumbsUp, Bookmark, Eye, Calendar, Share2, Loader2, FileVideo, Check } from 'lucide-react';
+import { ThumbsUp, Bookmark, Calendar, Share2, Loader2, FileVideo, Check } from 'lucide-react';
 
 import VideoPlayer from '../components/VideoPlayer';
 import Comments from '../components/Comments';
@@ -149,7 +149,6 @@ export default function Player() {
                             <span className="bg-zinc-800 text-zinc-200 px-3 py-1 rounded-lg border border-zinc-700 uppercase text-xs tracking-wider">
                                 {video.Nome_Categoria || 'Generale'}
                             </span>
-                            <span className="flex items-center gap-1.5"><Eye size={16} /> {video.Views || 0}</span>
                             <span className="flex items-center gap-1.5"><Calendar size={16} /> {new Date(video.data_Pubblicazione).toLocaleDateString()}</span>
                             {/* Format Badge */}
                             {video.Formato && (

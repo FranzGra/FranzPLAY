@@ -491,15 +491,20 @@ class VideoHandler(FileSystemEventHandler):
                             if os.path.exists(old_full_cover):
                                 try:
                                     os.makedirs(Path(new_full_cover).parent, exist_ok=True)
-                                    os.rename(old_full_cover, new_full_cover)
-                                    logging.info(f"RINOMINATA Copertina: {old_db_cover_path} -> {new_db_cover_calc}")
-                                    new_db_cover = new_db_cover_calc 
+                                    # Mantiene l'estensione originale della cover personalizzata
+                                    _, cover_ext = os.path.splitext(old_full_cover)
+                                    new_full_cover_with_ext = str(Path(new_full_cover).with_suffix(cover_ext))
+                                    new_db_cover_calc_with_ext = str(Path(new_db_cover_calc).with_suffix(cover_ext)).replace(os.sep, '/')
+                                    
+                                    os.rename(old_full_cover, new_full_cover_with_ext)
+                                    logging.info(f"RINOMINATA Copertina: {old_db_cover_path} -> {new_db_cover_calc_with_ext}")
+                                    new_db_cover = new_db_cover_calc_with_ext
                                 except Exception as e:
-                                    if os.path.exists(new_full_cover):
-                                        logging.info(f"File copertina {new_full_cover} già presente. Assumo spostato da rinomina categoria.")
-                                        new_db_cover = new_db_cover_calc 
+                                    if os.path.exists(new_full_cover_with_ext):
+                                        logging.info(f"File copertina {new_full_cover_with_ext} già presente. Assumo spostato da rinomina categoria.")
+                                        new_db_cover = new_db_cover_calc_with_ext 
                                     else:
-                                        logging.error(f"Fallita rinomina copertina {old_full_cover} -> {new_full_cover}: {e}")
+                                        logging.error(f"Fallita rinomina copertina {old_full_cover} -> {new_full_cover_with_ext}: {e}")
                             else:
                                 logging.warning(f"Copertina {old_db_cover_path} in DB ma non su disco. Sarà rigenerata.")
                         
@@ -508,15 +513,20 @@ class VideoHandler(FileSystemEventHandler):
                             if os.path.exists(old_full_preview):
                                 try:
                                     os.makedirs(Path(new_full_preview).parent, exist_ok=True)
-                                    os.rename(old_full_preview, new_full_preview)
-                                    logging.info(f"RINOMINATA Anteprima: {old_db_preview_path} -> {new_db_preview_calc}")
-                                    new_db_preview = new_db_preview_calc 
+                                    # Mantiene l'estensione originale dell'anteprima
+                                    _, preview_ext = os.path.splitext(old_full_preview)
+                                    new_full_preview_with_ext = str(Path(new_full_preview).with_suffix(preview_ext))
+                                    new_db_preview_calc_with_ext = str(Path(new_db_preview_calc).with_suffix(preview_ext)).replace(os.sep, '/')
+                                    
+                                    os.rename(old_full_preview, new_full_preview_with_ext)
+                                    logging.info(f"RINOMINATA Anteprima: {old_db_preview_path} -> {new_db_preview_calc_with_ext}")
+                                    new_db_preview = new_db_preview_calc_with_ext
                                 except Exception as e:
-                                    if os.path.exists(new_full_preview):
-                                        logging.info(f"File anteprima {new_full_preview} già presente. Assumo spostato da rinomina categoria.")
-                                        new_db_preview = new_db_preview_calc
+                                    if os.path.exists(new_full_preview_with_ext):
+                                        logging.info(f"File anteprima {new_full_preview_with_ext} già presente. Assumo spostato da rinomina categoria.")
+                                        new_db_preview = new_db_preview_calc_with_ext
                                     else:
-                                        logging.error(f"Fallita rinomina anteprima {old_full_preview} -> {new_full_preview}: {e}")
+                                        logging.error(f"Fallita rinomina anteprima {old_full_preview} -> {new_full_preview_with_ext}: {e}")
                             else:
                                 logging.warning(f"Anteprima {old_db_preview_path} in DB ma non su disco. Sarà rigenerata.")
 
