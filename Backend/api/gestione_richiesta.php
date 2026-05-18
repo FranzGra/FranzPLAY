@@ -76,7 +76,8 @@ header("Content-Type: application/json; charset=UTF-8");
 $sessionPath = '/App_Data/Sessions';
 
 if (!file_exists($sessionPath)) {
-    @mkdir($sessionPath, 0777, true);
+    // 0700: solo l'utente PHP-FPM può leggere/scrivere i file di sessione.
+    @mkdir($sessionPath, 0700, true);
 }
 
 if (is_writable($sessionPath)) {
@@ -93,11 +94,15 @@ ini_set('session.cookie_lifetime', $session_lifetime);
  * - HTTPOnly: Nasconde il cookie a JS (anti-XSS).
  * - SameSite=Lax: Protezione base contro CSRF.
  */
+// Rileva automaticamente HTTPS (considerando reverse proxy).
+$is_https = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+    || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https');
+
 session_set_cookie_params([
     'lifetime' => $session_lifetime,
     'path' => '/',
     'domain' => '',
-    'secure' => false, // Da mettere a TRUE se si abilita HTTPS in produzione
+    'secure' => $is_https, // Cookie marcato Secure solo sotto HTTPS, altrimenti il browser lo scarterebbe in dev.
     'httponly' => true,
     'samesite' => 'Lax'
 ]);

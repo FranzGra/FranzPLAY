@@ -1,8 +1,13 @@
 FROM php:8.2-fpm-alpine
-RUN docker-php-ext-install mysqli pdo pdo_mysql
 
-# Custom PHP Config
+# Estensioni native PHP + OPcache per performance.
+RUN docker-php-ext-install mysqli pdo pdo_mysql opcache
+
+# Configurazione PHP custom (memory, upload, opcache).
 COPY uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+
+# Configurazione PHP-FPM pool (process management, healthcheck).
+COPY www.conf /usr/local/etc/php-fpm.d/www.conf
 
 # Install Redis Extension
 RUN apk add --no-cache pcre-dev $PHPIZE_DEPS \

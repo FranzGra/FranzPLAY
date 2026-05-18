@@ -11,32 +11,57 @@
  * ============================================================================
  */
 
+// CORS coerente con gestione_richiesta.php (whitelist degli origin invece di "*").
+$allowed_origins_status = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://frontend:5173',
+    'http://localhost',
+    'http://localhost:80'
+];
+$origin_status = $_SERVER['HTTP_ORIGIN'] ?? '';
 header('Content-Type: application/json; charset=utf-8');
-header("Access-Control-Allow-Origin: *");
+if (in_array($origin_status, $allowed_origins_status)) {
+    header("Access-Control-Allow-Origin: $origin_status");
+    header("Access-Control-Allow-Credentials: true");
+}
 header("Access-Control-Allow-Methods: GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+    http_response_code(204);
     exit;
 }
 
 require_once 'database.php';
+require_once 'cache.php';
 
-global $database;
+global $database, $Cache;
+
+// Cache breve dello stato di configurazione: il frontend lo polla all'avvio
+// e il valore cambia raramente (solo durante setup iniziale).
+$STATUS_CACHE_KEY = 'system_status_v1';
+if (isset($Cache) && is_object($Cache)) {
+    $cached_status = $Cache->get($STATUS_CACHE_KEY);
+    if (is_array($cached_status) && isset($cached_status['isConfigured'])) {
+        echo json_encode($cached_status);
+        exit;
+    }
+}
 
 try {
     // 1. Verifica se la tabella Utenti esiste
     $checkTable = $database->query("SHOW TABLES LIKE 'Utenti'");
 
     if ($checkTable->num_rows === 0) {
-        // La tabella non esiste: il database è vuoto o non inizializzato
-        echo json_encode([
+        // La tabella non esiste: il database è vuoto o non inizializzato.
+        // NON cachiamo: vogliamo che subito dopo il setup lo stato torni "configurato".
+        $payload = [
             "success" => true,
             "needsSetup" => true,
-            "isConfigured" => false,
-            "debug" => "Tabella Utenti mancante"
-        ]);
+            "isConfigured" => false
+        ];
+        echo json_encode($payload);
         exit;
     }
 
@@ -47,11 +72,19 @@ try {
 
     $needsSetup = ($num_utenti === 0);
 
-    echo json_encode([
+    $payload = [
         "success" => true,
         "needsSetup" => $needsSetup,
         "isConfigured" => !$needsSetup
-    ]);
+    ];
+
+    // Cachiamo solo lo stato "configurato" (5 min): il caso "needsSetup" può
+    // cambiare in qualsiasi momento al primo wizard di setup.
+    if (!$needsSetup && isset($Cache) && is_object($Cache)) {
+        $Cache->set($STATUS_CACHE_KEY, $payload, 300);
+    }
+
+    echo json_encode($payload);
 
 }
 catch (Exception $e) {
@@ -65,14 +98,13 @@ catch (Exception $e) {
         ]);
     }
     else {
+        error_log("❌ [STATUS ERROR] " . $e->getMessage());
         http_response_code(500);
         echo json_encode([
             "success" => false,
             "needsSetup" => false,
-            "avviso" => "Errore verifica stato sistema: " . $e->getMessage()
+            "avviso" => "Errore verifica stato sistema"
         ]);
     }
 }
-
-$database->close();
 ?>

@@ -34,11 +34,11 @@ try {
         }
     } else {
         // LA TABELLA NON ESISTE: DOBBIAMO INIZIALIZZARE IL DATABASE
-        // Leggiamo lo schema SQL dal file mappato nel container
-        $sqlPath = '/var/www/Docker_Config/DBMS_Iniziale/DBMS.sql';
+        // Path overridable via ENV (DB_INIT_SQL_PATH) per maggiore portabilità.
+        $sqlPath = getenv('DB_INIT_SQL_PATH') ?: '/var/www/Docker_Config/DBMS_Iniziale/DBMS.sql';
 
         if (!file_exists($sqlPath)) {
-            throw new Exception("File di inizializzazione database non trovato in $sqlPath. Verifica il mount dei volumi.");
+            throw new Exception("File di inizializzazione database non trovato. Verifica il mount dei volumi.");
         }
 
         $sql = file_get_contents($sqlPath);
@@ -46,8 +46,15 @@ try {
             throw new Exception("Errore durante l'inizializzazione dello schema database.");
         }
 
-        // Piccolo delay per dare tempo a MySQL/MariaDB di stabilizzare le tabelle appena create
-        usleep(500000);
+        // Attendi stabilizzazione tabelle in modo deterministico (max ~1.5s)
+        $ready = false;
+        for ($i = 0; $i < 15; $i++) {
+            if (checkTableExists('Utenti')) { $ready = true; break; }
+            usleep(100000); // 100ms
+        }
+        if (!$ready) {
+            throw new Exception("Le tabelle non sono diventate disponibili dopo l'inizializzazione.");
+        }
     }
 } catch (Exception $e) {
     inviaRisposta(false, "Errore verifica/inizializzazione sistema: " . $e->getMessage(), 500);
@@ -67,8 +74,8 @@ if (empty($username) || empty($password)) {
     inviaRisposta(false, "Username e Password sono obbligatori", 400);
 }
 
-if (strlen($password) < 4) {
-    inviaRisposta(false, "La password deve contenere almeno 4 caratteri", 400);
+if (strlen($password) < 8) {
+    inviaRisposta(false, "La password deve contenere almeno 8 caratteri", 400);
 }
 
 // 3. ESECUZIONE SETUP
@@ -76,27 +83,37 @@ $database->begin_transaction();
 
 try {
     // A. Cancellazione impostazioni vecchie/sporche
-    $database->query("DELETE FROM Impostazioni WHERE Chiave_Impostazione IN ('logo_part_1', 'logo_part_2', 'colore_tema_default')");
+    if (!$database->query("DELETE FROM Impostazioni WHERE Chiave_Impostazione IN ('logo_part_1', 'logo_part_2', 'colore_tema_default')")) {
+        throw new Exception("DELETE impostazioni iniziali fallita: " . $database->error);
+    }
 
     // B. Inserimento nuove impostazioni grafiche
     $sql_impostazioni = "INSERT INTO Impostazioni (Chiave_Impostazione, Valore_Impostazione) VALUES (?, ?)";
 
-    executePreparedQuery($sql_impostazioni, "ss", ['logo_part_1', $logo_part_1]);
-    executePreparedQuery($sql_impostazioni, "ss", ['logo_part_2', $logo_part_2]);
-    executePreparedQuery($sql_impostazioni, "ss", ['colore_tema_default', $colore_tema_default]);
+    foreach ([
+        ['logo_part_1', $logo_part_1],
+        ['logo_part_2', $logo_part_2],
+        ['colore_tema_default', $colore_tema_default],
+    ] as $row) {
+        if (executePreparedQuery($sql_impostazioni, "ss", $row) === false) {
+            throw new Exception("Errore inserimento impostazione: {$row[0]}");
+        }
+    }
 
-    // C. Creazione Utente Amministratore
-    $hash_password = password_hash($password, PASSWORD_BCRYPT);
+    // C. Creazione Utente Amministratore (PASSWORD_DEFAULT coerente con login/registrazione).
+    $hash_password = password_hash($password, PASSWORD_DEFAULT);
     $sql_utente = "INSERT INTO Utenti (Nome_Utente, Password, Admin, colore_Tema) VALUES (?, ?, TRUE, NULL)";
 
     $success = executePreparedQuery($sql_utente, "ss", [$username, $hash_password]);
-    if (!$success) {
+    if ($success === false) {
         throw new Exception("Errore durante la creazione dell'amministratore (username già in uso?)");
     }
 
     // D. Invalida la Cache se esiste
     if (isset($Cache) && is_object($Cache)) {
         $Cache->delete('impostazioni_globali');
+        $Cache->delete('system_status_v1');
+        $Cache->delete('categorie_list_v1');
     }
 
     $database->commit();

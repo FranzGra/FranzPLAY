@@ -41,9 +41,22 @@ class Cache
         try {
             $this->redis = new Redis();
 
-            // 2. Tentativo di connessione (host 'redis' definito nel docker-compose)
-            // Timeout di 0.5s per evitare colli di bottiglia in caso di disservizio cache
-            if ($this->redis->connect('redis', 6379, 0.5)) {
+            // 2. Tentativo di connessione (host 'redis' definito nel docker-compose).
+            // Timeout configurabile via ENV; default 1.0s, più tollerante su Raspberry Pi.
+            $timeout = (float)(getenv('REDIS_TIMEOUT') ?: 1.0);
+            $host = getenv('REDIS_HOST') ?: 'redis';
+            $port = (int)(getenv('REDIS_PORT') ?: 6379);
+
+            if ($this->redis->connect($host, $port, $timeout)) {
+                // Autenticazione opzionale se REDIS_PASSWORD è impostata.
+                $pwd = getenv('REDIS_PASSWORD');
+                if (is_string($pwd) && $pwd !== '') {
+                    if (!$this->redis->auth($pwd)) {
+                        error_log("⚠️ [CACHE] Autenticazione Redis fallita.");
+                        $this->enabled = false;
+                        return;
+                    }
+                }
                 $this->enabled = true;
             } else {
                 error_log("⚠️ [CACHE] Connessione a Redis fallita (timeout o host non raggiungibile).");
@@ -114,7 +127,7 @@ class Cache
 
     /**
      * Svuota completamente l'intero database Redis della cache (Invalidazione globale).
-     * 
+     *
      * @return bool True se svuotato con successo.
      */
     public function flush()
@@ -122,6 +135,39 @@ class Cache
         if (!$this->enabled)
             return false;
         return $this->redis->flushDB();
+    }
+
+    /**
+     * Incrementa atomicamente un contatore. Usato dal rate limiter.
+     *
+     * @param string $key  Chiave del contatore.
+     * @return int|false   Valore dopo incremento o false se Redis non disponibile.
+     */
+    public function incr($key)
+    {
+        if (!$this->enabled) return false;
+        try {
+            return $this->redis->incr($key);
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Imposta il TTL (in secondi) su una chiave esistente.
+     *
+     * @param string $key
+     * @param int $seconds
+     * @return bool
+     */
+    public function expire($key, $seconds)
+    {
+        if (!$this->enabled) return false;
+        try {
+            return (bool) $this->redis->expire($key, (int)$seconds);
+        } catch (Exception $e) {
+            return false;
+        }
     }
 }
 

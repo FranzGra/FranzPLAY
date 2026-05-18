@@ -58,6 +58,13 @@ $limit = isset($_POST['limit']) ? (int) $_POST['limit'] : 12;
 $offset = isset($_POST['offset']) ? (int) $_POST['offset'] : 0;
 $seed = isset($_POST['seed']) ? (int) $_POST['seed'] : 0;
 
+// Hardening anti-DoS: limita la pagina a max 100 e impedisce offset negativi.
+// Su Raspberry Pi, evita che un client malevolo richieda 100k record in un colpo.
+if ($limit < 1)  $limit = 1;
+if ($limit > 100) $limit = 100;
+if ($offset < 0) $offset = 0;
+if ($offset > 100000) $offset = 100000; // limite ragionevole
+
 
 // ============================================================================
 // SEZIONE 4: LOGICA CORE E OPERAZIONI DATABASE
@@ -153,11 +160,21 @@ try {
 
         // --- RICERCA VIDEO ---
         case 'cerca':
-            $testo = $_POST['query'] ?? '';
-            if (empty(trim($testo))) {
+            $testo = trim($_POST['query'] ?? '');
+            if ($testo === '') {
                 inviaRisposta(true, "Query vuota", 200, ['dati' => []]);
             }
-            $searchTerm = "%" . $testo . "%";
+            // Anti-DoS: tronca query molto lunghe e richiede min 2 caratteri.
+            // Un termine < 2 char produce LIKE "%x%" che è full-scan inutile.
+            if (mb_strlen($testo) < 2) {
+                inviaRisposta(true, "Query troppo corta", 200, ['dati' => []]);
+            }
+            if (mb_strlen($testo) > 100) {
+                $testo = mb_substr($testo, 0, 100);
+            }
+            // Escape dei wildcard SQL per evitare che l'utente forzi pattern complessi.
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $testo);
+            $searchTerm = "%" . $escaped . "%";
             $query = "SELECT v.id, v.Titolo, v.percorso_copertina, v.percorso_anteprima, v.Durata, v.Likes, c.Nome as Nome_Categoria
                       FROM Video v
                       LEFT JOIN Categorie c ON v.id_Categoria = c.id

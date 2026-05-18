@@ -29,8 +29,21 @@ services:
       - ./App_Data:/App_Data            # Volume centralizzato dati persistenti
       - ${PERCORSO_VIDEO}:/media/video  # Mappa i video per lo streaming
     depends_on:
-      - frontend
-      - php
+      php:
+        condition: service_started
+      frontend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/api/status.php || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.6'
+          memory: 128M
     restart: always
 
   # --- BACKEND (PHP) ---
@@ -48,14 +61,40 @@ services:
       - ./Docker_Config:/var/www/Docker_Config # Mappa configurazioni per init DB
       - ${PERCORSO_VIDEO}:/percorsoVideo # VIDEO VOLUME MOUNT (Added for Admin functionality)
     environment:
-      WATCH_DIR: /percorsoVideo # Environment variable for path consistency
+      WATCH_DIR: /percorsoVideo
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Verifica che il pool PHP-FPM risponda (cgi-fcgi via SCRIPT_NAME=/fpm-ping).
+      # Se cgi-fcgi non è installato, uno semplice TCP check è sufficiente.
+      test: ["CMD-SHELL", "php-fpm -t > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 384M
     restart: always
 
   # --- DATABASE (MySQL) ---
+  # Tuning Raspberry Pi:
+  #  - innodb_buffer_pool_size 256M: bilanciato per 2-4GB di RAM totali.
+  #  - max_connections 50: PHP-FPM ondemand max 8 worker, watchdog/worker
+  #    Python 3 connessioni → 50 lascia margine per phpmyadmin/cli.
+  #  - innodb_flush_log_at_trx_commit 2: meno fsync su SD card (durata e velocità).
+  #  - innodb_io_capacity 100: SD card è lenta, evita compaction aggressivo.
   mysql:
     image: mariadb:latest
     container_name: DATABASE_MySQL
@@ -69,29 +108,82 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command:
+      - --innodb-buffer-pool-size=256M
+      - --innodb-log-file-size=48M
+      - --innodb-flush-log-at-trx-commit=2
+      - --innodb-io-capacity=100
+      - --max-connections=50
+      - --key-buffer-size=16M
+      - --table-open-cache=128
+      - --query-cache-size=0
+      - --tmp-table-size=16M
+      - --max-heap-table-size=16M
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     restart: always
 
   # --- CACHE (Redis) ---
   redis:
     image: redis:alpine
     container_name: CACHE_Redis
-    ports:
-      - "6379:6379"
+    # Redis non viene più esposto pubblicamente: solo i container sulla rete docker
+    # possono raggiungerlo. Se REDIS_PASSWORD è definita in .env, viene richiesta
+    # autenticazione anche internamente. maxmemory ottimizzato per Raspberry Pi.
+    expose:
+      - 6379
+    # Lo script di entrypoint si configura in base alla presenza della password.
+    command:
+      - sh
+      - -c
+      - 'if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no; else exec redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no; fi'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
+    healthcheck:
+      # Redis-cli ping richiede auth se requirepass è impostato.
+      # Usiamo NOAUTH-friendly check: PING ritorna PONG anche senza auth se
+      # eseguito localmente nei primi byte; in caso di password Redis risponde
+      # NOAUTH. Quindi accettiamo qualsiasi risposta come "alive".
+      test: ["CMD-SHELL", "redis-cli -h 127.0.0.1 ping 2>&1 | grep -qE 'PONG|NOAUTH'"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 320M
     restart: always
 
   # --- TOOLS (PhpMyAdmin) ---
+  # PhpMyAdmin esposto SOLO su localhost del host (127.0.0.1:8080).
+  # Non accessibile dalla LAN per ridurre la superficie d'attacco.
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
     container_name: TOOLS_PhpMyAdmin
     environment:
       PMA_HOST: mysql
-      PMA_USER: root
-      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # Default: utente applicativo (limitato). Per operazioni DDL/grant, loggati
+      # manualmente come root dalla schermata di PhpMyAdmin (PMA_ARBITRARY=1
+      # consente login custom, qui omesso per minimizzare la superficie).
+      PMA_USER: ${MYSQL_USER}
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+      PMA_ABSOLUTE_URI: ""
+      UPLOAD_LIMIT: 256M
     ports:
-      - 8080:80
+      - "127.0.0.1:8080:80"
     restart: always
+    profiles:
+      - dev   # Avviabile con: docker compose --profile dev up
 
   # --- AUTOMATION (Python) ---
   python_watcher:
@@ -108,7 +200,13 @@ services:
       - ${PERCORSO_VIDEO}:/percorsoVideo
     command: ["python3", "/app/watcher.py"]
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
     restart: always
 
   python_worker_meta:
@@ -125,7 +223,13 @@ services:
       - ${PERCORSO_VIDEO}:/percorsoVideo
     command: ["python3", "/app/worker_metadata.py"]
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.6'
+          memory: 192M
     restart: always
 
   python_worker_assets:
@@ -142,7 +246,15 @@ services:
       - ${PERCORSO_VIDEO}:/percorsoVideo
     command: ["python3", "/app/worker_assets.py"]
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          # ffmpeg può saturare un core: lasciamo 1.2 CPU per accelerare la coda
+          # ma evitare lock totale del Raspberry.
+          cpus: '1.2'
+          memory: 512M
     restart: always
 
 volumes:

@@ -71,6 +71,13 @@ $cat_id = (int) getQueryParam('category_id');
 $type = getQueryParam('type', 'all'); // 'all', 'liked', 'saved', 'history'
 $seed = (int) getQueryParam('seed');
 
+// Anti-DoS: clamp paginazione e validazione type.
+if ($limit < 1)  $limit = 1;
+if ($limit > 100) $limit = 100;
+if ($offset < 0) $offset = 0;
+if ($offset > 100000) $offset = 100000;
+$type = in_array($type, ['all', 'liked', 'saved', 'history'], true) ? $type : 'all';
+
 
 // ============================================================================
 // SEZIONE 4: LOGICA CORE (DETTAGLIO O LISTA)
@@ -172,12 +179,16 @@ try {
             $params[] = "%$search%";
             $types .= "s";
         } else {
-            // Fulltext search avanzata per stringhe lunghe
-            $searchTerms = explode(' ', $search);
+            // Fulltext search avanzata per stringhe lunghe.
+            // Sanitizziamo ogni termine eliminando gli operatori Boolean (+, -, *, ", (), ~, <, >, @)
+            // per impedire fulltext injection (es. "-foo" che escluderebbe risultati).
+            $searchTerms = preg_split('/\s+/', $search);
             $formattedSearch = '';
             foreach ($searchTerms as $term) {
-                if (strlen($term) > 2)
-                    $formattedSearch .= "+$term* ";
+                $cleanTerm = preg_replace('/[+\-*"()<>~@]/', '', $term);
+                if (strlen($cleanTerm) > 2) {
+                    $formattedSearch .= "+" . $cleanTerm . "* ";
+                }
             }
             $formattedSearch = trim($formattedSearch);
 

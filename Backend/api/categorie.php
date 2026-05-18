@@ -17,6 +17,7 @@
 
 require_once 'gestione_richiesta.php';
 require_once 'database.php';
+require_once 'cache.php';
 
 
 // ============================================================================
@@ -34,23 +35,36 @@ if (!isset($_SESSION['id_utente'])) {
 // ============================================================================
 
 try {
-    $query = "SELECT id, Nome, Percorso, Immagine_Sfondo, Colore_Default FROM Categorie ORDER BY Nome ASC";
+    global $Cache;
+    $cacheKey = 'categorie_list_v1';
+    $lista_categorie = null;
 
-    // Utilizziamo executePreparedQuery per coerenza con lo standard del progetto
-    $res = executePreparedQuery($query);
+    // 1) Tenta dal Redis cache (TTL 10 min). Le categorie cambiano raramente.
+    if (isset($Cache) && is_object($Cache)) {
+        $cached = $Cache->get($cacheKey);
+        if (is_array($cached)) {
+            $lista_categorie = $cached;
+        }
+    }
 
-    if ($res) {
+    // 2) Cache miss: fallback al DB.
+    if ($lista_categorie === null) {
+        $query = "SELECT id, Nome, Percorso, Immagine_Sfondo, Colore_Default FROM Categorie ORDER BY Nome ASC";
+        $res = executePreparedQuery($query);
+        if (!$res) {
+            throw new Exception("Nessun dato restituito dalla query delle categorie.");
+        }
         $lista_categorie = $res->fetch_all(MYSQLI_ASSOC);
 
-
-        // ============================================================================
-        // SEZIONE 4: RISPOSTA AL CLIENT
-        // ============================================================================
-        inviaRisposta(true, 'Lista categorie caricata', 200, ['dati' => $lista_categorie]);
-
-    } else {
-        throw new Exception("Nessun dato restituito dalla query delle categorie.");
+        if (isset($Cache) && is_object($Cache)) {
+            $Cache->set($cacheKey, $lista_categorie, 600); // 10 minuti
+        }
     }
+
+    // ========================================================================
+    // SEZIONE 4: RISPOSTA AL CLIENT
+    // ========================================================================
+    inviaRisposta(true, 'Lista categorie caricata', 200, ['dati' => $lista_categorie]);
 
 } catch (Exception $e) {
     error_log("❌ [CATEGORIE API ERROR] " . $e->getMessage());

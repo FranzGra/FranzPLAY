@@ -25,6 +25,14 @@
 
 require_once 'gestione_richiesta.php';
 require_once 'database.php';
+require_once 'rate_limit.php';
+
+// Anti-spam reset password: max 5 ogni 10 minuti per IP.
+$ip_addr_rp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+if (strpos($ip_addr_rp, ',') !== false) {
+    $ip_addr_rp = trim(explode(',', $ip_addr_rp)[0]);
+}
+checkRateLimit('reset_password', $ip_addr_rp, 5, 600);
 
 
 // ============================================================================
@@ -58,31 +66,35 @@ try {
             );
             $utente = $res->fetch_assoc();
 
-            // Nota: In produzione sarebbe meglio non rivelare l'esistenza dell'account,
-            // ma in questo contesto diamo feedback per semplicità.
-            if (!$utente || empty($utente['Email'])) {
-                inviaRisposta(false, 'Nessun account trovato o nessuna email associata a questo profilo.', 404);
+            // Anti-enumeration: rispondi sempre con lo stesso messaggio, sia che
+            // l'account esista o meno. Solo se esiste con email, generiamo realmente il token.
+            $messaggio_generico = 'Se l\'account esiste e ha un\'email associata, le istruzioni sono state inviate.';
+
+            if ($utente && !empty($utente['Email'])) {
+                // Generazione Token e Scadenza
+                $token = bin2hex(random_bytes(32));
+                $expiry = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+                $updated = executePreparedQuery(
+                    "UPDATE Utenti SET ResetToken = ?, ResetTokenExpiry = ? WHERE id = ?",
+                    "ssi",
+                    [$token, $expiry, $utente['id']]
+                );
+                if ($updated === false) {
+                    error_log("❌ [RESET] Impossibile salvare token per utente {$utente['id']}");
+                    inviaRisposta(false, "Errore interno nel salvataggio token.", 500);
+                }
+
+                // LOGICA DI INVIO EMAIL (Simulazione)
+                $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                $link = "http://" . $host . "/reset-password?token=" . $token;
+                error_log("📧 [SIMULAZIONE EMAIL RESET] To=" . $utente['Email'] . " | Link=" . $link);
+            } else {
+                // Logga internamente per diagnostica, ma rispondi generico al client.
+                error_log("ℹ️ [RESET] Richiesta per identificativo inesistente: $user_input");
             }
 
-            // Generazione Token e Scadenza
-            $token = bin2hex(random_bytes(32));
-            $expiry = date('Y-m-d H:i:s', strtotime('+1 hour'));
-
-            executePreparedQuery(
-                "UPDATE Utenti SET ResetToken = ?, ResetTokenExpiry = ? WHERE id = ?",
-                "ssi",
-                [$token, $expiry, $utente['id']]
-            );
-
-            // LOGICA DI INVIO EMAIL (Simulazione)
-            $link = "http://" . $_SERVER['HTTP_HOST'] . "/reset-password?token=" . $token;
-            error_log("\n📧 [SIMULAZIONE INVIO EMAIL RESET] ----------------");
-            error_log("A: " . $utente['Email']);
-            error_log("OGGETTO: Recupero Password FranzPLAY");
-            error_log("LINK: " . $link);
-            error_log("--------------------------------------------------\n");
-
-            inviaRisposta(true, 'Istruzioni inviate! Controlla la tua casella email (o i log del server).', 200);
+            inviaRisposta(true, $messaggio_generico, 200);
             break;
 
 
@@ -91,8 +103,8 @@ try {
             $token = $input['token'] ?? '';
             $new_pass = $input['new_password'] ?? '';
 
-            if (empty($token) || strlen($new_pass) < 4) {
-                inviaRisposta(false, 'Parametri non validi o password troppo corta (min 4 caratteri).', 400);
+            if (empty($token) || strlen($new_pass) < 8) {
+                inviaRisposta(false, 'Parametri non validi o password troppo corta (min 8 caratteri).', 400);
             }
 
             // Verifica validità e scadenza token

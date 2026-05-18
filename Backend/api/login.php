@@ -27,6 +27,7 @@
 
 require_once 'gestione_richiesta.php';
 require_once 'database.php';
+require_once 'rate_limit.php';
 
 
 // ============================================================================
@@ -41,6 +42,10 @@ $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'un
 if (strpos($ip_address, ',') !== false) {
     $ip_address = trim(explode(',', $ip_address)[0]);
 }
+
+// Rate limit (Redis-backed). Funge da strato preventivo PRIMA del check DB:
+// se Redis è giù, fail-open lascia che il rate limit DB-side (ban Spammers) faccia il suo.
+checkRateLimit('login', $ip_address, 15, 60);
 
 
 // ============================================================================
@@ -95,7 +100,17 @@ try {
     $stmt->close();
 
     // 3. VERIFICA PASSWORD
-    $login_successo = ($utente && password_verify($password, $utente['Password']));
+    // Per evitare timing attack che permettano user enumeration, eseguiamo password_verify
+    // anche se l'utente NON esiste, usando un hash dummy precalcolato.
+    // In questo modo il tempo di risposta è costante.
+    static $DUMMY_HASH = '$2y$10$abcdefghijklmnopqrstuuJ8VxNn5O0kY/.kV6/sQ0Z0g8XwT8u6jK';
+    if ($utente) {
+        $login_successo = password_verify($password, $utente['Password']);
+    } else {
+        // Esegui comunque l'hash per consumare lo stesso tempo CPU
+        password_verify($password, $DUMMY_HASH);
+        $login_successo = false;
+    }
 
     // 4. REGISTRAZIONE ACCESSO (Solo se la tabella esiste)
     if (checkTableExists('Accessi')) {
@@ -107,31 +122,31 @@ try {
         $stmt->execute();
         $stmt->close();
 
-        // 5. GESTIONE FALLIMENTO E RATE LIMITING
-        if (!$login_successo) {
-            // Conta i fallimenti recenti per questo username
-            $stmt = $database->prepare(
-                "SELECT COUNT(*) FROM Accessi WHERE Nome_Utente = ? AND successo = 0 AND data_ora_tentativo > DATE_SUB(NOW(), INTERVAL 30 SECOND)"
-            );
-            $stmt->bind_param('s', $nome_utente);
-            $stmt->execute();
-            $stmt->bind_result($tentativi_falliti);
-            $stmt->fetch();
-            $stmt->close();
-
-            // Se supera i 3 tentativi e la tabella Spammers esiste, applica il ban
-            if ($tentativi_falliti >= 3 && checkTableExists('Spammers')) {
-                $stmt = $database->prepare(
-                    "INSERT INTO Spammers (Nome_Utente, indirizzo_Ip, bloccato_fino_a) 
-                     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 SECOND)) 
-                     ON DUPLICATE KEY UPDATE indirizzo_Ip = VALUES(indirizzo_Ip), bloccato_fino_a = DATE_ADD(NOW(), INTERVAL 30 SECOND)"
-                );
-                $stmt->bind_param('ss', $nome_utente, $ip_address);
+        // 5. GESTIONE FALLIMENTO E RATE LIMITING (ATOMICO)
+        // La race condition sull'ordine COUNT->INSERT viene mitigata eseguendo
+        // l'INSERT del ban in modo CONDIZIONALE in un singolo statement che
+        // valuta atomicamente il numero di fallimenti recenti dentro MySQL.
+        if (!$login_successo && checkTableExists('Spammers') && checkTableExists('Accessi')) {
+            $sql = "INSERT INTO Spammers (Nome_Utente, indirizzo_Ip, bloccato_fino_a)
+                    SELECT ?, ?, DATE_ADD(NOW(), INTERVAL 30 SECOND)
+                    FROM (SELECT COUNT(*) AS c FROM Accessi
+                          WHERE Nome_Utente = ?
+                            AND successo = 0
+                            AND data_ora_tentativo > DATE_SUB(NOW(), INTERVAL 30 SECOND)) t
+                    WHERE t.c >= 3
+                    ON DUPLICATE KEY UPDATE
+                        indirizzo_Ip = VALUES(indirizzo_Ip),
+                        bloccato_fino_a = DATE_ADD(NOW(), INTERVAL 30 SECOND)";
+            $stmt = $database->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sss', $nome_utente, $ip_address, $nome_utente);
                 $stmt->execute();
+                $banned_now = ($stmt->affected_rows > 0);
                 $stmt->close();
-
-                error_log("🚨 [SECURITY BAN] Username bloccato: $nome_utente (IP: $ip_address)");
-                inviaRisposta(false, 'Troppi tentativi falliti. Accesso bloccato per 30 secondi.', 429);
+                if ($banned_now) {
+                    error_log("🚨 [SECURITY BAN] Username bloccato: $nome_utente (IP: $ip_address)");
+                    inviaRisposta(false, 'Troppi tentativi falliti. Accesso bloccato per 30 secondi.', 429);
+                }
             }
         }
     }

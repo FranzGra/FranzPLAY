@@ -22,7 +22,8 @@ DB_HOST = os.environ.get('MYSQL_HOST', 'mysql')
 DB_USER = os.environ.get('MYSQL_USER')
 DB_PASS = os.environ.get('MYSQL_PASSWORD')
 DB_NAME = os.environ.get('MYSQL_DATABASE')
-POLL_TIMEOUT = 2 # Scansione ogni 2 secondi
+POLL_TIMEOUT = int(os.environ.get('WATCHER_POLL_TIMEOUT', '5'))  # Scansione ogni 5s di default (era 2s, troppo aggressivo per ARM)
+POLL_BACKOFF_MAX = int(os.environ.get('WATCHER_POLL_BACKOFF_MAX', '30'))  # Ceiling backoff esponenziale
 
 # --- Configurazione Logging (Invariata) ---
 logging.basicConfig(
@@ -66,19 +67,37 @@ class FakeEvent:
 # --- Gestore Eventi (MODIFICATO) ---
 class VideoHandler(FileSystemEventHandler):
 
-    # --- Funzioni Helper (Invariate) ---
+    # --- Funzioni Helper ---
     def _get_relative_path(self, absolute_path):
+        """
+        Calcola il path relativo a PATH_TO_MONITOR e, in caso di symlink che
+        puntano fuori dalla directory monitorata, ritorna None per impedire
+        path traversal o accesso a file di sistema (es. /etc/passwd via symlink).
+        """
         try:
+            abs_real = os.path.realpath(absolute_path)
+            base_real = os.path.realpath(PATH_TO_MONITOR)
+            if not (abs_real == base_real or abs_real.startswith(base_real + os.sep)):
+                logging.warning(f"[SECURITY] Path fuori dalla base monitorata, ignorato: {absolute_path}")
+                return None
             relative_path = os.path.relpath(absolute_path, PATH_TO_MONITOR)
+            # Sanifica: rifiuta path con caratteri di controllo o '..' residui
+            if '..' in relative_path.split(os.sep) or any(ord(c) < 32 for c in relative_path):
+                logging.warning(f"[SECURITY] Path con componenti sospette: {relative_path}")
+                return None
             return relative_path.replace(os.sep, '/')
-        except ValueError:
-            logging.error(f"[!] Errore: il file {absolute_path} è fuori dalla directory monitorata {PATH_TO_MONITOR}")
+        except (ValueError, OSError) as e:
+            logging.error(f"[!] Errore calcolo path relativo per {absolute_path}: {e}")
             return None
 
     def _is_video_file(self, file_path):
         if os.path.basename(file_path).startswith('.'):
             return False
         if os.path.isdir(file_path):
+            return False
+        # I symlink potrebbero puntare a file non-video o fuori dalla base: rifiutiamo.
+        if os.path.islink(file_path):
+            logging.warning(f"[SECURITY] Symlink ignorato: {file_path}")
             return False
         return file_path.lower().endswith(VIDEO_EXTENSIONS)
 

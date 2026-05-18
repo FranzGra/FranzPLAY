@@ -157,7 +157,7 @@ try {
 
             $upload_dir = '/App_Data/User_Images/';
             if (!file_exists($upload_dir))
-                mkdir($upload_dir, 0777, true);
+                @mkdir($upload_dir, 0755, true);
 
             // Rimuove la precedente immagine se esistente
             if (!empty($_SESSION['immagine_profilo'])) {
@@ -206,8 +206,8 @@ try {
             if ($new !== $conf) {
                 inviaRisposta(false, 'La nuova password e la conferma non corrispondono.', 400);
             }
-            if (strlen($new) < 4) {
-                inviaRisposta(false, 'La password è troppo fragile (minimo 4 caratteri).', 400);
+            if (strlen($new) < 8) {
+                inviaRisposta(false, 'La password è troppo fragile (minimo 8 caratteri).', 400);
             }
 
             // Verifica che la password attuale sia corretta

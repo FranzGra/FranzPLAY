@@ -64,18 +64,15 @@ try {
 
 }
 catch (Exception $e) {
-    // Gestione errore critico di connessione
+    // Gestione errore critico di connessione: NON leakare credenziali/host al client.
     error_log("❌ [DATABASE CONNECTION ERROR] " . $e->getMessage());
 
-    $debugMessage = $e->getMessage(); // Cattura messaggio reale per debug
-
-    // Se è disponibile la funzione di risposta standard, usiamola
     if (function_exists('inviaRisposta')) {
-        inviaRisposta(false, "Il servizio database è momentaneamente offline. Dettaglio: " . $debugMessage, 500);
+        inviaRisposta(false, "Il servizio database è momentaneamente offline.", 500);
     }
     else {
         http_response_code(500);
-        die(json_encode(["successo" => false, "messaggio" => "Errore fatale: Database offline. " . $debugMessage]));
+        die(json_encode(["successo" => false, "messaggio" => "Errore fatale: Database offline."]));
     }
 }
 
@@ -90,7 +87,13 @@ catch (Exception $e) {
 function checkTableExists($tableName)
 {
     global $database;
-    $res = $database->query("SHOW TABLES LIKE '$tableName'");
+    // Whitelist regex: SHOW TABLES non supporta prepared statement per il pattern LIKE,
+    // quindi vincoliamo il nome a soli caratteri sicuri prima di interpolare.
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $tableName)) {
+        return false;
+    }
+    $safe = $database->real_escape_string($tableName);
+    $res = $database->query("SHOW TABLES LIKE '$safe'");
     return ($res && $res->num_rows > 0);
 }
 

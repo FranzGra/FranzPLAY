@@ -5,6 +5,7 @@ import sys
 import time
 import logging
 import os
+import platform
 import mysql.connector
 from mysql.connector import errorcode
 import subprocess
@@ -18,8 +19,15 @@ DB_HOST = os.environ.get('MYSQL_HOST', 'mysql')
 DB_USER = os.environ.get('MYSQL_USER')
 DB_PASS = os.environ.get('MYSQL_PASSWORD')
 DB_NAME = os.environ.get('MYSQL_DATABASE')
-POLL_INTERVAL = 10 
-STABILITY_CHECK_TIME = 2 
+POLL_INTERVAL = int(os.environ.get('WORKER_POLL_INTERVAL', '10'))
+STABILITY_CHECK_TIME = 2
+
+# Adatta i preset ffmpeg all'architettura: su ARM (Raspberry) usiamo 'ultrafast'
+# per non saturare la CPU; su x86 più potente teniamo 'fast' per qualità migliore.
+_IS_ARM = platform.machine().lower().startswith(('arm', 'aarch'))
+FFMPEG_PRESET = os.environ.get('FFMPEG_PRESET', 'ultrafast' if _IS_ARM else 'fast')
+FFMPEG_PREVIEW_TIMEOUT = int(os.environ.get('FFMPEG_PREVIEW_TIMEOUT', '60' if _IS_ARM else '120'))
+FFMPEG_COVER_TIMEOUT = int(os.environ.get('FFMPEG_COVER_TIMEOUT', '20' if _IS_ARM else '30'))
 
 # --- Configurazione Logging ---
 logging.basicConfig(
@@ -92,11 +100,24 @@ def get_video_metadata(full_path):
         if size1 != size2:
             return None 
 
+        # Hardening: rifiuta path fuori base e symlink.
+        try:
+            full_real = os.path.realpath(full_path)
+            base_real = os.path.realpath(PATH_TO_MONITOR)
+            if not (full_real == base_real or full_real.startswith(base_real + os.sep)):
+                logging.warning(f"[SECURITY] Path fuori base in worker_assets: {full_path}")
+                return None
+            if os.path.islink(full_path):
+                logging.warning(f"[SECURITY] Symlink ignorato in worker_assets: {full_path}")
+                return None
+        except OSError:
+            return None
+
         command = [
             "ffprobe", "-v", "quiet", "-print_format", "json",
             "-show_format", full_path
         ]
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=20)
         metadata = json.loads(result.stdout)
         
         duration_sec = float(metadata['format']['duration'])
@@ -136,6 +157,11 @@ def generate_cover(full_video_path, full_cover_path, start_min, video_duration_s
         
     os.makedirs(Path(full_cover_path).parent, exist_ok=True)
     
+    # NB: usiamo path già validati a monte (process_missing_assets). ffmpeg non
+    # supporta "--" come terminatore opzioni, ma essendo argomenti passati come
+    # lista (no shell), un nome file che inizia con "-" non causa injection,
+    # al massimo viene interpretato come flag; previeniamo a monte rifiutando
+    # file con prefisso "-" nella validazione del path.
     command = [
         "ffmpeg",
         "-ss", str(start_time_sec), "-i", full_video_path,
@@ -144,7 +170,7 @@ def generate_cover(full_video_path, full_cover_path, start_min, video_duration_s
     
     try:
         logging.info(f"Generazione copertina per: {full_cover_path}")
-        subprocess.run(command, capture_output=True, text=True, check=True, timeout=30)
+        subprocess.run(command, capture_output=True, text=True, check=True, timeout=FFMPEG_COVER_TIMEOUT)
         return True
     except Exception as e:
         logging.error(f"Fallita generazione copertina: {e}")
@@ -169,7 +195,7 @@ def generate_preview(full_video_path, full_preview_path, start_min, duration_sec
         "-t", str(duration_sec), 
         "-vf", "scale=-2:480", # Risoluzione 480p 
         "-c:v", "libx264",
-        "-preset", "fast", 
+        "-preset", FFMPEG_PRESET,
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart", 
         "-an", # Rimuove audio (non specificato, ma ottimizza)
@@ -178,32 +204,84 @@ def generate_preview(full_video_path, full_preview_path, start_min, duration_sec
     
     try:
         logging.info(f"Generazione anteprima per: {full_preview_path}")
-        subprocess.run(command, capture_output=True, text=True, check=True, timeout=120)
+        subprocess.run(command, capture_output=True, text=True, check=True, timeout=FFMPEG_PREVIEW_TIMEOUT)
         return True
     except Exception as e:
         logging.error(f"Fallita generazione anteprima: {e}")
         return False
+
+# --- Migrazione idempotente: aggiunge colonna locked_at se mancante ---
+def _ensure_lock_column(conn, table_name='Video', column_name='locked_at'):
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+                (table_name, column_name)
+            )
+            exists = cursor.fetchone()[0] > 0
+            if not exists:
+                if not all(c.isalnum() or c == '_' for c in table_name): return
+                if not all(c.isalnum() or c == '_' for c in column_name): return
+                cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` DATETIME NULL")
+                logging.info(f"Migrazione: aggiunta colonna {table_name}.{column_name}")
+    except Exception as e:
+        logging.warning(f"_ensure_lock_column({table_name}.{column_name}) skip: {e}")
+
 
 # --- Funzione Principale (Solo Asset) ---
 def process_missing_assets(conn, settings):
     """
     Cerca UN video a cui mancano asset e li genera.
     Restituisce True se un lavoro è stato fatto, altrimenti False.
+
+    Claim atomico: usa Video.locked_at per evitare che due worker paralleli
+    elaborino lo stesso video contemporaneamente.
     """
     job = None
     try:
+        _ensure_lock_column(conn, 'Video', 'locked_at')
+
+        # Rilascia lock abbandonati (più vecchi di 10 minuti).
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE Video SET locked_at = NULL "
+                "WHERE locked_at IS NOT NULL AND locked_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)"
+            )
+
+        # Trova un candidato.
         with conn.cursor(dictionary=True) as cursor:
             query = """
-                SELECT id, percorso_file, id_Categoria, percorso_copertina, percorso_anteprima 
-                FROM Video 
-                WHERE percorso_copertina IS NULL OR percorso_anteprima IS NULL 
+                SELECT id FROM Video
+                WHERE (percorso_copertina IS NULL OR percorso_anteprima IS NULL)
+                  AND locked_at IS NULL
                 ORDER BY id ASC LIMIT 1
             """
             cursor.execute(query)
+            candidate = cursor.fetchone()
+        if not candidate:
+            return False
+
+        # Claim atomico.
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE Video SET locked_at = NOW() WHERE id = %s AND locked_at IS NULL",
+                (candidate['id'],)
+            )
+            if cursor.rowcount == 0:
+                # Un altro worker l'ha preso prima di noi.
+                return True
+
+        # Carica il record completo dopo il claim.
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT id, percorso_file, id_Categoria, percorso_copertina, percorso_anteprima "
+                "FROM Video WHERE id = %s",
+                (candidate['id'],)
+            )
             job = cursor.fetchone()
-            
         if not job:
-            return False 
+            return True
 
         video_id = job['id']
         relative_path = job['percorso_file']
@@ -294,11 +372,25 @@ def process_missing_assets(conn, settings):
                 logging.error(f"[Assets] Errore DB update: {e_trans}")
                 conn.rollback()
 
+        # Rilascia sempre il lock (sia che l'asset sia stato generato o meno).
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE Video SET locked_at = NULL WHERE id = %s", (video_id,))
+        except Exception:
+            pass
+
         logging.info(f"[Assets] Elaborazione assets per ID {video_id} completata.")
-        return True 
+        return True
 
     except Exception as e_outer:
         logging.error(f"[Assets] Errore generico esterno: {e_outer}")
+        # Best-effort: rilascia il lock se possibile.
+        try:
+            if job and job.get('id'):
+                with conn.cursor() as cursor:
+                    cursor.execute("UPDATE Video SET locked_at = NULL WHERE id = %s", (job['id'],))
+        except Exception:
+            pass
         return False
 
 # --- Blocco Principale ---
@@ -308,30 +400,42 @@ if __name__ == "__main__":
         logging.critical("Errore: Variabili d'ambiente del database non impostate!")
         sys.exit(1)
 
+    # Riusiamo la connessione DB tra iterazioni: handshake costa ~20-100ms su Pi.
+    conn = None
+    idle_streak = 0
+    BACKOFF_MAX = int(os.environ.get('WORKER_BACKOFF_MAX', '120'))
+
     while True:
-        conn = None
         work_done = False
         try:
-            conn = get_db_connection()
-            # Carica le impostazioni (necessarie per ffmpeg)
+            if conn is None or not conn.is_connected():
+                conn = get_db_connection()
             settings = fetch_settings(conn)
-            
-            # Esegue solo il lavoro "lento"
             work_done = process_missing_assets(conn, settings)
 
         except mysql.connector.Error as err:
-            logging.error(f"Errore connessione DB nel loop principale: {err}")
+            logging.error(f"Errore DB nel loop principale: {err}")
+            try:
+                if conn: conn.close()
+            except Exception:
+                pass
+            conn = None
         except KeyboardInterrupt:
             logging.info("Arresto del worker (Assets)...")
+            try:
+                if conn: conn.close()
+            except Exception:
+                pass
             break
         except Exception as e:
             logging.error(f"Errore non gestito nel loop principale: {e}")
-        finally:
-            if conn and conn.is_connected():
-                conn.close()
 
-        if not work_done:
-            logging.info(f"Nessun lavoro. In attesa per {POLL_INTERVAL}s...")
-            time.sleep(POLL_INTERVAL)
+        if work_done:
+            idle_streak = 0
+            time.sleep(1)
         else:
-            time.sleep(1) # Lavora velocemente se c'è coda
+            # Backoff esponenziale per ridurre wakeup inutili su Raspberry.
+            idle_streak = min(idle_streak + 1, 6)
+            sleep_for = min(POLL_INTERVAL * (2 ** (idle_streak - 1)), BACKOFF_MAX)
+            logging.info(f"Nessun lavoro. Attendo {sleep_for}s.")
+            time.sleep(sleep_for)

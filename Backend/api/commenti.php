@@ -27,6 +27,7 @@
 
 require_once 'gestione_richiesta.php';
 require_once 'database.php';
+require_once 'rate_limit.php';
 
 
 // ============================================================================
@@ -40,6 +41,9 @@ if (!isset($_SESSION['id_utente'])) {
 
 $id_utente = $_SESSION['id_utente'];
 $is_admin = $_SESSION['amministratore'] ?? false;
+
+// Anti-flood: max 30 commenti/min per utente loggato.
+checkRateLimit('commenti', $id_utente, 30, 60);
 
 
 // ============================================================================
@@ -93,6 +97,20 @@ try {
             // Validazione lunghezza per prevenire abusi (max 2000 car.)
             if (mb_strlen($testo) > 2000) {
                 inviaRisposta(false, 'Il commento è troppo lungo. Massimo 2000 caratteri.', 400);
+            }
+
+            // Anti-doppione: se un commento identico esiste già nell'ultimo minuto
+            // dallo stesso utente sullo stesso video, lo trattiamo come duplicato.
+            // Previene double-submit da doppio click o richieste parallele.
+            $check = executePreparedQuery(
+                "SELECT 1 FROM Commenti
+                 WHERE id_Utente = ? AND id_Video = ? AND testo_commento = ?
+                   AND data_ora_commento > DATE_SUB(NOW(), INTERVAL 60 SECOND)",
+                "iis",
+                [$id_utente, $id_video, $testo]
+            );
+            if ($check && $check->fetch_assoc()) {
+                inviaRisposta(true, 'Commento già pubblicato.', 200);
             }
 
             $sql = "INSERT INTO Commenti (id_Utente, id_Video, testo_commento) VALUES (?, ?, ?)";
