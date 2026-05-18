@@ -27,14 +27,32 @@
 
 require_once 'gestione_richiesta.php';
 require_once 'database.php';
+require_once 'rate_limit.php';
+
+// Anti-spam registrazioni di massa: max 5 ogni 5 minuti per IP.
+$ip_addr_reg = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+if (strpos($ip_addr_reg, ',') !== false) {
+    $ip_addr_reg = trim(explode(',', $ip_addr_reg)[0]);
+}
+checkRateLimit('registrazione', $ip_addr_reg, 5, 300);
 
 
 // ============================================================================
 // SEZIONE 2: VALIDAZIONE E SICUREZZA INPUT
 // ============================================================================
 
-// Normalizzazione input da JSON o POST standard
-$input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+// Normalizzazione input da JSON o POST standard.
+// Se il body è JSON malformato, json_decode ritorna null. Diamo un errore esplicito
+// invece di silenziosamente cadere su $_POST vuoto.
+$raw_body = file_get_contents('php://input');
+$json = null;
+if ($raw_body !== '' && $raw_body !== false) {
+    $json = json_decode($raw_body, true);
+    if ($json === null && json_last_error() !== JSON_ERROR_NONE) {
+        inviaRisposta(false, 'Corpo della richiesta JSON non valido.', 400);
+    }
+}
+$input = $json ?? $_POST;
 
 $username = trim($input['username'] ?? '');
 $password = $input['password'] ?? '';
@@ -46,8 +64,8 @@ if (empty($username) || empty($password)) {
 }
 
 // Verifiche lunghezza
-if (strlen($username) < 3 || strlen($password) < 4) {
-    inviaRisposta(false, 'Dati troppo brevi: Username (min 3) o Password (min 4).', 400);
+if (strlen($username) < 3 || strlen($password) < 8) {
+    inviaRisposta(false, 'Dati troppo brevi: Username (min 3) o Password (min 8).', 400);
 }
 
 // Verifica caratteri username (solo lettere, numeri e underscore)
@@ -65,8 +83,9 @@ if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
 // SEZIONE 3: GESTIONE INPUT (Normalizzazione DB)
 // ============================================================================
 
-// Se l'email è vuota, usiamo NULL per evitare conflitti con vincoli UNIQUE nel DB
-$emailParam = empty($email) ? null : $email;
+// Email normalizzata lowercase per evitare account duplicati "User@x" vs "user@x".
+// Se vuota usiamo NULL per coesistere con il vincolo UNIQUE in MySQL.
+$emailParam = empty($email) ? null : strtolower($email);
 
 
 // ============================================================================

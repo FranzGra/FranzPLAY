@@ -13,7 +13,19 @@ switch ($action) {
         if ($id == $_SESSION['id_utente'])
             throw new Exception("Non puoi modificare i tuoi permessi admin");
 
+        // Anti-lockout: se il target è admin e sarebbe l'ultimo admin rimasto, blocca.
+        $res_t = executePreparedQuery("SELECT Admin FROM Utenti WHERE id = ?", "i", [$id]);
+        $target = $res_t ? $res_t->fetch_assoc() : null;
+        if ($target && (int)$target['Admin'] === 1) {
+            $res_cnt = $database->query("SELECT COUNT(*) AS cnt FROM Utenti WHERE Admin = 1");
+            $row_cnt = $res_cnt ? $res_cnt->fetch_assoc() : ['cnt' => 0];
+            if ((int)$row_cnt['cnt'] <= 1) {
+                throw new Exception("Operazione bloccata: deve restare almeno un amministratore nel sistema.");
+            }
+        }
+
         executePreparedQuery("UPDATE Utenti SET Admin = NOT Admin WHERE id = ?", "i", [$id]);
+        error_log("[ADMIN AUDIT] toggle_admin user=$id by={$_SESSION['id_utente']}");
         inviaRisposta(true, 'Permessi utente aggiornati');
         break;
 
@@ -22,7 +34,19 @@ switch ($action) {
         if ($id == $_SESSION['id_utente'])
             throw new Exception("Non puoi eliminare il tuo stesso account amministratore");
 
+        // Anti-lockout: se l'utente da eliminare è admin e sarebbe l'ultimo admin, blocca.
+        $res_t = executePreparedQuery("SELECT Admin FROM Utenti WHERE id = ?", "i", [$id]);
+        $target = $res_t ? $res_t->fetch_assoc() : null;
+        if ($target && (int)$target['Admin'] === 1) {
+            $res_cnt = $database->query("SELECT COUNT(*) AS cnt FROM Utenti WHERE Admin = 1");
+            $row_cnt = $res_cnt ? $res_cnt->fetch_assoc() : ['cnt' => 0];
+            if ((int)$row_cnt['cnt'] <= 1) {
+                throw new Exception("Impossibile eliminare l'ultimo amministratore rimasto.");
+            }
+        }
+
         executePreparedQuery("DELETE FROM Utenti WHERE id = ?", "i", [$id]);
+        error_log("[ADMIN AUDIT] elimina_utente user=$id by={$_SESSION['id_utente']}");
         inviaRisposta(true, 'Utente eliminato definitivamente');
         break;
 
@@ -33,6 +57,12 @@ switch ($action) {
 
         if (empty($username) || empty($password)) {
             throw new Exception("Username e Password sono obbligatori.");
+        }
+        if (strlen($password) < 8) {
+            throw new Exception("La password deve avere almeno 8 caratteri.");
+        }
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+            throw new Exception("Lo username può contenere solo lettere, numeri e underscore.");
         }
 
         // Verifica se l'utente esiste già
@@ -65,8 +95,8 @@ switch ($action) {
             inviaRisposta(false, "ID utente e Nuova Password sono obbligatori.", 400);
         }
 
-        if (strlen($new_password) < 4) {
-            inviaRisposta(false, 'La password deve avere almeno 4 caratteri.', 400);
+        if (strlen($new_password) < 8) {
+            inviaRisposta(false, 'La password deve avere almeno 8 caratteri.', 400);
         }
 
         // Eseguiamo l'hash

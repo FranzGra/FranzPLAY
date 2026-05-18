@@ -12,14 +12,25 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
-// Permettiamo le richieste CORS per lo sviluppo
-header("Access-Control-Allow-Origin: *");
+// CORS coerente: whitelist invece di "*" per non esporre il backend a tutti.
+$allowed_origins_imp = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://frontend:5173',
+    'http://localhost',
+    'http://localhost:80'
+];
+$origin_imp = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin_imp, $allowed_origins_imp)) {
+    header("Access-Control-Allow-Origin: $origin_imp");
+    header("Access-Control-Allow-Credentials: true");
+}
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
 // Gestione preflight CORS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+    http_response_code(204);
     exit;
 }
 
@@ -64,7 +75,8 @@ try {
     echo json_encode(["success" => true, "dati" => $logo_data]);
 
 } catch (Exception $e) {
-    // Risposta di fallback sicura in caso di errore
+    error_log("❌ [IMPOSTAZIONI ERROR] " . $e->getMessage());
+    // Risposta di fallback sicura senza leakare dettagli al client
     http_response_code(200);
     echo json_encode([
         "success" => true,
@@ -73,9 +85,7 @@ try {
             "logo_part_2" => "PLAY",
             "colore_tema_default" => "#dc2626"
         ],
-        "avviso" => "Errore recupero da database: " . $e->getMessage()
+        "avviso" => "Impostazioni temporanee (fallback)"
     ]);
 }
-
-$database->close();
 ?>

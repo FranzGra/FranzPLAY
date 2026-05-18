@@ -2,6 +2,8 @@
 if (!defined('ADMIN_API'))
     exit('Nessun accesso diretto consentito.');
 
+require_once __DIR__ . '/../path_safety.php';
+
 switch ($action) {
     case 'upload_copertina':
         $id_video = (int) ($_POST['id_video'] ?? 0);
@@ -29,22 +31,22 @@ switch ($action) {
         $video_rel_dir = $video_rel_dir ? $video_rel_dir . '/' . $cover_dir_name : $cover_dir_name;
 
         global $BASE_VIDEO_PATH;
-        // Rimuovi vecchia copertina se esiste per evitare file orfani
+        // Rimuovi vecchia copertina (con path safety)
         if ($info['percorso_copertina'] && $info['percorso_copertina'] != 'mancante') {
-            $old_full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $info['percorso_copertina']), DIRECTORY_SEPARATOR);
-            if (file_exists($old_full_path)) {
+            $old_full_path = safeJoinPath($BASE_VIDEO_PATH, ltrim($info['percorso_copertina'], '/\\'));
+            if ($old_full_path !== null && file_exists($old_full_path)) {
                 @unlink($old_full_path);
             }
         }
 
-        // Normalize slashes
-        $video_rel_dir = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video_rel_dir);
-        $base_path = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $BASE_VIDEO_PATH), DIRECTORY_SEPARATOR);
-
-        $target_dir = $base_path . DIRECTORY_SEPARATOR . ltrim($video_rel_dir, DIRECTORY_SEPARATOR);
+        $target_dir = safeJoinPath($BASE_VIDEO_PATH, ltrim($video_rel_dir, '/\\'));
+        if ($target_dir === null) {
+            error_log("🚨 [SECURITY] Path traversal in upload_copertina: $video_rel_dir");
+            throw new Exception("Percorso copertina non valido");
+        }
 
         if (!file_exists($target_dir)) {
-            if (!@mkdir($target_dir, 0777, true)) {
+            if (!@mkdir($target_dir, 0755, true)) {
                 throw new Exception("Impossibile creare la cartella di destinazione: $target_dir");
             }
         }
@@ -77,8 +79,11 @@ switch ($action) {
 
             executePreparedQuery("UPDATE Video SET percorso_copertina = ? WHERE id = ?", "si", [$db_path, $id_video]);
             global $Cache;
-            if (isset($Cache) && is_object($Cache))
-                $Cache->flush();
+            if (isset($Cache) && is_object($Cache)) {
+                // Niente flush globale: gli asset video non hanno cache dedicata.
+                // Manteniamo l'invalidazione su categorie per sicurezza.
+                $Cache->delete('categorie_list_v1');
+            }
             inviaRisposta(true, 'Copertina caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
         } else {
             throw new Exception("Errore durante lo spostamento del file caricato");
@@ -96,14 +101,11 @@ switch ($action) {
 
         global $BASE_VIDEO_PATH;
         if ($video['percorso_copertina'] && $video['percorso_copertina'] != 'mancante') {
-            // Normalizzazione path per Windows/Unix
-            $clean_path = ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video['percorso_copertina']), DIRECTORY_SEPARATOR);
-            $full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . $clean_path;
-
-            if (file_exists($full_path)) {
-                if (!@unlink($full_path)) {
-                    error_log("⚠️ Errore eliminazione copertina: $full_path");
-                }
+            $full_path = safeJoinPath($BASE_VIDEO_PATH, ltrim($video['percorso_copertina'], '/\\'));
+            if ($full_path === null) {
+                error_log("🚨 [SECURITY] Path traversal in rimuovi_copertina: " . $video['percorso_copertina']);
+            } elseif (file_exists($full_path) && !@unlink($full_path)) {
+                error_log("⚠️ Errore eliminazione copertina: $full_path");
             }
         }
 
@@ -136,20 +138,22 @@ switch ($action) {
         $video_rel_dir = $video_rel_dir ? $video_rel_dir . '/' . $preview_dir_name : $preview_dir_name;
 
         global $BASE_VIDEO_PATH;
-        // Rimuovi vecchia anteprima se esiste
+        // Rimuovi vecchia anteprima (con path safety)
         if ($info['percorso_anteprima'] && $info['percorso_anteprima'] != 'mancante') {
-            $old_full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $info['percorso_anteprima']), DIRECTORY_SEPARATOR);
-            if (file_exists($old_full_path)) {
+            $old_full_path = safeJoinPath($BASE_VIDEO_PATH, ltrim($info['percorso_anteprima'], '/\\'));
+            if ($old_full_path !== null && file_exists($old_full_path)) {
                 @unlink($old_full_path);
             }
         }
 
-        $video_rel_dir = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video_rel_dir);
-        $base_path = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $BASE_VIDEO_PATH), DIRECTORY_SEPARATOR);
-        $target_dir = $base_path . DIRECTORY_SEPARATOR . ltrim($video_rel_dir, DIRECTORY_SEPARATOR);
+        $target_dir = safeJoinPath($BASE_VIDEO_PATH, ltrim($video_rel_dir, '/\\'));
+        if ($target_dir === null) {
+            error_log("🚨 [SECURITY] Path traversal in upload_anteprima: $video_rel_dir");
+            throw new Exception("Percorso anteprima non valido");
+        }
 
         if (!file_exists($target_dir)) {
-            if (!@mkdir($target_dir, 0777, true)) {
+            if (!@mkdir($target_dir, 0755, true)) {
                 throw new Exception("Impossibile creare la cartella di destinazione: $target_dir");
             }
         }
@@ -175,8 +179,11 @@ switch ($action) {
 
             executePreparedQuery("UPDATE Video SET percorso_anteprima = ? WHERE id = ?", "si", [$db_path, $id_video]);
             global $Cache;
-            if (isset($Cache) && is_object($Cache))
-                $Cache->flush();
+            if (isset($Cache) && is_object($Cache)) {
+                // Niente flush globale: gli asset video non hanno cache dedicata.
+                // Manteniamo l'invalidazione su categorie per sicurezza.
+                $Cache->delete('categorie_list_v1');
+            }
             inviaRisposta(true, 'Anteprima caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
         } else {
             throw new Exception("Errore durante lo spostamento del file caricato");
@@ -194,10 +201,10 @@ switch ($action) {
 
         global $BASE_VIDEO_PATH;
         if ($video['percorso_anteprima'] && $video['percorso_anteprima'] != 'mancante') {
-            $clean_path = ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $video['percorso_anteprima']), DIRECTORY_SEPARATOR);
-            $full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . $clean_path;
-
-            if (file_exists($full_path)) {
+            $full_path = safeJoinPath($BASE_VIDEO_PATH, ltrim($video['percorso_anteprima'], '/\\'));
+            if ($full_path === null) {
+                error_log("🚨 [SECURITY] Path traversal in rimuovi_anteprima: " . $video['percorso_anteprima']);
+            } elseif (file_exists($full_path)) {
                 @unlink($full_path);
             }
         }

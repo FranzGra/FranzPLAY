@@ -2,6 +2,8 @@
 if (!defined('ADMIN_API'))
     exit('Nessun accesso diretto consentito.');
 
+require_once __DIR__ . '/../path_safety.php';
+
 switch ($action) {
     case 'lista_video':
         $limit = (int) ($_POST['limit'] ?? 20);
@@ -65,8 +67,11 @@ switch ($action) {
         );
 
         global $Cache;
-        if (isset($Cache) && is_object($Cache))
-            $Cache->flush();
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione mirata: solo categorie/impostazioni globali, NON tutto.
+            // I dati video sono già letti senza cache aggressiva (paginate + N+1 risolto).
+            $Cache->delete('categorie_list_v1');
+        }
         inviaRisposta(true, 'Informazioni video aggiornate con successo');
         break;
 
@@ -80,28 +85,29 @@ switch ($action) {
         // Rimozione dal DB
         executePreparedQuery("DELETE FROM Video WHERE id = ?", "i", [$id]);
 
-        // Rimozione file fisici dal disco
+        // Rimozione file fisici dal disco (con sandbox path safety)
         if ($info) {
+            global $BASE_VIDEO_PATH;
             foreach ($info as $key => $path) {
-                if ($path && $path != 'mancante') {
-                    // Normalizzazione path per Windows/Unix
-                    $clean_path = ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
-                    global $BASE_VIDEO_PATH;
-                    $full_path = $BASE_VIDEO_PATH . DIRECTORY_SEPARATOR . $clean_path;
+                if (!$path || $path === 'mancante') continue;
 
-                    // Tentativo di eliminazione se il file esiste
-                    if (file_exists($full_path)) {
-                        if (!@unlink($full_path)) {
-                            error_log("⚠️ Errore eliminazione file: $full_path");
-                        }
-                    }
+                $full_path = safeJoinPath($BASE_VIDEO_PATH, ltrim($path, '/\\'));
+                if ($full_path === null) {
+                    error_log("🚨 [SECURITY] Path traversal bloccato in elimina_video: $path");
+                    continue;
+                }
+                if (file_exists($full_path) && !@unlink($full_path)) {
+                    error_log("⚠️ Errore eliminazione file: $full_path");
                 }
             }
         }
 
         global $Cache;
-        if (isset($Cache) && is_object($Cache))
-            $Cache->flush();
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione mirata: solo categorie/impostazioni globali, NON tutto.
+            // I dati video sono già letti senza cache aggressiva (paginate + N+1 risolto).
+            $Cache->delete('categorie_list_v1');
+        }
         inviaRisposta(true, 'Video ed elementi correlati (file/anteprime) rimossi');
         break;
 }

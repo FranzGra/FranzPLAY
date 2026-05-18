@@ -57,9 +57,17 @@ try {
     $user = $res->fetch_assoc();
 
     if (!$user || (int) $user['Admin'] !== 1) {
-        error_log("🚨 [SECURITY ALERT] Tentativo di accesso Admin non autorizzato. ID Utente: $id_utente");
+        $ip_alert = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        error_log("🚨 [SECURITY ALERT] Tentativo accesso Admin non autorizzato. UserID=$id_utente IP=$ip_alert");
+        // Difesa addizionale: se la sessione mente, distruggila per forzare re-login.
+        $_SESSION['amministratore'] = false;
         failJson('Accesso Negato: Sono richiesti privilegi amministrativi.', 403);
     }
+
+    // Audit dell'azione admin (richiesta autorizzata).
+    $audit_ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $audit_action = $_POST['action'] ?? $_GET['action'] ?? 'unknown';
+    error_log("[ADMIN AUDIT] user=$id_utente action=$audit_action ip=$audit_ip");
 
     // Se arriviamo qui, il controllo è superato e lo script chiamante può proseguire.
 

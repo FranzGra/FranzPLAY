@@ -2,10 +2,21 @@
 if (!defined('ADMIN_API'))
     exit('Nessun accesso diretto consentito.');
 
+require_once __DIR__ . '/../path_safety.php';
+
 switch ($action) {
     case 'lista_categorie':
-        $sql = "SELECT c.*, (SELECT COUNT(*) FROM Video v WHERE v.id_Categoria = c.id) as num_video FROM Categorie c ORDER BY c.Nome ASC";
+        // LEFT JOIN + GROUP BY al posto della subquery correlata (N+1).
+        // Su 100 categorie passiamo da 101 query a 1 sola.
+        $sql = "SELECT c.*, COUNT(v.id) AS num_video
+                FROM Categorie c
+                LEFT JOIN Video v ON v.id_Categoria = c.id
+                GROUP BY c.id
+                ORDER BY c.Nome ASC";
         $res = $database->query($sql);
+        if (!$res) {
+            throw new Exception("Errore query lista categorie");
+        }
         inviaRisposta(true, 'Elenco categorie caricato', 200, ['dati' => $res->fetch_all(MYSQLI_ASSOC)]);
         break;
 
@@ -17,8 +28,11 @@ switch ($action) {
 
         executePreparedQuery("UPDATE Categorie SET Nome = ? WHERE id = ?", "si", [$nome, $id]);
         global $Cache;
-        if (isset($Cache) && is_object($Cache))
-            $Cache->flush();
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione MIRATA invece di flush() globale (più efficiente).
+            $Cache->delete('categorie_list_v1');
+            $Cache->delete('impostazioni_globali');
+        }
         inviaRisposta(true, 'Categoria aggiornata con successo');
         break;
 
@@ -33,8 +47,11 @@ switch ($action) {
         }
 
         global $Cache;
-        if (isset($Cache) && is_object($Cache))
-            $Cache->flush();
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione MIRATA invece di flush() globale (più efficiente).
+            $Cache->delete('categorie_list_v1');
+            $Cache->delete('impostazioni_globali');
+        }
         inviaRisposta(true, 'Colore categoria aggiornato con successo');
         break;
 
@@ -62,11 +79,15 @@ switch ($action) {
         }
 
         global $BASE_VIDEO_PATH;
-        $target_dir = rtrim($BASE_VIDEO_PATH, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $cat['Percorso']), DIRECTORY_SEPARATOR);
+        $target_dir = safeJoinPath($BASE_VIDEO_PATH, ltrim($cat['Percorso'], '/\\'));
+        if ($target_dir === null) {
+            error_log("🚨 [SECURITY] Path traversal in upload_sfondo_categoria: " . $cat['Percorso']);
+            throw new Exception("Percorso categoria non valido");
+        }
         if (!file_exists($target_dir))
-            throw new Exception("Cartella di destinazione non esistente: $target_dir");
+            throw new Exception("Cartella di destinazione non esistente");
         if (!is_writable($target_dir))
-            throw new Exception("Permessi negati nella cartella: $target_dir");
+            throw new Exception("Permessi negati nella cartella di destinazione");
 
         $ext = ($mime == 'image/png') ? 'png' : (($mime == 'image/webp') ? 'webp' : 'jpg');
         $new_filename = "cover." . $ext;
@@ -97,21 +118,21 @@ switch ($action) {
 
         global $BASE_VIDEO_PATH;
         if ($cat['Immagine_Sfondo']) {
-            $path = ltrim($cat['Immagine_Sfondo'], '/');
-            // Path fisico completo
-            $full_path = rtrim($BASE_VIDEO_PATH, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
-
-            if (file_exists($full_path)) {
-                if (!@unlink($full_path)) {
-                    error_log("⚠️ Impossibile eliminare fisicamente lo sfondo: $full_path");
-                }
+            $full_path = safeJoinPath($BASE_VIDEO_PATH, ltrim($cat['Immagine_Sfondo'], '/\\'));
+            if ($full_path === null) {
+                error_log("🚨 [SECURITY] Path traversal in rimuovi_sfondo_categoria: " . $cat['Immagine_Sfondo']);
+            } elseif (file_exists($full_path) && !@unlink($full_path)) {
+                error_log("⚠️ Impossibile eliminare fisicamente lo sfondo: $full_path");
             }
         }
 
         executePreparedQuery("UPDATE Categorie SET Immagine_Sfondo = NULL WHERE id = ?", "i", [$id]);
         global $Cache;
-        if (isset($Cache) && is_object($Cache))
-            $Cache->flush();
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione MIRATA invece di flush() globale (più efficiente).
+            $Cache->delete('categorie_list_v1');
+            $Cache->delete('impostazioni_globali');
+        }
         inviaRisposta(true, 'Sfondo rimosso con successo');
         break;
 }

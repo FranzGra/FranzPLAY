@@ -61,46 +61,59 @@ try {
     $res = executePreparedQuery("SELECT Durata FROM Video WHERE id = ?", "i", [$id_video]);
     $video_info = $res->fetch_assoc();
 
-    // Calcolo della durata in secondi (formato HH:MM:SS o MM:SS)
+    // Calcolo durata in secondi: accetta solo formati HH:MM:SS, H:MM, MM:SS.
     $durata_totale = 0;
     if ($video_info && !empty($video_info['Durata'])) {
-        $parti = array_reverse(explode(':', $video_info['Durata']));
-        $moltiplicatore = 1;
-
-        foreach ($parti as $parte) {
-            $durata_totale += (int) $parte * $moltiplicatore;
-            $moltiplicatore *= 60;
+        $durata_str = trim($video_info['Durata']);
+        if (preg_match('/^\d{1,3}(:\d{1,2}){1,2}$/', $durata_str)) {
+            $parti = array_reverse(explode(':', $durata_str));
+            $moltiplicatore = 1;
+            foreach ($parti as $parte) {
+                $durata_totale += (int) $parte * $moltiplicatore;
+                $moltiplicatore *= 60;
+            }
         }
     }
 
-    // 2. LOGICA DI COMPLETAMENTO
-    // Se siamo oltre il 90%, lo consideriamo concluso per pulizia UI
-    $mostra_in_continua = 1;
-    if ($durata_totale > 0) {
-        $percentuale_visione = ($progresso / $durata_totale) * 100;
-        if ($percentuale_visione >= 90) {
-            $mostra_in_continua = 0;
-        }
-    }
+    // 2. Logica di completamento (calcolo lato PHP solo come hint;
+    // l'autorità è la formula MySQL che evita race condition).
+    // Se non conosciamo la durata, lasciamo il record in continua-a-guardare.
 
-    // 3. AGGIORNAMENTO CRONOLOGIA (UPSERT)
-    $sql = "INSERT INTO Cronologia 
-              (id_Utente, id_Video, progresso_secondi, continua_a_guardare, ultimo_aggiornamento) 
-            VALUES (?, ?, ?, ?, NOW()) 
-            ON DUPLICATE KEY UPDATE 
-              progresso_secondi = VALUES(progresso_secondi), 
-              continua_a_guardare = VALUES(continua_a_guardare),
+    // 3. UPSERT ATOMICO E IDEMPOTENTE
+    // - progresso: prendiamo il MAX tra il valore corrente e quello in arrivo
+    //   per evitare regressioni causate da richieste fuori ordine.
+    // - continua_a_guardare: 0 se progresso >= 90% della durata, 1 altrimenti.
+    //   Tutto calcolato lato MySQL in un singolo statement.
+    $sql = "INSERT INTO Cronologia
+              (id_Utente, id_Video, progresso_secondi, continua_a_guardare, ultimo_aggiornamento)
+            VALUES (?, ?, ?,
+                CASE WHEN ? > 0 AND (? / ?) >= 0.9 THEN 0 ELSE 1 END,
+                NOW())
+            ON DUPLICATE KEY UPDATE
+              progresso_secondi = GREATEST(progresso_secondi, VALUES(progresso_secondi)),
+              continua_a_guardare = CASE
+                  WHEN ? > 0 AND (GREATEST(progresso_secondi, VALUES(progresso_secondi)) / ?) >= 0.9
+                  THEN 0 ELSE 1 END,
               ultimo_aggiornamento = NOW()";
 
-    if (executePreparedQuery($sql, "iiii", [$id_utente, $id_video, $progresso, $mostra_in_continua])) {
+    // Bind: id_utente, id_video, progresso (per INSERT),
+    //       durata, progresso, durata (per CASE INSERT),
+    //       durata, durata (per CASE UPDATE)
+    $ok = executePreparedQuery(
+        $sql,
+        "iiiiiiii",
+        [
+            $id_utente, $id_video, $progresso,
+            $durata_totale, $progresso, max(1, $durata_totale),
+            $durata_totale, max(1, $durata_totale)
+        ]
+    );
 
-        // ========================================================================
-        // SEZIONE 5: RISPOSTA AL CLIENT
-        // ========================================================================
+    if ($ok !== false) {
+        $completato = ($durata_totale > 0 && ($progresso / $durata_totale) >= 0.9);
         inviaRisposta(true, 'Sincronizzazione completata', 200, [
-            'completato' => ($mostra_in_continua === 0)
+            'completato' => $completato
         ]);
-
     } else {
         throw new Exception("Errore durante l'esecuzione della query di aggiornamento cronologia.");
     }
