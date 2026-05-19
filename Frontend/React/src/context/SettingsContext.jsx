@@ -12,16 +12,36 @@ export const SettingsProvider = ({ children }) => {
 
   const fetchSettings = async () => {
     try {
-      // 1. Controllo Stato Sistema (Setup Wizard)
-      const statusRes = await apiRequest('/status.php', 'GET');
-
-      // Controllo se il database è offline / non inizializzato (errore 500)
-      if (statusRes === null || statusRes?.success === false) {
-        const errorMsg = statusRes?.message || statusRes?.messaggio || statusRes?.avviso || "";
-        if (errorMsg.includes("offline") || errorMsg.includes("Connessione rifiutata") || errorMsg.includes("Unknown database") || errorMsg.includes("Base di dati sconosciuta") || errorMsg.includes("Errore verifica stato sistema") || errorMsg.includes("doesn't exist")) {
+      // 1. Controllo Stato Sistema (Setup Wizard).
+      // apiRequest lancia eccezione su success:false o HTTP error, quindi
+      // intercettiamo localmente per distinguere "DB offline" da "needsSetup".
+      let statusRes = null;
+      try {
+        statusRes = await apiRequest('/status.php', 'GET');
+      } catch (statusErr) {
+        const errorMsg = String(statusErr?.message || '');
+        // Errori tipici quando il DB è giù o schema mancante.
+        const looksLikeDbDown =
+          errorMsg.includes('offline') ||
+          errorMsg.includes('Connessione rifiutata') ||
+          errorMsg.includes('Unknown database') ||
+          errorMsg.includes('Base di dati sconosciuta') ||
+          errorMsg.includes('Errore verifica stato sistema') ||
+          errorMsg.includes("doesn't exist") ||
+          errorMsg.includes('Failed to fetch');
+        if (looksLikeDbDown) {
+          // Caso speciale: se l'errore è proprio "tabella Utenti non esiste",
+          // significa che il DB esiste ma è vuoto → vai al setup wizard,
+          // non mostrare la pagina "DB offline".
+          if (errorMsg.includes("Utenti") || errorMsg.includes("doesn't exist")) {
+            setNeedsSetup(true);
+            return;
+          }
           setDbOffline(true);
           return;
         }
+        // Errore inatteso: propaga.
+        throw statusErr;
       }
 
       if (statusRes?.success && statusRes?.needsSetup) {

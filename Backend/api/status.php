@@ -38,24 +38,21 @@ require_once 'cache.php';
 
 global $database, $Cache;
 
-// Cache breve dello stato di configurazione: il frontend lo polla all'avvio
-// e il valore cambia raramente (solo durante setup iniziale).
 $STATUS_CACHE_KEY = 'system_status_v1';
-if (isset($Cache) && is_object($Cache)) {
-    $cached_status = $Cache->get($STATUS_CACHE_KEY);
-    if (is_array($cached_status) && isset($cached_status['isConfigured'])) {
-        echo json_encode($cached_status);
-        exit;
-    }
-}
 
 try {
-    // 1. Verifica se la tabella Utenti esiste
+    // 1. Verifica REALE che la tabella Utenti esista PRIMA di consultare la cache.
+    //    Motivo: se il DB è stato wipato dopo che la cache aveva memorizzato
+    //    isConfigured=true, la cache sarebbe stantia e il frontend mostrerebbe
+    //    Login invece del Setup Wizard. Costo: una query SHOW TABLES — trascurabile.
     $checkTable = $database->query("SHOW TABLES LIKE 'Utenti'");
 
     if ($checkTable->num_rows === 0) {
-        // La tabella non esiste: il database è vuoto o non inizializzato.
-        // NON cachiamo: vogliamo che subito dopo il setup lo stato torni "configurato".
+        // La tabella non esiste: DB vuoto o non inizializzato.
+        // Invalidiamo qualsiasi cache stantia che dicesse il contrario.
+        if (isset($Cache) && is_object($Cache)) {
+            $Cache->delete($STATUS_CACHE_KEY);
+        }
         $payload = [
             "success" => true,
             "needsSetup" => true,
@@ -65,7 +62,16 @@ try {
         exit;
     }
 
-    // 2. Se la tabella esiste, conta gli utenti
+    // 2. Tabella esiste: ora possiamo consultare la cache.
+    if (isset($Cache) && is_object($Cache)) {
+        $cached_status = $Cache->get($STATUS_CACHE_KEY);
+        if (is_array($cached_status) && isset($cached_status['isConfigured'])) {
+            echo json_encode($cached_status);
+            exit;
+        }
+    }
+
+    // 3. Se la tabella esiste, conta gli utenti
     $res = $database->query("SELECT COUNT(*) as num_utenti FROM Utenti");
     $row = $res->fetch_assoc();
     $num_utenti = (int)$row['num_utenti'];
