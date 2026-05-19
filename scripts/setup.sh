@@ -107,22 +107,29 @@ esac
 log_ok "Architettura host: $HOST_ARCH (platform=$DOCKER_PLATFORM)"
 
 if [ -n "$DOCKER_PLATFORM" ]; then
-    # Lista immagini esterne usate dal compose (parse banale, abbastanza affidabile)
-    EXT_IMAGES=$(grep -E '^\s+image:\s+' docker-compose.yml | awk '{print $2}' | sort -u)
+    # Lista immagini esterne usate dal compose (parse banale, abbastanza affidabile).
+    # Strip righe vuote e righe che non sono reference di immagini (es. commenti).
+    EXT_IMAGES=$(grep -E '^\s+image:\s+\S+' docker-compose.yml | awk '{print $2}' | grep -v '^$' | sort -u)
     for img in $EXT_IMAGES; do
+        # Skip stringhe vuote o malformate
+        [ -z "$img" ] && continue
+        case "$img" in
+            *:*|*/*) ;;  # ok, ha tag o repo
+            *) continue ;;  # nome strano, skip
+        esac
         # Verifica se l'immagine è in cache e con quale arch
         CACHED_ARCH=$(docker image inspect "$img" --format '{{.Os}}/{{.Architecture}}{{if .Variant}}/{{.Variant}}{{end}}' 2>/dev/null || echo "")
         if [ -z "$CACHED_ARCH" ]; then
-            log_info "Pull $img per $DOCKER_PLATFORM (non in cache)"
+            log_info "Pull '$img' per $DOCKER_PLATFORM (non in cache)"
             docker pull --platform "$DOCKER_PLATFORM" "$img" >/dev/null 2>&1 || \
-                log_warn "Pull di $img fallito (verrà ritentato da docker compose)"
+                log_warn "Pull di '$img' fallito (verrà ritentato da docker compose)"
         elif [ "$CACHED_ARCH" != "$DOCKER_PLATFORM" ]; then
-            log_warn "$img in cache ha arch '$CACHED_ARCH' ≠ '$DOCKER_PLATFORM', rifaccio pull"
+            log_warn "'$img' in cache ha arch '$CACHED_ARCH' ≠ '$DOCKER_PLATFORM', rifaccio pull"
             docker rmi "$img" >/dev/null 2>&1 || true
             docker pull --platform "$DOCKER_PLATFORM" "$img" >/dev/null 2>&1 || \
-                log_warn "Pull di $img fallito"
+                log_warn "Pull di '$img' fallito"
         else
-            log_ok "$img ($CACHED_ARCH)"
+            log_ok "'$img' ($CACHED_ARCH)"
         fi
     done
 fi
@@ -161,16 +168,26 @@ if [ -n "$SUB_GID_LINE" ]; then
     HOST_GID=$((SUB_GID_BASE + CONTAINER_GID - 1))
 fi
 
-# Inoltre, se App_Data/Database_Data esiste GIÀ con un uid specifico, fidiamoci
-# di quello (è quello che il "vero" container ha usato in sessioni precedenti).
-# Questo gestisce automaticamente cambi di mapping rootless.
+# Inoltre, se App_Data/Database_Data esiste GIÀ con un uid PLAUSIBILE per
+# l'host (>= 100000 su rootless, oppure uid utente reale), fidiamoci di quello.
+# IMPORTANTE: NON usiamo mai uid < 1000 perché quelli sono uid container-interni
+# (es. 999=mysql) e in rootless non hanno equivalente host. Se vediamo 999:999
+# significa che un setup precedente ha sbagliato il chown — riapplichiamo
+# il calcolo originale (subuid mapping).
 if [ -d "App_Data/Database_Data" ] && [ -f "App_Data/Database_Data/ibdata1" ]; then
     EXISTING_UID=$(stat -c '%u' App_Data/Database_Data/ibdata1)
     EXISTING_GID=$(stat -c '%g' App_Data/Database_Data/ibdata1)
-    if [ "$EXISTING_UID" != "$HOST_UID" ] || [ "$EXISTING_GID" != "$HOST_GID" ]; then
-        log_warn "ibdata1 esistente ha uid:gid=$EXISTING_UID:$EXISTING_GID, override del calcolo"
-        HOST_UID=$EXISTING_UID
-        HOST_GID=$EXISTING_GID
+    # Solo override se l'uid esistente è "host-plausibile":
+    #   - >= 1000 (normale utente Linux)
+    #   - oppure 0 (root: caso Docker non-rootless)
+    if [ "$EXISTING_UID" -ge 1000 ] || [ "$EXISTING_UID" = "0" ]; then
+        if [ "$EXISTING_UID" != "$HOST_UID" ] || [ "$EXISTING_GID" != "$HOST_GID" ]; then
+            log_warn "ibdata1 esistente ha uid:gid=$EXISTING_UID:$EXISTING_GID, override del calcolo"
+            HOST_UID=$EXISTING_UID
+            HOST_GID=$EXISTING_GID
+        fi
+    else
+        log_warn "ibdata1 ha uid=$EXISTING_UID (<1000, non plausibile host). Forzo uid mappato $HOST_UID."
     fi
 fi
 
