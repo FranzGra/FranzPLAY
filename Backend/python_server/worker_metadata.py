@@ -182,12 +182,25 @@ def process_new_videos_from_temp(conn):
             logging.info(f"Video processato: {titolo} ({durata_str})")
             # Nuovo video: invalida feed pubblico (Home, Categorie).
             invalidate_videos_and_categories(reason=f"nuovo video '{titolo}'")
+        except mysql.connector.errors.IntegrityError as e:
+            conn.rollback()
+            if e.errno == mysql.connector.errorcode.ER_DUP_ENTRY:
+                logging.info(f"Video {relative_path} già presente in DB. Rimuovo da temp.")
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM Video_Temp WHERE id = %s", (job['id'],))
+                conn.commit()
+            else:
+                logging.error(f"Errore integrità video {relative_path}: {e}")
+                with conn.cursor() as cursor:
+                    cursor.execute("UPDATE Video_Temp SET locked_at = NULL WHERE id = %s", (job['id'],))
+                conn.commit()
         except Exception as e:
             conn.rollback()
             logging.error(f"Errore processo video {relative_path}: {e}")
             # In caso di errore, rilascia il lock per permettere il retry.
             with conn.cursor() as cursor:
                 cursor.execute("UPDATE Video_Temp SET locked_at = NULL WHERE id = %s", (job['id'],))
+            conn.commit()
         return True
     except Exception as e:
         logging.error(f"Errore generale in process_new_videos_from_temp: {e}")
