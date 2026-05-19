@@ -128,11 +128,15 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      # MariaDB 11.x crea automaticamente /var/lib/mysql/.my-healthcheck.cnf
-      # con credenziali dedicate (utente "healthcheck"). IMPORTANTE: l'opzione
-      # --defaults-extra-file va PRIMA del subcomando (ping), altrimenti
-      # mariadb-admin la interpreta come "unknown variable".
-      test: ["CMD-SHELL", "mariadb-admin --defaults-extra-file=/var/lib/mysql/.my-healthcheck.cnf ping || exit 1"]
+      # Usiamo le credenziali root dal .env del container, senza file di
+      # configurazione esterni. Motivo: in MariaDB 11.4.10 ARM64 il file
+      # /var/lib/mysql/.my-healthcheck.cnf dichiara la sezione
+      # [mariadb-client] che mariadb-admin non legge → auth fallisce e
+      # ping ritorna "Access denied" che Docker interpreta come unhealthy.
+      # MYSQL_ROOT_PASSWORD è già una env var del container.
+      # Le doppie virgolette singole sono per evitare che la shell del
+      # docker-compose.yml espanda $MYSQL_ROOT_PASSWORD prima del CMD-SHELL.
+      test: ["CMD-SHELL", "mariadb-admin -uroot -p\"$$MYSQL_ROOT_PASSWORD\" ping || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
