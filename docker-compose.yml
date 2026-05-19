@@ -10,6 +10,7 @@ services:
       - /app/node_modules      # Volume anonimo per node_modules
       - npm_cache:/root/.npm   # Cache
     environment:
+      - TZ=Europe/Rome
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
     restart: always
@@ -61,6 +62,7 @@ services:
       - ./Docker_Config:/var/www/Docker_Config # Mappa configurazioni per init DB
       - ${PERCORSO_VIDEO}:/percorsoVideo # VIDEO VOLUME MOUNT (Added for Admin functionality)
     environment:
+      TZ: Europe/Rome
       WATCH_DIR: /percorsoVideo
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -110,6 +112,7 @@ services:
       - ./App_Data/Database_Data:/var/lib/mysql
       - ./Docker_Config/DBMS_Iniziale/:/docker-entrypoint-initdb.d
     environment:
+      TZ: Europe/Rome
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_USER: ${MYSQL_USER}
@@ -164,6 +167,7 @@ services:
       - -c
       - 'if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no; else exec redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no; fi'
     environment:
+      TZ: Europe/Rome
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
@@ -198,6 +202,7 @@ services:
     image: arm64v8/phpmyadmin:latest
     container_name: TOOLS_PhpMyAdmin
     environment:
+      TZ: Europe/Rome
       PMA_HOST: mysql
       # Default: utente applicativo (limitato). Per operazioni DDL/grant, loggati
       # manualmente come root dalla schermata di PhpMyAdmin (PMA_ARBITRARY=1
@@ -215,6 +220,7 @@ services:
     build: ./Docker_Config/Python
     container_name: AUTO_Watcher
     environment:
+      - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
@@ -240,6 +246,7 @@ services:
     build: ./Docker_Config/Python
     container_name: AUTO_Worker_Meta
     environment:
+      - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
@@ -265,6 +272,7 @@ services:
     build: ./Docker_Config/Python
     container_name: AUTO_Worker_Assets
     environment:
+      - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
@@ -297,6 +305,7 @@ services:
     build: ./Docker_Config/Python
     container_name: AUTO_Worker_Optimizer
     environment:
+      - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
