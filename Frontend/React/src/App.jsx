@@ -171,7 +171,7 @@ const SettingsGuard = ({ children }) => {
             <h3 className="font-semibold text-zinc-100">Come risolvere il problema:</h3>
             <ol className="list-decimal list-inside text-sm text-zinc-400 space-y-2">
               <li>Assicurati di aver creato il file <code className="bg-zinc-800 text-red-400 px-1.5 py-0.5 rounded">.env</code> nella directory principale (puoi duplicare <code className="text-red-400">.env.example</code>).</li>
-              <li>Chiudi i container e pulisci i volumi sporchi lanciando lo script <code className="bg-zinc-800 text-blue-400 px-1.5 py-0.5 rounded">resetta_ambiente_docker.bat</code> (su Windows) o cancellando manualmente la cartella <code className="text-blue-400">App_Data/Database_Data</code>.</li>
+              <li>Chiudi i container e pulisci i volumi sporchi lanciando lo script <code className="bg-zinc-800 text-blue-400 px-1.5 py-0.5 rounded">scripts\resetta_ambiente_docker.bat</code> (su Windows) o cancellando manualmente la cartella <code className="text-blue-400">App_Data/Database_Data</code>.</li>
               <li>Riavvia i container con <code className="text-blue-400">docker-compose up -d</code>.</li>
             </ol>
           </div>

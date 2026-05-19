@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Posizionati nella root del progetto (cartella padre di /scripts)
+cd "$(dirname "$0")/.." || exit 1
+
 docker-compose down
 
 echo ""

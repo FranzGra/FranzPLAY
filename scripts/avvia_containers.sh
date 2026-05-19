@@ -6,6 +6,9 @@
 # Verifica la presenza dei file necessari e avvia i container.
 # ============================================================================
 
+# Posizionati nella root del progetto (cartella padre di /scripts)
+cd "$(dirname "$0")/.." || exit 1
+
 # 1. Verifica file .env
 if [ ! -f .env ]; then
     echo "❌ [ERRORE] File .env mancante!"

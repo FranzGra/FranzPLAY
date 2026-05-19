@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Posizionati nella root del progetto (cartella padre di /scripts)
+cd "$(dirname "$0")/.." || exit 1
+
 echo ""
 echo "ATTENZIONE: Questa un'operazione distruttiva!"
 echo "Verranno cancellati tutti i container, i volumi e i file del database."

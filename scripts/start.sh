@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Posizionati nella root del progetto (cartella padre di /scripts)
+cd "$(dirname "$0")/.." || exit 1
+
 # Verifica presenza file .env fondamentale per il db
 if [ ! -f ".env" ]; then
     echo ""

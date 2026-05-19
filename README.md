@@ -70,7 +70,7 @@ Per configurare da zero il progetto sul tuo computer/server e avviarlo per la pr
        docker-compose up -d --build
        ```
    *   **Se usi Windows**, fai doppio clic sullo script fornito:
-       `Avvia_Containers.bat`
+       `scripts\Avvia_Containers.bat`
 
 5. **Accedi alla Piattaforma**
    L'applicazione è ora online e funzionante sul tuo PC. Apri il browser e naviga su:
@@ -83,10 +83,12 @@ Per configurare da zero il progetto sul tuo computer/server e avviarlo per la pr
    Prendi un qualsiasi file video (es: `video.mp4`) e posizionalo fisicamente all'interno della cartella `testVideo/`. L'automazione Python "subirà" il cambiamento catturando i frame, generando le anteprime e mettendo il file nel catalogo database, rendendolo visualizzabile istantaneamente nell'interfaccia React secondo la logica "Drop & Watch".
 
 ### Azioni Rapide con Script Batch (Windows)
-Dopo la configurazione iniziale, puoi operare agilmente attraverso i file Batch:
-*   `Avvia_Containers.bat`: Avvia rapidamente tutto in background.
-*   `Stop_Containers.bat`: Arresta i servizi e spenge correttamente gli applicativi.
-*   `resetta_ambiente_docker.bat`: **Attenzione**, questo script arresta i container ed elimina sia le immagini che i *Volumi* associati, **cancellando l'intero database!** Usare con cautela.
+Tutti gli script si trovano nella cartella `scripts/`. Dopo la configurazione iniziale, puoi operare agilmente attraverso i file Batch:
+*   `scripts\Avvia_Containers.bat`: Avvia rapidamente tutto in background.
+*   `scripts\Stop_Containers.bat`: Arresta i servizi e spenge correttamente gli applicativi.
+*   `scripts\resetta_ambiente_docker.bat`: **Attenzione**, questo script arresta i container ed elimina sia le immagini che i *Volumi* associati, **cancellando l'intero database!** Usare con cautela.
+
+Per una panoramica completa di tutti gli script disponibili (Windows e Unix/Mac) consulta [scripts/README.md](scripts/README.md).
 
 ## 📂 Struttura Cartelle
 *   `/App_Data`: Volume centralizzato contenente tutti i dati persistenti (Database MariaDB, file generati, ecc).
@@ -94,3 +96,4 @@ Dopo la configurazione iniziale, puoi operare agilmente attraverso i file Batch:
 *   `/Backend/api`: Endpoint PHP (API).
 *   `/Backend/python_server`: Script di automazione (Watcher, Workers).
 *   `/Docker_Config`: Dockerfile e configurazioni servizi (Nginx, PHP, ecc).
+*   `/scripts`: Script di avvio, stop e reset dell'ambiente Docker (Windows + Unix/Mac).

@@ -1,5 +1,8 @@
 @echo off
 
+:: Posizionati nella root del progetto (cartella padre di /scripts)
+cd /d "%~dp0.."
+
 :: Verifica presenza file .env fondamentale per il db
 if not exist ".env" (
     echo.

@@ -1,5 +1,8 @@
 @echo off
 
+:: Posizionati nella root del progetto (cartella padre di /scripts)
+cd /d "%~dp0.."
+
 echo.
 echo ATTENZIONE: Questa un'operazione distruttiva!
 echo Verranno cancellati tutti i container, i volumi e i file del database.

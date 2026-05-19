@@ -7,6 +7,9 @@
 # ATTENZIONE: Questa operazione è distruttiva!
 # ============================================================================
 
+# Posizionati nella root del progetto (cartella padre di /scripts)
+cd "$(dirname "$0")/.." || exit 1
+
 echo "⚠️ ATTENZIONE: Questa operazione cancellerà TUTTI i dati del database!"
 read -p "Vuoi procedere? (s/N): " confirm
 
