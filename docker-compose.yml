@@ -128,7 +128,12 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      # MariaDB 11.x crea automaticamente /var/lib/mysql/.my-healthcheck.cnf
+      # con le credenziali per healthcheck (utente locale "mariadb.sys").
+      # Usandolo evitiamo problemi di shell-escaping della password e
+      # incompatibilità con il rename mysqladmin → mariadb-admin.
+      # Fallback: prova entrambi i binari per coprire 10.x e 11.x.
+      test: ["CMD-SHELL", "mariadb-admin ping --defaults-extra-file=/var/lib/mysql/.my-healthcheck.cnf 2>/dev/null || mysqladmin ping --defaults-extra-file=/var/lib/mysql/.my-healthcheck.cnf 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
