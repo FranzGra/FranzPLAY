@@ -96,7 +96,13 @@ services:
   #  - innodb_flush_log_at_trx_commit 2: meno fsync su SD card (durata e velocità).
   #  - innodb_io_capacity 100: SD card è lenta, evita compaction aggressivo.
   mysql:
-    image: mariadb:latest
+    # Pin esplicito alla 11.4 LTS (supporto fino al 2029).
+    # Motivo: `mariadb:latest` ora è 12.x, che NON è retro-compatibile con
+    # le tabelle di sistema generate da 10.x/11.x → all'avvio mariadbd
+    # muore silenziosamente dopo "MariaDB upgrade not required".
+    # 11.4 supporta IF NOT EXISTS su ALTER COLUMN/INDEX (richiesto dalle migration)
+    # e gira nativamente su ARM64 (Raspberry Pi 4/5).
+    image: mariadb:11.4
     container_name: DATABASE_MySQL
     tmpfs:
       - /var/run/mysqld
@@ -255,6 +261,40 @@ services:
           # ma evitare lock totale del Raspberry.
           cpus: '1.2'
           memory: 512M
+    restart: always
+
+  # --- OPTIMIZER (remux fMP4 faststart, NO transcodifica) ---
+  # Worker batch che converte i video al formato MP4 frammentato + faststart per
+  # garantire compatibilità cross-device (incluso iOS che non legge MKV) e
+  # streaming chunked stile YouTube. ffmpeg `-c copy` è I/O-bound: CPU bassa
+  # anche per file 4K. Cleanup originale dopo 24h (failsafe).
+  python_worker_optimizer:
+    build: ./Docker_Config/Python
+    container_name: AUTO_Worker_Optimizer
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=mysql
+      - WATCH_DIR=/percorsoVideo
+      - OPTIMIZER_POLL_INTERVAL=${OPTIMIZER_POLL_INTERVAL:-30}
+      - OPTIMIZER_BACKOFF_MAX=${OPTIMIZER_BACKOFF_MAX:-300}
+      - OPTIMIZER_CLEANUP_HOURS=${OPTIMIZER_CLEANUP_HOURS:-24}
+      - OPTIMIZER_REMUX_TIMEOUT=${OPTIMIZER_REMUX_TIMEOUT:-1800}
+    volumes:
+      - ./Backend/python_server:/app
+      - ${PERCORSO_VIDEO}:/percorsoVideo
+    command: ["python3", "/app/worker_optimizer.py"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          # Remux -c copy non satura CPU (I/O-bound). Audio re-encode AAC è leggero.
+          # Bassa priorità: non vogliamo competere con worker_assets per ffmpeg.
+          cpus: '0.8'
+          memory: 256M
     restart: always
 
 volumes:

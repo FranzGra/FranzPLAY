@@ -113,7 +113,9 @@ header('Accept-Ranges: bytes'); // Anche per Nginx, aiuta il client a sapere che
 if (in_array($estensione, ['jpg', 'jpeg', 'png', 'webp'])) {
     header('Cache-Control: public, max-age=86400, immutable');
 } else {
-    header('Cache-Control: private, max-age=60');
+    // Cache estesa per consentire rewatch entro 5 min senza ri-fetch, e
+    // stale-while-revalidate per evitare buffering visibile durante refresh.
+    header('Cache-Control: private, max-age=300, stale-while-revalidate=600');
 }
 
 
@@ -144,6 +146,19 @@ if ($full_path === null || !is_file($full_path)) {
 }
 
 $file_size = filesize($full_path);
+$mtime = filemtime($full_path);
+$etag = '"' . md5($file_clean . '|' . $mtime . '|' . $file_size) . '"';
+
+// Conditional GET: se il client già possiede questa versione, 304 Not Modified.
+$inm = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+$ims = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+header('ETag: ' . $etag);
+header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+if ($inm === $etag || ($ims !== '' && strtotime($ims) >= $mtime)) {
+    http_response_code(304);
+    exit;
+}
+
 $start = 0;
 $end = $file_size - 1;
 $status = 200;

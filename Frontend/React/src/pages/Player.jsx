@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ThumbsUp, Bookmark, Calendar, Share2, Loader2, FileVideo, Check } from 'lucide-react';
+import { ThumbsUp, Bookmark, Calendar, Share2, Loader2, FileVideo, Check, Zap, Clock, AlertTriangle } from 'lucide-react';
 
 import VideoPlayer from '../components/VideoPlayer';
 import Comments from '../components/Comments';
@@ -154,6 +154,31 @@ export default function Player() {
                             {video.Formato && (
                                 <span className="flex items-center gap-1.5 uppercase">
                                     <FileVideo size={16} /> {video.Formato}
+                                </span>
+                            )}
+                            {/* Optimization Badge */}
+                            {video.ottimizzato === 1 && (
+                                <span
+                                    title={`Codec: ${video.codec_video || '?'} / ${video.codec_audio || '?'} — riproducibile su tutti i dispositivi`}
+                                    className="flex items-center gap-1.5 text-emerald-400"
+                                >
+                                    <Zap size={16} /> Ottimizzato
+                                </span>
+                            )}
+                            {video.ottimizzato === null && (
+                                <span
+                                    title="Il worker sta processando questo video per la compatibilità cross-device"
+                                    className="flex items-center gap-1.5 text-amber-400"
+                                >
+                                    <Clock size={16} /> In ottimizzazione…
+                                </span>
+                            )}
+                            {video.ottimizzato === 0 && (
+                                <span
+                                    title={`Codec ${video.codec_video || '?'} non supportato nativamente su tutti i dispositivi (es. iPhone). Per garantire la compatibilità servirebbe la transcodifica.`}
+                                    className="flex items-center gap-1.5 text-red-400"
+                                >
+                                    <AlertTriangle size={16} /> Compatibilità limitata
                                 </span>
                             )}
                         </div>
