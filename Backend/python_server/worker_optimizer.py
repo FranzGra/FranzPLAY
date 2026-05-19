@@ -169,10 +169,11 @@ def has_enough_space(source_path, factor=1.2):
 
 
 # --- Remux core ---
-def remux_to_fmp4(source_path, dest_path, copy_audio=True):
+def remux_to_fmp4(source_path, dest_path, copy_audio=True, v_codec=None):
     """
     Lancia ffmpeg per produrre un fMP4 faststart.
     copy_audio=False → re-encode audio in AAC 192k (per Opus/Vorbis/FLAC/DTS).
+    v_codec → codec video (per scegliere il codec_tag corretto).
     Ritorna True/False.
 
     Note movflags:
@@ -180,12 +181,27 @@ def remux_to_fmp4(source_path, dest_path, copy_audio=True):
       +frag_keyframe              → frammenta ad ogni keyframe (Range chunked)
       +empty_moov                 → moov vuoto iniziale (compatibile MSE)
       +default_base_moof          → offset relativi (più robusto per HTTP Range)
+
+    CODEC TAGS (cruciale per Safari iOS):
+      HEVC → 'hvc1' (Apple flavor) anziché 'hev1' (default standard MPEG).
+             Senza questo, iPhone Safari rifiuta SILENZIOSAMENTE i video HEVC
+             (player nero, nessun messaggio errore).
+      H.264 → 'avc1' (default già corretto, ma esplicito per chiarezza).
     """
     audio_args = ['-c:a', 'copy'] if copy_audio else ['-c:a', 'aac', '-b:a', '192k']
+
+    # Imposta il codec tag corretto in base al codec video.
+    video_tag_args = []
+    if v_codec in ('hevc', 'h265'):
+        video_tag_args = ['-tag:v', 'hvc1']
+    elif v_codec == 'h264':
+        video_tag_args = ['-tag:v', 'avc1']
+
     cmd = [
         'ffmpeg', '-v', 'error', '-y',
         '-i', source_path,
         '-c:v', 'copy',
+        *video_tag_args,
         *audio_args,
         '-movflags', '+faststart+frag_keyframe+empty_moov+default_base_moof',
         # Mantiene tutti gli stream video/audio principali; scarta dati extra
@@ -445,7 +461,7 @@ def process_one_video(conn):
         new_rel = (src_path.parent / f"{src_path.stem}.opt.mp4").as_posix()
         new_full = os.path.join(PATH_TO_MONITOR, new_rel)
 
-    success = remux_to_fmp4(full, new_full, copy_audio=not needs_audio_reencode)
+    success = remux_to_fmp4(full, new_full, copy_audio=not needs_audio_reencode, v_codec=v_codec)
     if not success:
         # Cleanup output parziale.
         try:
