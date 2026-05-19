@@ -11,6 +11,7 @@ import {
   Zap,
   Clock,
   AlertTriangle,
+  MonitorPlay,
 } from "lucide-react";
 
 import VideoPlayer from "../components/VideoPlayer";
@@ -182,19 +183,11 @@ export default function Player() {
               )}
               {/* Quality Badge */}
               {video.altezza_video > 0 && (
-                <span className="flex items-center gap-1.5 bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded-lg border border-zinc-700 font-bold uppercase text-xs">
-                  {video.altezza_video}p
+                <span className="flex items-center gap-1.5 uppercase">
+                  <MonitorPlay size={16} /> {video.altezza_video}p
                 </span>
               )}
-              {/* Optimization Badge */}
-              {video.ottimizzato === 1 && (
-                <span
-                  title={`Codec: ${video.codec_video || "?"} / ${video.codec_audio || "?"} — riproducibile su tutti i dispositivi`}
-                  className="flex items-center gap-1.5 text-emerald-400"
-                >
-                  <Zap size={16} /> Ottimizzato
-                </span>
-              )}
+              {/* Optimization Badge (nascosto se = 1, visibile solo in errore/in corso) */}
               {video.ottimizzato === null && (
                 <span
                   title="Il worker sta processando questo video per la compatibilità cross-device"
