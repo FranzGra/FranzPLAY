@@ -89,6 +89,7 @@ try {
         $query = "SELECT 
                     v.id, v.percorso_file, v.Titolo, v.Durata, v.Formato, 
                     v.percorso_copertina, v.Likes, v.data_Pubblicazione,
+                    v.altezza_video, v.ottimizzato, v.codec_video, v.codec_audio,
                     c.id as id_Categoria, c.Nome as Nome_Categoria,
                     (SELECT 1 FROM `Like` WHERE id_Utente = ? AND id_Video = v.id) as is_liked,
                     (SELECT 1 FROM Salvati WHERE id_Utente = ? AND id_Video = v.id) as is_saved,
