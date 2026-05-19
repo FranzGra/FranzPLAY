@@ -93,6 +93,40 @@ if [ "$(uname)" = "Linux" ] && systemctl --user is-active docker >/dev/null 2>&1
     fi
 fi
 
+# 1.5 - Verifica architettura immagini Docker esterne.
+# Rileva quando un'immagine in cache è per un'architettura diversa da quella
+# del Pi (succede se l'immagine è stata pullata su un altro host e copiata,
+# o se un manifest multi-arch è stato risolto male). Ri-pulla se necessario.
+HOST_ARCH=$(uname -m)
+case "$HOST_ARCH" in
+    aarch64|arm64) DOCKER_PLATFORM="linux/arm64" ;;
+    armv7l)        DOCKER_PLATFORM="linux/arm/v7" ;;
+    x86_64|amd64)  DOCKER_PLATFORM="linux/amd64" ;;
+    *)             DOCKER_PLATFORM="" ;;
+esac
+log_ok "Architettura host: $HOST_ARCH (platform=$DOCKER_PLATFORM)"
+
+if [ -n "$DOCKER_PLATFORM" ]; then
+    # Lista immagini esterne usate dal compose (parse banale, abbastanza affidabile)
+    EXT_IMAGES=$(grep -E '^\s+image:\s+' docker-compose.yml | awk '{print $2}' | sort -u)
+    for img in $EXT_IMAGES; do
+        # Verifica se l'immagine è in cache e con quale arch
+        CACHED_ARCH=$(docker image inspect "$img" --format '{{.Os}}/{{.Architecture}}{{if .Variant}}/{{.Variant}}{{end}}' 2>/dev/null || echo "")
+        if [ -z "$CACHED_ARCH" ]; then
+            log_info "Pull $img per $DOCKER_PLATFORM (non in cache)"
+            docker pull --platform "$DOCKER_PLATFORM" "$img" >/dev/null 2>&1 || \
+                log_warn "Pull di $img fallito (verrà ritentato da docker compose)"
+        elif [ "$CACHED_ARCH" != "$DOCKER_PLATFORM" ]; then
+            log_warn "$img in cache ha arch '$CACHED_ARCH' ≠ '$DOCKER_PLATFORM', rifaccio pull"
+            docker rmi "$img" >/dev/null 2>&1 || true
+            docker pull --platform "$DOCKER_PLATFORM" "$img" >/dev/null 2>&1 || \
+                log_warn "Pull di $img fallito"
+        else
+            log_ok "$img ($CACHED_ARCH)"
+        fi
+    done
+fi
+
 # ============================================================================
 # STEP 2: Rileva UID del processo mysql dentro al container
 # ============================================================================
