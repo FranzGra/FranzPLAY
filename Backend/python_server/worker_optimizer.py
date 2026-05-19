@@ -137,10 +137,11 @@ def probe_codecs(full_path):
                                 check=True, timeout=FFPROBE_TIMEOUT)
         data = json.loads(result.stdout)
 
-        v_codec, a_codec, height = None, None, None
+        v_codec, a_codec, height, profile = None, None, None, None
         for s in data.get('streams', []):
             if s.get('codec_type') == 'video' and v_codec is None:
                 v_codec = (s.get('codec_name') or '').lower()
+                profile = (s.get('profile') or '').lower()
                 height = s.get('height')
             elif s.get('codec_type') == 'audio' and a_codec is None:
                 a_codec = (s.get('codec_name') or '').lower()
@@ -148,7 +149,7 @@ def probe_codecs(full_path):
         fmt = data.get('format', {})
         container = (fmt.get('format_name') or '').lower()
         duration = float(fmt.get('duration', 0)) if fmt.get('duration') else 0
-        return v_codec, a_codec, container, duration, height
+        return v_codec, a_codec, container, duration, height, profile
 
     except subprocess.TimeoutExpired:
         logging.error(f"ffprobe TIMEOUT su {full_path}")
@@ -416,17 +417,18 @@ def process_one_video(conn):
         return True
 
     probe = probe_codecs(full)
-    if probe is None:
-        logging.warning(f"[ID {video_id}] ffprobe fallito. Rilascio lock per retry.")
-        release_lock(conn, video_id)
-        return True
+    if not probe:
+        # TIMEOUT o file inesistente, abortiamo e sblocchiamo per ritentare
+        return False
+    
+    v_codec, a_codec, container, _duration, height, profile = probe
+    logging.info(f"[ID {video_id}] codec_video={v_codec} profile={profile} codec_audio={a_codec} container={container} height={height}")
 
-    v_codec, a_codec, container, _duration, height = probe
-    logging.info(f"[ID {video_id}] codec_video={v_codec} codec_audio={a_codec} container={container} height={height}")
-
-    # Caso 1: codec video incompatibile → impossibile senza transcodifica.
-    if v_codec not in COMPATIBLE_VIDEO_CODECS:
-        logging.info(f"[ID {video_id}] Codec video {v_codec} non compatibile. Marco ottimizzato=0.")
+    # FIX iPhone: l'H.264 a 10 bit (High 10) produce schermo nero su iOS.
+    is_hi10p = (v_codec == 'h264' and '10' in profile)
+    
+    if v_codec not in COMPATIBLE_VIDEO_CODECS or is_hi10p:
+        logging.info(f"[ID {video_id}] Video incompatibile (codec={v_codec}, profile={profile}). Marco come fallito.")
         mark_incompatible(conn, video_id, v_codec, a_codec, height)
         return True
 
