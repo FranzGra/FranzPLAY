@@ -153,19 +153,22 @@ CONTAINER_GID=$(echo "$MYSQL_UID_GID" | cut -d: -f2)
 log_ok "mysql interno: uid=$CONTAINER_UID gid=$CONTAINER_GID"
 
 # In Docker rootless, l'uid del container viene mappato su un uid alto dell'host
-# (es. uid 999 → 100xxx). Rileviamo il mapping leggendo /etc/subuid.
+# (es. uid 999 container → 100999 host). Formula esatta da subuid:
+#   host_uid = sub_uid_base + container_uid
+# IMPORTANTE: NON sottrarre 1. /etc/subuid dichiara la BASE del range, e
+# uid 0 container → base, uid 1 container → base+1, ..., uid 999 → base+999.
 HOST_UID=$CONTAINER_UID
 HOST_GID=$CONTAINER_GID
 SUB_UID_LINE=$(grep "^$(id -un):" /etc/subuid 2>/dev/null || true)
 SUB_GID_LINE=$(grep "^$(id -gn):" /etc/subgid 2>/dev/null || true)
 if [ -n "$SUB_UID_LINE" ]; then
     SUB_UID_BASE=$(echo "$SUB_UID_LINE" | cut -d: -f2)
-    HOST_UID=$((SUB_UID_BASE + CONTAINER_UID - 1))
+    HOST_UID=$((SUB_UID_BASE + CONTAINER_UID))
     log_ok "Docker rootless rilevato: uid container $CONTAINER_UID → host $HOST_UID"
 fi
 if [ -n "$SUB_GID_LINE" ]; then
     SUB_GID_BASE=$(echo "$SUB_GID_LINE" | cut -d: -f2)
-    HOST_GID=$((SUB_GID_BASE + CONTAINER_GID - 1))
+    HOST_GID=$((SUB_GID_BASE + CONTAINER_GID))
 fi
 
 # Inoltre, se App_Data/Database_Data esiste GIÀ con un uid PLAUSIBILE per
