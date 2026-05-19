@@ -18,7 +18,60 @@ import {
   ThumbsUp,
   LayoutGrid,
   List,
+  Zap,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
+  Clock,
+  Hourglass,
 } from "lucide-react";
+
+// --- Helpers metadati video ---
+const VIDEO_CODECS_OK = ["h264", "hevc"];
+const AUDIO_CODECS_OK = ["aac", "ac3", "eac3"];
+
+function getQualityLabel(altezza) {
+  const h = Number(altezza);
+  if (!h || h <= 0) return null;
+  if (h >= 4000) return "4K";
+  if (h >= 1400) return "2K";
+  if (h >= 1000) return "1080p";
+  if (h >= 700) return "720p";
+  if (h >= 400) return "480p";
+  return `${h}p`;
+}
+
+function getCompatibilityStatus(video) {
+  const opt = video.ottimizzato;
+  const cv = (video.codec_video || "").toLowerCase();
+  const ca = (video.codec_audio || "").toLowerCase();
+
+  if (opt === 1 || opt === "1") {
+    return { key: "ok", label: "Compatibile", Icon: ShieldCheck, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
+  }
+  if (opt === 0 || opt === "0") {
+    if (cv && !VIDEO_CODECS_OK.includes(cv)) {
+      return { key: "ko", label: "Non compatibile", Icon: ShieldX, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" };
+    }
+    if (ca && !AUDIO_CODECS_OK.includes(ca)) {
+      return { key: "partial", label: "Parziale", Icon: ShieldAlert, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" };
+    }
+    return { key: "ko", label: "Non compatibile", Icon: ShieldX, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" };
+  }
+  return { key: "pending", label: "In coda", Icon: Hourglass, color: "text-zinc-400", bg: "bg-zinc-500/10", border: "border-zinc-500/20" };
+}
+
+function MetaBadge({ Icon, label, color = "text-zinc-300", bg = "bg-zinc-950/60", border = "border-white/5", title }) {
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border ${border} ${bg} ${color} text-[10px] font-black uppercase tracking-widest`}
+    >
+      {Icon && <Icon size={11} />}
+      {label}
+    </span>
+  );
+}
 
 export default function AdminVideos() {
   const [videos, setVideos] = useState([]);
@@ -380,6 +433,19 @@ export default function AdminVideos() {
                     {video.Titolo}
                   </h3>
 
+                  {(() => {
+                    const st = getCompatibilityStatus(video);
+                    const q = getQualityLabel(video.altezza_video);
+                    return (
+                      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                        <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={`Codec: ${video.codec_video || "?"} / ${video.codec_audio || "?"}`} />
+                        {q && <MetaBadge label={q} title="Risoluzione" />}
+                        {video.Formato && <MetaBadge label={video.Formato} title="Formato file" />}
+                        {video.Durata && <MetaBadge Icon={Clock} label={video.Durata} title="Durata" />}
+                      </div>
+                    );
+                  })()}
+
                   <div className="flex items-center justify-between mb-4 mt-auto">
                     <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 bg-zinc-950/50 px-2 py-1 rounded-lg border border-white/5 truncate max-w-[50%]">
                       {video.Nome_Categoria || "NESSUNA"}
@@ -424,7 +490,7 @@ export default function AdminVideos() {
                       Categoria
                     </th>
                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                      Stats
+                      Info
                     </th>
                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">
                       Azioni
@@ -469,12 +535,19 @@ export default function AdminVideos() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-4 text-zinc-500 text-[11px] font-bold">
-                          <span className="flex items-center gap-1.5">
-                            <ThumbsUp size={14} className="opacity-50" />{" "}
-                            {video.Likes || 0}
-                          </span>
-                        </div>
+                        {(() => {
+                          const st = getCompatibilityStatus(video);
+                          const q = getQualityLabel(video.altezza_video);
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 max-w-[260px]">
+                              <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={`Codec: ${video.codec_video || "?"} / ${video.codec_audio || "?"}`} />
+                              {q && <MetaBadge label={q} title="Risoluzione" />}
+                              {video.Formato && <MetaBadge label={video.Formato} title="Formato file" />}
+                              {video.Durata && <MetaBadge Icon={Clock} label={video.Durata} title="Durata" />}
+                              <MetaBadge Icon={ThumbsUp} label={video.Likes || 0} title="Likes" />
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-3 md:gap-2">
@@ -535,13 +608,29 @@ export default function AdminVideos() {
             <div className="w-full max-w-7xl bg-zinc-950 border border-white/10 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col max-h-full animate-in zoom-in-95 duration-300">
               {/* Modal Header */}
               <div className="px-8 py-4 flex justify-between items-center bg-zinc-900/50 border-b border-white/5 shrink-0">
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-2xl font-black text-white tracking-tight">
                     Setup Video
                   </h2>
-                  <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-1">
-                    ID: #{editingVideo.id}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">
+                      ID: #{editingVideo.id}
+                    </p>
+                    {(() => {
+                      const st = getCompatibilityStatus(editingVideo);
+                      const q = getQualityLabel(editingVideo.altezza_video);
+                      return (
+                        <>
+                          <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={`Codec: ${editingVideo.codec_video || "?"} / ${editingVideo.codec_audio || "?"}`} />
+                          {q && <MetaBadge label={q} title="Risoluzione" />}
+                          {editingVideo.Formato && <MetaBadge label={editingVideo.Formato} title="Formato file" />}
+                          {editingVideo.Durata && <MetaBadge Icon={Clock} label={editingVideo.Durata} title="Durata" />}
+                          {editingVideo.codec_video && <MetaBadge Icon={Film} label={editingVideo.codec_video.toUpperCase()} title="Codec video" />}
+                          {editingVideo.codec_audio && <MetaBadge Icon={Zap} label={editingVideo.codec_audio.toUpperCase()} title="Codec audio" />}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
                 <button
                   onClick={() => setEditingVideo(null)}
