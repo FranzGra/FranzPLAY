@@ -531,10 +531,10 @@ export default function AdminVideos() {
       {/* MODALE DI MODIFICA (Wider & Cleaner) - Portal */}
       {editingVideo &&
         createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-10 bg-black/60 backdrop-blur-xl animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6 bg-black/60 backdrop-blur-xl animate-in fade-in duration-200">
             <div className="w-full max-w-7xl bg-zinc-950 border border-white/10 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col max-h-full animate-in zoom-in-95 duration-300">
               {/* Modal Header */}
-              <div className="p-8 pb-4 flex justify-between items-center bg-zinc-900/50 border-b border-white/5">
+              <div className="px-8 py-4 flex justify-between items-center bg-zinc-900/50 border-b border-white/5 shrink-0">
                 <div>
                   <h2 className="text-2xl font-black text-white tracking-tight">
                     Setup Video
@@ -552,10 +552,10 @@ export default function AdminVideos() {
               </div>
 
               {/* Modal Body */}
-              <div className="overflow-y-auto custom-scrollbar">
-                <form onSubmit={handleSaveEdit} className="p-8 space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
+              <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 min-h-0">
+                <div className="overflow-y-auto custom-scrollbar p-6 flex-1 min-h-0">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
                           Titolo Video
@@ -613,7 +613,7 @@ export default function AdminVideos() {
                       </div>
                     </div>
 
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
                           Cover Art
@@ -753,23 +753,23 @@ export default function AdminVideos() {
                     </div>
                   </div>
 
-                  <div className="pt-6 flex gap-4 border-t border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => setEditingVideo(null)}
-                      className="flex-1 px-4 py-4 rounded-2xl border border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-900 hover:text-white transition-all active:scale-[0.98]"
-                    >
-                      Annulla
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 px-4 py-4 rounded-2xl bg-primary text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]"
-                    >
-                      Applica modifiche
-                    </button>
-                  </div>
-                </form>
-              </div>
+                </div>
+                <div className="px-6 py-4 flex gap-4 border-t border-white/5 bg-zinc-900/50 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditingVideo(null)}
+                    className="flex-1 px-4 py-3.5 rounded-2xl border border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-900 hover:text-white transition-all active:scale-[0.98]"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-3.5 rounded-2xl bg-primary text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]"
+                  >
+                    Applica modifiche
+                  </button>
+                </div>
+              </form>
             </div>
           </div>,
           document.body,
