@@ -18,3 +18,6 @@ App_Data/*
 !Frontend/React/README.md
 CONTENUTO *
 **/CONTENUTO *
+
+# Claude Code worktrees (file di lavoro del tool, non parte del repo)
+.claude/
