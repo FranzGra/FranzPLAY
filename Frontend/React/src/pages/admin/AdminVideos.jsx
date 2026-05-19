@@ -24,6 +24,7 @@ import {
   ShieldX,
   Clock,
   Hourglass,
+  RotateCw,
 } from "lucide-react";
 
 // --- Helpers metadati video ---
@@ -47,18 +48,22 @@ function getCompatibilityStatus(video) {
   const ca = (video.codec_audio || "").toLowerCase();
 
   if (opt === 1 || opt === "1") {
-    return { key: "ok", label: "Compatibile", Icon: ShieldCheck, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
+    return { key: "ok", label: "Ottimizzato", Icon: ShieldCheck, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", tooltip: "Remuxato in fMP4 faststart, streaming cross-device garantito" };
   }
   if (opt === 0 || opt === "0") {
     if (cv && !VIDEO_CODECS_OK.includes(cv)) {
-      return { key: "ko", label: "Non compatibile", Icon: ShieldX, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" };
+      return { key: "ko", label: "Non compatibile", Icon: ShieldX, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20", tooltip: `Codec video ${cv.toUpperCase()} non supportato su iOS Safari` };
     }
     if (ca && !AUDIO_CODECS_OK.includes(ca)) {
-      return { key: "partial", label: "Parziale", Icon: ShieldAlert, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" };
+      return { key: "partial", label: "Parziale", Icon: ShieldAlert, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", tooltip: `Audio ${ca.toUpperCase()} non compatibile - richiede re-encode` };
     }
-    return { key: "ko", label: "Non compatibile", Icon: ShieldX, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" };
+    return { key: "ko", label: "Non compatibile", Icon: ShieldX, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20", tooltip: "Worker ha scartato il video (codec non supportato)" };
   }
-  return { key: "pending", label: "In coda", Icon: Hourglass, color: "text-zinc-400", bg: "bg-zinc-500/10", border: "border-zinc-500/20" };
+  // opt === null/undefined: distinguiamo "mai analizzato" da "in coda attiva"
+  if (!cv && !ca) {
+    return { key: "unknown", label: "Da analizzare", Icon: Hourglass, color: "text-zinc-400", bg: "bg-zinc-500/10", border: "border-zinc-500/20", tooltip: "Worker optimizer non ha ancora processato questo video" };
+  }
+  return { key: "pending", label: "In coda", Icon: Clock, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20", tooltip: "In attesa del worker optimizer" };
 }
 
 function MetaBadge({ Icon, label, color = "text-zinc-300", bg = "bg-zinc-950/60", border = "border-white/5", title }) {
@@ -157,6 +162,22 @@ export default function AdminVideos() {
       showNotification("Video eliminato con successo");
     } catch (error) {
       showNotification("Errore eliminazione: " + error.message, "error");
+    }
+  };
+
+  const handleReoptimize = async () => {
+    if (!editingVideo) return;
+    if (!confirm("Ri-accodare il video per l'ottimizzazione? Il worker lo riprocessera al prossimo poll.")) return;
+    try {
+      await apiRequest("/admin.php", "POST", {
+        action: "reottimizza_video",
+        id: editingVideo.id,
+      });
+      showNotification("Video ri-accodato per ottimizzazione");
+      setEditingVideo(null);
+      fetchVideos();
+    } catch (error) {
+      showNotification("Errore re-enqueue: " + error.message, "error");
     }
   };
 
@@ -438,7 +459,7 @@ export default function AdminVideos() {
                     const q = getQualityLabel(video.altezza_video);
                     return (
                       <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                        <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={`Codec: ${video.codec_video || "?"} / ${video.codec_audio || "?"}`} />
+                        <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={st.tooltip} />
                         {q && <MetaBadge label={q} title="Risoluzione" />}
                         {video.Formato && <MetaBadge label={video.Formato} title="Formato file" />}
                         {video.Durata && <MetaBadge Icon={Clock} label={video.Durata} title="Durata" />}
@@ -540,7 +561,7 @@ export default function AdminVideos() {
                           const q = getQualityLabel(video.altezza_video);
                           return (
                             <div className="flex flex-wrap items-center gap-1.5 max-w-[260px]">
-                              <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={`Codec: ${video.codec_video || "?"} / ${video.codec_audio || "?"}`} />
+                              <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={st.tooltip} />
                               {q && <MetaBadge label={q} title="Risoluzione" />}
                               {video.Formato && <MetaBadge label={video.Formato} title="Formato file" />}
                               {video.Durata && <MetaBadge Icon={Clock} label={video.Durata} title="Durata" />}
@@ -621,7 +642,7 @@ export default function AdminVideos() {
                       const q = getQualityLabel(editingVideo.altezza_video);
                       return (
                         <>
-                          <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={`Codec: ${editingVideo.codec_video || "?"} / ${editingVideo.codec_audio || "?"}`} />
+                          <MetaBadge Icon={st.Icon} label={st.label} color={st.color} bg={st.bg} border={st.border} title={st.tooltip} />
                           {q && <MetaBadge label={q} title="Risoluzione" />}
                           {editingVideo.Formato && <MetaBadge label={editingVideo.Formato} title="Formato file" />}
                           {editingVideo.Durata && <MetaBadge Icon={Clock} label={editingVideo.Durata} title="Durata" />}
@@ -849,7 +870,16 @@ export default function AdminVideos() {
                   </div>
 
                 </div>
-                <div className="px-6 py-4 flex gap-4 border-t border-white/5 bg-zinc-900/50 shrink-0">
+                <div className="px-6 py-4 flex flex-wrap gap-3 border-t border-white/5 bg-zinc-900/50 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleReoptimize}
+                    className="px-4 py-3.5 rounded-2xl border border-sky-500/30 bg-sky-500/10 text-sky-400 font-bold hover:bg-sky-500 hover:text-white hover:border-sky-500 transition-all active:scale-[0.98] flex items-center gap-2"
+                    title="Re-accoda il video al worker_optimizer"
+                  >
+                    <RotateCw size={16} />
+                    Ri-ottimizza
+                  </button>
                   <button
                     type="button"
                     onClick={() => setEditingVideo(null)}

@@ -80,6 +80,26 @@ switch ($action) {
         inviaRisposta(true, 'Informazioni video aggiornate con successo');
         break;
 
+    case 'reottimizza_video':
+        $id = (int) ($_POST['id'] ?? 0);
+        if ($id <= 0)
+            throw new Exception("ID Video non valido");
+
+        // Reset dei flag worker: il worker_optimizer riprendera il video al prossimo poll.
+        // locked_at azzerato per liberare eventuali lock orfani.
+        executePreparedQuery(
+            "UPDATE Video SET ottimizzato = NULL, ottimizzato_at = NULL, locked_at = NULL WHERE id = ?",
+            "i",
+            [$id]
+        );
+
+        global $Cache;
+        if (isset($Cache) && is_object($Cache)) {
+            $Cache->deletePattern('videos_list_*');
+        }
+        inviaRisposta(true, 'Video ri-accodato per ottimizzazione');
+        break;
+
     case 'elimina_video':
         $id = (int) ($_POST['id_video'] ?? 0);
 
