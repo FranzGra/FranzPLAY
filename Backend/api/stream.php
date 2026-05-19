@@ -128,9 +128,10 @@ $is_windows = (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN');
 
 // In produzione Linux deleghiamo a Nginx: lui gestisce sendfile, range, ecc.
 if (!$is_windows) {
-    $parts = explode('/', $file_clean);
-    $encoded_path = implode('/', array_map('rawurlencode', $parts));
-    header('X-Accel-Redirect: /protected_media/' . $encoded_path);
+    // IMPORTANTE: Nginx X-Accel-Redirect si aspetta un URI NON url-encodato!
+    // Altrimenti i file con spazi (es. "Mio Video.mp4") falliscono con 404,
+    // e il browser va in loop infinito di richieste perché Nginx risponde con HTML.
+    header('X-Accel-Redirect: /protected_media/' . $file_clean);
     exit;
 }
 
