@@ -69,7 +69,7 @@ $action = $_POST['action'] ?? '';
 
 try {
     $routes = [
-        'videos' => ['lista_video', 'dettagli_video', 'aggiorna_info_video', 'elimina_video'],
+        'videos' => ['lista_video', 'dettagli_video', 'aggiorna_info_video', 'elimina_video', 'reottimizza_video'],
         'assets' => ['upload_copertina', 'rimuovi_copertina', 'upload_anteprima', 'rimuovi_anteprima'],
         'categories' => ['lista_categorie', 'aggiorna_categoria', 'salva_colore_categoria', 'upload_sfondo_categoria', 'rimuovi_sfondo_categoria'],
         'users' => ['lista_utenti', 'toggle_admin', 'elimina_utente', 'aggiungi_utente', 'reset_password_utente', 'lista_accessi'],
