@@ -93,13 +93,21 @@ class VideoHandler(FileSystemEventHandler):
             return None
 
     def _is_video_file(self, file_path):
-        if os.path.basename(file_path).startswith('.'):
+        basename = os.path.basename(file_path)
+        # File nascosti (dotfile)
+        if basename.startswith('.'):
             return False
+        # Directory
         if os.path.isdir(file_path):
             return False
-        # I symlink potrebbero puntare a file non-video o fuori dalla base: rifiutiamo.
+        # Symlink: potrebbero puntare a file non-video o fuori dalla base.
         if os.path.islink(file_path):
             logging.warning(f"[SECURITY] Symlink ignorato: {file_path}")
+            return False
+        # Backup creati da worker_optimizer durante il remux (failsafe 24h
+        # prima del cleanup). Pattern: "<nome>.bak.<timestamp><ext>".
+        # Non sono veri video, non vanno indicizzati.
+        if '.bak.' in basename:
             return False
         return file_path.lower().endswith(VIDEO_EXTENSIONS)
 
