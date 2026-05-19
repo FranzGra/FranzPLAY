@@ -17,16 +17,21 @@ echo "📁 [Entrypoint] Controllo directory strutturali in ${APP_DATA}..."
 mkdir -p "${APP_DATA}/Sessions"
 mkdir -p "${APP_DATA}/User_Images"
 
-# 2. Resettiamo il proprietario permettendo lettura/scrittura a PHP
+# 2. Resettiamo il proprietario permettendo lettura/scrittura a PHP.
+#    IMPORTANTE: chownamo SOLO Sessions e User_Images (le uniche cartelle che
+#    PHP deve scrivere). NON tocchiamo Database_Data (è di MariaDB, owner
+#    diverso, in rootless dà spam di "Operation not permitted" e rallenta
+#    l'avvio di 30+ secondi) né i Database_Data.backup_*.
 echo "🔑 [Entrypoint] Allineamento privilegi per l'utente www-data..."
-chown -R www-data:www-data "${APP_DATA}"
+chown -R www-data:www-data "${APP_DATA}/Sessions" 2>/dev/null || true
+chown -R www-data:www-data "${APP_DATA}/User_Images" 2>/dev/null || true
 
-# 3. Permessi opzionali per cartella Video (se montata come variabile env)
+# 3. Permessi opzionali per cartella Video (se montata come variabile env).
+#    Anche qui sopprimiamo gli errori: i file potrebbero essere su mount
+#    read-only (NAS/SMB) o avere owner diverso (rootless).
 if [ -n "$WATCH_DIR" ] && [ -d "$WATCH_DIR" ]; then
     echo "🎬 [Entrypoint] Configuro permessi per la libreria Video in $WATCH_DIR..."
-    # Se i volumi video sono read-only nel NAS, questo comando potrebbe fallire
-    # aggiungiamo "|| true" per non bloccare l'avvio in tal caso.
-    chown -R www-data:www-data "$WATCH_DIR" || true
+    chown -R www-data:www-data "$WATCH_DIR" 2>/dev/null || true
 fi
 
 echo "🚀 [Entrypoint] Avvio del server PHP-FPM in corso..."
