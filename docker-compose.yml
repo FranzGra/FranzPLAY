@@ -127,12 +127,12 @@ services:
       - --max-heap-table-size=16M
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-      # Robustezza ai crash sporchi (Raspberry Pi può avere power loss).
-      # Se tc.log viene trovato corrotto al boot, committa le transazioni
-      # "in dubbio" invece di abortire. Sicuro perché InnoDB già gestisce
-      # il proprio recovery indipendentemente; tc.log serve solo per il
-      # commit a 2 fasi tra storage engine multipli, e noi usiamo solo InnoDB.
-      - --tc-heuristic-recover=COMMIT
+      # NOTA: --tc-heuristic-recover=COMMIT è un flag ONE-SHOT, non permanente.
+      # MariaDB esce con "Please restart without --tc-heuristic-recover" subito
+      # dopo aver fatto il recovery. Se serve (raro), va passato manualmente con
+      # `docker compose run --rm mysql mariadbd --tc-heuristic-recover=COMMIT`
+      # poi rimosso. Per evitare il problema all'origine: --innodb-doublewrite=ON
+      # (default) e shutdown puliti via `docker compose down --timeout 60`.
     healthcheck:
       # Usiamo le credenziali root dal .env del container, senza file di
       # configurazione esterni. Motivo: in MariaDB 11.4.10 ARM64 il file
