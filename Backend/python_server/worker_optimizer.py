@@ -137,17 +137,18 @@ def probe_codecs(full_path):
                                 check=True, timeout=FFPROBE_TIMEOUT)
         data = json.loads(result.stdout)
 
-        v_codec, a_codec = None, None
+        v_codec, a_codec, height = None, None, None
         for s in data.get('streams', []):
             if s.get('codec_type') == 'video' and v_codec is None:
                 v_codec = (s.get('codec_name') or '').lower()
+                height = s.get('height')
             elif s.get('codec_type') == 'audio' and a_codec is None:
                 a_codec = (s.get('codec_name') or '').lower()
 
         fmt = data.get('format', {})
         container = (fmt.get('format_name') or '').lower()
         duration = float(fmt.get('duration', 0)) if fmt.get('duration') else 0
-        return v_codec, a_codec, container, duration
+        return v_codec, a_codec, container, duration, height
 
     except subprocess.TimeoutExpired:
         logging.error(f"ffprobe TIMEOUT su {full_path}")
@@ -256,6 +257,7 @@ def _ensure_schema(conn):
     _ensure_column(conn, 'Video', 'ottimizzato_at', 'DATETIME NULL')
     _ensure_column(conn, 'Video', 'codec_video',    'VARCHAR(32) NULL')
     _ensure_column(conn, 'Video', 'codec_audio',    'VARCHAR(32) NULL')
+    _ensure_column(conn, 'Video', 'altezza_video',  'INT NULL')
     _ensure_column(conn, 'Video', 'cleanup_path',   'VARCHAR(500) NULL')
     _ensure_column(conn, 'Video', 'cleanup_at',     'DATETIME NULL')
 
@@ -350,32 +352,32 @@ def release_lock(conn, video_id):
         pass
 
 
-def mark_incompatible(conn, video_id, v_codec, a_codec):
+def mark_incompatible(conn, video_id, v_codec, a_codec, height):
     with conn.cursor() as cursor:
         cursor.execute(
             "UPDATE Video SET ottimizzato = 0, ottimizzato_at = NOW(), "
-            "codec_video = %s, codec_audio = %s, locked_at = NULL "
+            "codec_video = %s, codec_audio = %s, altezza_video = %s, locked_at = NULL "
             "WHERE id = %s",
-            (v_codec, a_codec, video_id),
+            (v_codec, a_codec, height, video_id),
         )
 
 
-def mark_already_good(conn, video_id, v_codec, a_codec):
+def mark_already_good(conn, video_id, v_codec, a_codec, height):
     """File già in formato compatibile ma non necessariamente fMP4: marca solo metadata."""
     with conn.cursor() as cursor:
         cursor.execute(
             "UPDATE Video SET ottimizzato = 1, ottimizzato_at = NOW(), "
-            "codec_video = %s, codec_audio = %s, locked_at = NULL "
+            "codec_video = %s, codec_audio = %s, altezza_video = %s, locked_at = NULL "
             "WHERE id = %s",
-            (v_codec, a_codec, video_id),
+            (v_codec, a_codec, height, video_id),
         )
 
 
-def commit_remux(conn, video_id, new_rel_path, original_rel_path, v_codec, a_codec):
+def commit_remux(conn, video_id, new_rel_path, original_rel_path, v_codec, a_codec, height):
     """
     Commit atomico post-remux:
       - percorso_file = nuovo .mp4
-      - ottimizzato = 1, codec_*, ottimizzato_at = NOW()
+      - ottimizzato = 1, codec_*, altezza_video, ottimizzato_at = NOW()
       - cleanup_path = file originale rinominato
       - cleanup_at   = NOW() + 24h
     """
@@ -388,11 +390,12 @@ def commit_remux(conn, video_id, new_rel_path, original_rel_path, v_codec, a_cod
             "  ottimizzato_at = NOW(), "
             "  codec_video = %s, "
             "  codec_audio = %s, "
+            "  altezza_video = %s, "
             "  cleanup_path = %s, "
             "  cleanup_at = DATE_ADD(NOW(), INTERVAL %s HOUR), "
             "  locked_at = NULL "
             "WHERE id = %s",
-            (new_rel_path, v_codec, a_codec, original_rel_path, grace_hours, video_id),
+            (new_rel_path, v_codec, a_codec, height, original_rel_path, grace_hours, video_id),
         )
 
 
@@ -408,7 +411,7 @@ def process_one_video(conn):
 
     if not os.path.isfile(full):
         logging.warning(f"[ID {video_id}] File mancante: {rel}. Marco ottimizzato=0.")
-        mark_incompatible(conn, video_id, None, None)
+        mark_incompatible(conn, video_id, None, None, None)
         return True
 
     probe = probe_codecs(full)
@@ -417,13 +420,13 @@ def process_one_video(conn):
         release_lock(conn, video_id)
         return True
 
-    v_codec, a_codec, container, _duration = probe
-    logging.info(f"[ID {video_id}] codec_video={v_codec} codec_audio={a_codec} container={container}")
+    v_codec, a_codec, container, _duration, height = probe
+    logging.info(f"[ID {video_id}] codec_video={v_codec} codec_audio={a_codec} container={container} height={height}")
 
     # Caso 1: codec video incompatibile → impossibile senza transcodifica.
     if v_codec not in COMPATIBLE_VIDEO_CODECS:
         logging.info(f"[ID {video_id}] Codec video {v_codec} non compatibile. Marco ottimizzato=0.")
-        mark_incompatible(conn, video_id, v_codec, a_codec)
+        mark_incompatible(conn, video_id, v_codec, a_codec, height)
         return True
 
     # Caso 2: già MP4 con codec ok → consideralo ottimizzato senza toccarlo.
@@ -435,7 +438,7 @@ def process_one_video(conn):
         # Già MP4 + codec ok. Non rifrazioniamo (sarebbe costoso e inutile su Pi
         # per file potenzialmente già faststart). Marchiamo come ottimizzato.
         logging.info(f"[ID {video_id}] Già MP4 con codec compatibili: marco ottimizzato=1.")
-        mark_already_good(conn, video_id, v_codec, a_codec)
+        mark_already_good(conn, video_id, v_codec, a_codec, height)
         return True
 
     # Caso 3: serve remux (container != mp4, oppure audio non compatibile).
@@ -470,7 +473,7 @@ def process_one_video(conn):
         except OSError:
             pass
         logging.error(f"[ID {video_id}] Remux fallito. Marco ottimizzato=0 (fallback).")
-        mark_incompatible(conn, video_id, v_codec, a_codec)
+        mark_incompatible(conn, video_id, v_codec, a_codec, height)
         return True
 
     # Rinomina l'originale per il cleanup ritardato (failsafe 24h).
@@ -492,7 +495,7 @@ def process_one_video(conn):
 
     # Nuovi codec (post-remux audio re-encode l'audio diventa aac).
     final_a_codec = 'aac' if needs_audio_reencode else a_codec
-    commit_remux(conn, video_id, new_rel, backup_rel, v_codec, final_a_codec)
+    commit_remux(conn, video_id, new_rel, backup_rel, v_codec, final_a_codec, height)
     invalidate_videos_only(reason=f"remux video id={video_id}")
     logging.info(f"[ID {video_id}] ✅ Ottimizzato. Originale → {backup_rel} (cleanup in {CLEANUP_GRACE_HOURS}h)")
     return True
