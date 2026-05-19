@@ -137,11 +137,12 @@ def probe_codecs(full_path):
                                 check=True, timeout=FFPROBE_TIMEOUT)
         data = json.loads(result.stdout)
 
-        v_codec, a_codec, height, profile = None, None, None, None
+        v_codec, a_codec, height, profile, pix_fmt = None, None, None, None, None
         for s in data.get('streams', []):
             if s.get('codec_type') == 'video' and v_codec is None:
                 v_codec = (s.get('codec_name') or '').lower()
                 profile = (s.get('profile') or '').lower()
+                pix_fmt = (s.get('pix_fmt') or '').lower()
                 height = s.get('height')
             elif s.get('codec_type') == 'audio' and a_codec is None:
                 a_codec = (s.get('codec_name') or '').lower()
@@ -149,7 +150,7 @@ def probe_codecs(full_path):
         fmt = data.get('format', {})
         container = (fmt.get('format_name') or '').lower()
         duration = float(fmt.get('duration', 0)) if fmt.get('duration') else 0
-        return v_codec, a_codec, container, duration, height, profile
+        return v_codec, a_codec, container, duration, height, profile, pix_fmt
 
     except subprocess.TimeoutExpired:
         logging.error(f"ffprobe TIMEOUT su {full_path}")
@@ -421,14 +422,16 @@ def process_one_video(conn):
         # TIMEOUT o file inesistente, abortiamo e sblocchiamo per ritentare
         return False
     
-    v_codec, a_codec, container, _duration, height, profile = probe
-    logging.info(f"[ID {video_id}] codec_video={v_codec} profile={profile} codec_audio={a_codec} container={container} height={height}")
+    v_codec, a_codec, container, _duration, height, profile, pix_fmt = probe
+    logging.info(f"[ID {video_id}] codec_video={v_codec} profile={profile} pix_fmt={pix_fmt} codec_audio={a_codec} container={container} height={height}")
 
-    # FIX iPhone: l'H.264 a 10 bit (High 10) produce schermo nero su iOS.
+    # FIX iPhone: l'H.264 a 10 bit (High 10) o con chroma subsampling non 4:2:0 (es. yuv444p) produce schermo nero su iOS.
     is_hi10p = (v_codec == 'h264' and '10' in profile)
+    is_bad_chroma_h264 = (v_codec == 'h264' and pix_fmt != 'yuv420p' and pix_fmt != '')
+    is_bad_chroma_hevc = (v_codec == 'hevc' and pix_fmt not in ['yuv420p', 'yuv420p10le', 'main10', ''])
     
-    if v_codec not in COMPATIBLE_VIDEO_CODECS or is_hi10p:
-        logging.info(f"[ID {video_id}] Video incompatibile (codec={v_codec}, profile={profile}). Marco come fallito.")
+    if v_codec not in COMPATIBLE_VIDEO_CODECS or is_hi10p or is_bad_chroma_h264 or is_bad_chroma_hevc:
+        logging.info(f"[ID {video_id}] Video incompatibile (codec={v_codec}, profile={profile}, pix_fmt={pix_fmt}). Marco come fallito.")
         mark_incompatible(conn, video_id, v_codec, a_codec, height)
         return True
 

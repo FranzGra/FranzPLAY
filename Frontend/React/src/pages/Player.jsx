@@ -155,7 +155,7 @@ export default function Player() {
           {/* VIDEO CONTAINER */}
           <div className="w-full bg-black rounded-2xl overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/10 aspect-video relative z-20">
             <VideoPlayer
-              src={getAssetUrl(video.percorso_file)}
+              src={`${getAssetUrl(video.percorso_file)}${video.ottimizzato_at ? '&cb=' + new Date(video.ottimizzato_at).getTime() : ''}`}
               poster={getAssetUrl(video.percorso_copertina)}
               videoId={video.id}
               startTime={Number(video.progresso_secondi || 0)}
