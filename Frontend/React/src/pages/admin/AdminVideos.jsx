@@ -553,9 +553,9 @@ export default function AdminVideos() {
 
               {/* Modal Body */}
               <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 min-h-0">
-                <div className="overflow-y-auto custom-scrollbar p-6 flex-1 min-h-0">
+                <div className="overflow-y-auto custom-scrollbar p-6 flex-1 min-h-0 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
+                    <div>
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
                           Titolo Video
@@ -573,7 +573,9 @@ export default function AdminVideos() {
                           required
                         />
                       </div>
+                    </div>
 
+                    <div>
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
                           Sposta Categoria
@@ -612,8 +614,10 @@ export default function AdminVideos() {
                         </details>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
                           Cover Art
@@ -679,7 +683,9 @@ export default function AdminVideos() {
                           )}
                         </div>
                       </div>
+                    </div>
 
+                    <div>
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
                           Anteprima (Video)
