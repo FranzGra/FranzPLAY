@@ -185,8 +185,10 @@ services:
     restart: always
 
   # --- TOOLS (PhpMyAdmin) ---
-  # PhpMyAdmin esposto SOLO su localhost del host (127.0.0.1:8080).
-  # Non accessibile dalla LAN per ridurre la superficie d'attacco.
+  # PhpMyAdmin esposto su tutte le interfacce, accessibile dalla LAN.
+  # ⚠️ SICUREZZA: chiunque sulla rete LAN può raggiungere http://IP_PI:8080.
+  #    Per uso solo locale via SSH tunnel, ripristina bind "127.0.0.1:8080:80"
+  #    e usa: ssh -L 8080:localhost:8080 franz@IP_PI dal tuo PC.
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
     container_name: TOOLS_PhpMyAdmin
@@ -200,10 +202,8 @@ services:
       PMA_ABSOLUTE_URI: ""
       UPLOAD_LIMIT: 256M
     ports:
-      - "127.0.0.1:8080:80"
+      - "8080:80"
     restart: always
-    profiles:
-      - dev   # Avviabile con: docker compose --profile dev up
 
   # --- AUTOMATION (Python) ---
   python_watcher:
