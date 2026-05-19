@@ -81,19 +81,21 @@ header("Expires: 0");
 // ============================================================================
 
 /**
- * Percorso persistente per i file di sessione (mappato su volume Docker).
- * Garantisce che gli utenti non vengano sloggati al riavvio del container PHP.
+ * Configurazione Sessione su Redis
+ * In base all'architettura per RPi4, usiamo Redis per evitare scritture su SD card.
  */
-$sessionPath = '/App_Data/Sessions';
+$redisHost = getenv('REDIS_HOST') ?: 'redis';
+$redisPort = getenv('REDIS_PORT') ?: 6379;
+$redisPwd = getenv('REDIS_PASSWORD');
 
-if (!file_exists($sessionPath)) {
-    // 0700: solo l'utente PHP-FPM può leggere/scrivere i file di sessione.
-    @mkdir($sessionPath, 0700, true);
+// Costruisce la stringa di connessione per il save_path
+$savePath = "tcp://$redisHost:$redisPort";
+if (!empty($redisPwd)) {
+    $savePath .= "?auth=" . urlencode($redisPwd);
 }
 
-if (is_writable($sessionPath)) {
-    session_save_path($sessionPath);
-}
+ini_set('session.save_handler', 'redis');
+ini_set('session.save_path', $savePath);
 
 // Configurazione durata sessione (30 giorni) per un'esperienza d'uso fluida
 $session_lifetime = 30 * 24 * 60 * 60;

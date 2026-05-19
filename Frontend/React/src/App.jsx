@@ -1,33 +1,40 @@
-import React, { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, Outlet } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import React, { useEffect, Suspense, lazy } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useLocation,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 // --- CONTESTI E COMPONENTI ---
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { SettingsProvider } from './context/SettingsContext';
-import Navbar from './components/Navbar';
-import PageTransition from './components/PageTransition';
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { SettingsProvider } from "./context/SettingsContext";
+import Navbar from "./components/Navbar";
+import PageTransition from "./components/PageTransition";
 
 // --- PAGINE (Lazy Loaded) ---
-const Home = lazy(() => import('./pages/Home'));
-const Player = lazy(() => import('./pages/Player'));
-const Profile = lazy(() => import('./pages/Profile'));
-const Categories = lazy(() => import('./pages/Categories'));
-const CategoryDetail = lazy(() => import('./pages/CategoryDetail'));
-const Saved = lazy(() => import('./pages/Saved'));
-const Login = lazy(() => import('./pages/Login'));
-const Register = lazy(() => import('./pages/Register'));
+const Home = lazy(() => import("./pages/Home"));
+const Player = lazy(() => import("./pages/Player"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Categories = lazy(() => import("./pages/Categories"));
+const CategoryDetail = lazy(() => import("./pages/CategoryDetail"));
+const Saved = lazy(() => import("./pages/Saved"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
 
 // --- ADMIN (Lazy Loaded) ---
-const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
-const AdminVideos = lazy(() => import('./pages/admin/AdminVideos'));
-const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
-const AdminCategories = lazy(() => import('./pages/admin/AdminCategories'));
-const AdminAccessi = lazy(() => import('./pages/admin/AdminAccessi'));
+const AdminLayout = lazy(() => import("./layouts/AdminLayout"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminVideos = lazy(() => import("./pages/admin/AdminVideos"));
+const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
+const AdminAccessi = lazy(() => import("./pages/admin/AdminAccessi"));
 
 // --- WIZARD (Lazy Loaded) ---
-const SetupWizard = lazy(() => import('./pages/SetupWizard'));
+const SetupWizard = lazy(() => import("./pages/SetupWizard"));
 
 /**
  * COMPONENTE: ScrollToTop
@@ -37,7 +44,7 @@ const ScrollToTop = () => {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [pathname]);
 
   return null;
@@ -73,18 +80,15 @@ const Layout = ({ children }) => {
   const location = useLocation();
 
   // Rotte "Full Screen" senza Navbar
-  const noNavbarRoutes = ['/login', '/register'];
+  const noNavbarRoutes = ["/login", "/register"];
   const hideNavbar = noNavbarRoutes.includes(location.pathname);
 
   return (
     <div className="min-h-dvh bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-blue-600/30 overflow-x-hidden [scrollbar-gutter:stable]">
-
       {!hideNavbar && <Navbar />}
 
       <div className="relative w-full isolation-auto">
-        <PageTransition>
-          {children}
-        </PageTransition>
+        <PageTransition>{children}</PageTransition>
       </div>
     </div>
   );
@@ -103,7 +107,13 @@ export default function App() {
         <AuthProvider>
           <Router>
             <ScrollToTop />
-            <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /></div>}>
+            <Suspense
+              fallback={
+                <div className="h-screen w-full flex items-center justify-center bg-zinc-950">
+                  <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+                </div>
+              }
+            >
               <Routes>
                 {/* 1. ADMIN ROUTES - Independent Layout */}
                 <Route path="/admin" element={<AdminLayout />}>
@@ -121,12 +131,54 @@ export default function App() {
                   <Route path="/register" element={<Register />} />
 
                   {/* PROTECTED */}
-                  <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-                  <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
-                  <Route path="/category/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
-                  <Route path="/watch/:id" element={<ProtectedRoute><Player /></ProtectedRoute>} />
-                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                  <Route path="/saved" element={<ProtectedRoute><Saved /></ProtectedRoute>} />
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <Home />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/categories"
+                    element={
+                      <ProtectedRoute>
+                        <Categories />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/category/:id"
+                    element={
+                      <ProtectedRoute>
+                        <CategoryDetail />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/watch/:id"
+                    element={
+                      <ProtectedRoute>
+                        <Player />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/saved"
+                    element={
+                      <ProtectedRoute>
+                        <Saved />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* FALLBACK */}
                   <Route path="*" element={<Navigate to="/" replace />} />
@@ -145,7 +197,7 @@ export default function App() {
  * Descrizione: Blocca il rendering dell'app se il backend segnala
  * che il setup iniziale (Wizard) non è ancora stato completato.
  */
-import { useSettings } from './context/SettingsContext';
+import { useSettings } from "./context/SettingsContext";
 
 const SettingsGuard = ({ children }) => {
   const { needsSetup, loading, dbOffline } = useSettings();
@@ -163,16 +215,39 @@ const SettingsGuard = ({ children }) => {
     return (
       <div className="min-h-dvh w-full bg-zinc-950 flex flex-col items-center justify-center text-center p-6 text-zinc-100">
         <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-8 max-w-lg shadow-2xl backdrop-blur-sm">
-          <h1 className="text-3xl font-bold text-red-500 mb-4 tracking-tight">Database Offline</h1>
+          <h1 className="text-3xl font-bold text-red-500 mb-4 tracking-tight">
+            Database Offline
+          </h1>
           <p className="text-lg text-zinc-300 mb-6 leading-relaxed">
-            FranzPLAY non riesce a connettersi al Database oppure quest'ultimo non è stato inizializzato correttamente.
+            FranzPLAY non riesce a connettersi al Database oppure quest'ultimo
+            non è stato inizializzato correttamente.
           </p>
           <div className="bg-zinc-900/50 rounded-xl p-6 text-left border border-zinc-800 space-y-4">
-            <h3 className="font-semibold text-zinc-100">Come risolvere il problema:</h3>
+            <h3 className="font-semibold text-zinc-100">
+              Come risolvere il problema:
+            </h3>
             <ol className="list-decimal list-inside text-sm text-zinc-400 space-y-2">
-              <li>Assicurati di aver creato il file <code className="bg-zinc-800 text-red-400 px-1.5 py-0.5 rounded">.env</code> nella directory principale (puoi duplicare <code className="text-red-400">.env.example</code>).</li>
-              <li>Chiudi i container e pulisci i volumi sporchi lanciando lo script <code className="bg-zinc-800 text-blue-400 px-1.5 py-0.5 rounded">scripts\resetta_ambiente_docker.bat</code> (su Windows) o cancellando manualmente la cartella <code className="text-blue-400">App_Data/Database_Data</code>.</li>
-              <li>Riavvia i container con <code className="text-blue-400">docker-compose up -d</code>.</li>
+              <li>
+                Assicurati di aver creato il file{" "}
+                <code className="bg-zinc-800 text-red-400 px-1.5 py-0.5 rounded">
+                  .env
+                </code>{" "}
+                nella directory principale (puoi duplicare{" "}
+                <code className="text-red-400">.env.example</code>).
+              </li>
+              <li>
+                Chiudi i container e pulisci i volumi sporchi lanciando lo
+                script{" "}
+                <code className="bg-zinc-800 text-blue-400 px-1.5 py-0.5 rounded">
+                  scripts\resetta_ambiente_docker.bat
+                </code>{" "}
+                (su Windows) o cancellando manualmente la cartella{" "}
+                <code className="text-blue-400">App_Data/Database_Data</code>.
+              </li>
+              <li>
+                Riavvia i container con{" "}
+                <code className="text-blue-400">docker-compose up -d</code>.
+              </li>
             </ol>
           </div>
           <button
@@ -188,11 +263,13 @@ const SettingsGuard = ({ children }) => {
 
   if (needsSetup) {
     return (
-      <Suspense fallback={
-        <div className="h-screen w-full flex items-center justify-center bg-zinc-950">
-          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        </div>
-      }>
+      <Suspense
+        fallback={
+          <div className="h-screen w-full flex items-center justify-center bg-zinc-950">
+            <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+          </div>
+        }
+      >
         <SetupWizard />
       </Suspense>
     );

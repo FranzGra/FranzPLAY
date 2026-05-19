@@ -1,21 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
-import Plyr from 'plyr';
-import { apiRequest } from '../services/api';
-import { Loader2, AlertCircle } from 'lucide-react';
-import 'plyr/dist/plyr.css';
+import React, { useEffect, useRef, useState } from "react";
+import Plyr from "plyr";
+import { apiRequest } from "../services/api";
+import { Loader2, AlertCircle } from "lucide-react";
+import "plyr/dist/plyr.css";
 
 // MIME dei container video supportati: serve passare il tipo corretto a Plyr/HTML5
 // altrimenti Safari/Chrome possono rifiutare il source o sbagliare il demuxer.
 const VIDEO_MIME_MAP = {
-  mp4: 'video/mp4',
-  m4v: 'video/mp4',
-  mov: 'video/quicktime',
-  webm: 'video/webm',
-  ogv: 'video/ogg',
-  mkv: 'video/x-matroska',
-  avi: 'video/x-msvideo',
-  wmv: 'video/x-ms-wmv',
-  flv: 'video/x-flv',
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  ogv: "video/ogg",
+  mkv: "video/x-matroska",
+  avi: "video/x-msvideo",
+  wmv: "video/x-ms-wmv",
+  flv: "video/x-flv",
 };
 
 export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
@@ -33,14 +33,14 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     if (!path) return true;
 
     // 1. Estrai estensione
-    let ext = '';
+    let ext = "";
     try {
       const urlObj = new URL(path, window.location.origin);
       const params = new URLSearchParams(urlObj.search);
-      const fileParam = params.get('file');
-      ext = (fileParam || urlObj.pathname).split('.').pop().toLowerCase();
+      const fileParam = params.get("file");
+      ext = (fileParam || urlObj.pathname).split(".").pop().toLowerCase();
     } catch (e) {
-      ext = path.split('.').pop().toLowerCase();
+      ext = path.split(".").pop().toLowerCase();
     }
 
     const mime = VIDEO_MIME_MAP[ext];
@@ -49,7 +49,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     if (!mime) return true;
 
     // 3. Usa HTML5 Video API per controllare il supporto
-    const tempVideo = document.createElement('video');
+    const tempVideo = document.createElement("video");
     const canPlay = tempVideo.canPlayType(mime);
 
     // "" -> Non supportato
@@ -58,14 +58,14 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
   };
 
   const getExtension = (path) => {
-    if (!path) return '';
+    if (!path) return "";
     try {
       const urlObj = new URL(path, window.location.origin);
       const params = new URLSearchParams(urlObj.search);
-      const fileParam = params.get('file');
-      return (fileParam || urlObj.pathname).split('.').pop().toLowerCase();
+      const fileParam = params.get("file");
+      return (fileParam || urlObj.pathname).split(".").pop().toLowerCase();
     } catch (e) {
-      return path.split('.').pop().toLowerCase();
+      return path.split(".").pop().toLowerCase();
     }
   };
 
@@ -89,9 +89,9 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     lastSavedRef.current = sec;
     try {
       const formData = new FormData();
-      formData.append('id_video', videoId);
-      formData.append('progresso', sec);
-      await apiRequest('/aggiornaMinutaggio.php', 'POST', formData, false);
+      formData.append("id_video", videoId);
+      formData.append("progresso", sec);
+      await apiRequest("/aggiornaMinutaggio.php", "POST", formData, false);
     } catch (e) {
       console.warn("Save progress failed", e);
     }
@@ -102,7 +102,10 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     const handleKeyDown = (e) => {
       // A. Protezione Input: Se l'utente scrive, ignora le shortcut
       const tagName = document.activeElement.tagName.toLowerCase();
-      const isInput = tagName === 'input' || tagName === 'textarea' || document.activeElement.isContentEditable;
+      const isInput =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        document.activeElement.isContentEditable;
       if (isInput) return;
 
       const player = playerRef.current;
@@ -110,41 +113,41 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
 
       // B. Mappatura Tasti
       switch (e.key.toLowerCase()) {
-        case ' ':
-        case 'k':
+        case " ":
+        case "k":
           e.preventDefault(); // Evita lo scroll della pagina con spazio
           player.togglePlay();
           break;
 
-        case 'f':
+        case "f":
           e.preventDefault();
           player.fullscreen.toggle();
           break;
 
-        case 'arrowright':
-        case 'l':
+        case "arrowright":
+        case "l":
           e.preventDefault();
           player.forward(10); // Salta avanti 10s
           break;
 
-        case 'arrowleft':
-        case 'j':
+        case "arrowleft":
+        case "j":
           e.preventDefault();
           player.rewind(10); // Salta indietro 10s
           break;
 
-        case 'm':
+        case "m":
           player.muted = !player.muted;
           break;
       }
     };
 
     // Aggiungi listener globale
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
 
     // Rimuovi listener quando il componente viene smontato
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, []); // Dipendenze vuote: la ref è stabile
 
@@ -153,7 +156,17 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     if (!videoRef.current) return;
 
     const options = {
-      controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'pip', 'airplay', 'fullscreen'],
+      controls: [
+        "play-large",
+        "play",
+        "progress",
+        "current-time",
+        "mute",
+        "volume",
+        "pip",
+        "airplay",
+        "fullscreen",
+      ],
       autoplay: true,
       muted: false,
       hideControls: true,
@@ -171,11 +184,13 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     playerRef.current = player;
 
     // EVENTI
-    player.on('loadedmetadata', () => {
+    player.on("loadedmetadata", () => {
       // FIX SAFARI: Riconvalida il supporto. Se è false, NON resettare l'errore.
       const isSupported = checkVideoSupport(srcRef.current);
       // Su iOS siamo severi. Su Desktop/Android, se è arrivato qui, lasciamolo andare.
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
       if (isIOS && !isSupported) {
         setFormatError(true);
@@ -196,9 +211,9 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
       }
     });
 
-    player.on('error', () => {
+    player.on("error", () => {
       const ext = getExtension(srcRef.current);
-      const suspicious = ['avi', 'mkv', 'flv', 'wmv', 'divx', 'xvid'];
+      const suspicious = ["avi", "mkv", "flv", "wmv", "divx", "xvid"];
 
       // Mostriamo l'errore personalizzato solo se l'estensione è "sospetta"
       // e il player ha effettivamente fallito il caricamento.
@@ -208,18 +223,22 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
       }
     });
 
-    player.on('playing', () => {
+    player.on("playing", () => {
       // Stessa logica: su iOS blocchiamo, altrove ci fidiamo del fatto che sta suonando
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       if (isIOS && !checkVideoSupport(srcRef.current)) return;
 
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       setFormatError(false);
       setIsInternalLoading(false);
     });
-    player.on('waiting', () => setIsInternalLoading(true));
-    player.on('canplay', () => {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    player.on("waiting", () => setIsInternalLoading(true));
+    player.on("canplay", () => {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       if (isIOS && !checkVideoSupport(srcRef.current)) return;
 
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
@@ -232,21 +251,25 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     if (videoEl) {
       videoEl.onerror = () => {
         const ext = getExtension(srcRef.current);
-        if (['avi', 'mkv', 'flv', 'wmv', 'divx', 'xvid'].includes(ext)) {
+        if (["avi", "mkv", "flv", "wmv", "divx", "xvid"].includes(ext)) {
           setFormatError(true);
           setIsInternalLoading(false);
         }
       };
     }
 
-    player.on('timeupdate', (event) => {
+    player.on("timeupdate", (event) => {
       const time = event.detail.plyr.currentTime;
       saveProgress(time);
     });
 
-    player.on('pause', () => saveProgress(player.currentTime, true));
-    player.on('enterfullscreen', () => document.body.classList.add('video-fullscreen-active'));
-    player.on('exitfullscreen', () => document.body.classList.remove('video-fullscreen-active'));
+    player.on("pause", () => saveProgress(player.currentTime, true));
+    player.on("enterfullscreen", () =>
+      document.body.classList.add("video-fullscreen-active"),
+    );
+    player.on("exitfullscreen", () =>
+      document.body.classList.remove("video-fullscreen-active"),
+    );
 
     return () => {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
@@ -288,25 +311,22 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     // un secondo round Range subito dopo i metadati. Altrimenti "metadata"
     // per non sprecare banda su un video che potrebbe non venire avviato.
     if (videoRef.current) {
-      videoRef.current.preload = Number(startTime) > 0 ? 'auto' : 'metadata';
+      videoRef.current.preload = Number(startTime) > 0 ? "auto" : "metadata";
     }
 
     player.source = {
-      type: 'video',
-      title: 'Video Player',
-      sources: [{ src, type: VIDEO_MIME_MAP[ext] || 'video/mp4' }],
+      type: "video",
+      title: "Video Player",
+      sources: [{ src, type: VIDEO_MIME_MAP[ext] || "video/mp4" }],
       poster,
     };
   }, [src, videoId, startTime]);
 
   return (
     <div className="w-full bg-black rounded-xl shadow-2xl relative z-0 aspect-video group overflow-hidden">
-
       {/* OVERLAY DI CARICAMENTO */}
       {isInternalLoading && !formatError ? (
-        <div
-          className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-500 pointer-events-none opacity-100"
-        >
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-500 pointer-events-none opacity-100">
           <Loader2 className="h-10 w-10 animate-spin text-[var(--primary-color)]" />
         </div>
       ) : null}
@@ -317,7 +337,9 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
           <div className="bg-red-500/20 p-2 sm:p-3 rounded-full mb-2 sm:mb-4">
             <AlertCircle className="h-6 w-6 sm:h-10 sm:w-10 text-red-500" />
           </div>
-          <h3 className="text-base sm:text-xl font-bold text-white mb-1 sm:mb-2 leading-tight">Formato Non Supportato</h3>
+          <h3 className="text-base sm:text-xl font-bold text-white mb-1 sm:mb-2 leading-tight">
+            Formato Non Supportato
+          </h3>
           <p className="text-zinc-400 text-[10px] sm:text-sm max-w-[280px] sm:max-w-md mb-3 sm:mb-6 leading-relaxed">
             Il browser non supporta la riproduzione diretta di questo file.
             Prova a convertirlo in MP4.
@@ -348,7 +370,12 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
         }
       `}</style>
 
-      <video ref={videoRef} className="plyr" playsInline preload="metadata"></video>
+      <video
+        ref={videoRef}
+        className="plyr"
+        playsInline
+        preload="metadata"
+      ></video>
     </div>
   );
 }

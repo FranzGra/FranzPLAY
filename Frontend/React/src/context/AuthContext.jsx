@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiRequest } from '../services/api';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { apiRequest } from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -10,9 +10,9 @@ export const AuthProvider = ({ children }) => {
   // --- FUNZIONE PER APPLICARE IL TEMA CSS ---
   const applyTheme = (color) => {
     if (!color) return;
-    document.documentElement.style.setProperty('--primary-color', color);
+    document.documentElement.style.setProperty("--primary-color", color);
     // Salviamo in localStorage per evitare flash o perdite cache
-    localStorage.setItem('franz_theme', color);
+    localStorage.setItem("franz_theme", color);
   };
 
   // --- HELPER: FORMATTAZIONE DATI ---
@@ -22,12 +22,14 @@ export const AuthProvider = ({ children }) => {
     return {
       username: userData.username || "Utente",
       avatar: userData.avatar
-        ? (userData.avatar.startsWith('http') || userData.avatar.startsWith('/') ? userData.avatar : `/img_utenti/${userData.avatar}`)
+        ? userData.avatar.startsWith("http") || userData.avatar.startsWith("/")
+          ? userData.avatar
+          : `/img_utenti/${userData.avatar}`
         : null,
       isAdmin: Boolean(userData.isAdmin),
       themeColor: userData.themeColor || null,
       appDefaultThemeColor: userData.appDefaultThemeColor || null,
-      homePreferences: userData.homePreferences || {}
+      homePreferences: userData.homePreferences || {},
     };
   };
 
@@ -35,13 +37,13 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       // Carica eventuale tema salvato in cache locale per istantaneità
-      const cachedTheme = localStorage.getItem('franz_theme');
+      const cachedTheme = localStorage.getItem("franz_theme");
       if (cachedTheme) applyTheme(cachedTheme);
 
       const formData = new FormData();
-      formData.append('action', 'ottieni_info_utente');
+      formData.append("action", "ottieni_info_utente");
 
-      const data = await apiRequest('/profilo.php', 'POST', formData);
+      const data = await apiRequest("/profilo.php", "POST", formData);
 
       if (data && data.success) {
         const formattedUser = formatUser(data.user);
@@ -54,15 +56,15 @@ export const AuthProvider = ({ children }) => {
           applyTheme(formattedUser.appDefaultThemeColor);
         } else {
           // Usa il tema default se l'utente non ne ha uno
-          applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626');
+          applyTheme(localStorage.getItem("franz_default_theme") || "#dc2626");
         }
       } else {
         setUser(null);
-        applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626'); // Reset al globale default se non loggato
+        applyTheme(localStorage.getItem("franz_default_theme") || "#dc2626"); // Reset al globale default se non loggato
       }
     } catch (error) {
       setUser(null);
-      applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626');
+      applyTheme(localStorage.getItem("franz_default_theme") || "#dc2626");
     } finally {
       setLoading(false);
     }
@@ -71,7 +73,12 @@ export const AuthProvider = ({ children }) => {
   // --- 2. LOGIN ---
   const login = async (username, password) => {
     try {
-      const data = await apiRequest('/login.php', 'POST', { username, password }, false);
+      const data = await apiRequest(
+        "/login.php",
+        "POST",
+        { username, password },
+        false,
+      );
 
       if (data.success) {
         const formattedUser = formatUser(data.user);
@@ -83,17 +90,20 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: data.message || "Errore Login" };
       }
     } catch (error) {
-      return { success: false, message: error.message || "Errore di connessione" };
+      return {
+        success: false,
+        message: error.message || "Errore di connessione",
+      };
     }
   };
 
   // --- 3. LOGOUT ---
   const logout = async () => {
     try {
-      await apiRequest('/logout.php');
+      await apiRequest("/logout.php");
       setUser(null);
-      localStorage.removeItem('franz_theme');
-      applyTheme(localStorage.getItem('franz_default_theme') || '#dc2626'); // Reset al tema globale
+      localStorage.removeItem("franz_theme");
+      applyTheme(localStorage.getItem("franz_default_theme") || "#dc2626"); // Reset al tema globale
     } catch (error) {
       console.error("Errore Logout:", error);
     }
@@ -106,7 +116,11 @@ export const AuthProvider = ({ children }) => {
       if (newColor) {
         applyTheme(newColor); // Aggiorna il CSS
       } else {
-        applyTheme(user.appDefaultThemeColor || localStorage.getItem('franz_default_theme') || '#dc2626'); // Usa default app se resettato
+        applyTheme(
+          user.appDefaultThemeColor ||
+            localStorage.getItem("franz_default_theme") ||
+            "#dc2626",
+        ); // Usa default app se resettato
       }
     }
   };
@@ -122,9 +136,9 @@ export const AuthProvider = ({ children }) => {
     try {
       // 2. Sync con Backend
       const formData = new FormData();
-      formData.append('action', 'salva_preferenze_home');
-      formData.append('preferenze', JSON.stringify(newPrefs));
-      await apiRequest('/profilo.php', 'POST', formData);
+      formData.append("action", "salva_preferenze_home");
+      formData.append("preferenze", JSON.stringify(newPrefs));
+      await apiRequest("/profilo.php", "POST", formData);
     } catch (e) {
       console.error("Errore salvataggio preferenze:", e);
       // In caso di errore, potremmo revertare, ma per ora teniamo l'optimistic
@@ -140,7 +154,17 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, refreshUser, updateLocalTheme, updateHomePreferences, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        refreshUser,
+        updateLocalTheme,
+        updateHomePreferences,
+        loading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

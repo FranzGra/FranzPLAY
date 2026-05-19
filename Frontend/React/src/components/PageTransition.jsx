@@ -1,5 +1,5 @@
-import React from 'react';
-import { useLocation } from 'react-router-dom';
+import React from "react";
+import { useLocation } from "react-router-dom";
 
 export default function PageTransition({ children }) {
   const location = useLocation();
@@ -28,22 +28,22 @@ export default function PageTransition({ children }) {
 
   const getAnimationClass = () => {
     // FIX: Nessuna animazione di pagina per Auth, così lo sfondo resta fisso
-    if (path === '/login' || path === '/register') return ''; 
-    
-    if (path.startsWith('/category/')) return 'anim-slide-right';
-    if (path === '/categories') return 'anim-button';
-    if (path.startsWith('/watch')) return 'anim-player';
-    if (path === '/') return 'anim-home';
-    if (path === '/saved') return 'anim-button';
-    if (path === '/profile') return 'slide-up';
-    return 'anim-default';
+    if (path === "/login" || path === "/register") return "";
+
+    if (path.startsWith("/category/")) return "anim-slide-right";
+    if (path === "/categories") return "anim-button";
+    if (path.startsWith("/watch")) return "anim-player";
+    if (path === "/") return "anim-home";
+    if (path === "/saved") return "anim-button";
+    if (path === "/profile") return "slide-up";
+    return "anim-default";
   };
 
   return (
     <>
       <style>{styles}</style>
-      <div 
-        key={path} 
+      <div
+        key={path}
         className={`w-full h-full overflow-hidden will-change-transform ${getAnimationClass()}`}
       >
         {children}

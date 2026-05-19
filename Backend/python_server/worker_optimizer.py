@@ -203,7 +203,7 @@ def remux_to_fmp4(source_path, dest_path, copy_audio=True, v_codec=None):
         '-c:v', 'copy',
         *video_tag_args,
         *audio_args,
-        '-movflags', '+faststart+frag_keyframe+empty_moov+default_base_moof',
+        '-movflags', '+faststart',
         # Mantiene tutti gli stream video/audio principali; scarta dati extra
         # tipici degli MKV (capitoli, allegati, sottotitoli non-mov_text) che
         # MP4 non supporta o gestisce diversamente.

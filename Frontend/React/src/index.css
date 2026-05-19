@@ -24,7 +24,11 @@
   .admin-card {
     @apply bg-zinc-900/30 backdrop-blur-md rounded-3xl p-6;
     border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+    transition:
+      background-color 0.3s ease,
+      border-color 0.3s ease,
+      box-shadow 0.3s ease,
+      transform 0.3s ease;
   }
 
   /* Se il genitore ha .page-enter, disabilitiamo la transizione iniziale per evitare il flash */
@@ -75,7 +79,7 @@
 @keyframes scaleIn {
   0% {
     opacity: 0;
-    transform: scale(0.90) translateY(10px);
+    transform: scale(0.9) translateY(10px);
   }
 
   100% {
@@ -95,7 +99,7 @@
 }
 
 /* Colore primario dinamico per Play/Volume/Progress integrato con var(--primary-color) */
-.plyr--full-ui input[type=range] {
+.plyr--full-ui input[type="range"] {
   color: var(--primary-color) !important;
 }
 
@@ -107,6 +111,7 @@
   background: var(--primary-color) !important;
 }
 
-.plyr__menu__container .plyr__control[role="menuitemradio"][aria-checked="true"]::before {
+.plyr__menu__container
+  .plyr__control[role="menuitemradio"][aria-checked="true"]::before {
   background: var(--primary-color) !important;
 }

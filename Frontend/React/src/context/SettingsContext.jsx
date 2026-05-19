@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiRequest } from '../services/api';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { apiRequest } from "../services/api";
 
 const SettingsContext = createContext(null);
 
 export const SettingsProvider = ({ children }) => {
-  const [logoParts, setLogoParts] = useState({ part1: 'FRANZ', part2: 'PLAY' });
-  const [defaultTheme, setDefaultTheme] = useState(() => localStorage.getItem('franz_default_theme') || '#dc2626');
+  const [logoParts, setLogoParts] = useState({ part1: "FRANZ", part2: "PLAY" });
+  const [defaultTheme, setDefaultTheme] = useState(
+    () => localStorage.getItem("franz_default_theme") || "#dc2626",
+  );
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [dbOffline, setDbOffline] = useState(false); // Nuovo stato per intercettare assenza di DB (es. mancanza .env)
@@ -17,23 +19,26 @@ export const SettingsProvider = ({ children }) => {
       // intercettiamo localmente per distinguere "DB offline" da "needsSetup".
       let statusRes = null;
       try {
-        statusRes = await apiRequest('/status.php', 'GET');
+        statusRes = await apiRequest("/status.php", "GET");
       } catch (statusErr) {
-        const errorMsg = String(statusErr?.message || '');
+        const errorMsg = String(statusErr?.message || "");
         // Errori tipici quando il DB è giù o schema mancante.
         const looksLikeDbDown =
-          errorMsg.includes('offline') ||
-          errorMsg.includes('Connessione rifiutata') ||
-          errorMsg.includes('Unknown database') ||
-          errorMsg.includes('Base di dati sconosciuta') ||
-          errorMsg.includes('Errore verifica stato sistema') ||
+          errorMsg.includes("offline") ||
+          errorMsg.includes("Connessione rifiutata") ||
+          errorMsg.includes("Unknown database") ||
+          errorMsg.includes("Base di dati sconosciuta") ||
+          errorMsg.includes("Errore verifica stato sistema") ||
           errorMsg.includes("doesn't exist") ||
-          errorMsg.includes('Failed to fetch');
+          errorMsg.includes("Failed to fetch");
         if (looksLikeDbDown) {
           // Caso speciale: se l'errore è proprio "tabella Utenti non esiste",
           // significa che il DB esiste ma è vuoto → vai al setup wizard,
           // non mostrare la pagina "DB offline".
-          if (errorMsg.includes("Utenti") || errorMsg.includes("doesn't exist")) {
+          if (
+            errorMsg.includes("Utenti") ||
+            errorMsg.includes("doesn't exist")
+          ) {
             setNeedsSetup(true);
             return;
           }
@@ -52,20 +57,20 @@ export const SettingsProvider = ({ children }) => {
       }
 
       // 2. Fetch Impostazioni normali
-      const res = await apiRequest('/impostazioni.php', 'GET');
+      const res = await apiRequest("/impostazioni.php", "GET");
       if (res?.success) {
         const data = res.data || res.dati || {};
-        const dTheme = data.colore_tema_default || '#dc2626';
+        const dTheme = data.colore_tema_default || "#dc2626";
         setLogoParts({
-          part1: data.logo_part_1 || 'FRANZ',
-          part2: data.logo_part_2 || 'PLAY'
+          part1: data.logo_part_1 || "FRANZ",
+          part2: data.logo_part_2 || "PLAY",
         });
         setDefaultTheme(dTheme);
-        localStorage.setItem('franz_default_theme', dTheme);
+        localStorage.setItem("franz_default_theme", dTheme);
 
         // Se l'utente non è loggato (o non ha forzato un tema) spingiamo questo come fallback globale
-        if (!localStorage.getItem('franz_theme')) {
-          document.documentElement.style.setProperty('--primary-color', dTheme);
+        if (!localStorage.getItem("franz_theme")) {
+          document.documentElement.style.setProperty("--primary-color", dTheme);
         }
       }
     } catch (e) {
@@ -80,7 +85,16 @@ export const SettingsProvider = ({ children }) => {
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ logoParts, defaultTheme, fetchSettings, loading, needsSetup, dbOffline }}>
+    <SettingsContext.Provider
+      value={{
+        logoParts,
+        defaultTheme,
+        fetchSettings,
+        loading,
+        needsSetup,
+        dbOffline,
+      }}
+    >
       {children}
     </SettingsContext.Provider>
   );
