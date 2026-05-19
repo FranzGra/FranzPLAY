@@ -26,12 +26,16 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  // Fallback placeholder se la <img> della copertina fallisce a caricare
+  // (file inesistente su disco anche se DB la dichiara presente: succede ad esempio
+  // dopo rinomine manuali del file video senza aggiornare gli asset).
+  const [coverLoadFailed, setCoverLoadFailed] = useState(false);
 
   // Stato animazione rimozione
   const [isRemoving, setIsRemoving] = useState(false);
 
   // Asset Paths
-  const hasCover = hasAsset(video.percorso_copertina);
+  const hasCover = hasAsset(video.percorso_copertina) && !coverLoadFailed;
   const hasPreview = hasAsset(video.percorso_anteprima);
   const thumbnailSrc = getAssetUrl(video.percorso_copertina);
   const previewSrc = getAssetUrl(video.percorso_anteprima);
@@ -111,6 +115,7 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
               alt=""
               className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isPlaying && hasLoaded ? 'opacity-0' : 'opacity-100'}`}
               loading="lazy"
+              onError={() => setCoverLoadFailed(true)}
             />
           ) : (
             <ThumbnailPlaceholder title={video.Titolo} processing={isProcessing} />

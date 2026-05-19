@@ -64,6 +64,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Forza il tipo di contenuto in uscita come JSON UTF-8
 header("Content-Type: application/json; charset=UTF-8");
 
+// Anti-cache HTTP per tutte le risposte JSON delle API.
+// Motivo: il browser e i proxy intermedi cachevano response come
+// /videos.php?type=all&limit=5 fino a quando l'utente non faceva un hard
+// reload, mostrando dati stantii (es. copertina ancora "null" dopo che il
+// worker_assets l'aveva generata). Con no-store la cache lato client non
+// avviene mai → la cache Redis lato server resta unica fonte di verità.
+// Gli endpoint che servono immagini/video (stream.php) hanno cache headers propri.
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 
 // ============================================================================
 // SEZIONE 2: GESTIONE SESSIONE E COOKIE
