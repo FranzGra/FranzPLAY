@@ -191,6 +191,11 @@ services:
   #    e usa: ssh -L 8080:localhost:8080 franz@IP_PI dal tuo PC.
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
+    # Forza Docker a scegliere il manifest arm64 della multi-arch image.
+    # Senza questa direttiva, Docker rootless su Raspberry Pi a volte sceglie
+    # erroneamente la variante amd64 (per problemi di parsing del manifest
+    # o cache stale), causando "exec /docker-entrypoint.sh: exec format error".
+    platform: linux/arm64
     container_name: TOOLS_PhpMyAdmin
     environment:
       PMA_HOST: mysql
