@@ -55,10 +55,7 @@ from pathlib import Path
 
 import mysql.connector
 
-try:
-    import redis as redis_lib
-except ImportError:
-    redis_lib = None
+from cache_invalidation import invalidate_videos_only
 
 # --- Impostazioni ---
 PATH_TO_MONITOR = os.environ.get('WATCH_DIR', '/percorsoVideo')
@@ -66,8 +63,6 @@ DB_HOST = os.environ.get('MYSQL_HOST', 'mysql')
 DB_USER = os.environ.get('MYSQL_USER')
 DB_PASS = os.environ.get('MYSQL_PASSWORD')
 DB_NAME = os.environ.get('MYSQL_DATABASE')
-REDIS_HOST = os.environ.get('REDIS_HOST', 'redis')
-REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD') or None
 
 POLL_INTERVAL = int(os.environ.get('OPTIMIZER_POLL_INTERVAL', '30'))
 BACKOFF_MAX = int(os.environ.get('OPTIMIZER_BACKOFF_MAX', '300'))
@@ -92,28 +87,6 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[logging.StreamHandler(sys.stdout)],
 )
-
-
-# --- Cache invalidation (fail-open) ---
-def invalidate_videos_list_cache():
-    """Cancella tutte le chiavi videos_list_* dal Redis usato da videos.php."""
-    if redis_lib is None:
-        return
-    try:
-        r = redis_lib.Redis(host=REDIS_HOST, port=6379, password=REDIS_PASSWORD,
-                            socket_connect_timeout=2, socket_timeout=2)
-        deleted = 0
-        cursor = 0
-        while True:
-            cursor, keys = r.scan(cursor=cursor, match='videos_list_*', count=100)
-            if keys:
-                deleted += r.delete(*keys)
-            if cursor == 0:
-                break
-        if deleted:
-            logging.info(f"[CACHE] Invalidate {deleted} chiavi videos_list_*")
-    except Exception as e:
-        logging.warning(f"[CACHE] Invalidazione fallita (fail-open): {e}")
 
 
 # --- DB ---
@@ -504,7 +477,7 @@ def process_one_video(conn):
     # Nuovi codec (post-remux audio re-encode l'audio diventa aac).
     final_a_codec = 'aac' if needs_audio_reencode else a_codec
     commit_remux(conn, video_id, new_rel, backup_rel, v_codec, final_a_codec)
-    invalidate_videos_list_cache()
+    invalidate_videos_only(reason=f"remux video id={video_id}")
     logging.info(f"[ID {video_id}] ✅ Ottimizzato. Originale → {backup_rel} (cleanup in {CLEANUP_GRACE_HOURS}h)")
     return True
 

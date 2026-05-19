@@ -39,7 +39,9 @@ try {
     $cacheKey = 'categorie_list_v1';
     $lista_categorie = null;
 
-    // 1) Tenta dal Redis cache (TTL 10 min). Le categorie cambiano raramente.
+    // 1) Tenta dal Redis cache. TTL 60s: rete di sicurezza per invalidazioni
+    //    mancate, ma abbastanza basso da non far attendere l'utente troppo
+    //    in caso di modifica filesystem (watcher Python).
     if (isset($Cache) && is_object($Cache)) {
         $cached = $Cache->get($cacheKey);
         if (is_array($cached)) {
@@ -57,7 +59,7 @@ try {
         $lista_categorie = $res->fetch_all(MYSQLI_ASSOC);
 
         if (isset($Cache) && is_object($Cache)) {
-            $Cache->set($cacheKey, $lista_categorie, 600); // 10 minuti
+            $Cache->set($cacheKey, $lista_categorie, 60); // 1 minuto (era 10min)
         }
     }
 

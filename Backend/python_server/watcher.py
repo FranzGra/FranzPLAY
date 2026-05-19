@@ -11,6 +11,8 @@ from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
 from pathlib import Path
 
+from cache_invalidation import invalidate_videos_and_categories
+
 # --- Impostazioni (Invariate) ---
 VIDEO_EXTENSIONS = (
     '.mp4', '.mkv', '.avi', '.mov', 
@@ -206,6 +208,7 @@ class VideoHandler(FileSystemEventHandler):
                     conn.commit()
                     if cursor.rowcount > 0:
                         logging.info(f"Categoria '{category_db_path}' aggiornata con nuova cover: {db_path}")
+                        invalidate_videos_and_categories(reason=f"cover categoria {category_db_path}")
                     else:
                         logging.warning(f"UPDATE fallito stranamente per '{category_db_path}' (Cover: {db_path}).")
                 except mysql.connector.Error as err:
@@ -249,12 +252,18 @@ class VideoHandler(FileSystemEventHandler):
 
     def on_deleted(self, event):
         """
-        (Logica invariata)
+        Gestisce eliminazione di video, asset, cover categoria e cartelle categoria.
+        Tutti questi cambi richiedono invalidazione cache Redis per riflettere
+        subito in UI lo stato post-eliminazione.
         """
         relative_path = self._get_relative_path(event.src_path)
         if not relative_path:
             return
-        
+
+        # Flag che indica se almeno una modifica al DB è stata applicata.
+        # Solo in tal caso invalidiamo la cache.
+        db_changed = False
+
         conn = None
         cursor = None
         try:
@@ -348,11 +357,15 @@ class VideoHandler(FileSystemEventHandler):
                         except Exception as e:
                             logging.error(f"Errore eliminazione anteprima {full_preview}: {e}")
 
+            db_changed = True
         except mysql.connector.Error as err:
             logging.error(f"Errore DB (Eliminazione) per {relative_path}: {err}")
         finally:
             if cursor: cursor.close()
             if conn and conn.is_connected(): conn.close()
+
+        if db_changed:
+            invalidate_videos_and_categories(reason=f"eliminazione {relative_path}")
 
     # --- on_moved (MODIFICATO) ---
     def on_moved(self, event):
@@ -446,6 +459,7 @@ class VideoHandler(FileSystemEventHandler):
 
                 if cursor.rowcount > 0:
                     logging.info(f"CATEGORIA Aggiornata: Nome='{new_category_name}', Percorso='{new_db_path}'")
+                    invalidate_videos_and_categories(reason=f"rinomina categoria {old_db_path} -> {new_db_path}")
                 else:
                     logging.info(f"Nessuna categoria trovata con percorso '{old_db_path}'.")
             except mysql.connector.Error as err:
@@ -453,7 +467,7 @@ class VideoHandler(FileSystemEventHandler):
             finally:
                 if cursor: cursor.close()
                 if conn and conn.is_connected(): conn.close()
-            
+
             return # Evento directory gestito.
         # --- FINE MODIFICA ---
 
@@ -575,6 +589,10 @@ class VideoHandler(FileSystemEventHandler):
         finally:
             if cursor: cursor.close()
             if conn and conn.is_connected(): conn.close()
+
+        # Spostamento/rinomina ha sempre conseguenze in UI:
+        # titolo video, categoria, asset → invalida tutto il feed.
+        invalidate_videos_and_categories(reason=f"spostamento {old_rel_path} -> {new_rel_path}")
 
 # --- Funzione Scansione (Invariata) ---
 def perform_scan(handler):

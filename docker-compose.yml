@@ -214,6 +214,8 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
     volumes:
       - ./Backend/python_server:/app    # Mappa gli script Python
@@ -262,6 +264,8 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
     volumes:
       - ./Backend/python_server:/app

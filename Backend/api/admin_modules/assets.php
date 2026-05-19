@@ -80,8 +80,8 @@ switch ($action) {
             executePreparedQuery("UPDATE Video SET percorso_copertina = ? WHERE id = ?", "si", [$db_path, $id_video]);
             global $Cache;
             if (isset($Cache) && is_object($Cache)) {
-                // Niente flush globale: gli asset video non hanno cache dedicata.
-                // Manteniamo l'invalidazione su categorie per sicurezza.
+                // Invalidazione mirata: lista pubblica + categorie.
+                $Cache->deletePattern('videos_list_*');
                 $Cache->delete('categorie_list_v1');
             }
             inviaRisposta(true, 'Copertina caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
@@ -111,8 +111,13 @@ switch ($action) {
 
         executePreparedQuery("UPDATE Video SET percorso_copertina = NULL WHERE id = ?", "i", [$id]);
         global $Cache;
-        if (isset($Cache) && is_object($Cache))
-            $Cache->flush();
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione mirata: solo la lista video pubblica (Home/Categorie)
+            // e la lista categorie. MAI flush() globale — distruggerebbe i
+            // contatori del rate limiter, lo status cachato e tutto il resto.
+            $Cache->deletePattern('videos_list_*');
+            $Cache->delete('categorie_list_v1');
+        }
         inviaRisposta(true, 'Copertina rimossa (in coda per rigenerazione)');
         break;
 
@@ -180,8 +185,8 @@ switch ($action) {
             executePreparedQuery("UPDATE Video SET percorso_anteprima = ? WHERE id = ?", "si", [$db_path, $id_video]);
             global $Cache;
             if (isset($Cache) && is_object($Cache)) {
-                // Niente flush globale: gli asset video non hanno cache dedicata.
-                // Manteniamo l'invalidazione su categorie per sicurezza.
+                // Invalidazione mirata: lista pubblica + categorie.
+                $Cache->deletePattern('videos_list_*');
                 $Cache->delete('categorie_list_v1');
             }
             inviaRisposta(true, 'Anteprima caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
@@ -211,8 +216,11 @@ switch ($action) {
 
         executePreparedQuery("UPDATE Video SET percorso_anteprima = NULL WHERE id = ?", "i", [$id]);
         global $Cache;
-        if (isset($Cache) && is_object($Cache))
-            $Cache->flush();
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione mirata, niente flush() globale (vedi sopra).
+            $Cache->deletePattern('videos_list_*');
+            $Cache->delete('categorie_list_v1');
+        }
         inviaRisposta(true, 'Anteprima rimossa');
         break;
 }

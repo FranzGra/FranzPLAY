@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+from cache_invalidation import invalidate_videos_only
+
 # --- Impostazioni ---
 PATH_TO_MONITOR = os.environ.get('WATCH_DIR', '/percorsoVideo')
 DB_HOST = os.environ.get('MYSQL_HOST', 'mysql')
@@ -368,6 +370,10 @@ def process_missing_assets(conn, settings):
                         cursor.execute(query, params)
                 conn.commit()
                 logging.info(f"[Assets] DB aggiornato per ID {video_id}.")
+                # Copertine/anteprime appena pronte: aggiorna cache feed pubblico
+                # così le thumbnail compaiono subito in Home/Categorie senza
+                # aspettare il TTL di 5 min.
+                invalidate_videos_only(reason=f"asset video id={video_id}")
             except Exception as e_trans:
                 logging.error(f"[Assets] Errore DB update: {e_trans}")
                 conn.rollback()

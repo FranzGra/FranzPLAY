@@ -99,8 +99,11 @@ switch ($action) {
             $db_path = '/' . $db_rel_path . '/' . $new_filename;
             executePreparedQuery("UPDATE Categorie SET Immagine_Sfondo = ? WHERE id = ?", "si", [$db_path, $id]);
             global $Cache;
-            if (isset($Cache) && is_object($Cache))
-                $Cache->flush();
+            if (isset($Cache) && is_object($Cache)) {
+                // Invalidazione mirata, niente flush() globale.
+                $Cache->delete('categorie_list_v1');
+                $Cache->deletePattern('videos_list_*');
+            }
             inviaRisposta(true, 'Sfondo categoria aggiornato', 200, ['nuovo_path' => $db_path]);
         } else {
             throw new Exception("Errore nel salvataggio fisico del file");
