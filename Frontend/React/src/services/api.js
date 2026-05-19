@@ -27,6 +27,12 @@ export const apiRequest = async (endpoint, method = 'GET', body = null) => {
     const options = {
         method,
         credentials: 'include', // OBBLIGATORIO: Mantiene la sessione tra le richieste
+        // Forza il browser (incluso Safari iOS che spesso ignora Cache-Control:
+        // no-store dei response headers) a non cachare mai le risposte API.
+        // Diventa critico quando i worker aggiornano i dati in background:
+        // es. percorso_file passa da .mkv a .mp4 dopo il remux → iPhone deve
+        // vedere subito il nuovo path, non quello vecchio cachato.
+        cache: 'no-store',
     };
 
     // Auto-detection Content-Type
