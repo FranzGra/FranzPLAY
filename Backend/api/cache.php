@@ -138,6 +138,34 @@ class Cache
     }
 
     /**
+     * Cancella tutte le chiavi che corrispondono al pattern (es. "videos_list_*").
+     * Usa SCAN (non KEYS) per non bloccare Redis su DB grandi.
+     *
+     * @param string $pattern  Pattern stile-glob (es. "videos_list_*").
+     * @return int             Numero di chiavi cancellate.
+     */
+    public function deletePattern($pattern)
+    {
+        if (!$this->enabled) return 0;
+        try {
+            $deleted = 0;
+            $iterator = null;
+            // setOption per evitare che SCAN restituisca cursor 0 prematuramente.
+            $this->redis->setOption(Redis::OPT_SCAN, Redis::SCAN_RETRY);
+            while (($keys = $this->redis->scan($iterator, $pattern, 100)) !== false) {
+                if (!empty($keys)) {
+                    $deleted += $this->redis->del($keys);
+                }
+                if ($iterator === 0) break;
+            }
+            return $deleted;
+        } catch (Exception $e) {
+            error_log("⚠️ [CACHE] deletePattern fallito: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * Incrementa atomicamente un contatore. Usato dal rate limiter.
      *
      * @param string $key  Chiave del contatore.

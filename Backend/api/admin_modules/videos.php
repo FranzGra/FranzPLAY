@@ -68,9 +68,12 @@ switch ($action) {
 
         global $Cache;
         if (isset($Cache) && is_object($Cache)) {
-            // Invalidazione mirata: solo categorie/impostazioni globali, NON tutto.
-            // I dati video sono già letti senza cache aggressiva (paginate + N+1 risolto).
+            // Invalida sia la lista categorie sia tutte le liste video cachate
+            // (videos.php cache per type='all' con TTL 5min: senza questo
+            // delete-pattern il titolo nuovo non comparirebbe in "Caricati di recente"
+            // fino allo scadere del TTL).
             $Cache->delete('categorie_list_v1');
+            $Cache->deletePattern('videos_list_*');
         }
         inviaRisposta(true, 'Informazioni video aggiornate con successo');
         break;
@@ -104,9 +107,12 @@ switch ($action) {
 
         global $Cache;
         if (isset($Cache) && is_object($Cache)) {
-            // Invalidazione mirata: solo categorie/impostazioni globali, NON tutto.
-            // I dati video sono già letti senza cache aggressiva (paginate + N+1 risolto).
+            // Invalida sia la lista categorie sia tutte le liste video cachate
+            // (videos.php cache per type='all' con TTL 5min: senza questo
+            // delete-pattern il titolo nuovo non comparirebbe in "Caricati di recente"
+            // fino allo scadere del TTL).
             $Cache->delete('categorie_list_v1');
+            $Cache->deletePattern('videos_list_*');
         }
         inviaRisposta(true, 'Video ed elementi correlati (file/anteprime) rimossi');
         break;

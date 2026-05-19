@@ -25,22 +25,53 @@ POLL_INTERVAL = 10
 STABILITY_CHECK_TIME = 2
 
 
+def _get_redis():
+    if redis_lib is None:
+        return None
+    try:
+        return redis_lib.Redis(host=REDIS_HOST, port=6379, password=REDIS_PASSWORD,
+                               socket_connect_timeout=2, socket_timeout=2)
+    except Exception:
+        return None
+
+
 def invalidate_categories_cache():
     """
     Invalida la chiave Redis `categorie_list_v1` cachata da categorie.php.
     Fail-open: se Redis è giù o la libreria manca, NON blocca il worker.
-    Speculare a quello che fanno admin_modules/categories.php quando l'admin
-    modifica una categoria.
     """
-    if redis_lib is None:
+    r = _get_redis()
+    if r is None:
         return
     try:
-        r = redis_lib.Redis(host=REDIS_HOST, port=6379, password=REDIS_PASSWORD,
-                            socket_connect_timeout=2, socket_timeout=2)
         r.delete('categorie_list_v1')
         logging.info("[CACHE] Invalidata chiave Redis categorie_list_v1")
     except Exception as e:
         logging.warning(f"[CACHE] Invalidazione fallita (fail-open): {e}")
+
+
+def invalidate_videos_list_cache():
+    """
+    Invalida tutte le chiavi `videos_list_*` cachate da videos.php (TTL 5min)
+    per far apparire subito i nuovi video in "Caricati di recente" e nel feed.
+    Fail-open.
+    """
+    r = _get_redis()
+    if r is None:
+        return
+    try:
+        deleted = 0
+        cursor = 0
+        while True:
+            cursor, keys = r.scan(cursor=cursor, match='videos_list_*', count=100)
+            if keys:
+                deleted += r.delete(*keys)
+            if cursor == 0:
+                break
+        if deleted:
+            logging.info(f"[CACHE] Invalidate {deleted} chiavi videos_list_*")
+    except Exception as e:
+        logging.warning(f"[CACHE] Invalidazione videos_list_* fallita (fail-open): {e}")
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [Worker-Meta] - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
@@ -197,6 +228,9 @@ def process_new_videos_from_temp(conn):
                 cursor.execute("DELETE FROM Video_Temp WHERE id = %s", (job['id'],))
             conn.commit()
             logging.info(f"Video processato: {titolo} ({durata_str})")
+            # Invalida la cache del feed video così il nuovo titolo compare
+            # subito in "Caricati di recente" senza dover aspettare TTL 5min.
+            invalidate_videos_list_cache()
         except Exception as e:
             conn.rollback()
             logging.error(f"Errore processo video {relative_path}: {e}")
