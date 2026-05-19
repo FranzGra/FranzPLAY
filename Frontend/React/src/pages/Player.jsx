@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ThumbsUp, Bookmark, Calendar, Share2, Loader2, FileVideo, Check, Zap, Clock, AlertTriangle } from 'lucide-react';
+import { ThumbsUp, Bookmark, Calendar, Share2, Loader2, FileVideo, Check, Zap, Clock, AlertTriangle, Monitor } from 'lucide-react';
+
+/**
+ * Mappa l'altezza del video stream (in px) sulla label di risoluzione standard.
+ * Restituisce null se l'altezza è sconosciuta o sentinel "0" (ffprobe fallito).
+ */
+const resolutionLabel = (h) => {
+    const n = Number(h);
+    if (!n || n <= 0) return null;
+    if (n >= 4320) return '8K';
+    if (n >= 2160) return '2160p';
+    if (n >= 1440) return '1440p';
+    if (n >= 1080) return '1080p';
+    if (n >= 720) return '720p';
+    if (n >= 480) return '480p';
+    if (n >= 360) return '360p';
+    return 'SD';
+};
 
 import VideoPlayer from '../components/VideoPlayer';
 import Comments from '../components/Comments';
@@ -154,6 +171,15 @@ export default function Player() {
                             {video.Formato && (
                                 <span className="flex items-center gap-1.5 uppercase">
                                     <FileVideo size={16} /> {video.Formato}
+                                </span>
+                            )}
+                            {/* Resolution Badge */}
+                            {resolutionLabel(video.altezza_video) && (
+                                <span
+                                    title={`Risoluzione nativa: ${video.altezza_video}p`}
+                                    className="flex items-center gap-1.5"
+                                >
+                                    <Monitor size={16} /> {resolutionLabel(video.altezza_video)}
                                 </span>
                             )}
                             {/* Optimization Badge */}

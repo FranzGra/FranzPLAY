@@ -41,3 +41,11 @@ ALTER TABLE `Video` ADD INDEX IF NOT EXISTS `idx_video_ottimizzato` (`ottimizzat
 
 -- Indice per la query di cleanup (trova file scaduti da cancellare).
 ALTER TABLE `Video` ADD INDEX IF NOT EXISTS `idx_video_cleanup` (`cleanup_at`);
+
+-- ----------------------------------------------------------------------------
+-- Risoluzione video: altezza del video stream in pixel (es. 1080, 2160).
+-- Popolata da worker_metadata.py via `ffprobe -show_streams`.
+-- NULL = mai analizzato → backfill automatico al prossimo ciclo del worker.
+-- Usata dal frontend per mostrare badge "1080p", "2160p", ecc.
+-- ----------------------------------------------------------------------------
+ALTER TABLE `Video` ADD COLUMN IF NOT EXISTS `altezza_video` INT NULL;

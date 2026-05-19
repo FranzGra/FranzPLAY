@@ -44,24 +44,34 @@ def get_video_metadata(full_path):
         # Hardening: nessun accesso a file fuori dalla base, niente symlink che escono.
         if not _is_path_inside_base(full_path):
             logging.warning(f"[SECURITY] Path fuori base ignorato in metadata: {full_path}")
-            return None, None, None
+            return None, None, None, None
         if os.path.islink(full_path):
             logging.warning(f"[SECURITY] Symlink ignorato in metadata: {full_path}")
-            return None, None, None
+            return None, None, None, None
 
         size1 = os.path.getsize(full_path)
         time.sleep(STABILITY_CHECK_TIME)
         size2 = os.path.getsize(full_path)
-        if size1 != size2: return None, None, None
+        if size1 != size2: return None, None, None, None
 
         # ffprobe con timeout per evitare hang su file corrotti.
+        # `-show_streams` ci permette di estrarre l'altezza del video stream (risoluzione).
         # I path provengono da watcher.py che già rifiuta symlink e path fuori base;
         # essendo argomenti passati come lista (no shell) non è possibile command-injection.
-        command = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", full_path]
+        command = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", full_path]
         result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=20)
         metadata = json.loads(result.stdout)
-        
+
         duration_sec = float(metadata['format']['duration'])
+
+        # Estrai altezza dal primo video stream disponibile.
+        altezza = None
+        for stream in metadata.get('streams', []):
+            if stream.get('codec_type') == 'video':
+                h = stream.get('height')
+                if isinstance(h, int) and h > 0:
+                    altezza = h
+                    break
         
         # --- LOGICA DURATA MIGLIORATA (MM:SS) ---
         # Se il video dura meno di 1 ora, usiamo MM:SS (es. 59:59)
@@ -78,14 +88,14 @@ def get_video_metadata(full_path):
             durata_str = f"{minutes:02d}:{seconds:02d}"
         
         formato_file = Path(full_path).suffix.lstrip('.').lower()
-        return duration_sec, durata_str, formato_file
+        return duration_sec, durata_str, formato_file, altezza
 
     except subprocess.TimeoutExpired:
         logging.error(f"[!] ffprobe TIMEOUT su {full_path}: file probabilmente corrotto.")
-        return None, None, None
+        return None, None, None, None
     except Exception as e:
         logging.error(f"Errore metadata {full_path}: {e}")
-        return None, None, None
+        return None, None, None, None
 
 def get_or_create_category(cursor, relative_path):
     parent_path_obj = Path(relative_path).parent
@@ -155,7 +165,7 @@ def process_new_videos_from_temp(conn):
                 cursor.execute("DELETE FROM Video_Temp WHERE id = %s", (job['id'],))
             return True
 
-        _, durata_str, formato = get_video_metadata(full_path)
+        _, durata_str, formato, altezza = get_video_metadata(full_path)
         if not durata_str:
             # Rilascia il lock per ritentare al prossimo giro.
             with conn.cursor() as cursor:
@@ -168,9 +178,9 @@ def process_new_videos_from_temp(conn):
             conn.start_transaction()
             with conn.cursor(dictionary=True) as cursor:
                 id_cat = get_or_create_category(cursor, relative_path)
-                query = ("INSERT INTO Video (percorso_file, Titolo, id_Categoria, Durata, Formato, data_Pubblicazione) "
-                         "VALUES (%s, %s, %s, %s, %s, NOW())")
-                cursor.execute(query, (relative_path, titolo, id_cat, durata_str, formato))
+                query = ("INSERT INTO Video (percorso_file, Titolo, id_Categoria, Durata, Formato, altezza_video, data_Pubblicazione) "
+                         "VALUES (%s, %s, %s, %s, %s, %s, NOW())")
+                cursor.execute(query, (relative_path, titolo, id_cat, durata_str, formato, altezza))
                 cursor.execute("DELETE FROM Video_Temp WHERE id = %s", (job['id'],))
             conn.commit()
             logging.info(f"Video processato: {titolo} ({durata_str})")
@@ -185,6 +195,45 @@ def process_new_videos_from_temp(conn):
         return True
     except Exception as e:
         logging.error(f"Errore generale in process_new_videos_from_temp: {e}")
+        return False
+
+
+def backfill_altezza_video(conn):
+    """
+    Backfill one-shot per video esistenti senza `altezza_video`.
+    Processa UN record per chiamata (rate-limit naturale + non blocca il poll).
+    Ritorna True se ha lavorato (per riarmare il poll veloce).
+    """
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT id, percorso_file FROM Video "
+                "WHERE altezza_video IS NULL LIMIT 1"
+            )
+            row = cursor.fetchone()
+        if not row:
+            return False
+
+        full_path = os.path.join(PATH_TO_MONITOR, row['percorso_file'])
+        if not os.path.exists(full_path):
+            # File mancante: marca a 0 per non riprovare all'infinito.
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE Video SET altezza_video = 0 WHERE id = %s", (row['id'],))
+            return True
+
+        _, _, _, altezza = get_video_metadata(full_path)
+        if altezza is None:
+            # ffprobe fallito o nessun video stream: marca a 0 (no retry infinito).
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE Video SET altezza_video = 0 WHERE id = %s", (row['id'],))
+            return True
+
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE Video SET altezza_video = %s WHERE id = %s", (altezza, row['id']))
+        logging.info(f"Backfill altezza_video: id={row['id']} → {altezza}p")
+        return True
+    except Exception as e:
+        logging.error(f"Errore backfill_altezza_video: {e}")
         return False
 
 
@@ -225,6 +274,10 @@ if __name__ == "__main__":
                 conn = get_db_connection()
 
             did_work = process_new_videos_from_temp(conn)
+            # Backfill risoluzione per i video pre-esistenti (one-shot per ciclo).
+            # Priorità bassa: viene eseguito solo se non c'è lavoro nuovo in coda.
+            if not did_work:
+                did_work = backfill_altezza_video(conn)
 
             if did_work:
                 idle_streak = 0
