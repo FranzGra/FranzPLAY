@@ -8,14 +8,39 @@ import subprocess
 import json
 from pathlib import Path
 
+try:
+    import redis as redis_lib
+except ImportError:
+    redis_lib = None  # Se la libreria manca, l'invalidazione cache è no-op (fail-open).
+
 # --- Impostazioni ---
 PATH_TO_MONITOR = os.environ.get('WATCH_DIR', '/percorsoVideo')
 DB_HOST = os.environ.get('MYSQL_HOST', 'mysql')
 DB_USER = os.environ.get('MYSQL_USER')
 DB_PASS = os.environ.get('MYSQL_PASSWORD')
 DB_NAME = os.environ.get('MYSQL_DATABASE')
-POLL_INTERVAL = 10 
-STABILITY_CHECK_TIME = 2 
+REDIS_HOST = os.environ.get('REDIS_HOST', 'redis')
+REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD') or None
+POLL_INTERVAL = 10
+STABILITY_CHECK_TIME = 2
+
+
+def invalidate_categories_cache():
+    """
+    Invalida la chiave Redis `categorie_list_v1` cachata da categorie.php.
+    Fail-open: se Redis è giù o la libreria manca, NON blocca il worker.
+    Speculare a quello che fanno admin_modules/categories.php quando l'admin
+    modifica una categoria.
+    """
+    if redis_lib is None:
+        return
+    try:
+        r = redis_lib.Redis(host=REDIS_HOST, port=6379, password=REDIS_PASSWORD,
+                            socket_connect_timeout=2, socket_timeout=2)
+        r.delete('categorie_list_v1')
+        logging.info("[CACHE] Invalidata chiave Redis categorie_list_v1")
+    except Exception as e:
+        logging.warning(f"[CACHE] Invalidazione fallita (fail-open): {e}")
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [Worker-Meta] - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
@@ -97,7 +122,11 @@ def get_or_create_category(cursor, relative_path):
         return result['id']
     else:
         cursor.execute("INSERT INTO Categorie (Nome, Percorso) VALUES (%s, %s)", (category_name, category_path))
-        return cursor.lastrowid
+        new_id = cursor.lastrowid
+        # Invalida la cache Redis di categorie.php così la nuova categoria
+        # compare immediatamente in UI senza dover aspettare il TTL di 10min.
+        invalidate_categories_cache()
+        return new_id
 
 def process_new_videos_from_temp(conn):
     """
