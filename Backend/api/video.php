@@ -89,6 +89,7 @@ try {
             $query = "SELECT
                         v.id, v.percorso_file, v.Titolo, v.Durata, v.Formato,
                         v.percorso_copertina, v.Likes, v.data_Pubblicazione,
+                        v.ottimizzato, v.codec_video, v.codec_audio,
                         c.id as id_Categoria, c.Nome as Nome_Categoria,
                         (SELECT 1 FROM `Like` WHERE id_Utente = ? AND id_Video = v.id) as is_liked,
                         (SELECT 1 FROM Salvati WHERE id_Utente = ? AND id_Video = v.id) as is_saved,
@@ -108,6 +109,8 @@ try {
                 $video['is_liked'] = (bool) $video['is_liked'];
                 $video['is_saved'] = (bool) $video['is_saved'];
                 $video['progresso_secondi'] = (int) ($video['progresso_secondi'] ?? 0);
+                // ottimizzato: NULL=in-progress, 1=ok, 0=non possibile (codec incompatibile)
+                $video['ottimizzato'] = $video['ottimizzato'] === null ? null : (int) $video['ottimizzato'];
                 inviaRisposta(true, "Video trovato", 200, ['video' => $video]);
             } else {
                 inviaRisposta(false, "Video non trovato", 404);

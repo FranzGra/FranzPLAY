@@ -4,10 +4,26 @@ import { apiRequest } from '../services/api';
 import { Loader2, AlertCircle } from 'lucide-react';
 import 'plyr/dist/plyr.css';
 
+// MIME dei container video supportati: serve passare il tipo corretto a Plyr/HTML5
+// altrimenti Safari/Chrome possono rifiutare il source o sbagliare il demuxer.
+const VIDEO_MIME_MAP = {
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  ogv: 'video/ogg',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  wmv: 'video/x-ms-wmv',
+  flv: 'video/x-flv',
+};
+
 export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
   const seekTargetRef = useRef(0);
+  const srcRef = useRef(src);
+  const lastSavedRef = useRef(0);
   const [isInternalLoading, setIsInternalLoading] = useState(true);
   const [formatError, setFormatError] = useState(false);
   const loadingTimeoutRef = useRef(null);
@@ -27,19 +43,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
       ext = path.split('.').pop().toLowerCase();
     }
 
-    // 2. Mappa MIME Types dei formati "a rischio"
-    const mimeMap = {
-      'mkv': 'video/x-matroska',
-      'avi': 'video/x-msvideo',
-      'wmv': 'video/x-ms-wmv',
-      'flv': 'video/x-flv',
-      'mov': 'video/quicktime', // Safari ok, altri forse no
-      'mp4': 'video/mp4',
-      'webm': 'video/webm',
-      'ogv': 'video/ogg'
-    };
-
-    const mime = mimeMap[ext];
+    const mime = VIDEO_MIME_MAP[ext];
 
     // Se non conosciamo il MIME, assumiamo sia supportato (o lasciamo fare al browser)
     if (!mime) return true;
@@ -68,6 +72,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
   useEffect(() => {
     setFormatError(false);
 
+    srcRef.current = src;
     // CONTROLLO PROATTIVO: Se il browser ci dice già "NO", mostriamo errore subito.
     const isSupported = checkVideoSupport(src);
     if (!isSupported) {
@@ -76,13 +81,16 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     }
   }, [src]);
 
-  // --- SAVE PROGRESS ---
-  const saveProgress = async (currentTime) => {
+  // --- SAVE PROGRESS (debounce reale: max 1 chiamata ogni 10s) ---
+  const saveProgress = async (currentTime, force = false) => {
     if (!videoId || currentTime < 5) return;
+    const sec = Math.floor(currentTime);
+    if (!force && Math.abs(sec - lastSavedRef.current) < 10) return;
+    lastSavedRef.current = sec;
     try {
       const formData = new FormData();
       formData.append('id_video', videoId);
-      formData.append('progresso', Math.floor(currentTime));
+      formData.append('progresso', sec);
       await apiRequest('/aggiornaMinutaggio.php', 'POST', formData, false);
     } catch (e) {
       console.warn("Save progress failed", e);
@@ -145,7 +153,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     if (!videoRef.current) return;
 
     const options = {
-      controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
+      controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'pip', 'airplay', 'fullscreen'],
       autoplay: true,
       muted: false,
       hideControls: true,
@@ -165,7 +173,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     // EVENTI
     player.on('loadedmetadata', () => {
       // FIX SAFARI: Riconvalida il supporto. Se è false, NON resettare l'errore.
-      const isSupported = checkVideoSupport(src);
+      const isSupported = checkVideoSupport(srcRef.current);
       // Su iOS siamo severi. Su Desktop/Android, se è arrivato qui, lasciamolo andare.
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -189,7 +197,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     });
 
     player.on('error', () => {
-      const ext = getExtension(src);
+      const ext = getExtension(srcRef.current);
       const suspicious = ['avi', 'mkv', 'flv', 'wmv', 'divx', 'xvid'];
 
       // Mostriamo l'errore personalizzato solo se l'estensione è "sospetta"
@@ -203,7 +211,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     player.on('playing', () => {
       // Stessa logica: su iOS blocchiamo, altrove ci fidiamo del fatto che sta suonando
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS && !checkVideoSupport(src)) return;
+      if (isIOS && !checkVideoSupport(srcRef.current)) return;
 
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       setFormatError(false);
@@ -212,7 +220,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     player.on('waiting', () => setIsInternalLoading(true));
     player.on('canplay', () => {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS && !checkVideoSupport(src)) return;
+      if (isIOS && !checkVideoSupport(srcRef.current)) return;
 
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       setFormatError(false);
@@ -223,7 +231,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     const videoEl = videoRef.current;
     if (videoEl) {
       videoEl.onerror = () => {
-        const ext = getExtension(src);
+        const ext = getExtension(srcRef.current);
         if (['avi', 'mkv', 'flv', 'wmv', 'divx', 'xvid'].includes(ext)) {
           setFormatError(true);
           setIsInternalLoading(false);
@@ -233,19 +241,17 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
 
     player.on('timeupdate', (event) => {
       const time = event.detail.plyr.currentTime;
-      if (Math.floor(time) > 0 && Math.floor(time) % 10 === 0) {
-        saveProgress(time);
-      }
+      saveProgress(time);
     });
 
-    player.on('pause', () => saveProgress(player.currentTime));
+    player.on('pause', () => saveProgress(player.currentTime, true));
     player.on('enterfullscreen', () => document.body.classList.add('video-fullscreen-active'));
     player.on('exitfullscreen', () => document.body.classList.remove('video-fullscreen-active'));
 
     return () => {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       if (playerRef.current) {
-        saveProgress(playerRef.current.currentTime);
+        saveProgress(playerRef.current.currentTime, true);
         playerRef.current.destroy();
       }
     };
@@ -256,32 +262,40 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
     const player = playerRef.current;
     if (!player || !src || formatError) return;
 
+    srcRef.current = src;
+    lastSavedRef.current = 0;
     setIsInternalLoading(true);
     setFormatError(false);
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
 
-    // SAFETY TIMEOUT per Safari/iOS:
-    // Se è un formato "sospetto" e non carica nulla dopo 6 secondi, mostriamo l'errore.
     const ext = getExtension(src);
-    const mimeMap = { 'mkv': 1, 'avi': 1, 'flv': 1, 'wmv': 1, 'divx': 1, 'xvid': 1 };
 
-    if (mimeMap[ext]) {
+    // Safety timeout per container "a rischio" sul demuxer del browser.
+    const riskyExt = { mkv: 1, avi: 1, flv: 1, wmv: 1, divx: 1, xvid: 1 };
+    if (riskyExt[ext]) {
       loadingTimeoutRef.current = setTimeout(() => {
         if (isInternalLoading && !player.playing) {
           console.warn("Playback timeout: suspicious format not loading.");
           setFormatError(true);
           setIsInternalLoading(false);
         }
-      }, 4000); // Ridotto a 4s per feedback più rapido
+      }, 4000);
     }
 
     seekTargetRef.current = Number(startTime);
 
+    // Preload adattivo: se ripartiamo da metà video meglio "auto" per evitare
+    // un secondo round Range subito dopo i metadati. Altrimenti "metadata"
+    // per non sprecare banda su un video che potrebbe non venire avviato.
+    if (videoRef.current) {
+      videoRef.current.preload = Number(startTime) > 0 ? 'auto' : 'metadata';
+    }
+
     player.source = {
       type: 'video',
       title: 'Video Player',
-      sources: [{ src: src, type: 'video/mp4' }],
-      poster: poster,
+      sources: [{ src, type: VIDEO_MIME_MAP[ext] || 'video/mp4' }],
+      poster,
     };
   }, [src, videoId, startTime]);
 
@@ -334,7 +348,7 @@ export default function VideoPlayer({ src, poster, videoId, startTime = 0 }) {
         }
       `}</style>
 
-      <video ref={videoRef} className="plyr" playsInline controls crossOrigin="anonymous" preload="metadata"></video>
+      <video ref={videoRef} className="plyr" playsInline preload="metadata"></video>
     </div>
   );
 }
