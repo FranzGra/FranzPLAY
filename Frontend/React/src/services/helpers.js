@@ -1,5 +1,16 @@
+/**
+ * Verifica se un path asset (copertina/anteprima) è valido.
+ * NULL / undefined / stringa vuota / 'mancante' → no asset disponibile,
+ * la UI mostrerà un placeholder elegante invece di un'immagine rotta.
+ */
+export const hasAsset = (path) => {
+    return !!path && path !== 'mancante';
+};
+
 export const getAssetUrl = (path) => {
-    if (!path || path === 'mancante') return "https://via.placeholder.com/640x360?text=Anteprima+Non+Disponibile";
+    // Restituiamo stringa vuota per i casi "no asset": il componente che ci chiama
+    // userà hasAsset() per decidere se mostrare il placeholder React invece di <img>.
+    if (!hasAsset(path)) return '';
     // Se è già un URL completo (es. placeholder esterni)
     if (path.startsWith('http')) return path;
 

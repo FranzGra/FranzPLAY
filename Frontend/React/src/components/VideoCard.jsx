@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ThumbsUp, X } from 'lucide-react';
-import { getAssetUrl } from '../services/helpers';
+import { getAssetUrl, hasAsset } from '../services/helpers';
+import ThumbnailPlaceholder from './ThumbnailPlaceholder';
 
 // Helper per calcolo durata
 const parseDurationToSeconds = (durationStr) => {
@@ -30,8 +31,13 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
   const [isRemoving, setIsRemoving] = useState(false);
 
   // Asset Paths
+  const hasCover = hasAsset(video.percorso_copertina);
+  const hasPreview = hasAsset(video.percorso_anteprima);
   const thumbnailSrc = getAssetUrl(video.percorso_copertina);
   const previewSrc = getAssetUrl(video.percorso_anteprima);
+  // "In elaborazione" = il video è nuovo e il worker_assets non ha ancora
+  // generato copertina/anteprima. Distinguiamo da "mancante" (asset perso/cancellato).
+  const isProcessing = !hasCover && video.percorso_copertina !== 'mancante';
 
   // Calcolo % completamento per barra rossa
   let progressPercent = 0;
@@ -98,16 +104,20 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
         {/* MEDIA CONTAINER */}
         <div className="relative aspect-video w-full rounded-xl bg-zinc-900 overflow-hidden shadow-lg ring-1 ring-white/10 group-hover:ring-zinc-500/50 transition-all mb-3 flex-shrink-0">
 
-          {/* 1. Immagine Copertina */}
-          <img
-            src={thumbnailSrc}
-            alt=""
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isPlaying && hasLoaded ? 'opacity-0' : 'opacity-100'}`}
-            loading="lazy"
-          />
+          {/* 1. Immagine Copertina (o Placeholder elegante se non ancora disponibile) */}
+          {hasCover ? (
+            <img
+              src={thumbnailSrc}
+              alt=""
+              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isPlaying && hasLoaded ? 'opacity-0' : 'opacity-100'}`}
+              loading="lazy"
+            />
+          ) : (
+            <ThumbnailPlaceholder title={video.Titolo} processing={isProcessing} />
+          )}
 
-          {/* 2. Video Anteprima (Lazy loaded) */}
-          {hasLoaded ? (
+          {/* 2. Video Anteprima (Lazy loaded, solo se disponibile) */}
+          {hasLoaded && hasPreview ? (
             <video
               ref={videoRef}
               src={previewSrc}
