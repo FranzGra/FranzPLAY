@@ -386,6 +386,7 @@ def commit_remux(conn, video_id, new_rel_path, original_rel_path, v_codec, a_cod
         cursor.execute(
             "UPDATE Video SET "
             "  percorso_file = %s, "
+            "  Formato = 'mp4', "
             "  ottimizzato = 1, "
             "  ottimizzato_at = NOW(), "
             "  codec_video = %s, "
