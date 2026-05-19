@@ -19,12 +19,13 @@ if [[ ! $confirm =~ ^[sS]$ ]]; then
 fi
 
 echo "🧹 Fermo i container e rimuovo i volumi..."
-docker-compose down --volumes
+docker compose down --volumes
 
 echo "🗑️ Cancello fisicamente i dati del database locale..."
-rm -rf App_Data/Database_Data
+# sudo necessario in rootless: i file sono di uid mappato del container.
+sudo rm -rf App_Data/Database_Data
 
 echo "🚀 Ricostruzione e avvio ambiente..."
-docker-compose up -d --build
+docker compose up -d --build
 
 echo "✅ Ambiente resettato correttamente!"

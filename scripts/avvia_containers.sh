@@ -22,7 +22,7 @@ fi
 
 # 2. Avvio Container
 echo "🚀 Avvio dei container Docker in corso..."
-docker-compose up -d
+docker compose up -d
 
 echo "✅ Ambiente avviato correttamente!"
 echo "Puoi accedere a FranzPLAY all'indirizzo: http://localhost"

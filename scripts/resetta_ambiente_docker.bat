@@ -10,20 +10,18 @@ echo Il file .env e la cartella App_Data verranno ripristinati.
 echo.
 pause
 
-docker-compose down --volumes
-docker-compose rm -fsv
+docker compose down --volumes
+docker compose rm -fsv
 
 echo Rimozione file locali del database in corso (App_Data\Database_Data)...
 if exist "App_Data\Database_Data" rmdir /S /Q "App_Data\Database_Data"
 
-docker-compose build
+docker compose build
 
-if not exist "App_Data\Database_Data" (
-    mkdir "App_Data\Database_Data"
-)
+:: NON ricreare manualmente Database_Data: lasciamo che lo faccia
+:: il container con l'uid corretto del processo mysql.
 
-docker-compose up -d
-docker-compose up -d
+docker compose up -d
 
 echo.
 echo ==================================

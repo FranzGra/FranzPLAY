@@ -9,7 +9,7 @@ Esistono **due famiglie** di script che fanno cose simili ma con stile diverso:
 | **Famiglia "Containers"** (con pause) | Più verbosa, mostra `docker ps`, attende `Invio` alla fine | **Uso interattivo / desktop**: doppio-clic, vuoi leggere l'output prima che la finestra si chiuda |
 | **Famiglia "compatta"** (no pause) | Output minimale, esce subito | **Uso da terminale / CI / automazioni**: già stai in una shell, non vuoi prompt bloccanti |
 
-> Tutti gli script si auto-posizionano nella **root del progetto** (cartella padre di `/scripts`), quindi puoi lanciarli da qualunque directory: i path a `.env`, `App_Data/`, `docker-compose.yml` continuano a funzionare.
+> Tutti gli script si auto-posizionano nella **root del progetto** (cartella padre di `/scripts`), quindi puoi lanciarli da qualunque directory: i path a `.env`, `App_Data/`, `docker compose.yml` continuano a funzionare.
 
 ---
 
@@ -18,11 +18,11 @@ Esistono **due famiglie** di script che fanno cose simili ma con stile diverso:
 Lancia con **doppio-clic** dal File Explorer oppure da `cmd` / PowerShell.
 
 ### ▶️ Avviare l'ambiente
-- **`Avvia_Containers.bat`** — Verifica che esista `.env`, crea `App_Data/Database_Data` se serve, lancia `docker-compose up -d`, mostra l'elenco container e attende `Invio`.
+- **`Avvia_Containers.bat`** — Verifica che esista `.env`, lancia `docker compose up -d` (la cartella `App_Data/Database_Data` viene creata dal container al primo avvio), mostra l'elenco container e attende `Invio`.
   - 👉 *Usa questo per il normale avvio quotidiano su Windows.*
 
 ### ⏹️ Fermare l'ambiente
-- **`Stop_Containers.bat`** — Esegue `docker-compose down` (ferma e rimuove i container, **mantiene i dati**) e attende `Invio`.
+- **`Stop_Containers.bat`** — Esegue `docker compose down` (ferma e rimuove i container, **mantiene i dati**) e attende `Invio`.
   - 👉 *Usa questo per chiudere FranzPLAY a fine giornata senza perdere nulla.*
 
 ### 💣 Reset totale (DISTRUTTIVO)
@@ -47,10 +47,10 @@ Esistono **due varianti** per ogni operazione: una **interattiva** (con pause st
 ### ⏹️ Fermare l'ambiente
 | Script | Cosa fa | Quando usarlo |
 |---|---|---|
-| **`stop.sh`** | `docker-compose down` (rimuove i container, mantiene i volumi) + pausa interattiva | Stop "completo" del normale flusso quotidiano, con conferma a video |
-| **`stop_containers.sh`** | `docker-compose stop` (mette in pausa i container, **non li rimuove**) | Quando vuoi solo **sospendere** temporaneamente senza distruggere i container — riavvio più veloce con `docker-compose start` |
+| **`stop.sh`** | `docker compose down` (rimuove i container, mantiene i volumi) + pausa interattiva | Stop "completo" del normale flusso quotidiano, con conferma a video |
+| **`stop_containers.sh`** | `docker compose stop` (mette in pausa i container, **non li rimuove**) | Quando vuoi solo **sospendere** temporaneamente senza distruggere i container — riavvio più veloce con `docker compose start` |
 
-> 🔍 **Differenza chiave**: `down` rimuove i container, `stop` li congela. `stop` è più veloce a riavviarsi ma se cambi `docker-compose.yml` ti serve comunque `down`.
+> 🔍 **Differenza chiave**: `down` rimuove i container, `stop` li congela. `stop` è più veloce a riavviarsi ma se cambi `docker compose.yml` ti serve comunque `down`.
 
 ### 💣 Reset totale (DISTRUTTIVO)
 | Script | Stile | Quando usarlo |
@@ -77,7 +77,7 @@ Esistono **due varianti** per ogni operazione: una **interattiva** (con pause st
   - Windows: `resetta_ambiente_docker.bat`
   - Mac/Linux: `resetta_ambiente_docker.sh` (rapido) oppure `reset.sh` (guidato)
 
-- **«Sto modificando il `Dockerfile` o `docker-compose.yml`»**
+- **«Sto modificando il `Dockerfile` o `docker compose.yml`»**
   - Spesso basta `down` + `up -d --build`, ma se hai dubbi sui volumi conviene un reset completo.
 
 ---

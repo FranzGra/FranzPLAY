@@ -10,22 +10,24 @@ echo "Il file .env e la cartella App_Data verranno ripristinati."
 echo ""
 read -p "Premi Invio per continuare oppure CTRL+C per annullare..."
 
-docker-compose down --volumes
-docker-compose rm -fsv
+docker compose down --volumes
+docker compose rm -fsv
 
 echo "Rimozione file locali del database in corso (App_Data/Database_Data)..."
 if [ -d "App_Data/Database_Data" ]; then
-    rm -rf "App_Data/Database_Data"
+    # Serve sudo perché i file appartengono a uid mappato del container (rootless),
+    # non all'utente host.
+    sudo rm -rf "App_Data/Database_Data"
 fi
 
-docker-compose build
+docker compose build
 
-if [ ! -d "App_Data/Database_Data" ]; then
-    mkdir -p "App_Data/Database_Data"
-fi
+# IMPORTANTE: non creiamo manualmente Database_Data.
+# Lasciamo che lo crei il container all'avvio con l'uid corretto del processo mysql.
+# Crearla a mano qui significherebbe owner=franz e i container in rootless
+# Docker non potrebbero scriverci dentro.
 
-docker-compose up -d
-docker-compose up -d
+docker compose up -d
 
 echo ""
 echo "=================================="

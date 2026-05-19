@@ -3,7 +3,7 @@
 :: Posizionati nella root del progetto (cartella padre di /scripts)
 cd /d "%~dp0.."
 
-docker-compose down
+docker compose down
 
 echo.
 echo.

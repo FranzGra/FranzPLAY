@@ -14,11 +14,12 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-if [ ! -d "App_Data/Database_Data" ]; then
-    mkdir -p "App_Data/Database_Data"
-fi
+# NON creiamo manualmente Database_Data: in rootless Docker la directory
+# va creata dal container con l'uid corretto del processo mysql, altrimenti
+# l'utente mysql interno non riesce a scriverci e MariaDB fallisce l'init
+# con "Permission denied". Lasciamo che sia docker compose up a crearla.
 
-docker-compose up -d
+docker compose up -d
 
 echo ""
 echo "=================================="

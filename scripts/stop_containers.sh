@@ -8,6 +8,6 @@
 cd "$(dirname "$0")/.." || exit 1
 
 echo "🛑 Fermo i container Docker..."
-docker-compose stop
+docker compose stop
 
 echo "✅ Container fermati."

@@ -14,11 +14,11 @@ if not exist ".env" (
     exit /b 1
 )
 
-if not exist "App_Data\Database_Data" (
-    mkdir "App_Data\Database_Data"
-)
+:: NON creiamo manualmente Database_Data: in rootless Docker la directory
+:: va creata dal container con l'uid corretto del processo mysql.
+:: Lasciamo che sia docker compose up a crearla.
 
-docker-compose up -d
+docker compose up -d
 
 echo.
 echo ==================================
