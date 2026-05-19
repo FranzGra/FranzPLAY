@@ -106,14 +106,6 @@ services:
     # e gira nativamente su ARM64 (Raspberry Pi 4/5).
     image: mariadb:11.4
     container_name: DATABASE_MySQL
-    # Avvia il processo direttamente come 'mysql' (UID 999 nell'immagine
-    # ufficiale). Senza questo, l'entrypoint parte come root container e tenta
-    # `chown -R mysql:mysql /var/lib/mysql`, che fallisce su Docker rootless
-    # (root container = utente non privilegiato host, niente CAP_CHOWN reale).
-    # Compatibile sia con Docker rootless (Raspberry Pi) sia root (ZimaBlade):
-    # in entrambi i casi l'immagine ha mysql=999; setup.sh allinea l'owner dei
-    # file su disco al mapping corretto per ciascun host.
-    user: "999:999"
     tmpfs:
       - /var/run/mysqld
     volumes:
