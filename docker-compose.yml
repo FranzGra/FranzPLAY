@@ -129,11 +129,10 @@ services:
       - --collation-server=utf8mb4_unicode_ci
     healthcheck:
       # MariaDB 11.x crea automaticamente /var/lib/mysql/.my-healthcheck.cnf
-      # con le credenziali per healthcheck (utente locale "mariadb.sys").
-      # Usandolo evitiamo problemi di shell-escaping della password e
-      # incompatibilità con il rename mysqladmin → mariadb-admin.
-      # Fallback: prova entrambi i binari per coprire 10.x e 11.x.
-      test: ["CMD-SHELL", "mariadb-admin ping --defaults-extra-file=/var/lib/mysql/.my-healthcheck.cnf 2>/dev/null || mysqladmin ping --defaults-extra-file=/var/lib/mysql/.my-healthcheck.cnf 2>/dev/null || exit 1"]
+      # con credenziali dedicate (utente "healthcheck"). IMPORTANTE: l'opzione
+      # --defaults-extra-file va PRIMA del subcomando (ping), altrimenti
+      # mariadb-admin la interpreta come "unknown variable".
+      test: ["CMD-SHELL", "mariadb-admin --defaults-extra-file=/var/lib/mysql/.my-healthcheck.cnf ping || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
