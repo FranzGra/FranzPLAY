@@ -10,6 +10,8 @@ from mysql.connector import errorcode
 from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
 from pathlib import Path
+import re
+import unicodedata
 
 from cache_invalidation import invalidate_videos_and_categories
 
@@ -26,6 +28,154 @@ DB_PASS = os.environ.get('MYSQL_PASSWORD')
 DB_NAME = os.environ.get('MYSQL_DATABASE')
 POLL_TIMEOUT = int(os.environ.get('WATCHER_POLL_TIMEOUT', '5'))  # Scansione ogni 5s di default (era 2s, troppo aggressivo per ARM)
 POLL_BACKOFF_MAX = int(os.environ.get('WATCHER_POLL_BACKOFF_MAX', '30'))  # Ceiling backoff esponenziale
+
+# --- Helper per la Sanificazione dei Nomi dei File ---
+def sanitize_component_string(name):
+    # 1. Rimpiazza caratteri accentati ed europei con i rispettivi equivalenti ASCII
+    name = unicodedata.normalize('NFKD', name)
+    name = "".join([c for c in name if not unicodedata.combining(c)])
+    
+    # Mappa manuale per casi speciali come l'apostrofo e le virgolette
+    name = name.replace("'", "_")
+    name = name.replace('"', "_")
+    
+    # 2. Sostituisci tutti i caratteri non conformi con underscore
+    # Sono consentiti solo a-z, A-Z, 0-9, dot (.) e dash (-)
+    name = re.sub(r'[^a-zA-Z0-9\.\-]', '_', name)
+    
+    # 3. Normalizza gli underscore multipli e rimuovi quelli ai bordi
+    name = re.sub(r'_{2,}', '_', name)
+    name = re.sub(r'_\.', '.', name)
+    name = name.strip('_')
+    name = name.strip('-')
+    
+    return name
+
+def sanitize_name(name, is_file=True):
+    if is_file:
+        path_obj = Path(name)
+        stem = path_obj.stem
+        ext = path_obj.suffix
+        clean_stem = sanitize_component_string(stem)
+        clean_ext = sanitize_component_string(ext.lstrip('.')).lower()
+        if not clean_stem:
+            clean_stem = f"video_{int(time.time())}"
+        return f"{clean_stem}.{clean_ext}" if clean_ext else clean_stem
+    else:
+        clean_name = sanitize_component_string(name)
+        if not clean_name:
+            clean_name = f"cartella_{int(time.time())}"
+        return clean_name
+
+def is_conforming(name, is_file=True):
+    if not name:
+        return False
+    # Controlla se contiene solo a-zA-Z0-9, dot (.), dash (-), underscore (_)
+    if re.search(r'[^a-zA-Z0-9\.\-_]', name):
+        return False
+    # Evita underscore multipli o strani pattern di inizio/fine
+    if '__' in name or '..' in name or '--' in name:
+        return False
+    if name.startswith('_') or name.endswith('_') or name.startswith('-') or name.endswith('-'):
+        return False
+    if is_file:
+        ext = Path(name).suffix
+        if ext and ext != ext.lower():
+            return False
+    return True
+
+def get_unique_path(target_path):
+    if not os.path.exists(target_path):
+        return target_path
+    
+    path_obj = Path(target_path)
+    parent = path_obj.parent
+    stem = path_obj.stem
+    ext = path_obj.suffix
+    
+    counter = 1
+    while True:
+        new_name = f"{stem}_{counter}{ext}"
+        new_path = parent / new_name
+        if not new_path.exists():
+            return str(new_path)
+        counter += 1
+
+def sanitize_path(absolute_path):
+    """
+    Rinomina il file o la directory se contiene caratteri non conformi.
+    Restituisce il nuovo path assoluto (o quello originale se già conforme o se c'è un errore).
+    """
+    try:
+        abs_real = os.path.realpath(absolute_path)
+        base_real = os.path.realpath(PATH_TO_MONITOR)
+        if not (abs_real == base_real or abs_real.startswith(base_real + os.sep)):
+            return absolute_path
+        if os.path.islink(absolute_path):
+            return absolute_path
+
+        if abs_real == base_real:
+            return absolute_path
+
+        parent_dir = os.path.dirname(absolute_path)
+        basename = os.path.basename(absolute_path)
+        
+        if basename.startswith('.'):
+            return absolute_path
+        if basename.startswith('anteprime_') or basename.startswith('copertine_'):
+            return absolute_path
+
+        is_dir = os.path.isdir(absolute_path)
+        
+        if is_conforming(basename, is_file=not is_dir):
+            return absolute_path
+
+        clean_basename = sanitize_name(basename, is_file=not is_dir)
+        
+        dest_path = os.path.join(parent_dir, clean_basename)
+        dest_path = get_unique_path(dest_path)
+        
+        logging.info(f"[SANITY] Rinomina di sicurezza: '{absolute_path}' -> '{dest_path}'")
+        os.rename(absolute_path, dest_path)
+        return dest_path
+    except Exception as e:
+        logging.error(f"[SANITY] Errore durante la rinomina di '{absolute_path}': {e}")
+        return absolute_path
+
+def pre_scan_sanitize(base_path):
+    logging.info(f"--- [Pre-Scan] Avvio bonifica nomi file in {base_path} ---")
+    renamed_count = 0
+    try:
+        for root, dirs, files in os.walk(base_path, topdown=False):
+            # Filtra dirs in-place per escludere cartelle nascoste e speciali
+            dirs[:] = [
+                d for d in dirs 
+                if not d.startswith('.') and 
+                   not d.startswith('anteprime_') and 
+                   not d.startswith('copertine_')
+            ]
+            
+            # Rinomina prima i file
+            for file in files:
+                if file.startswith('.'):
+                    continue
+                file_path = os.path.join(root, file)
+                new_path = sanitize_path(file_path)
+                if new_path != file_path:
+                    renamed_count += 1
+            
+            # Rinomina poi le directory
+            for d in dirs:
+                if d.startswith('.'):
+                    continue
+                dir_path = os.path.join(root, d)
+                new_path = sanitize_path(dir_path)
+                if new_path != dir_path:
+                    renamed_count += 1
+                    
+        logging.info(f"--- [Pre-Scan] Bonifica completata. Rinominate {renamed_count} risorse. ---")
+    except Exception as e:
+        logging.error(f"[Pre-Scan] Errore critico durante la bonifica nomi: {e}")
 
 # --- Configurazione Logging (Invariata) ---
 logging.basicConfig(
@@ -104,10 +254,9 @@ class VideoHandler(FileSystemEventHandler):
         if os.path.islink(file_path):
             logging.warning(f"[SECURITY] Symlink ignorato: {file_path}")
             return False
-        # Backup creati da worker_optimizer durante il remux (failsafe 24h
-        # prima del cleanup). Pattern: "<nome>.bak.<timestamp><ext>".
+        # Backup o file temporanei creati da worker_optimizer durante il remux
         # Non sono veri video, non vanno indicizzati.
-        if '.bak.' in basename:
+        if '.bak.' in basename or '.tmp.' in basename:
             return False
         return file_path.lower().endswith(VIDEO_EXTENSIONS)
 
@@ -177,16 +326,56 @@ class VideoHandler(FileSystemEventHandler):
     # --- GESTORI EVENTI ---
 
     def on_created(self, event):
-        """
-        (Logica invariata)
-        """
         if self._is_path_excluded(event.src_path):
             logging.debug(f"[+ IGNORATA] CREAZIONE: Ignorato evento in percorso escluso: {event.src_path}")
+            return
+        
+        # Bonifica immediata del nome se non conforme
+        sanitized_path = sanitize_path(event.src_path)
+        if sanitized_path != event.src_path:
+            # Rinomina eseguita, watchdog rileverà il nuovo nome.
             return
         
         if event.is_directory:
             logging.info(f"[+] CREAZIONE (CARTELLA): Rilevata {event.src_path}.")
             return
+
+    def on_modified(self, event):
+        if self._is_path_excluded(event.src_path):
+            return
+        
+        if event.is_directory:
+            return
+        
+        # Bonifica immediata del nome se non conforme
+        sanitized_path = sanitize_path(event.src_path)
+        if sanitized_path != event.src_path:
+            return
+
+        if not self._is_video_file(event.src_path):
+            return
+
+        relative_path = self._get_relative_path(event.src_path)
+        if not relative_path:
+            return
+
+        logging.info(f"[*] MODIFICA (FILE): Rilevata modifica al file video: {relative_path}")
+        conn = None
+        cursor = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            # Inserisce in Video_Temp per far rielaborare i metadata e rigenerare gli asset
+            query_insert = "INSERT IGNORE INTO Video_Temp (percorso_file) VALUES (%s)"
+            cursor.execute(query_insert, (relative_path,))
+            conn.commit()
+            if cursor.rowcount > 0:
+                logging.info(f"Video modificato '{relative_path}' aggiunto a 'Video_Temp' per rielaborazione.")
+        except mysql.connector.Error as err:
+            logging.error(f"Errore DB (Modifica) per {relative_path}: {err}")
+        finally:
+            if cursor: cursor.close()
+            if conn and conn.is_connected(): conn.close()
         
         # --- BLOCCO GESTIONE COPERTINE CATEGORIA ---
         if self._is_cover_file(event.src_path):
@@ -380,8 +569,11 @@ class VideoHandler(FileSystemEventHandler):
         """
         Gestisce lo spostamento/rinomina di file, asset E directory (Categorie).
         """
+        # Bonifica immediata della destinazione se non conforme
+        sanitized_dest = sanitize_path(event.dest_path)
+        
         old_rel_path = self._get_relative_path(event.src_path)
-        new_rel_path = self._get_relative_path(event.dest_path)
+        new_rel_path = self._get_relative_path(sanitized_dest)
         if not old_rel_path or not new_rel_path:
             return
 
@@ -653,6 +845,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     event_handler = VideoHandler()
+    pre_scan_sanitize(PATH_TO_MONITOR)
     perform_scan(event_handler)
     observer = Observer(timeout=POLL_TIMEOUT) 
     observer.schedule(event_handler, PATH_TO_MONITOR, recursive=True)

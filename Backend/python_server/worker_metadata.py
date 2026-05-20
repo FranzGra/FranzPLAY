@@ -7,6 +7,7 @@ import mysql.connector
 import subprocess
 import json
 from pathlib import Path
+import re
 
 from cache_invalidation import invalidate_videos_and_categories
 
@@ -168,24 +169,66 @@ def process_new_videos_from_temp(conn):
                 cursor.execute("UPDATE Video_Temp SET locked_at = NULL WHERE id = %s", (job['id'],))
             return False
 
-        titolo = Path(relative_path).stem
+        # Rimuoviamo gli underscore per visualizzare un titolo pulito sul sito (con spazi), lasciando intatti i trattini (-)
+        titolo = Path(relative_path).stem.replace('_', ' ')
+        titolo = re.sub(r'\s+', ' ', titolo).strip()
 
         try:
             conn.start_transaction()
             with conn.cursor(dictionary=True) as cursor:
                 id_cat = get_or_create_category(cursor, relative_path)
-                query = ("INSERT INTO Video (percorso_file, Titolo, id_Categoria, Durata, Formato, altezza_video, data_Pubblicazione) "
-                         "VALUES (%s, %s, %s, %s, %s, %s, NOW())")
-                cursor.execute(query, (relative_path, titolo, id_cat, durata_str, formato, height))
+                
+                # Controlla se il video è già presente nella tabella Video (caso di modifica/sovrascrittura)
+                cursor.execute("SELECT id, percorso_copertina, percorso_anteprima FROM Video WHERE percorso_file = %s", (relative_path,))
+                existing_video = cursor.fetchone()
+                
+                if existing_video:
+                    # File modificato: eliminiamo i vecchi asset se presenti per evitare orfani
+                    for asset_key in ['percorso_copertina', 'percorso_anteprima']:
+                        old_asset = existing_video[asset_key]
+                        if old_asset and old_asset != 'mancante':
+                            full_asset_path = os.path.join(PATH_TO_MONITOR, old_asset)
+                            if os.path.exists(full_asset_path):
+                                try:
+                                    os.remove(full_asset_path)
+                                    logging.info(f"Rimosso vecchio asset {full_asset_path} per modifica video.")
+                                except Exception as e:
+                                    logging.error(f"Errore rimozione vecchio asset {full_asset_path}: {e}")
+                    
+                    # Aggiorna la riga esistente resettando gli asset e lo stato di ottimizzazione
+                    query = """
+                        UPDATE Video SET 
+                            Titolo = %s,
+                            id_Categoria = %s,
+                            Durata = %s,
+                            Formato = %s,
+                            altezza_video = %s,
+                            percorso_copertina = NULL,
+                            percorso_anteprima = NULL,
+                            ottimizzato = NULL,
+                            ottimizzato_at = NULL,
+                            locked_at = NULL,
+                            data_Pubblicazione = NOW()
+                        WHERE id = %s
+                    """
+                    cursor.execute(query, (titolo, id_cat, durata_str, formato, height, existing_video['id']))
+                    logging.info(f"Video modificato e aggiornato nel DB: {titolo} ({durata_str})")
+                else:
+                    # Nuovo video: inserisci come record nuovo
+                    query = """
+                        INSERT INTO Video (percorso_file, Titolo, id_Categoria, Durata, Formato, altezza_video, data_Pubblicazione)
+                        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    """
+                    cursor.execute(query, (relative_path, titolo, id_cat, durata_str, formato, height))
+                    logging.info(f"Nuovo video registrato: {titolo} ({durata_str})")
+                
                 cursor.execute("DELETE FROM Video_Temp WHERE id = %s", (job['id'],))
             conn.commit()
-            logging.info(f"Video processato: {titolo} ({durata_str})")
-            # Nuovo video: invalida feed pubblico (Home, Categorie).
-            invalidate_videos_and_categories(reason=f"nuovo video '{titolo}'")
+            invalidate_videos_and_categories(reason=f"elaborazione video '{titolo}'")
         except mysql.connector.errors.IntegrityError as e:
             conn.rollback()
             if e.errno == mysql.connector.errorcode.ER_DUP_ENTRY:
-                logging.info(f"Video {relative_path} già presente in DB. Rimuovo da temp.")
+                logging.info(f"Video {relative_path} già presente in DB (duplicato concorrente). Rimuovo da temp.")
                 with conn.cursor() as cursor:
                     cursor.execute("DELETE FROM Video_Temp WHERE id = %s", (job['id'],))
                 conn.commit()

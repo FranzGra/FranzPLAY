@@ -146,6 +146,16 @@ def _get_asset_paths(relative_path, category_name):
     
     return full_cover_path, db_cover_path, full_preview_path, db_preview_path
 
+def get_low_priority_prefix():
+    prefix = []
+    if sys.platform != 'win32':
+        import shutil
+        if shutil.which('nice'):
+            prefix.extend(['nice', '-n', '19'])
+        if shutil.which('ionice'):
+            prefix.extend(['ionice', '-c', '3'])
+    return prefix
+
 def generate_cover(full_video_path, full_cover_path, start_min, video_duration_sec):
     """
     Genera copertina (ffmpeg).
@@ -164,7 +174,7 @@ def generate_cover(full_video_path, full_cover_path, start_min, video_duration_s
     # lista (no shell), un nome file che inizia con "-" non causa injection,
     # al massimo viene interpretato come flag; previeniamo a monte rifiutando
     # file con prefisso "-" nella validazione del path.
-    command = [
+    command = get_low_priority_prefix() + [
         "ffmpeg",
         "-ss", str(start_time_sec), "-i", full_video_path,
         "-vframes", "1", "-q:v", "2", "-y", full_cover_path
@@ -191,13 +201,14 @@ def generate_preview(full_video_path, full_preview_path, start_min, duration_sec
         
     os.makedirs(Path(full_preview_path).parent, exist_ok=True)
 
-    command = [
+    command = get_low_priority_prefix() + [
         "ffmpeg",
         "-ss", str(start_time_sec), "-i", full_video_path,
         "-t", str(duration_sec), 
         "-vf", "scale=-2:480", # Risoluzione 480p 
         "-c:v", "libx264",
         "-preset", FFMPEG_PRESET,
+        "-threads", "1", # Limita a 1 thread su RPi4 per preservare risorse
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart", 
         "-an", # Rimuove audio (non specificato, ma ottimizza)

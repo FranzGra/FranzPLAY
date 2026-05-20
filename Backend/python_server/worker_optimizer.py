@@ -171,6 +171,15 @@ def has_enough_space(source_path, factor=1.2):
         return False
 
 
+def get_low_priority_prefix():
+    prefix = []
+    if sys.platform != 'win32':
+        if shutil.which('nice'):
+            prefix.extend(['nice', '-n', '19'])
+        if shutil.which('ionice'):
+            prefix.extend(['ionice', '-c', '3'])
+    return prefix
+
 # --- Remux core ---
 def remux_to_fmp4(source_path, dest_path, copy_audio=True, v_codec=None):
     """
@@ -200,7 +209,7 @@ def remux_to_fmp4(source_path, dest_path, copy_audio=True, v_codec=None):
     elif v_codec == 'h264':
         video_tag_args = ['-tag:v', 'avc1']
 
-    cmd = [
+    cmd = get_low_priority_prefix() + [
         'ffmpeg', '-v', 'error', '-y',
         '-i', source_path,
         '-c:v', 'copy',
@@ -457,25 +466,31 @@ def process_one_video(conn):
     new_rel = (src_path.parent / f"{src_path.stem}.mp4").as_posix()
     new_full = os.path.join(PATH_TO_MONITOR, new_rel)
 
-    # Se il nuovo file esiste già (rerun parziale): rimuovilo.
-    if os.path.exists(new_full) and new_full != full:
-        try:
-            os.remove(new_full)
-        except OSError:
-            pass
-
     # Se per caso il container era già .mp4 ma serve audio re-encode, il nome
     # del nuovo file colliderebbe con l'originale: usiamo un nome intermedio.
     if os.path.abspath(new_full) == os.path.abspath(full):
         new_rel = (src_path.parent / f"{src_path.stem}.opt.mp4").as_posix()
         new_full = os.path.join(PATH_TO_MONITOR, new_rel)
 
-    success = remux_to_fmp4(full, new_full, copy_audio=not needs_audio_reencode, v_codec=v_codec)
+    # Definiamo il percorso temporaneo per il remux.
+    # Il nome del file temporaneo contiene '.tmp.' in modo che watcher.py lo ignori completamente.
+    ts = int(time.time())
+    temp_rel = (src_path.parent / f"{src_path.stem}.tmp.{ts}.mp4").as_posix()
+    temp_full = os.path.join(PATH_TO_MONITOR, temp_rel)
+
+    # Se il file temporaneo esiste già per caso, rimuovilo.
+    if os.path.exists(temp_full):
+        try:
+            os.remove(temp_full)
+        except OSError:
+            pass
+
+    success = remux_to_fmp4(full, temp_full, copy_audio=not needs_audio_reencode, v_codec=v_codec)
     if not success:
         # Cleanup output parziale.
         try:
-            if os.path.exists(new_full):
-                os.remove(new_full)
+            if os.path.exists(temp_full):
+                os.remove(temp_full)
         except OSError:
             pass
         logging.error(f"[ID {video_id}] Remux fallito. Marco ottimizzato=0 (fallback).")
@@ -483,17 +498,32 @@ def process_one_video(conn):
         return True
 
     # Rinomina l'originale per il cleanup ritardato (failsafe 24h).
-    ts = int(time.time())
     backup_rel = (src_path.parent / f"{src_path.stem}.bak.{ts}{src_path.suffix}").as_posix()
     backup_full = os.path.join(PATH_TO_MONITOR, backup_rel)
 
+    # 1. Rinomina il file originale in backup
     try:
         os.rename(full, backup_full)
     except OSError as e:
-        # Rinomina fallita: rollback del file remuxato.
         logging.error(f"[ID {video_id}] Impossibile rinominare originale: {e}. Rollback.")
         try:
-            os.remove(new_full)
+            os.remove(temp_full)
+        except OSError:
+            pass
+        release_lock(conn, video_id)
+        return True
+
+    # 2. Rinomina il file temporaneo in quello finale (new_full)
+    try:
+        os.rename(temp_full, new_full)
+    except OSError as e:
+        logging.error(f"[ID {video_id}] Impossibile rinominare file temporaneo in finale: {e}. Ripristino originale.")
+        try:
+            os.rename(backup_full, full)
+        except OSError:
+            pass
+        try:
+            os.remove(temp_full)
         except OSError:
             pass
         release_lock(conn, video_id)
