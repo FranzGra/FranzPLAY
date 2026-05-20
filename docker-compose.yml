@@ -228,6 +228,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./Backend/python_server:/app    # Mappa gli script Python
       - ${PERCORSO_VIDEO}:/percorsoVideo
@@ -254,6 +255,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./Backend/python_server:/app
       - ${PERCORSO_VIDEO}:/percorsoVideo
@@ -280,6 +282,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./Backend/python_server:/app
       - ${PERCORSO_VIDEO}:/percorsoVideo
@@ -313,6 +316,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
+      - PYTHONUNBUFFERED=1
       - OPTIMIZER_POLL_INTERVAL=${OPTIMIZER_POLL_INTERVAL:-30}
       - OPTIMIZER_BACKOFF_MAX=${OPTIMIZER_BACKOFF_MAX:-300}
       - OPTIMIZER_CLEANUP_HOURS=${OPTIMIZER_CLEANUP_HOURS:-24}
