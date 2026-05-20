@@ -340,43 +340,6 @@ class VideoHandler(FileSystemEventHandler):
             logging.info(f"[+] CREAZIONE (CARTELLA): Rilevata {event.src_path}.")
             return
 
-    def on_modified(self, event):
-        if self._is_path_excluded(event.src_path):
-            return
-        
-        if event.is_directory:
-            return
-        
-        # Bonifica immediata del nome se non conforme
-        sanitized_path = sanitize_path(event.src_path)
-        if sanitized_path != event.src_path:
-            return
-
-        if not self._is_video_file(event.src_path):
-            return
-
-        relative_path = self._get_relative_path(event.src_path)
-        if not relative_path:
-            return
-
-        logging.info(f"[*] MODIFICA (FILE): Rilevata modifica al file video: {relative_path}")
-        conn = None
-        cursor = None
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            # Inserisce in Video_Temp per far rielaborare i metadata e rigenerare gli asset
-            query_insert = "INSERT IGNORE INTO Video_Temp (percorso_file) VALUES (%s)"
-            cursor.execute(query_insert, (relative_path,))
-            conn.commit()
-            if cursor.rowcount > 0:
-                logging.info(f"Video modificato '{relative_path}' aggiunto a 'Video_Temp' per rielaborazione.")
-        except mysql.connector.Error as err:
-            logging.error(f"Errore DB (Modifica) per {relative_path}: {err}")
-        finally:
-            if cursor: cursor.close()
-            if conn and conn.is_connected(): conn.close()
-        
         # --- BLOCCO GESTIONE COPERTINE CATEGORIA ---
         if self._is_cover_file(event.src_path):
             relative_path = self._get_relative_path(event.src_path)
@@ -443,6 +406,43 @@ class VideoHandler(FileSystemEventHandler):
                     logging.info(f"Video '{relative_path}' era già presente in 'Video_Temp'.")
         except mysql.connector.Error as err:
             logging.error(f"Errore DB (Creazione) per {relative_path}: {err}")
+        finally:
+            if cursor: cursor.close()
+            if conn and conn.is_connected(): conn.close()
+
+    def on_modified(self, event):
+        if self._is_path_excluded(event.src_path):
+            return
+        
+        if event.is_directory:
+            return
+        
+        # Bonifica immediata del nome se non conforme
+        sanitized_path = sanitize_path(event.src_path)
+        if sanitized_path != event.src_path:
+            return
+
+        if not self._is_video_file(event.src_path):
+            return
+
+        relative_path = self._get_relative_path(event.src_path)
+        if not relative_path:
+            return
+
+        logging.info(f"[*] MODIFICA (FILE): Rilevata modifica al file video: {relative_path}")
+        conn = None
+        cursor = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            # Inserisce in Video_Temp per far rielaborare i metadata e rigenerare gli asset
+            query_insert = "INSERT IGNORE INTO Video_Temp (percorso_file) VALUES (%s)"
+            cursor.execute(query_insert, (relative_path,))
+            conn.commit()
+            if cursor.rowcount > 0:
+                logging.info(f"Video modificato '{relative_path}' aggiunto a 'Video_Temp' per rielaborazione.")
+        except mysql.connector.Error as err:
+            logging.error(f"Errore DB (Modifica) per {relative_path}: {err}")
         finally:
             if cursor: cursor.close()
             if conn and conn.is_connected(): conn.close()
