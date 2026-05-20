@@ -860,6 +860,71 @@ def cleanup_missing_categories(conn):
     except Exception as e:
         logging.error(f"Errore durante il cleanup delle categorie mancanti: {e}")
 
+def cleanup_orphaned_assets(conn):
+    import shutil
+    import time
+    logging.info("--- [Avvio Cleanup] Rimozione cartelle/file asset orfani ---")
+    deleted_files = 0
+    deleted_dirs = 0
+    try:
+        valid_assets = set()
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT percorso_copertina, percorso_anteprima FROM Video")
+            for row in cursor.fetchall():
+                if row['percorso_copertina'] and row['percorso_copertina'] != 'mancante':
+                    valid_assets.add(row['percorso_copertina'].replace('\\', '/'))
+                if row['percorso_anteprima'] and row['percorso_anteprima'] != 'mancante':
+                    valid_assets.add(row['percorso_anteprima'].replace('\\', '/'))
+
+        current_time = time.time()
+        for root, dirs, files in os.walk(PATH_TO_MONITOR, topdown=False):
+            # Normalizziamo rel_root per avere gli slash in avanti
+            rel_root = os.path.relpath(root, PATH_TO_MONITOR).replace('\\', '/')
+            
+            dir_name = os.path.basename(root)
+            if dir_name.startswith('copertine_') or dir_name.startswith('anteprime_'):
+                parent_dir = os.path.dirname(root)
+                
+                # Calcola il parent_name
+                if os.path.realpath(parent_dir) == os.path.realpath(PATH_TO_MONITOR):
+                    parent_name = "Generale"
+                else:
+                    parent_name = os.path.basename(parent_dir)
+                
+                is_wrong_name = (
+                    (dir_name.startswith('copertine_') and dir_name != f"copertine_{parent_name}") or
+                    (dir_name.startswith('anteprime_') and dir_name != f"anteprime_{parent_name}")
+                )
+                
+                if is_wrong_name:
+                    logging.info(f"Rimuovo cartella asset con nome obsoleto: {rel_root}")
+                    try:
+                        shutil.rmtree(root)
+                        deleted_dirs += 1
+                    except Exception as e:
+                        logging.error(f"Errore rimozione {root}: {e}")
+                    continue
+                
+                # Cartella valida, controlla i file interni
+                for f in files:
+                    file_rel_path = f"{rel_root}/{f}"
+                    if file_rel_path not in valid_assets:
+                        file_full_path = os.path.join(root, f)
+                        if os.path.exists(file_full_path):
+                            # Evita race condition con i worker Python in esecuzione (tolleranza 1 ora)
+                            if current_time - os.path.getmtime(file_full_path) > 3600:
+                                try:
+                                    os.remove(file_full_path)
+                                    deleted_files += 1
+                                    logging.info(f"Rimosso file asset orfano: {file_rel_path}")
+                                except Exception:
+                                    pass
+    except Exception as e:
+        logging.error(f"Errore durante il cleanup degli asset orfani: {e}")
+        
+    if deleted_files > 0 or deleted_dirs > 0:
+        logging.info(f"Cleanup asset completato: rimosse {deleted_dirs} cartelle obsolete e {deleted_files} file orfani.")
+
 # --- Funzione Scansione (Invariata) ---
 def perform_scan(handler):
     logging.info(f"--- [Scan Iniziale] Avvio scansione di {PATH_TO_MONITOR} ---")
@@ -907,6 +972,7 @@ if __name__ == "__main__":
         logging.info("Test connessione DB riuscito. Avvio cleanup record inesistenti...")
         cleanup_missing_videos(initial_conn)
         cleanup_missing_categories(initial_conn)
+        cleanup_orphaned_assets(initial_conn)
         initial_conn.close()
         logging.info("Cleanup iniziale completato.")
     else:
