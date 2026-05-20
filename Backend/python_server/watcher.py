@@ -794,6 +794,44 @@ class VideoHandler(FileSystemEventHandler):
         # titolo video, categoria, asset → invalida tutto il feed.
         invalidate_videos_and_categories(reason=f"spostamento {old_rel_path} -> {new_rel_path}")
 
+def cleanup_missing_videos(conn):
+    logging.info("--- [Avvio Cleanup] Rimozione record video non esistenti su disco ---")
+    deleted_count = 0
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT id, percorso_file, percorso_copertina, percorso_anteprima FROM Video")
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                rel_path = row['percorso_file']
+                full_path = os.path.join(PATH_TO_MONITOR, rel_path)
+                if not os.path.exists(full_path):
+                    logging.info(f"Video non trovato su disco: {rel_path}. Rimuovo record ID {row['id']}.")
+                    
+                    # Rimuovi cover e anteprime rimaste orfane
+                    for asset_key in ['percorso_copertina', 'percorso_anteprima']:
+                        asset_rel = row[asset_key]
+                        if asset_rel and asset_rel != 'mancante':
+                            asset_full = os.path.join(PATH_TO_MONITOR, asset_rel)
+                            if os.path.exists(asset_full):
+                                try:
+                                    os.remove(asset_full)
+                                    logging.info(f"Rimosso asset orfano: {asset_rel}")
+                                except Exception as e:
+                                    logging.error(f"Errore rimozione asset {asset_rel}: {e}")
+                    
+                    cursor.execute("DELETE FROM Video WHERE id = %s", (row['id'],))
+                    deleted_count += 1
+            
+            conn.commit()
+            if deleted_count > 0:
+                logging.info(f"Cleanup completato: rimossi {deleted_count} record video inesistenti.")
+                invalidate_videos_and_categories(reason=f"cleanup {deleted_count} video mancanti")
+            else:
+                logging.info("Nessun record video obsoleto da rimuovere.")
+    except Exception as e:
+        logging.error(f"Errore durante il cleanup dei video mancanti: {e}")
+
 # --- Funzione Scansione (Invariata) ---
 def perform_scan(handler):
     logging.info(f"--- [Scan Iniziale] Avvio scansione di {PATH_TO_MONITOR} ---")
@@ -838,8 +876,10 @@ if __name__ == "__main__":
     logging.info("Test connessione iniziale al database...")
     initial_conn = get_db_connection()
     if initial_conn:
+        logging.info("Test connessione DB riuscito. Avvio cleanup record inesistenti...")
+        cleanup_missing_videos(initial_conn)
         initial_conn.close()
-        logging.info("Test connessione DB riuscito.")
+        logging.info("Cleanup iniziale completato.")
     else:
         logging.critical("Impossibile stabilire la connessione iniziale al DB. Uscita.")
         sys.exit(1)
