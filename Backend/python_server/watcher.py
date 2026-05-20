@@ -832,6 +832,34 @@ def cleanup_missing_videos(conn):
     except Exception as e:
         logging.error(f"Errore durante il cleanup dei video mancanti: {e}")
 
+def cleanup_missing_categories(conn):
+    logging.info("--- [Avvio Cleanup] Rimozione categorie orfane ---")
+    deleted_count = 0
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT id, Nome, Percorso FROM Categorie")
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                if row['Percorso'] == '/' or row['Percorso'] == '':
+                    continue # Non eliminiamo mai la categoria Generale
+                
+                # Il percorso nel DB ha uno slash iniziale, lo togliamo per os.path.join
+                rel_path = row['Percorso'].lstrip('/')
+                full_path = os.path.join(PATH_TO_MONITOR, rel_path)
+                
+                if not os.path.exists(full_path):
+                    logging.info(f"Categoria non trovata su disco: '{rel_path}'. Rimuovo record ID {row['id']}.")
+                    cursor.execute("DELETE FROM Categorie WHERE id = %s", (row['id'],))
+                    deleted_count += 1
+            
+            conn.commit()
+            if deleted_count > 0:
+                logging.info(f"Cleanup completato: rimosse {deleted_count} categorie orfane.")
+                invalidate_videos_and_categories(reason=f"cleanup {deleted_count} categorie orfane")
+    except Exception as e:
+        logging.error(f"Errore durante il cleanup delle categorie mancanti: {e}")
+
 # --- Funzione Scansione (Invariata) ---
 def perform_scan(handler):
     logging.info(f"--- [Scan Iniziale] Avvio scansione di {PATH_TO_MONITOR} ---")
@@ -878,6 +906,7 @@ if __name__ == "__main__":
     if initial_conn:
         logging.info("Test connessione DB riuscito. Avvio cleanup record inesistenti...")
         cleanup_missing_videos(initial_conn)
+        cleanup_missing_categories(initial_conn)
         initial_conn.close()
         logging.info("Cleanup iniziale completato.")
     else:
