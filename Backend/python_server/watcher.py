@@ -442,7 +442,7 @@ class VideoHandler(FileSystemEventHandler):
         relative_path = self._get_relative_path(event.src_path)
         if not relative_path:
             return
-        logging.info(f"[+] CREAZIONE (FILE): Nuovo file video rilevato: {relative_path}")
+        logging.debug(f"[+] CREAZIONE (FILE): Nuovo file video rilevato: {relative_path}")
         conn = None
         cursor = None
         try:
@@ -452,16 +452,18 @@ class VideoHandler(FileSystemEventHandler):
             cursor.execute(query_check, (relative_path,))
             result = cursor.fetchone()
             if result:
-                logging.info(f"[=] Video '{relative_path}' già presente in tabella 'Video'. Ignoro.")
+                # Caso comune e silente: file gia' indicizzato (es. evento duplicato
+                # di polling). Niente INFO: sporcherebbe i log senza informazione utile.
+                logging.debug(f"[=] '{relative_path}' gia' presente in Video. Skip.")
             else:
-                logging.info(f"Video '{relative_path}' non trovato in 'Video'. Aggiungo a 'Video_Temp'.")
+                logging.info(f"[+] Nuovo video '{relative_path}' -> accodo in Video_Temp.")
                 query_insert = "INSERT IGNORE INTO Video_Temp (percorso_file) VALUES (%s)"
                 cursor.execute(query_insert, (relative_path,))
                 conn.commit()
                 if cursor.rowcount > 0:
-                    logging.info(f"Video '{relative_path}' aggiunto con successo a 'Video_Temp'.")
+                    logging.info(f"[+] '{relative_path}' aggiunto a Video_Temp.")
                 else:
-                    logging.info(f"Video '{relative_path}' era già presente in 'Video_Temp'.")
+                    logging.debug(f"[=] '{relative_path}' era gia' in Video_Temp.")
         except mysql.connector.Error as err:
             logging.error(f"Errore DB (Creazione) per {relative_path}: {err}")
         finally:
@@ -1156,34 +1158,69 @@ def cleanup_orphaned_assets(conn):
     if deleted_files > 0 or deleted_dirs > 0:
         logging.info(f"Cleanup asset completato: rimosse {deleted_dirs} cartelle obsolete e {deleted_files} file orfani.")
 
-# --- Funzione Scansione (Invariata) ---
-def perform_scan(handler):
+# --- Funzione Scansione ---
+def _load_known_video_paths(conn):
+    """
+    Preload in memoria di tutti i percorso_file gia' presenti in Video e
+    Video_Temp. Evita N query (una per file) durante perform_scan al restart:
+    su una libreria di 200+ video si passa da ~200 SELECT a 2.
+    """
+    known = set()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT percorso_file FROM Video")
+            known.update(row[0] for row in cursor.fetchall() if row[0])
+            cursor.execute("SELECT percorso_file FROM Video_Temp")
+            known.update(row[0] for row in cursor.fetchall() if row[0])
+        logging.info(f"[Scan Iniziale] Preload: {len(known)} video gia' indicizzati nel DB.")
+    except Exception as e:
+        logging.error(f"[Scan Iniziale] Preload fallito (proseguo con check per-file): {e}")
+    return known
+
+
+def perform_scan(handler, conn=None):
     logging.info(f"--- [Scan Iniziale] Avvio scansione di {PATH_TO_MONITOR} ---")
-    scan_count = 0
+    # Set dei path gia' noti al DB: per essi saltiamo on_created (niente query
+    # ridondante, niente log INFO "gia' presente" che inondano il terminale).
+    known_paths = _load_known_video_paths(conn) if conn is not None else set()
+
+    scanned_total = 0
+    already_known = 0
+    newly_queued = 0
     try:
         for root, dirs, files in os.walk(PATH_TO_MONITOR, topdown=True):
-            
+
             dirs[:] = [
-                d for d in dirs 
-                if not d.startswith('.') and 
-                   not d.startswith('anteprime_') and 
+                d for d in dirs
+                if not d.startswith('.') and
+                   not d.startswith('anteprime_') and
                    not d.startswith('copertine_')
             ]
-            
+
             for file in files:
                 absolute_path = os.path.join(root, file)
                 if handler._is_video_file(absolute_path):
-                    logging.debug(f"[Scan Iniziale] Trovato video: {file}. Elaborazione...")
+                    scanned_total += 1
+                    rel = handler._get_relative_path(absolute_path)
+                    if rel and rel in known_paths:
+                        # Gia' indicizzato: nessuna query DB, log a DEBUG.
+                        already_known += 1
+                        logging.debug(f"[Scan Iniziale] '{rel}' gia' noto, skip.")
+                        continue
+                    logging.info(f"[Scan Iniziale] Nuovo video: {rel or file}. Accodo.")
                     fake_event = FakeEvent(absolute_path, is_dir=False)
                     handler.on_created(fake_event)
-                    scan_count += 1
+                    newly_queued += 1
                 elif handler._is_cover_file(absolute_path):
                     logging.debug(f"[Scan Iniziale] Trovata cover categoria: {file}. Elaborazione...")
                     fake_event = FakeEvent(absolute_path, is_dir=False)
-                    handler.on_created(fake_event) # Riutilizziamo la logica di creazione
-                    
-        logging.info(f"--- [Scan Iniziale] Scansione completata. Elaborati {scan_count} file video. ---")
-    
+                    handler.on_created(fake_event)
+
+        logging.info(
+            f"--- [Scan Iniziale] Completato: {scanned_total} video totali "
+            f"({already_known} gia' indicizzati, {newly_queued} accodati). ---"
+        )
+
     except Exception as e:
         logging.error(f"Errore critico during la scansione (polling): {e}")
 
@@ -1216,10 +1253,12 @@ if __name__ == "__main__":
     cleanup_missing_videos(initial_conn)
     cleanup_missing_categories(initial_conn)
     cleanup_orphaned_assets(initial_conn)
-    initial_conn.close()
     logging.info("Cleanup iniziale completato.")
 
-    perform_scan(event_handler)
+    # Passiamo la connessione viva: perform_scan la usa per il preload del set
+    # dei video gia' indicizzati (evita N query SELECT nel loop di scansione).
+    perform_scan(event_handler, conn=initial_conn)
+    initial_conn.close()
     observer = Observer(timeout=POLL_TIMEOUT) 
     observer.schedule(event_handler, PATH_TO_MONITOR, recursive=True)
     observer.start()
