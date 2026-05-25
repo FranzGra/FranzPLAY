@@ -111,7 +111,12 @@ header('Accept-Ranges: bytes'); // Anche per Nginx, aiuta il client a sapere che
 // - Video: short-cache (immutable per qualche minuto) per permettere seek
 //   senza dover rifare l'autorizzazione PHP ad ogni richiesta Range del browser.
 if (in_array($estensione, ['jpg', 'jpeg', 'png', 'webp'])) {
-    header('Cache-Control: public, max-age=86400, immutable');
+    // NIENTE `immutable`: quando un admin sostituisce una copertina,
+    // l'URL non sempre cambia (filename uguale) e `immutable` impedirebbe
+    // al browser di rivalidare per giorni. Con must-revalidate + ETag/Last-Modified
+    // il browser fa una richiesta condizionale che torna 304 nel caso comune,
+    // e scarica il file nuovo non appena mtime/etag cambiano.
+    header('Cache-Control: public, max-age=3600, must-revalidate');
 } else {
     // Cache estesa per consentire rewatch entro 5 min senza ri-fetch, e
     // stale-while-revalidate per evitare buffering visibile durante refresh.

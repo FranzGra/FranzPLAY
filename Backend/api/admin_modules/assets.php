@@ -67,9 +67,10 @@ switch ($action) {
         $ext_map = ['image/jpeg' => 'jpg', 'image/jpg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
         $ext = $ext_map[$mime];
 
-        // Rinomina la copertina con lo stesso nome del video
+        // Rinomina la copertina con lo stesso nome del video + timestamp
+        // (cache-busting: l'URL cambia ad ogni upload, niente cache stantia nei browser).
         $filename_no_ext = pathinfo($info['percorso_file'], PATHINFO_FILENAME);
-        $new_filename = $filename_no_ext . "." . $ext;
+        $new_filename = $filename_no_ext . "_" . time() . "." . $ext;
         $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
 
         if (move_uploaded_file($_FILES['file_copertina']['tmp_name'], $target_file)) {
@@ -174,8 +175,9 @@ switch ($action) {
         $ext_map = ['video/mp4' => 'mp4', 'video/webm' => 'webm', 'image/gif' => 'gif', 'image/webp' => 'webp'];
         $ext = $ext_map[$mime];
 
+        // Stesso cache-busting via timestamp del case upload_copertina.
         $filename_no_ext = pathinfo($info['percorso_file'], PATHINFO_FILENAME);
-        $new_filename = $filename_no_ext . "." . $ext;
+        $new_filename = $filename_no_ext . "_" . time() . "." . $ext;
         $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
 
         if (move_uploaded_file($_FILES['file_anteprima']['tmp_name'], $target_file)) {
