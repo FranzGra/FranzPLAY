@@ -253,12 +253,32 @@ sudo rm -f App_Data/Database_Data/tc.log 2>/dev/null || true
 log_info "Avvio container DATABASE_MySQL..."
 docker compose up -d mysql
 
-# Aspetta healthy con timeout
+# Aspetta healthy con timeout.
+# Risolviamo il container DINAMICAMENTE via `docker compose ps -q mysql`:
+# non possiamo hard-codare "DATABASE_MySQL" perche' utenti con
+# COMPOSE_PROJECT_NAME custom o container_name diverso (es. "FS_DATABASE_MySQL")
+# vedrebbero `docker inspect` fallire e finire nel ramo di fallback che mostra
+# "Status=<no value>" sovrascritto in modo confuso.
 TIMEOUT=120
 ELAPSED=0
 INTERVAL=3
+MYSQL_CID=""
 while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-    STATUS=$(docker inspect DATABASE_MySQL --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
+    if [ -z "$MYSQL_CID" ]; then
+        MYSQL_CID=$(docker compose ps -q mysql 2>/dev/null || true)
+    fi
+
+    if [ -z "$MYSQL_CID" ]; then
+        STATUS="missing"
+    else
+        # Se il container non ha (ancora) il blocco Health, il template
+        # restituisce "<no value>" con exit 0: trattiamolo come "starting".
+        STATUS=$(docker inspect "$MYSQL_CID" --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
+        if [ -z "$STATUS" ] || [ "$STATUS" = "<no value>" ]; then
+            STATUS="starting"
+        fi
+    fi
+
     case "$STATUS" in
         healthy)
             log_ok "MariaDB healthy dopo ${ELAPSED}s"
@@ -266,7 +286,7 @@ while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
             ;;
         unhealthy)
             log_err "MariaDB unhealthy. Ultimi log:"
-            docker logs DATABASE_MySQL --tail 30
+            docker logs "$MYSQL_CID" --tail 30
             exit 1
             ;;
         starting|missing)
@@ -275,7 +295,7 @@ while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
             ELAPSED=$((ELAPSED + INTERVAL))
             ;;
         *)
-            echo -ne "\r  Status=$STATUS ${ELAPSED}s "
+            echo -ne "\r  Status=$STATUS ${ELAPSED}s/${TIMEOUT}s    "
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
             ;;
@@ -285,7 +305,11 @@ echo  # newline dopo il loop
 
 if [ "$STATUS" != "healthy" ]; then
     log_err "Timeout attesa healthy. Log MariaDB:"
-    docker logs DATABASE_MySQL --tail 50
+    if [ -n "$MYSQL_CID" ]; then
+        docker logs "$MYSQL_CID" --tail 50
+    else
+        log_err "Container mysql non trovato via 'docker compose ps -q mysql'."
+    fi
     exit 1
 fi
 
