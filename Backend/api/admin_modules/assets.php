@@ -4,11 +4,54 @@ if (!defined('ADMIN_API'))
 
 require_once __DIR__ . '/../path_safety.php';
 
+/**
+ * Traduce il codice di errore in $_FILES['x']['error'] in un messaggio
+ * leggibile. Senza questo, "move_uploaded_file" fallisce silenziosamente e
+ * l'utente vede solo "Errore durante lo spostamento del file caricato"
+ * anche quando la causa reale è il limite PHP upload_max_filesize.
+ */
+function describeUploadError($err)
+{
+    switch ((int) $err) {
+        case UPLOAD_ERR_OK: return null;
+        case UPLOAD_ERR_INI_SIZE:
+            return 'File troppo grande: supera upload_max_filesize del server ('
+                . ini_get('upload_max_filesize') . ').';
+        case UPLOAD_ERR_FORM_SIZE: return 'File troppo grande (limite del form).';
+        case UPLOAD_ERR_PARTIAL: return 'Upload interrotto: il file è arrivato solo in parte.';
+        case UPLOAD_ERR_NO_FILE: return 'Nessun file ricevuto.';
+        case UPLOAD_ERR_NO_TMP_DIR: return 'Cartella temporanea PHP non disponibile.';
+        case UPLOAD_ERR_CANT_WRITE: return 'Impossibile scrivere il file su disco.';
+        case UPLOAD_ERR_EXTENSION: return 'Upload bloccato da un\'estensione PHP.';
+        default: return 'Errore upload sconosciuto (codice ' . (int) $err . ').';
+    }
+}
+
+/**
+ * Validazione completa di una entry $_FILES. Lancia eccezione con dettagli
+ * utili al primo problema. Va chiamata PRIMA di toccare tmp_name.
+ */
+function assertUploadOk($fileEntry, $fieldLabel)
+{
+    if (!is_array($fileEntry)) {
+        throw new Exception("Campo upload '$fieldLabel' mancante nella richiesta.");
+    }
+    $errMsg = describeUploadError($fileEntry['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($errMsg !== null) {
+        throw new Exception("$fieldLabel: $errMsg");
+    }
+    if (empty($fileEntry['tmp_name']) || !is_uploaded_file($fileEntry['tmp_name'])) {
+        throw new Exception("$fieldLabel: file temporaneo non valido (possibile attacco o upload corrotto).");
+    }
+    if (($fileEntry['size'] ?? 0) <= 0) {
+        throw new Exception("$fieldLabel: file vuoto (0 byte).");
+    }
+}
+
 switch ($action) {
     case 'upload_copertina':
         $id_video = (int) ($_POST['id_video'] ?? 0);
-        if (!isset($_FILES['file_copertina']))
-            throw new Exception("File copertina mancante");
+        assertUploadOk($_FILES['file_copertina'] ?? null, 'Copertina');
 
         // Recupero informazioni per determinare il percorso di destinazione
         $res = executePreparedQuery(
@@ -73,7 +116,15 @@ switch ($action) {
         $new_filename = $filename_no_ext . "_" . time() . "." . $ext;
         $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
 
-        if (move_uploaded_file($_FILES['file_copertina']['tmp_name'], $target_file)) {
+        if (!@move_uploaded_file($_FILES['file_copertina']['tmp_name'], $target_file)) {
+            $reason = is_writable($target_dir) ? 'cause sconosciute' : "permessi negati su $target_dir";
+            $free = @disk_free_space($target_dir);
+            if ($free !== false && $free < $_FILES['file_copertina']['size'] * 2) {
+                $reason = 'spazio disco insufficiente (' . round($free / 1048576) . ' MB liberi)';
+            }
+            throw new Exception("Spostamento copertina fallito: $reason. Destinazione: $target_file");
+        }
+        if (true) {
             // DB path always uses forward slashes for URL compatibility
             $db_rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $video_rel_dir);
             $db_path = '/' . ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
@@ -86,8 +137,6 @@ switch ($action) {
                 $Cache->delete('categorie_list_v1');
             }
             inviaRisposta(true, 'Copertina caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
-        } else {
-            throw new Exception("Errore durante lo spostamento del file caricato");
         }
         break;
 
@@ -124,8 +173,7 @@ switch ($action) {
 
     case 'upload_anteprima':
         $id_video = (int) ($_POST['id_video'] ?? 0);
-        if (!isset($_FILES['file_anteprima']))
-            throw new Exception("File anteprima mancante");
+        assertUploadOk($_FILES['file_anteprima'] ?? null, 'Anteprima');
 
         $res = executePreparedQuery(
             "SELECT v.percorso_file, v.percorso_anteprima, c.Nome as Nome_Cat FROM Video v LEFT JOIN Categorie c ON v.id_Categoria = c.id WHERE v.id = ?",
@@ -180,21 +228,25 @@ switch ($action) {
         $new_filename = $filename_no_ext . "_" . time() . "." . $ext;
         $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
 
-        if (move_uploaded_file($_FILES['file_anteprima']['tmp_name'], $target_file)) {
-            $db_rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $video_rel_dir);
-            $db_path = '/' . ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
-
-            executePreparedQuery("UPDATE Video SET percorso_anteprima = ? WHERE id = ?", "si", [$db_path, $id_video]);
-            global $Cache;
-            if (isset($Cache) && is_object($Cache)) {
-                // Invalidazione mirata: lista pubblica + categorie.
-                $Cache->deletePattern('videos_list_*');
-                $Cache->delete('categorie_list_v1');
+        if (!@move_uploaded_file($_FILES['file_anteprima']['tmp_name'], $target_file)) {
+            $reason = is_writable($target_dir) ? 'cause sconosciute' : "permessi negati su $target_dir";
+            $free = @disk_free_space($target_dir);
+            if ($free !== false && $free < $_FILES['file_anteprima']['size'] * 2) {
+                $reason = 'spazio disco insufficiente (' . round($free / 1048576) . ' MB liberi)';
             }
-            inviaRisposta(true, 'Anteprima caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
-        } else {
-            throw new Exception("Errore durante lo spostamento del file caricato");
+            throw new Exception("Spostamento anteprima fallito: $reason. Destinazione: $target_file");
         }
+        $db_rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $video_rel_dir);
+        $db_path = '/' . ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
+
+        executePreparedQuery("UPDATE Video SET percorso_anteprima = ? WHERE id = ?", "si", [$db_path, $id_video]);
+        global $Cache;
+        if (isset($Cache) && is_object($Cache)) {
+            // Invalidazione mirata: lista pubblica + categorie.
+            $Cache->deletePattern('videos_list_*');
+            $Cache->delete('categorie_list_v1');
+        }
+        inviaRisposta(true, 'Anteprima caricata e aggiornata', 200, ['nuovo_path' => $db_path]);
         break;
 
     case 'rimuovi_anteprima':
