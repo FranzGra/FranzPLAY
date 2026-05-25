@@ -41,19 +41,26 @@ def _is_path_inside_base(full_path):
 
 def get_video_metadata(full_path):
     global STABILITY_CHECK_TIME
+    # IMPORTANTE: questa funzione DEVE sempre ritornare un 4-tuple
+    # (duration_sec, durata_str, formato_file, height). Il chiamante fa
+    # unpacking esplicito a 4: ritornare 3 None scatena ValueError che fa
+    # restare il video bloccato in Video_Temp (locked_at -> retry -> stesso
+    # errore) finche' non interveniamo a mano.
     try:
         # Hardening: nessun accesso a file fuori dalla base, niente symlink che escono.
         if not _is_path_inside_base(full_path):
             logging.warning(f"[SECURITY] Path fuori base ignorato in metadata: {full_path}")
-            return None, None, None
+            return None, None, None, None
         if os.path.islink(full_path):
             logging.warning(f"[SECURITY] Symlink ignorato in metadata: {full_path}")
-            return None, None, None
+            return None, None, None, None
 
         size1 = os.path.getsize(full_path)
         time.sleep(STABILITY_CHECK_TIME)
         size2 = os.path.getsize(full_path)
-        if size1 != size2: return None, None, None
+        if size1 != size2:
+            logging.info(f"[Meta] File ancora in scrittura ({size1}->{size2} byte), riprovo: {full_path}")
+            return None, None, None, None
 
         # ffprobe con timeout per evitare hang su file corrotti.
         # I path provengono da watcher.py che già rifiuta symlink e path fuori base;
@@ -165,6 +172,12 @@ def process_new_videos_from_temp(conn):
         _, durata_str, formato, height = get_video_metadata(full_path)
         if not durata_str:
             # Rilascia il lock per ritentare al prossimo giro.
+            # Senza log esplicito un video puo' restare "appeso" in Video_Temp
+            # invisibile per ore mentre il worker fa retry silenziosi.
+            logging.warning(
+                f"[Meta] Metadata non disponibili per {relative_path} (id_temp={job['id']}). "
+                f"Lock rilasciato, ritento al prossimo poll."
+            )
             with conn.cursor() as cursor:
                 cursor.execute("UPDATE Video_Temp SET locked_at = NULL WHERE id = %s", (job['id'],))
             return False
