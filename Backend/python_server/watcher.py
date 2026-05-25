@@ -312,13 +312,15 @@ class VideoHandler(FileSystemEventHandler):
         if result:
             return result[0]
         else:
-            # Estrae il nome dal path (es: "/Forza Horizon 5" -> "Forza Horizon 5")
+            # Estrae il nome dal path (es: "/Forza_Horizon_5" -> "Forza Horizon 5")
             # Se è "/" -> "Generale"
+            # I path su disco usano underscore al posto degli spazi (sanitize),
+            # ma il Nome mostrato in UI/Admin deve avere gli spazi.
             if category_db_path == '/' or category_db_path == '':
                 category_name = "Generale"
             else:
-                category_name = os.path.basename(category_db_path)
-            
+                category_name = os.path.basename(category_db_path).replace('_', ' ')
+
             logging.info(f"Categoria '{category_name}' non trovata. Creazione automatica...")
             cursor.execute("INSERT INTO Categorie (Nome, Percorso) VALUES (%s, %s)", (category_name, category_db_path))
             return cursor.lastrowid
@@ -591,6 +593,9 @@ class VideoHandler(FileSystemEventHandler):
             # 1. Calcola nomi vecchi e nuovi
             old_category_name = Path(old_rel_path).name
             new_category_name = Path(new_rel_path).name
+            # Nome visualizzato: gli underscore (forzati dalla sanitize fs)
+            # vengono riconvertiti in spazi per l'Admin/UI.
+            new_category_display_name = new_category_name.replace('_', ' ')
             new_full_path_dir = event.dest_path # Percorso *completo* della cartella rinominata
 
             # 2. Rinomina cartella Copertine
@@ -654,11 +659,11 @@ class VideoHandler(FileSystemEventHandler):
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 query = "UPDATE Categorie SET Nome = %s, Percorso = %s WHERE Percorso = %s"
-                cursor.execute(query, (new_category_name, new_db_path, old_db_path))
+                cursor.execute(query, (new_category_display_name, new_db_path, old_db_path))
                 conn.commit()
 
                 if cursor.rowcount > 0:
-                    logging.info(f"CATEGORIA Aggiornata: Nome='{new_category_name}', Percorso='{new_db_path}'")
+                    logging.info(f"CATEGORIA Aggiornata: Nome='{new_category_display_name}', Percorso='{new_db_path}'")
                     invalidate_videos_and_categories(reason=f"rinomina categoria {old_db_path} -> {new_db_path}")
                 else:
                     logging.info(f"Nessuna categoria trovata con percorso '{old_db_path}'.")
@@ -793,6 +798,176 @@ class VideoHandler(FileSystemEventHandler):
         # Spostamento/rinomina ha sempre conseguenze in UI:
         # titolo video, categoria, asset → invalida tutto il feed.
         invalidate_videos_and_categories(reason=f"spostamento {old_rel_path} -> {new_rel_path}")
+
+def _sanitize_relative_path(rel_path):
+    """
+    Applica sanitize_name a ogni componente di un path relativo (in stile POSIX, '/').
+    Usato per ricalcolare il path "sanificato" di un record DB partendo dal vecchio path.
+    """
+    if not rel_path or rel_path in ('/', ''):
+        return rel_path
+    has_leading = rel_path.startswith('/')
+    parts = rel_path.strip('/').split('/')
+    new_parts = []
+    last_idx = len(parts) - 1
+    for i, part in enumerate(parts):
+        is_file = (i == last_idx) and ('.' in part)
+        if is_conforming(part, is_file=is_file):
+            new_parts.append(part)
+        else:
+            new_parts.append(sanitize_name(part, is_file=is_file))
+    result = '/'.join(new_parts)
+    if has_leading:
+        result = '/' + result
+    return result
+
+def reconcile_db_after_sanitize(conn):
+    """
+    Dopo pre_scan_sanitize, allinea Categorie/Video al filesystem sanificato.
+    - Riscrive Percorso/percorso_file/asset paths del DB sui nuovi nomi (con underscore).
+    - Preserva il `Nome` originale delle categorie (con spazi) per Admin/UI.
+    - Fonde eventuali duplicati creati da esecuzioni precedenti del bug
+      (categoria vecchia con spazi + duplicata con underscore): mantiene la
+      riga con Nome "umano", sposta i Video sulla riga giusta e cancella il duplicato.
+    """
+    logging.info("--- [Reconcile] Allineamento DB ai nomi sanificati su disco ---")
+    changed = False
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # ---------- 1) CATEGORIE ----------
+        cursor.execute("SELECT id, Nome, Percorso, Immagine_Sfondo FROM Categorie")
+        cats = cursor.fetchall()
+        # Indice per path (subirà mutazioni)
+        cats_by_path = {c['Percorso']: c for c in cats}
+
+        for cat in cats:
+            old_path = cat['Percorso']
+            if not old_path or old_path == '/':
+                continue
+
+            new_path = _sanitize_relative_path(old_path)
+            if new_path == old_path:
+                continue  # già conforme
+
+            # Verifica che la nuova cartella esista davvero (altrimenti
+            # ci penserà cleanup_missing_categories a rimuovere l'orfana).
+            new_full = os.path.join(PATH_TO_MONITOR, new_path.lstrip('/'))
+            if not os.path.isdir(new_full):
+                continue
+
+            # Determina il Nome "umano" da preservare/scegliere
+            preserved_name = cat['Nome']
+            if not preserved_name or '_' in preserved_name:
+                # Se il Nome attuale è gia bruttino (underscores) prova a derivare
+                # da Percorso vecchio (che storicamente ha gli spazi).
+                derived = os.path.basename(old_path)
+                if derived and ' ' in derived:
+                    preserved_name = derived
+
+            # Esiste già un duplicato con il nuovo path (creato da run precedenti)?
+            dup = cats_by_path.get(new_path)
+            if dup and dup['id'] != cat['id']:
+                logging.info(
+                    f"[Reconcile] Duplicato categoria: '{old_path}' (id={cat['id']}, Nome='{cat['Nome']}') "
+                    f"<-> '{new_path}' (id={dup['id']}, Nome='{dup['Nome']}'). Fondo mantenendo Nome '{preserved_name}'."
+                )
+                cur2 = conn.cursor()
+                # Sposta i video collegati al duplicato sulla riga "originale"
+                cur2.execute(
+                    "UPDATE Video SET id_Categoria = %s WHERE id_Categoria = %s",
+                    (cat['id'], dup['id'])
+                )
+                # Eredita lo sfondo se la riga originale non ce l'ha
+                if not cat['Immagine_Sfondo'] and dup['Immagine_Sfondo']:
+                    cur2.execute(
+                        "UPDATE Categorie SET Immagine_Sfondo = %s WHERE id = %s",
+                        (dup['Immagine_Sfondo'], cat['id'])
+                    )
+                # Per evitare UNIQUE conflict sull'Immagine_Sfondo del duplicato,
+                # azzeralo prima di cancellare.
+                cur2.execute("UPDATE Categorie SET Immagine_Sfondo = NULL WHERE id = %s", (dup['id'],))
+                cur2.execute("DELETE FROM Categorie WHERE id = %s", (dup['id'],))
+                cur2.close()
+                del cats_by_path[new_path]
+                changed = True
+
+            # Aggiorna la riga originale: nuovo Percorso, Nome con spazi preservato
+            cur2 = conn.cursor()
+            cur2.execute(
+                "UPDATE Categorie SET Nome = %s, Percorso = %s WHERE id = %s",
+                (preserved_name, new_path, cat['id'])
+            )
+            cur2.close()
+            cats_by_path.pop(old_path, None)
+            cat['Percorso'] = new_path
+            cat['Nome'] = preserved_name
+            cats_by_path[new_path] = cat
+            logging.info(
+                f"[Reconcile] Categoria id={cat['id']}: '{old_path}' -> '{new_path}' (Nome='{preserved_name}')"
+            )
+            changed = True
+
+        conn.commit()
+
+        # ---------- 2) VIDEO ----------
+        cursor.execute("SELECT id, percorso_file, percorso_copertina, percorso_anteprima FROM Video")
+        videos = cursor.fetchall()
+        for v in videos:
+            updates = {}
+            for col in ('percorso_file', 'percorso_copertina', 'percorso_anteprima'):
+                old = v[col]
+                if not old or old == 'mancante':
+                    continue
+                new = _sanitize_relative_path(old)
+                if new == old:
+                    continue
+                full = os.path.join(PATH_TO_MONITOR, new)
+                if os.path.exists(full):
+                    updates[col] = new
+            if updates:
+                set_clause = ', '.join(f"{k} = %s" for k in updates)
+                params = list(updates.values()) + [v['id']]
+                cur2 = conn.cursor()
+                try:
+                    cur2.execute(f"UPDATE Video SET {set_clause} WHERE id = %s", params)
+                except mysql.connector.Error as err:
+                    logging.error(f"[Reconcile] Update video id={v['id']} fallito: {err}")
+                cur2.close()
+                logging.info(f"[Reconcile] Video id={v['id']}: aggiornati {list(updates.keys())}")
+                changed = True
+
+        # ---------- 3) VIDEO_TEMP ----------
+        cursor.execute("SELECT percorso_file FROM Video_Temp")
+        temps = cursor.fetchall()
+        for t in temps:
+            old = t['percorso_file']
+            new = _sanitize_relative_path(old)
+            if new == old:
+                continue
+            full = os.path.join(PATH_TO_MONITOR, new)
+            if not os.path.exists(full):
+                continue
+            cur2 = conn.cursor()
+            try:
+                cur2.execute(
+                    "UPDATE Video_Temp SET percorso_file = %s WHERE percorso_file = %s",
+                    (new, old)
+                )
+                changed = True
+            except mysql.connector.Error as err:
+                # Probabile conflitto INSERT IGNORE su PK: rimuovi il duplicato vecchio
+                logging.warning(f"[Reconcile] Conflitto Video_Temp '{old}' -> '{new}': {err}. Rimuovo riga vecchia.")
+                cur2.execute("DELETE FROM Video_Temp WHERE percorso_file = %s", (old,))
+            cur2.close()
+
+        conn.commit()
+        cursor.close()
+        logging.info("--- [Reconcile] Completato ---")
+        if changed:
+            invalidate_videos_and_categories(reason="reconcile DB post-sanitize")
+    except Exception as e:
+        logging.error(f"[Reconcile] Errore critico: {e}")
 
 def cleanup_missing_videos(conn):
     logging.info("--- [Avvio Cleanup] Rimozione record video non esistenti su disco ---")
@@ -968,19 +1143,26 @@ if __name__ == "__main__":
 
     logging.info("Test connessione iniziale al database...")
     initial_conn = get_db_connection()
-    if initial_conn:
-        logging.info("Test connessione DB riuscito. Avvio cleanup record inesistenti...")
-        cleanup_missing_videos(initial_conn)
-        cleanup_missing_categories(initial_conn)
-        cleanup_orphaned_assets(initial_conn)
-        initial_conn.close()
-        logging.info("Cleanup iniziale completato.")
-    else:
+    if not initial_conn:
         logging.critical("Impossibile stabilire la connessione iniziale al DB. Uscita.")
         sys.exit(1)
 
     event_handler = VideoHandler()
+
+    # ORDINE CRITICO:
+    # 1) Sanifica i nomi su disco (rinomine fs PRIMA che l'observer parta).
+    # 2) Riallinea il DB ai nuovi nomi preservando i Nome con spazi e
+    #    fondendo eventuali duplicati creati da run precedenti del bug.
+    # 3) Cleanup di record/asset orfani (ora che i path sono coerenti).
+    # 4) Scan iniziale per indicizzare nuovi video.
     pre_scan_sanitize(PATH_TO_MONITOR)
+    reconcile_db_after_sanitize(initial_conn)
+    cleanup_missing_videos(initial_conn)
+    cleanup_missing_categories(initial_conn)
+    cleanup_orphaned_assets(initial_conn)
+    initial_conn.close()
+    logging.info("Cleanup iniziale completato.")
+
     perform_scan(event_handler)
     observer = Observer(timeout=POLL_TIMEOUT) 
     observer.schedule(event_handler, PATH_TO_MONITOR, recursive=True)
