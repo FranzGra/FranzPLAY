@@ -131,15 +131,23 @@ def get_video_metadata(full_path):
 def _get_asset_paths(relative_path, category_name):
     """
     Costruisce i percorsi per copertina e anteprima.
+
+    IMPORTANTE: il suffisso delle cartelle asset si calcola dal NOME DELLA
+    CARTELLA SU DISCO (parent_dir.name), non da Categorie.Nome del DB. Il
+    Nome contiene gli spazi originali per l'UI ("Freeuse MILF"), ma su disco
+    il watcher sanifica con underscore ("Freeuse_MILF"). Se usiamo Nome
+    creiamo "anteprime_Freeuse MILF" e PHP (che invece deriva dal path)
+    cerca/crea "anteprime_Freeuse_MILF" -> due cartelle, errori, asset orfani.
+    `category_name` resta nel firma per backward-compat ma viene usato solo
+    come fallback se relative_path non ha parent (video nella root).
     """
     p = Path(relative_path)
     parent_dir = p.parent
-    video_stem = p.stem 
+    video_stem = p.stem
+    folder_suffix = parent_dir.name if parent_dir.name else (category_name or "Generale")
 
-    # Usa la logica del PROMPT (es. Anteprime_Categoria 1)
-    # ma rinominata per coerenza (es. anteprime_NomeCategoria)
-    db_cover_path = (parent_dir / f"copertine_{category_name}" / f"{video_stem}.jpg").as_posix()
-    db_preview_path = (parent_dir / f"anteprime_{category_name}" / f"{video_stem}.mp4").as_posix()
+    db_cover_path = (parent_dir / f"copertine_{folder_suffix}" / f"{video_stem}.jpg").as_posix()
+    db_preview_path = (parent_dir / f"anteprime_{folder_suffix}" / f"{video_stem}.mp4").as_posix()
 
     full_cover_path = os.path.join(PATH_TO_MONITOR, db_cover_path)
     full_preview_path = os.path.join(PATH_TO_MONITOR, db_preview_path)

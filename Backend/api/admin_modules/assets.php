@@ -64,13 +64,17 @@ switch ($action) {
         if (!$info)
             throw new Exception("Video non trovato (ID: $id_video)");
 
-        // La copertina deve stare nella cartella copertine_[Categoria]
+        // La copertina deve stare nella cartella copertine_[NomeCartellaDisco].
+        // Importante: NON usiamo Categorie.Nome (che contiene gli spazi), ma il
+        // basename della cartella su disco (che il watcher sanifica con underscore).
+        // Altrimenti creiamo "copertine_Freeuse MILF" anziché "copertine_Freeuse_MILF"
+        // e Python worker_assets / PHP non si trovano d'accordo sulla destinazione.
         $video_rel_dir = trim(dirname($info['percorso_file']), '.\\/');
         if ($video_rel_dir == '.')
             $video_rel_dir = "";
 
-        $cat_name = $info['Nome_Cat'] ?: 'Generale';
-        $cover_dir_name = 'copertine_' . $cat_name;
+        $cat_folder_name = $video_rel_dir !== "" ? basename($video_rel_dir) : 'Generale';
+        $cover_dir_name = 'copertine_' . $cat_folder_name;
         $video_rel_dir = $video_rel_dir ? $video_rel_dir . '/' . $cover_dir_name : $cover_dir_name;
 
         global $BASE_VIDEO_PATH;
@@ -185,10 +189,11 @@ switch ($action) {
         if (!$info)
             throw new Exception("Video non trovato (ID: $id_video)");
 
+        // Vedi commento upload_copertina: usiamo il nome della cartella su disco
+        // (sanificato con underscore) e NON Categorie.Nome (con spazi).
         $video_rel_dir = trim(dirname($info['percorso_file']), '.\\/');
-
-        $cat_name = $info['Nome_Cat'] ?: 'Generale';
-        $preview_dir_name = 'anteprime_' . $cat_name;
+        $cat_folder_name = $video_rel_dir !== "" ? basename($video_rel_dir) : 'Generale';
+        $preview_dir_name = 'anteprime_' . $cat_folder_name;
         $video_rel_dir = $video_rel_dir ? $video_rel_dir . '/' . $preview_dir_name : $preview_dir_name;
 
         global $BASE_VIDEO_PATH;

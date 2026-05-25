@@ -340,14 +340,18 @@ class VideoHandler(FileSystemEventHandler):
     def _calculate_asset_paths(self, relative_path, category_name):
         """
         Calcola i percorsi asset (filesystem e DB) basandosi sulla logica del Worker.
-        (Logica invariata)
+        Vedi worker_assets._get_asset_paths per il razionale: usiamo il nome
+        della CARTELLA SU DISCO (sanificato dal watcher) come suffisso, non il
+        Categorie.Nome con spazi, altrimenti PHP e Python creerebbero due
+        cartelle distinte (con/senza spazi).
         """
         p = Path(relative_path)
         parent_dir = p.parent
-        video_stem = p.stem 
+        video_stem = p.stem
+        folder_suffix = parent_dir.name if parent_dir.name else (category_name or "Generale")
 
-        db_cover_path = (parent_dir / f"copertine_{category_name}" / f"{video_stem}.jpg").as_posix()
-        db_preview_path = (parent_dir / f"anteprime_{category_name}" / f"{video_stem}.mp4").as_posix()
+        db_cover_path = (parent_dir / f"copertine_{folder_suffix}" / f"{video_stem}.jpg").as_posix()
+        db_preview_path = (parent_dir / f"anteprime_{folder_suffix}" / f"{video_stem}.mp4").as_posix()
 
         full_cover_path = os.path.join(PATH_TO_MONITOR, db_cover_path)
         full_preview_path = os.path.join(PATH_TO_MONITOR, db_preview_path)
