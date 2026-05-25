@@ -114,10 +114,14 @@ switch ($action) {
         $ext_map = ['image/jpeg' => 'jpg', 'image/jpg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
         $ext = $ext_map[$mime];
 
-        // Rinomina la copertina con lo stesso nome del video + timestamp
-        // (cache-busting: l'URL cambia ad ogni upload, niente cache stantia nei browser).
+        // Filename = stem del video. Cosi la nuova copertina SOSTITUISCE quella
+        // precedente con lo stesso nome (niente file orfani su disco).
+        // Cache-busting non serve in filename: stream.php manda must-revalidate
+        // + ETag/Last-Modified, quindi al cambio di mtime il browser scarica il
+        // file nuovo via richiesta condizionale. In admin l'<img> appende
+        // gia' &t=${Date.now()} per vedere subito il risultato.
         $filename_no_ext = pathinfo($info['percorso_file'], PATHINFO_FILENAME);
-        $new_filename = $filename_no_ext . "_" . time() . "." . $ext;
+        $new_filename = $filename_no_ext . "." . $ext;
         $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
 
         if (!@move_uploaded_file($_FILES['file_copertina']['tmp_name'], $target_file)) {
@@ -228,9 +232,9 @@ switch ($action) {
         $ext_map = ['video/mp4' => 'mp4', 'video/webm' => 'webm', 'image/gif' => 'gif', 'image/webp' => 'webp'];
         $ext = $ext_map[$mime];
 
-        // Stesso cache-busting via timestamp del case upload_copertina.
+        // Vedi nota in upload_copertina: stesso nome del video, niente timestamp.
         $filename_no_ext = pathinfo($info['percorso_file'], PATHINFO_FILENAME);
-        $new_filename = $filename_no_ext . "_" . time() . "." . $ext;
+        $new_filename = $filename_no_ext . "." . $ext;
         $target_file = $target_dir . DIRECTORY_SEPARATOR . $new_filename;
 
         if (!@move_uploaded_file($_FILES['file_anteprima']['tmp_name'], $target_file)) {
