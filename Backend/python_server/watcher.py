@@ -1093,6 +1093,106 @@ def cleanup_missing_categories(conn):
     except Exception as e:
         logging.error(f"Errore durante il cleanup delle categorie mancanti: {e}")
 
+# Match di filename tipo "Nome_File_1779748402.jpg" (10 cifre = Unix epoch a 32 bit).
+# Estensioni: copertine (jpg/png/webp) + anteprime (mp4/webm/gif).
+_TIMESTAMP_ASSET_RE = re.compile(
+    r'^(?P<stem>.+)_(?P<ts>\d{10})(?P<ext>\.(?:jpg|jpeg|png|webp|mp4|webm|gif))$',
+    re.IGNORECASE
+)
+
+def cleanup_timestamped_assets(conn):
+    """
+    Sistema definitivamente gli asset salvati con suffisso _<timestamp> dal
+    vecchio bug del cache-busting filename (assets.php). Per ogni file
+    matchato:
+      - se NON esiste la versione "pulita" (<stem>.<ext>) -> rename del file
+        e UPDATE dei record DB che lo referenziano.
+      - se la versione pulita esiste gia' -> il file con timestamp e' un
+        duplicato obsoleto, lo cancelliamo.
+
+    Idempotente: al secondo avvio non trovera' piu' nulla.
+    Limitato alle sole cartelle copertine_*/anteprime_* per non toccare
+    nomi di file video legittimi (es. titoli che finiscono con cifre).
+    """
+    logging.info("--- [Cleanup TS] Normalizzazione asset con suffisso _<timestamp> ---")
+    renamed = 0
+    removed = 0
+    db_updates = 0
+    try:
+        for root, dirs, files in os.walk(PATH_TO_MONITOR):
+            dir_name = os.path.basename(root)
+            if not (dir_name.startswith('copertine_') or dir_name.startswith('anteprime_')):
+                continue
+
+            for f in files:
+                m = _TIMESTAMP_ASSET_RE.match(f)
+                if not m:
+                    continue
+                # Validazione: timestamp deve essere in range plausibile
+                # (2020-01-01 .. 2035-12-31). Evita di rinominare file
+                # legittimi che contengono incidentalmente "_" + 10 cifre.
+                try:
+                    ts_int = int(m.group('ts'))
+                except ValueError:
+                    continue
+                if not (1577836800 <= ts_int <= 2082758400):
+                    continue
+
+                old_full = os.path.join(root, f)
+                new_name = m.group('stem') + m.group('ext')
+                new_full = os.path.join(root, new_name)
+
+                old_rel = os.path.relpath(old_full, PATH_TO_MONITOR).replace(os.sep, '/')
+                new_rel = os.path.relpath(new_full, PATH_TO_MONITOR).replace(os.sep, '/')
+                old_db = '/' + old_rel
+                new_db = '/' + new_rel
+
+                try:
+                    if os.path.exists(new_full):
+                        # Versione pulita gia' presente: il file con timestamp e' duplicato.
+                        os.remove(old_full)
+                        removed += 1
+                        logging.info(f"[Cleanup TS] Duplicato rimosso: {old_rel}")
+                    else:
+                        os.rename(old_full, new_full)
+                        renamed += 1
+                        logging.info(f"[Cleanup TS] Rinominato: {old_rel} -> {new_rel}")
+                except OSError as e:
+                    logging.error(f"[Cleanup TS] Errore filesystem su {old_rel}: {e}")
+                    continue
+
+                # Aggiorna i record DB che referenziano il path vecchio.
+                # Anche se abbiamo solo cancellato (duplicato), il DB potrebbe
+                # ancora puntare al filename con timestamp -> lo facciamo puntare
+                # a quello pulito.
+                try:
+                    with conn.cursor() as cursor:
+                        cursor.execute(
+                            "UPDATE Video SET percorso_copertina = %s WHERE percorso_copertina = %s",
+                            (new_db, old_db)
+                        )
+                        db_updates += cursor.rowcount
+                        cursor.execute(
+                            "UPDATE Video SET percorso_anteprima = %s WHERE percorso_anteprima = %s",
+                            (new_db, old_db)
+                        )
+                        db_updates += cursor.rowcount
+                    conn.commit()
+                except mysql.connector.Error as e:
+                    logging.error(f"[Cleanup TS] Errore update DB per {old_rel}: {e}")
+
+        if renamed or removed or db_updates:
+            logging.info(
+                f"[Cleanup TS] Completato: rinominati {renamed}, duplicati rimossi {removed}, "
+                f"{db_updates} righe DB aggiornate."
+            )
+            invalidate_videos_and_categories(reason="cleanup_timestamped_assets")
+        else:
+            logging.info("[Cleanup TS] Nessun asset con suffisso timestamp trovato.")
+    except Exception as e:
+        logging.error(f"[Cleanup TS] Errore critico: {e}")
+
+
 def cleanup_orphaned_assets(conn):
     import shutil
     import time
@@ -1250,6 +1350,10 @@ if __name__ == "__main__":
     # 4) Scan iniziale per indicizzare nuovi video.
     pre_scan_sanitize(PATH_TO_MONITOR)
     reconcile_db_after_sanitize(initial_conn)
+    # Normalizza i nomi degli asset col vecchio suffisso _<timestamp> PRIMA
+    # del cleanup orfani: altrimenti i file timestampati verrebbero classificati
+    # come orfani (non matchano il DB pulito) e cancellati invece che rinominati.
+    cleanup_timestamped_assets(initial_conn)
     cleanup_missing_videos(initial_conn)
     cleanup_missing_categories(initial_conn)
     cleanup_orphaned_assets(initial_conn)
