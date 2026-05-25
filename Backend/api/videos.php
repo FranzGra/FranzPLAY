@@ -198,9 +198,14 @@ try {
                 $params[] = "%$search%";
                 $types .= "s";
             } else {
-                $conditions[] = "MATCH(v.Titolo) AGAINST(? IN BOOLEAN MODE)";
+                // Affianchiamo SEMPRE un LIKE %search% al MATCH BOOLEAN:
+                // se tutte le parole della query sono stopword InnoDB (es. "what is for")
+                // il MATCH restituisce 0 risultati anche quando il titolo combacia
+                // letteralmente. Il LIKE garantisce comunque il match diretto.
+                $conditions[] = "(MATCH(v.Titolo) AGAINST(? IN BOOLEAN MODE) OR v.Titolo LIKE ?)";
                 $params[] = $formattedSearch;
-                $types .= "s";
+                $params[] = "%$search%";
+                $types .= "ss";
             }
         }
     }
