@@ -101,6 +101,24 @@ def get_unique_path(target_path):
             return str(new_path)
         counter += 1
 
+def _is_size_stable(file_path, wait_seconds=2):
+    """
+    Verifica che la size del file non cambi per `wait_seconds` secondi.
+    Serve a non rinominare/processare file ancora in scrittura (es. sync OneDrive
+    che scarica gradualmente): rinominarli mentre vengono scritti porta a file
+    corrotti o a duplicati con suffisso _1 quando il sync li ricrea.
+    """
+    try:
+        size1 = os.path.getsize(file_path)
+        if size1 == 0:
+            return False
+        time.sleep(wait_seconds)
+        size2 = os.path.getsize(file_path)
+        return size1 == size2
+    except OSError:
+        return False
+
+
 def sanitize_path(absolute_path):
     """
     Rinomina il file o la directory se contiene caratteri non conformi.
@@ -119,22 +137,56 @@ def sanitize_path(absolute_path):
 
         parent_dir = os.path.dirname(absolute_path)
         basename = os.path.basename(absolute_path)
-        
+
         if basename.startswith('.'):
             return absolute_path
         if basename.startswith('anteprime_') or basename.startswith('copertine_'):
             return absolute_path
 
         is_dir = os.path.isdir(absolute_path)
-        
+
         if is_conforming(basename, is_file=not is_dir):
             return absolute_path
 
         clean_basename = sanitize_name(basename, is_file=not is_dir)
-        
         dest_path = os.path.join(parent_dir, clean_basename)
+
+        # Per i FILE: prima di toccarli, attendi che la size sia stabile.
+        # Rinominare un file ancora in scrittura (es. OneDrive sync in corso)
+        # produce file troncati/corrotti e duplicati _1 quando il sync ricrea
+        # l'originale per ritentare.
+        if not is_dir and os.path.exists(absolute_path):
+            if not _is_size_stable(absolute_path, wait_seconds=2):
+                logging.info(
+                    f"[SANITY] File '{absolute_path}' ancora in scrittura "
+                    f"(size non stabile). Rimando la rinomina al prossimo evento."
+                )
+                return absolute_path
+
+        # Se la destinazione "pulita" esiste GIÀ con la stessa size del source,
+        # siamo davanti a un duplicato di sync (OneDrive/Dropbox ricreano spesso
+        # il file originale dopo che noi l'avevamo rinominato). Cancelliamo il
+        # source invece di generare "<name>_1.ext" che resterebbe orfano e
+        # spesso corrotto.
+        if not is_dir and os.path.exists(dest_path):
+            try:
+                src_size = os.path.getsize(absolute_path)
+                dst_size = os.path.getsize(dest_path)
+                if src_size == dst_size and src_size > 0:
+                    logging.warning(
+                        f"[SANITY] Duplicato sync rilevato: '{absolute_path}' "
+                        f"({src_size}B) identico a '{dest_path}'. Rimuovo il source."
+                    )
+                    try:
+                        os.remove(absolute_path)
+                    except OSError as e:
+                        logging.error(f"[SANITY] Rimozione duplicato fallita: {e}")
+                    return dest_path
+            except OSError:
+                pass
+
         dest_path = get_unique_path(dest_path)
-        
+
         logging.info(f"[SANITY] Rinomina di sicurezza: '{absolute_path}' -> '{dest_path}'")
         os.rename(absolute_path, dest_path)
         return dest_path
