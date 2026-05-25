@@ -127,8 +127,10 @@ def process_new_videos_from_temp(conn):
     duplicare il lavoro.
     """
     try:
-        # Migrazione idempotente: aggiunge colonna `locked_at` se mancante.
+        # Migrazioni idempotenti: locked_at per il claim atomico, retry_count
+        # per quarantenare i video che falliscono ripetutamente.
         _ensure_lock_column(conn, 'Video_Temp', 'locked_at')
+        _ensure_retry_count_column(conn)
 
         # 1) Scarta i lock "abbandonati" (worker crashato): più vecchi di 5 min.
         with conn.cursor() as cursor:
@@ -171,16 +173,42 @@ def process_new_videos_from_temp(conn):
 
         _, durata_str, formato, height = get_video_metadata(full_path)
         if not durata_str:
-            # Rilascia il lock per ritentare al prossimo giro.
-            # Senza log esplicito un video puo' restare "appeso" in Video_Temp
-            # invisibile per ore mentre il worker fa retry silenziosi.
-            logging.warning(
-                f"[Meta] Metadata non disponibili per {relative_path} (id_temp={job['id']}). "
-                f"Lock rilasciato, ritento al prossimo poll."
-            )
-            with conn.cursor() as cursor:
-                cursor.execute("UPDATE Video_Temp SET locked_at = NULL WHERE id = %s", (job['id'],))
-            return False
+            # Failure handling NON-BLOCCANTE per la coda:
+            # - NON rilasciamo il lock: cosi al prossimo poll il SELECT pesca
+            #   un ALTRO record (la query usa "WHERE locked_at IS NULL").
+            #   Lo stale-lock cleanup (5 min) ribloccherà il record per il retry.
+            # - Incrementiamo retry_count: superata la soglia, scartiamo il
+            #   record per evitare di intasare permanentemente la coda con un
+            #   video davvero corrotto (es. file di 0 byte da sync interrotto).
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute(
+                    "UPDATE Video_Temp SET retry_count = retry_count + 1 WHERE id = %s",
+                    (job['id'],)
+                )
+                cursor.execute(
+                    "SELECT retry_count AS rc FROM Video_Temp WHERE id = %s",
+                    (job['id'],)
+                )
+                row = cursor.fetchone()
+                current_rc = row['rc'] if row else MAX_METADATA_RETRIES
+
+            if current_rc >= MAX_METADATA_RETRIES:
+                logging.error(
+                    f"[Meta] Video {relative_path} ha fallito {current_rc} tentativi. "
+                    f"Lo rimuovo da Video_Temp per non bloccare la coda. "
+                    f"Il file resta sul disco e verra' riprovato al prossimo restart del watcher."
+                )
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM Video_Temp WHERE id = %s", (job['id'],))
+            else:
+                logging.warning(
+                    f"[Meta] Tentativo {current_rc}/{MAX_METADATA_RETRIES} fallito per "
+                    f"{relative_path} (id_temp={job['id']}). Lock mantenuto: passo agli altri video, "
+                    f"questo verra' ripreso fra 5 min."
+                )
+            # Restituiamo True: il "lavoro" su questo slot e' concluso, il loop
+            # principale puo' subito tentare il prossimo record (senza backoff).
+            return True
 
         # Rimuoviamo gli underscore per visualizzare un titolo pulito sul sito (con spazi), lasciando intatti i trattini (-)
         titolo = Path(relative_path).stem.replace('_', ' ')
@@ -286,6 +314,33 @@ def _ensure_lock_column(conn, table_name, column_name):
                 logging.info(f"Migrazione: aggiunta colonna {table_name}.{column_name}")
     except Exception as e:
         logging.warning(f"_ensure_lock_column({table_name}.{column_name}) skip: {e}")
+
+
+def _ensure_retry_count_column(conn):
+    """
+    Aggiunge `retry_count INT NOT NULL DEFAULT 0` a Video_Temp se mancante.
+    Serve a tracciare i tentativi di lavorazione e a non bloccare la coda
+    a tempo indeterminato su un video corrotto.
+    """
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Video_Temp' AND COLUMN_NAME = 'retry_count'"
+            )
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    "ALTER TABLE `Video_Temp` ADD COLUMN `retry_count` INT NOT NULL DEFAULT 0"
+                )
+                logging.info("Migrazione: aggiunta colonna Video_Temp.retry_count")
+    except Exception as e:
+        logging.warning(f"_ensure_retry_count_column skip: {e}")
+
+
+# Dopo N tentativi consecutivi falliti, rinunciamo: il record viene rimosso
+# da Video_Temp per non bloccare l'elaborazione degli altri video. Il file
+# resta sul disco e verra' rilevato di nuovo al prossimo restart del watcher.
+MAX_METADATA_RETRIES = 10
 
 if __name__ == "__main__":
     # Connessione DB riutilizzata: meno overhead di handshake TCP/auth ad ogni iterazione.
