@@ -250,6 +250,34 @@ def _ensure_lock_column(conn, table_name='Video', column_name='locked_at'):
         logging.warning(f"_ensure_lock_column({table_name}.{column_name}) skip: {e}")
 
 
+def _ensure_asset_retry_column(conn):
+    """
+    Aggiunge `asset_retry_count INT NOT NULL DEFAULT 0` a Video se mancante.
+    Serve per quarantenare i video che falliscono ripetutamente la generazione
+    di copertina/anteprima, evitando di intasare il worker su un singolo file
+    corrotto.
+    """
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Video' AND COLUMN_NAME = 'asset_retry_count'"
+            )
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    "ALTER TABLE `Video` ADD COLUMN `asset_retry_count` INT NOT NULL DEFAULT 0"
+                )
+                logging.info("Migrazione: aggiunta colonna Video.asset_retry_count")
+    except Exception as e:
+        logging.warning(f"_ensure_asset_retry_column skip: {e}")
+
+
+# Soglia di tentativi falliti per copertina/anteprima. Superata, marchiamo
+# l'asset come 'mancante' (rimuove il video dai candidati SELECT) e liberamo
+# il lock. L'admin puo' sempre riaccodare manualmente via "Rigenera" nel modale.
+MAX_ASSET_RETRIES = 5
+
+
 # --- Funzione Principale (Solo Asset) ---
 def process_missing_assets(conn, settings):
     """
@@ -262,6 +290,7 @@ def process_missing_assets(conn, settings):
     job = None
     try:
         _ensure_lock_column(conn, 'Video', 'locked_at')
+        _ensure_asset_retry_column(conn)
 
         # Rilascia lock abbandonati (più vecchi di 10 minuti).
         with conn.cursor() as cursor:
@@ -339,48 +368,50 @@ def process_missing_assets(conn, settings):
 
         updates_to_run = []
         
+        # Traccia separatamente cosa e' fallito: serve per decidere se mantenere
+        # il lock (failure -> ritento dopo cooldown) o rilasciarlo (success).
+        cover_failed = False
+        preview_failed = False
+
         if job['percorso_copertina'] is None:
             success = False
-            # --- NUOVO CONTROLLO ---
             if os.path.exists(full_cover):
                 logging.info(f"[Assets] Copertina {db_cover} GIÀ ESISTENTE. Aggiorno DB.")
                 success = True
-            # --- FINE CONTROLLO ---
             else:
                 logging.info(f"[Assets] Copertina {db_cover} non trovata. Avvio generazione...")
-                success = generate_cover(full_video_path, full_cover, 
+                success = generate_cover(full_video_path, full_cover,
                                          settings['default_Minutaggio_Copertina'], duration_sec)
-            
+
             if success:
                 updates_to_run.append(
                     ("UPDATE Video SET percorso_copertina = %s WHERE id = %s", (db_cover, video_id))
                 )
                 logging.info(f"[Assets] Copertina per ID {video_id} impostata nel DB.")
             else:
-                 logging.error(f"[Assets] Fallita generazione/rilevamento copertina per ID {video_id}. Riprovo al prossimo ciclo.")
-                 # Non impostiamo 'mancante' così può riprovare se è stato un errore temporaneo
+                cover_failed = True
+                logging.error(f"[Assets] Fallita generazione copertina per ID {video_id}.")
 
         if job['percorso_anteprima'] is None:
             success = False
-            # --- NUOVO CONTROLLO ---
             if os.path.exists(full_preview):
                 logging.info(f"[Assets] Anteprima {db_preview} GIÀ ESISTENTE. Aggiorno DB.")
                 success = True
-            # --- FINE CONTROLLO ---
             else:
                 logging.info(f"[Assets] Anteprima {db_preview} non trovata. Avvio generazione...")
                 success = generate_preview(full_video_path, full_preview,
-                                           settings['default_Minutaggio_Anteprima'], 
+                                           settings['default_Minutaggio_Anteprima'],
                                            settings['durata_Anteprima'], duration_sec)
-            
+
             if success:
                 updates_to_run.append(
                     ("UPDATE Video SET percorso_anteprima = %s WHERE id = %s", (db_preview, video_id))
                 )
                 logging.info(f"[Assets] Anteprima per ID {video_id} impostata nel DB.")
             else:
-                 logging.error(f"[Assets] Fallita generazione/rilevamento anteprima per ID {video_id}. Riprovo al prossimo ciclo.")
-                 
+                preview_failed = True
+                logging.error(f"[Assets] Fallita generazione anteprima per ID {video_id}.")
+
         if updates_to_run:
             try:
                 conn.start_transaction()
@@ -397,12 +428,70 @@ def process_missing_assets(conn, settings):
                 logging.error(f"[Assets] Errore DB update: {e_trans}")
                 conn.rollback()
 
-        # Rilascia sempre il lock (sia che l'asset sia stato generato o meno).
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute("UPDATE Video SET locked_at = NULL WHERE id = %s", (video_id,))
-        except Exception:
-            pass
+        had_failure = cover_failed or preview_failed
+
+        if had_failure:
+            # Incrementa il contatore di tentativi per questo video. Se supera
+            # la soglia, marchiamo gli asset ancora mancanti come 'mancante'
+            # (cosi escono dai candidati del SELECT) e liberiamo il lock.
+            # Senza questa logica un singolo video corrotto (ffmpeg failure
+            # persistente) verrebbe ri-pescato in continuazione: rilascio
+            # immediato del lock -> SELECT ORDER BY id ASC -> stesso record
+            # -> busy-loop, gli altri video privi di asset non avanzano mai.
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute(
+                    "UPDATE Video SET asset_retry_count = asset_retry_count + 1 WHERE id = %s",
+                    (video_id,)
+                )
+                cursor.execute(
+                    "SELECT asset_retry_count AS rc FROM Video WHERE id = %s",
+                    (video_id,)
+                )
+                row = cursor.fetchone()
+                current_rc = row['rc'] if row else MAX_ASSET_RETRIES
+
+            if current_rc >= MAX_ASSET_RETRIES:
+                logging.error(
+                    f"[Assets] ID {video_id} ({relative_path}) ha fallito {current_rc} tentativi. "
+                    f"Marco asset non rigenerabili come 'mancante' e libero il lock. "
+                    f"Riprovare via Admin > Rigenera quando il file e' a posto."
+                )
+                with conn.cursor() as cursor:
+                    if cover_failed:
+                        cursor.execute(
+                            "UPDATE Video SET percorso_copertina = 'mancante' WHERE id = %s",
+                            (video_id,)
+                        )
+                    if preview_failed:
+                        cursor.execute(
+                            "UPDATE Video SET percorso_anteprima = 'mancante' WHERE id = %s",
+                            (video_id,)
+                        )
+                    # Reset contatore e rilascio lock: l'admin che fa "Rigenera"
+                    # rimette i path a NULL e il worker riparte da zero.
+                    cursor.execute(
+                        "UPDATE Video SET asset_retry_count = 0, locked_at = NULL WHERE id = %s",
+                        (video_id,)
+                    )
+                invalidate_videos_only(reason=f"asset quarantined id={video_id}")
+            else:
+                logging.warning(
+                    f"[Assets] Tentativo {current_rc}/{MAX_ASSET_RETRIES} fallito per ID {video_id}. "
+                    f"Lock mantenuto: passo agli altri video, questo verra' ripreso fra 10 min."
+                )
+                # NIENTE rilascio lock: lo stale-lock cleanup (10 min) lo liberera'.
+        else:
+            # Successo (o nulla da fare): rilascio del lock per permettere il
+            # prossimo ciclo di lavorazione su questo stesso video se servisse.
+            # Resetto anche il retry_count: i fallimenti precedenti erano transient.
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE Video SET locked_at = NULL, asset_retry_count = 0 WHERE id = %s",
+                        (video_id,)
+                    )
+            except Exception:
+                pass
 
         logging.info(f"[Assets] Elaborazione assets per ID {video_id} completata.")
         return True
