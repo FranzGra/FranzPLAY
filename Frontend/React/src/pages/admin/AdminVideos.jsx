@@ -1,8 +1,35 @@
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { apiRequest } from "../../services/api";
-import { getAssetUrl } from "../../services/helpers";
+import { getAssetUrl, hasAsset } from "../../services/helpers";
 import ImageCropper from "../../components/ImageCropper";
+import ThumbnailPlaceholder from "../../components/ThumbnailPlaceholder";
+
+/**
+ * Miniatura copertina per la dashboard admin.
+ * - Se la copertina è presente e si carica → mostra l'immagine.
+ * - Se è "mancante" (asset perso o cancellato) → placeholder statico.
+ * - Se è ancora null (worker_assets non ha ancora generato) → placeholder
+ *   con label "In elaborazione…" così l'admin capisce che è in coda,
+ *   invece di vedere un quadrato nero senza contesto.
+ */
+function AdminCoverThumb({ video }) {
+  const [failed, setFailed] = useState(false);
+  const has = hasAsset(video.percorso_copertina) && !failed;
+  const isProcessing = !has && video.percorso_copertina !== "mancante";
+
+  if (!has) {
+    return <ThumbnailPlaceholder title={video.Titolo} processing={isProcessing} />;
+  }
+  return (
+    <img
+      src={`${getAssetUrl(video.percorso_copertina)}&t=${Date.now()}`}
+      alt="Cover"
+      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 import {
   Search,
   Trash2,
@@ -434,15 +461,7 @@ export default function AdminVideos() {
               >
                 {/* Thumbnail */}
                 <div className="relative aspect-video rounded-2xl overflow-hidden bg-zinc-950 mb-4 ring-1 ring-white/5">
-                  <img
-                    src={`${getAssetUrl(video.percorso_copertina)}&t=${Date.now()}`}
-                    alt="Cover"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    onError={(e) =>
-                      (e.target.src =
-                        "https://via.placeholder.com/320x180?text=No+Cover")
-                    }
-                  />
+                  <AdminCoverThumb video={video} />
                 </div>
 
                 {/* Info */}
@@ -526,16 +545,8 @@ export default function AdminVideos() {
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                          <div className="w-20 aspect-video rounded-lg overflow-hidden bg-zinc-950 ring-1 ring-white/10 flex-shrink-0">
-                            <img
-                              src={`${getAssetUrl(video.percorso_copertina)}&t=${Date.now()}`}
-                              alt="Cover"
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                              onError={(e) =>
-                                (e.target.src =
-                                  "https://via.placeholder.com/320x180?text=No+Cover")
-                              }
-                            />
+                          <div className="relative w-20 aspect-video rounded-lg overflow-hidden bg-zinc-950 ring-1 ring-white/10 flex-shrink-0">
+                            <AdminCoverThumb video={video} />
                           </div>
                           <div>
                             <h3
