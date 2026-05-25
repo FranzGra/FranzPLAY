@@ -30,6 +30,137 @@ function AdminCoverThumb({ video }) {
     />
   );
 }
+
+/**
+ * Slot drag-and-drop per la copertina o l'anteprima nel modale di modifica.
+ * Stati gestiti:
+ * - selectedFile presente → anteprima del file appena scelto (in attesa di Salva).
+ * - asset presente e caricabile → mostra l'asset reale + hint hover.
+ * - asset null (worker in coda) → placeholder gradient con spinner "In elaborazione…".
+ * - asset "mancante" o load failed → placeholder + label "Trascina per caricare".
+ * Bottone "Rigenera" (top-right) chiama onRegenerate: il chiamante deve
+ * rimuovere l'asset dal DB e settare lo state locale a `null` per far
+ * comparire subito lo spinner.
+ */
+function AdminAssetSlot({
+  assetPath,
+  isVideo,
+  title,
+  selectedFile,
+  onSelectFile,
+  onRegenerate,
+  acceptTypes,
+  dragLabel,
+}) {
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Reset del flag quando cambia il video o l'asset (es. dopo upload o rigenerazione).
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [assetPath]);
+
+  const hasReal = hasAsset(assetPath) && !loadFailed;
+  // "In elaborazione" = path NULL nel DB. Distinguiamo da "mancante" che indica
+  // un asset volutamente assente / file perso senza essere in coda di rigenerazione.
+  const isProcessing = !hasReal && !selectedFile && (assetPath === null || assetPath === undefined);
+  const showRegenerateBtn = !selectedFile && assetPath && assetPath !== "mancante";
+  const Icon = isVideo ? Film : ImageIcon;
+
+  return (
+    <div className="group relative aspect-video rounded-3xl bg-zinc-950 border-2 border-dashed border-zinc-800 transition-all hover:border-primary/30 overflow-hidden cursor-pointer">
+      <input
+        type="file"
+        onChange={onSelectFile}
+        className="absolute inset-0 opacity-0 cursor-pointer z-10"
+        accept={acceptTypes}
+      />
+
+      {/* LAYER 1: contenuto principale (asset reale, preview file, o placeholder) */}
+      {selectedFile ? (
+        isVideo ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80">
+            <div className="text-center px-2">
+              <Film size={28} className="text-primary mx-auto mb-2" />
+              <p className="text-[10px] font-bold text-white uppercase break-all">{selectedFile.name}</p>
+              <p className="text-[9px] text-zinc-400 mt-1">In attesa di salvataggio…</p>
+            </div>
+          </div>
+        ) : (
+          <img
+            src={URL.createObjectURL(selectedFile)}
+            alt="Nuovo upload"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )
+      ) : hasReal ? (
+        isVideo ? (
+          <video
+            src={`${getAssetUrl(assetPath)}&t=${Date.now()}`}
+            className="absolute inset-0 w-full h-full object-cover"
+            muted
+            loop
+            autoPlay
+            playsInline
+            onError={() => setLoadFailed(true)}
+          />
+        ) : (
+          <img
+            src={`${getAssetUrl(assetPath)}&t=${Date.now()}`}
+            alt="Copertina attuale"
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setLoadFailed(true)}
+          />
+        )
+      ) : (
+        // Placeholder: niente asset reale, niente file in attesa.
+        // Mostra gradient + icona + label + (eventuale) spinner di elaborazione.
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-4 text-center"
+          style={{
+            background:
+              "radial-gradient(circle at 30% 20%, rgba(220,38,38,0.12) 0%, transparent 50%), radial-gradient(circle at 70% 80%, rgba(99,102,241,0.08) 0%, transparent 50%), linear-gradient(135deg, hsl(220,25%,14%) 0%, hsl(240,30%,8%) 100%)",
+          }}
+        >
+          <Icon size={32} className="text-zinc-500 mb-2" strokeWidth={1.5} />
+          <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wide">{dragLabel}</p>
+          {isProcessing ? (
+            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-400 font-semibold">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span>In elaborazione…</span>
+            </div>
+          ) : assetPath === "mancante" ? (
+            <p className="mt-1 text-[9px] text-zinc-600 uppercase">Asset mancante</p>
+          ) : loadFailed ? (
+            <p className="mt-1 text-[9px] text-red-400 uppercase">File non trovato — rigenera</p>
+          ) : null}
+        </div>
+      )}
+
+      {/* LAYER 2: hint hover quando l'asset reale e' presente (asset di sfondo, drag-to-replace overlay) */}
+      {!selectedFile && hasReal ? (
+        <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center pointer-events-none p-4 text-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Upload className="text-white mb-1" size={24} />
+          <p className="text-[10px] font-bold text-white uppercase tracking-wide">{dragLabel}</p>
+        </div>
+      ) : null}
+
+      {/* LAYER 3: bottone "Rigenera" (visibile se c'e' un path persistito o "mancante") */}
+      {showRegenerateBtn ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRegenerate();
+          }}
+          className="absolute top-2 right-2 z-20 p-2.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-xl hover:bg-amber-500 hover:text-white transition-all hover:scale-105 active:scale-90 flex items-center justify-center shadow-lg"
+          title="Rimuovi e rigenera automaticamente"
+        >
+          <RotateCw size={16} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
 import {
   Search,
   Trash2,
@@ -52,6 +183,7 @@ import {
   Clock,
   Hourglass,
   RotateCw,
+  Loader2,
 } from "lucide-react";
 
 // --- Helpers metadati video ---
@@ -271,13 +403,13 @@ export default function AdminVideos() {
   };
 
   const handleRemoveCover = async () => {
+    if (!editingVideo || !editingVideo.percorso_copertina) return;
     if (
-      !editingVideo ||
-      !editingVideo.percorso_copertina ||
-      editingVideo.percorso_copertina === "mancante"
+      !window.confirm(
+        "Rimuovere la copertina attuale? Verrà ricreata automaticamente dal worker.",
+      )
     )
       return;
-    if (!window.confirm("Rimuovere la copertina personalizzata?")) return;
 
     try {
       const formData = new FormData();
@@ -286,18 +418,16 @@ export default function AdminVideos() {
 
       const res = await apiRequest("/admin.php", "POST", formData);
       if (res.success) {
-        setEditingVideo((prev) => ({
-          ...prev,
-          percorso_copertina: "mancante",
-        }));
+        // Stato locale a NULL (non "mancante"): il backend ha settato NULL nel DB
+        // → worker_assets riprenderà il video al prossimo poll. Lo spinner
+        // "In elaborazione…" appare subito nello slot del modale e nella griglia.
+        setEditingVideo((prev) => ({ ...prev, percorso_copertina: null }));
         setVideos((prev) =>
           prev.map((v) =>
-            v.id === editingVideo.id
-              ? { ...v, percorso_copertina: "mancante" }
-              : v,
+            v.id === editingVideo.id ? { ...v, percorso_copertina: null } : v,
           ),
         );
-        showNotification("Copertina rimossa");
+        showNotification("Copertina in coda di rigenerazione");
       }
     } catch (error) {
       showNotification("Errore rimozione: " + error.message, "error");
@@ -312,13 +442,13 @@ export default function AdminVideos() {
   };
 
   const handleRemovePreview = async () => {
+    if (!editingVideo || !editingVideo.percorso_anteprima) return;
     if (
-      !editingVideo ||
-      !editingVideo.percorso_anteprima ||
-      editingVideo.percorso_anteprima === "mancante"
+      !window.confirm(
+        "Rimuovere l'anteprima attuale? Verrà ricreata automaticamente dal worker.",
+      )
     )
       return;
-    if (!window.confirm("Rimuovere l'anteprima video?")) return;
 
     try {
       const formData = new FormData();
@@ -327,18 +457,15 @@ export default function AdminVideos() {
 
       const res = await apiRequest("/admin.php", "POST", formData);
       if (res.success) {
-        setEditingVideo((prev) => ({
-          ...prev,
-          percorso_anteprima: "mancante",
-        }));
+        // Vedi commento in handleRemoveCover: state a null per mostrare subito
+        // "In elaborazione…" mentre worker_assets rigenera.
+        setEditingVideo((prev) => ({ ...prev, percorso_anteprima: null }));
         setVideos((prev) =>
           prev.map((v) =>
-            v.id === editingVideo.id
-              ? { ...v, percorso_anteprima: "mancante" }
-              : v,
+            v.id === editingVideo.id ? { ...v, percorso_anteprima: null } : v,
           ),
         );
-        showNotification("Anteprima rimossa");
+        showNotification("Anteprima in coda di rigenerazione");
       }
     } catch (error) {
       showNotification("Errore rimozione anteprima: " + error.message, "error");
@@ -739,144 +866,35 @@ export default function AdminVideos() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
-                          Cover Art
-                        </label>
-                        <div className="group relative aspect-video rounded-3xl bg-zinc-950 border-2 border-dashed border-zinc-800 transition-all hover:border-primary/30 overflow-hidden flex items-center justify-center cursor-pointer hover:bg-zinc-900/50">
-                          <input
-                            type="file"
-                            onChange={handleFileSelect}
-                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                            accept="image/*"
-                          />
-
-                          {editingVideo.newCoverFile ? (
-                            <div className="absolute inset-0 p-2">
-                              <img
-                                src={URL.createObjectURL(
-                                  editingVideo.newCoverFile,
-                                )}
-                                alt="Preview"
-                                className="w-full h-full object-cover rounded-2xl"
-                              />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Upload className="text-white" />
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              {editingVideo.percorso_copertina &&
-                                editingVideo.percorso_copertina !==
-                                  "mancante" && (
-                                  <img
-                                    src={`${getAssetUrl(editingVideo.percorso_copertina)}&t=${Date.now()}`}
-                                    alt="Current Cover"
-                                    className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-20 transition-opacity"
-                                  />
-                                )}
-                              <div className="relative z-0 text-center p-4">
-                                <ImageIcon
-                                  size={32}
-                                  className="text-zinc-700 mx-auto mb-2 group-hover:text-primary transition-colors"
-                                />
-                                <p className="text-[10px] font-bold text-zinc-600 uppercase">
-                                  Trascina Immagine
-                                </p>
-                              </div>
-
-                              {editingVideo.percorso_copertina &&
-                                editingVideo.percorso_copertina !==
-                                  "mancante" && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      handleRemoveCover();
-                                    }}
-                                    className="absolute top-2 right-2 z-20 p-2.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-all hover:scale-105 active:scale-90 flex items-center justify-center"
-                                    title="Rimuovi Copertina"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                )}
-                            </>
-                          )}
-                        </div>
-                      </div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
+                        Cover Art
+                      </label>
+                      <AdminAssetSlot
+                        assetPath={editingVideo.percorso_copertina}
+                        isVideo={false}
+                        title={editingVideo.Titolo}
+                        selectedFile={editingVideo.newCoverFile}
+                        onSelectFile={handleFileSelect}
+                        onRegenerate={handleRemoveCover}
+                        acceptTypes="image/*"
+                        dragLabel="Trascina Immagine"
+                      />
                     </div>
 
                     <div>
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
-                          Anteprima (Video)
-                        </label>
-                        <div className="group relative aspect-video rounded-3xl bg-zinc-950 border-2 border-dashed border-zinc-800 transition-all hover:border-primary/30 overflow-hidden flex items-center justify-center cursor-pointer hover:bg-zinc-900/50">
-                          <input
-                            type="file"
-                            onChange={handlePreviewSelect}
-                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                            accept="video/mp4,video/webm,image/gif,image/webp"
-                          />
-
-                          {editingVideo.newPreviewFile ? (
-                            <div className="absolute inset-0 p-2 flex items-center justify-center bg-zinc-900/80 rounded-2xl">
-                              <div className="text-center">
-                                <Film
-                                  size={24}
-                                  className="text-primary mx-auto mb-2"
-                                />
-                                <p className="text-[10px] font-bold text-white uppercase">
-                                  {editingVideo.newPreviewFile.name}
-                                </p>
-                              </div>
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Upload className="text-white" />
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              {editingVideo.percorso_anteprima &&
-                                editingVideo.percorso_anteprima !==
-                                  "mancante" && (
-                                  <video
-                                    src={`${getAssetUrl(editingVideo.percorso_anteprima)}&t=${Date.now()}`}
-                                    className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-20 transition-opacity"
-                                    muted
-                                    loop
-                                    autoPlay
-                                    playsInline
-                                  />
-                                )}
-                              <div className="relative z-0 text-center p-4">
-                                <Film
-                                  size={32}
-                                  className="text-zinc-700 mx-auto mb-2 group-hover:text-primary transition-colors"
-                                />
-                                <p className="text-[10px] font-bold text-zinc-600 uppercase">
-                                  Trascina .MP4 / .GIF
-                                </p>
-                              </div>
-
-                              {editingVideo.percorso_anteprima &&
-                                editingVideo.percorso_anteprima !==
-                                  "mancante" && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      handleRemovePreview();
-                                    }}
-                                    className="absolute top-2 right-2 z-20 p-2.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-all hover:scale-105 active:scale-90 flex items-center justify-center"
-                                    title="Rimuovi Anteprima"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                )}
-                            </>
-                          )}
-                        </div>
-                      </div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 px-1">
+                        Anteprima (Video)
+                      </label>
+                      <AdminAssetSlot
+                        assetPath={editingVideo.percorso_anteprima}
+                        isVideo={true}
+                        title={editingVideo.Titolo}
+                        selectedFile={editingVideo.newPreviewFile}
+                        onSelectFile={handlePreviewSelect}
+                        onRegenerate={handleRemovePreview}
+                        acceptTypes="video/mp4,video/webm,image/gif,image/webp"
+                        dragLabel="Trascina .MP4 / .GIF"
+                      />
                     </div>
                   </div>
 
