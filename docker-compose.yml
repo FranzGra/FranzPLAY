@@ -229,6 +229,11 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
       - PYTHONUNBUFFERED=1
+      - HOME=/tmp
+    # UID/GID 33 = www-data (utente PHP-FPM). Necessario per scrivere asset
+    # (copertine/anteprime) in /percorsoVideo: PHP riusa le stesse cartelle
+    # quando l'admin carica manualmente, e se sono di root non puo' scriverci.
+    user: "33:33"
     volumes:
       - ./Backend/python_server:/app    # Mappa gli script Python
       - ${PERCORSO_VIDEO}:/percorsoVideo
@@ -256,6 +261,8 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
       - PYTHONUNBUFFERED=1
+      - HOME=/tmp
+    user: "33:33"  # www-data: vedi nota in python_watcher.
     volumes:
       - ./Backend/python_server:/app
       - ${PERCORSO_VIDEO}:/percorsoVideo
@@ -283,6 +290,8 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - WATCH_DIR=/percorsoVideo
       - PYTHONUNBUFFERED=1
+      - HOME=/tmp
+    user: "33:33"  # www-data: vedi nota in python_watcher.
     volumes:
       - ./Backend/python_server:/app
       - ${PERCORSO_VIDEO}:/percorsoVideo
@@ -321,6 +330,8 @@ services:
       - OPTIMIZER_BACKOFF_MAX=${OPTIMIZER_BACKOFF_MAX:-300}
       - OPTIMIZER_CLEANUP_HOURS=${OPTIMIZER_CLEANUP_HOURS:-24}
       - OPTIMIZER_REMUX_TIMEOUT=${OPTIMIZER_REMUX_TIMEOUT:-1800}
+      - HOME=/tmp
+    user: "33:33"  # www-data: vedi nota in python_watcher.
     volumes:
       - ./Backend/python_server:/app
       - ${PERCORSO_VIDEO}:/percorsoVideo
