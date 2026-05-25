@@ -22,14 +22,27 @@ export default function CategoryDetail() {
     const fetchVideos = async () => {
       setLoading(true);
       try {
-        // USIAMO LA NUOVA API REST
-        const data = await fetchVideosRest({
-          category_id: id,
-          limit: 50,
-        });
-
-        // fetchVideosRest restituisce già l'array dei dati
-        setVideos(data);
+        // Il backend cappa `limit` a 100 (videos.php), quindi paginiamo con
+        // offset finché un batch torna meno di PAGE_SIZE: solo così cartelle
+        // con >100 video vengono caricate tutte.
+        const PAGE_SIZE = 100;
+        const all = [];
+        let offset = 0;
+        // Hard cap di sicurezza per evitare loop infiniti se il backend
+        // restituisse sempre PAGE_SIZE elementi per errore.
+        const MAX_PAGES = 50;
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const batch = await fetchVideosRest({
+            category_id: id,
+            limit: PAGE_SIZE,
+            offset,
+          });
+          if (!Array.isArray(batch) || batch.length === 0) break;
+          all.push(...batch);
+          if (batch.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+        setVideos(all);
       } catch (err) {
         console.error("Errore video:", err);
       } finally {

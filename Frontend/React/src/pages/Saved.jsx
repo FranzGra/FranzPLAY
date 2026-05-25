@@ -50,11 +50,24 @@ export default function Saved() {
       setLoading(true);
       setVideos([]);
       try {
-        const data = await fetchVideosRest({
-          type: currentTab.type,
-          limit: 50,
-        });
-        setVideos(data);
+        // Backend cappa `limit` a 100 (videos.php) → paginiamo per non
+        // troncare cronologia/salvati/piaciuti quando superano i 100 elementi.
+        const PAGE_SIZE = 100;
+        const MAX_PAGES = 50;
+        const all = [];
+        let offset = 0;
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const batch = await fetchVideosRest({
+            type: currentTab.type,
+            limit: PAGE_SIZE,
+            offset,
+          });
+          if (!Array.isArray(batch) || batch.length === 0) break;
+          all.push(...batch);
+          if (batch.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+        setVideos(all);
       } catch (error) {
         console.error("Errore fetch libreria:", error);
       } finally {
