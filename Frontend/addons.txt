@@ -4,3 +4,12 @@ lucide-react
 react-router-dom
 plyr
 react-easy-crop
+framer-motion
+@base-ui/react
+class-variance-authority
+clsx
+tailwind-merge
+sonner
+next-themes
+tw-animate-css
+@fontsource-variable/geist

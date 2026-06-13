@@ -38,6 +38,7 @@ if [ -f "addons.txt" ]; then
             # Nella v4 dobbiamo aggiungere il plugin in vite.config.js.
             # AGGIUNTA QUI LA CONFIGURAZIONE SERVER PER HOSTS
             cat > vite.config.js <<EOF
+import path from 'path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -48,6 +49,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    // Alias '@' -> ./src (richiesto dagli import shadcn: @/components/ui/*, @/lib/*)
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   server: {
     host: '0.0.0.0',
     allowedHosts: true, // Permette qualsiasi dominio/IP (es. video.franzpage.it)
