@@ -1260,14 +1260,22 @@ def cleanup_orphaned_assets(conn):
     deleted_files = 0
     deleted_dirs = 0
     try:
+        # Normalizza i path per il confronto: slash in avanti + niente slash
+        # iniziale. CRITICO: l'upload da UI (assets.php) salva percorso_copertina
+        # con uno slash iniziale ("/Cat/copertine_Cat/x.jpg"), mentre i worker e
+        # os.path.relpath NON lo mettono. Senza questa normalizzazione le copertine
+        # caricate a mano risultavano "orfane" e venivano cancellate al riavvio.
+        def _norm(p):
+            return p.replace('\\', '/').lstrip('/')
+
         valid_assets = set()
         with conn.cursor(dictionary=True) as cursor:
             cursor.execute("SELECT percorso_copertina, percorso_anteprima FROM Video")
             for row in cursor.fetchall():
                 if row['percorso_copertina'] and row['percorso_copertina'] != 'mancante':
-                    valid_assets.add(row['percorso_copertina'].replace('\\', '/'))
+                    valid_assets.add(_norm(row['percorso_copertina']))
                 if row['percorso_anteprima'] and row['percorso_anteprima'] != 'mancante':
-                    valid_assets.add(row['percorso_anteprima'].replace('\\', '/'))
+                    valid_assets.add(_norm(row['percorso_anteprima']))
 
         current_time = time.time()
         for root, dirs, files in os.walk(PATH_TO_MONITOR, topdown=False):
@@ -1300,7 +1308,7 @@ def cleanup_orphaned_assets(conn):
                 
                 # Cartella valida, controlla i file interni
                 for f in files:
-                    file_rel_path = f"{rel_root}/{f}"
+                    file_rel_path = _norm(f"{rel_root}/{f}")
                     if file_rel_path not in valid_assets:
                         file_full_path = os.path.join(root, f)
                         if os.path.exists(file_full_path):

@@ -133,9 +133,12 @@ switch ($action) {
             throw new Exception("Spostamento copertina fallito: $reason. Destinazione: $target_file");
         }
         if (true) {
-            // DB path always uses forward slashes for URL compatibility
+            // DB path: forward slashes, SENZA slash iniziale per coerenza con la
+            // convenzione dei worker Python (es. "Cat/copertine_Cat/x.jpg"). Uno
+            // slash iniziale faceva sembrare la copertina "orfana" al cleanup del
+            // watcher, che la cancellava al riavvio.
             $db_rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $video_rel_dir);
-            $db_path = '/' . ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
+            $db_path = ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
 
             executePreparedQuery("UPDATE Video SET percorso_copertina = ? WHERE id = ?", "si", [$db_path, $id_video]);
             global $Cache;
@@ -245,8 +248,9 @@ switch ($action) {
             }
             throw new Exception("Spostamento anteprima fallito: $reason. Destinazione: $target_file");
         }
+        // Niente slash iniziale: coerenza con i worker + evita falsi "orfani" al cleanup.
         $db_rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $video_rel_dir);
-        $db_path = '/' . ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
+        $db_path = ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
 
         executePreparedQuery("UPDATE Video SET percorso_anteprima = ? WHERE id = ?", "si", [$db_path, $id_video]);
         global $Cache;
