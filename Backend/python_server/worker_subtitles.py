@@ -20,6 +20,7 @@
 
 import sys
 import os
+import re
 import time
 import json
 import logging
@@ -50,6 +51,14 @@ WHISPER_BEAM_SIZE = int(os.environ.get('WHISPER_BEAM_SIZE', '5'))
 
 # Modelli selezionabili per-job dall'admin (whitelist, coerente col backend PHP).
 ALLOWED_MODELS = {'small', 'medium'}
+
+# --- Discovery sottotitoli manuali ---
+# Estensioni riconosciute quando l'utente mette i sottotitoli a mano nel filesystem.
+SUB_EXTENSIONS = ('.vtt', '.srt')
+# Lingua assegnata quando il nome file non contiene un codice (es. "video.vtt").
+MANUAL_DEFAULT_LANG = (os.environ.get('SUBTITLES_MANUAL_DEFAULT_LANG', 'it') or 'it').lower()
+# Ogni quanto ri-scansionare il disco per nuovi sottotitoli manuali (secondi).
+DISCOVERY_INTERVAL = int(os.environ.get('SUBTITLES_DISCOVERY_INTERVAL', '300'))
 
 # LibreTranslate (container separato per la traduzione multilingua)
 LIBRETRANSLATE_URL = os.environ.get('LIBRETRANSLATE_URL', 'http://libretranslate:5000').rstrip('/')
@@ -538,6 +547,121 @@ def _finalize_transcription_row(conn, video_id, trans_row, actual_source, db_src
 
 
 # ============================================================================
+# Discovery sottotitoli manuali (file .vtt/.srt messi a mano nel filesystem)
+# ============================================================================
+def _srt_to_vtt(srt_text):
+    """Converte il testo di un .srt in WebVTT (timestamp con '.' e header WEBVTT)."""
+    text = srt_text.lstrip('﻿')
+    # SRT usa la virgola per i millisecondi: 00:00:01,000 -> 00:00:01.000
+    text = re.sub(r'(\d{2}:\d{2}:\d{2}),(\d{3})', r'\1.\2', text)
+    return "WEBVTT\n\n" + text.strip() + "\n"
+
+
+def discover_manual_subtitles(conn):
+    """
+    Scansiona /percorsoVideo e importa i sottotitoli messi a mano dall'utente:
+    file .vtt o .srt accanto al video oppure nella cartella sottotitoli_<categoria>,
+    con nome <stem_video>[.<lingua>].(vtt|srt). Per ogni lingua non ancora presente
+    crea una riga Sottotitoli 'completato'. I .srt vengono convertiti in .vtt.
+    """
+    # 1. Indice dei video per cartella: parent_rel -> [(stem, id)]
+    by_parent = {}
+    langs_by_id = {}
+    try:
+        with conn.cursor(dictionary=True) as cur:
+            cur.execute("SELECT id, percorso_file FROM Video")
+            vids = cur.fetchall()
+    except Exception as e:
+        logging.warning(f"[Discovery] lettura Video fallita: {e}")
+        return
+    if not vids:
+        return
+    for r in vids:
+        p = Path(r['percorso_file'])
+        parent = p.parent.as_posix()
+        parent = '' if parent == '.' else parent
+        by_parent.setdefault(parent, []).append((p.stem, r['id']))
+        langs_by_id[r['id']] = set()
+
+    # 2. Lingue gia' registrate (qualsiasi stato): non le tocchiamo.
+    with conn.cursor(dictionary=True) as cur:
+        cur.execute("SELECT id_Video, lingua FROM Sottotitoli")
+        for r in cur.fetchall():
+            if r['id_Video'] in langs_by_id:
+                langs_by_id[r['id_Video']].add((r['lingua'] or '').lower())
+
+    imported = 0
+    for root, dirs, files in os.walk(PATH_TO_MONITOR):
+        base = os.path.basename(root)
+        # Un .vtt puo' stare nella cartella del video o in sottotitoli_<x>: in
+        # entrambi i casi il video di riferimento sta nella cartella "padre".
+        video_dir = os.path.dirname(root) if base.startswith('sottotitoli_') else root
+        rel_parent = os.path.relpath(video_dir, PATH_TO_MONITOR).replace('\\', '/')
+        rel_parent = '' if rel_parent == '.' else rel_parent
+        candidates = by_parent.get(rel_parent)
+        if not candidates:
+            continue
+
+        for f in files:
+            low = f.lower()
+            if not low.endswith(SUB_EXTENSIONS):
+                continue
+            name, ext = f[:-4], low[-4:]
+
+            # Match col video il cui stem combacia (preferisci lo stem piu' lungo).
+            matched = None
+            for stem, vid in candidates:
+                if name == stem or name.startswith(stem + '.'):
+                    if matched is None or len(stem) > len(matched[0]):
+                        matched = (stem, vid)
+            if not matched:
+                continue
+            stem, vid = matched
+
+            suffix = name[len(stem):].lstrip('.')          # 'en' | '' | 'en.forced'
+            lang = (suffix.split('.')[0].lower() if suffix else MANUAL_DEFAULT_LANG) or MANUAL_DEFAULT_LANG
+            if lang in langs_by_id.get(vid, set()):
+                continue  # lingua gia' presente: non sovrascrivere
+
+            full_src = os.path.join(root, f)
+            if not _validate_under_base(full_src):
+                continue
+
+            # Determina il .vtt finale (convertendo l'eventuale .srt).
+            if ext == '.srt':
+                full_vtt = os.path.join(root, f"{name}.vtt")
+                try:
+                    with open(full_src, 'r', encoding='utf-8', errors='replace') as fh:
+                        srt_text = fh.read()
+                    with open(full_vtt, 'w', encoding='utf-8') as fh:
+                        fh.write(_srt_to_vtt(srt_text))
+                except Exception as e:
+                    logging.warning(f"[Discovery] conversione SRT fallita {full_src}: {e}")
+                    continue
+                db_rel = os.path.relpath(full_vtt, PATH_TO_MONITOR).replace('\\', '/').lstrip('/')
+            else:
+                db_rel = os.path.relpath(full_src, PATH_TO_MONITOR).replace('\\', '/').lstrip('/')
+
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO Sottotitoli "
+                        "(id_Video, lingua, lingua_origine, tipo, percorso_file, stato, modello_usato, generato_at) "
+                        "VALUES (%s, %s, %s, 'trascrizione', %s, 'completato', 'manuale', NOW()) "
+                        "ON DUPLICATE KEY UPDATE id = id",
+                        (vid, lang, lang, db_rel)
+                    )
+                langs_by_id.setdefault(vid, set()).add(lang)
+                imported += 1
+                logging.info(f"[Discovery] Sottotitolo manuale importato: video={vid} lingua={lang} file={db_rel}")
+            except Exception as e:
+                logging.warning(f"[Discovery] insert fallita (video={vid}, lingua={lang}): {e}")
+
+    if imported:
+        logging.info(f"[Discovery] {imported} sottotitolo/i manuale/i importato/i.")
+
+
+# ============================================================================
 # Entrypoint
 # ============================================================================
 if __name__ == "__main__":
@@ -554,11 +678,22 @@ if __name__ == "__main__":
 
     conn = None
     idle_streak = 0
+    last_discovery = 0.0
     while True:
         work_done = False
         try:
             if conn is None or not conn.is_connected():
                 conn = get_db_connection()
+
+            # Discovery periodica dei sottotitoli messi a mano nel filesystem.
+            now = time.time()
+            if now - last_discovery >= DISCOVERY_INTERVAL:
+                try:
+                    discover_manual_subtitles(conn)
+                except Exception as e:
+                    logging.warning(f"[Discovery] errore scansione: {e}")
+                last_discovery = now
+
             model_name = fetch_whisper_model_name(conn)
             work_done = process_jobs(conn, model_name)
         except mysql.connector.Error as err:
