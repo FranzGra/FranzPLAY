@@ -206,8 +206,6 @@ export default function App() {
  * Descrizione: Blocca il rendering dell'app se il backend segnala
  * che il setup iniziale (Wizard) non è ancora stato completato.
  */
-import { useSettings } from "./context/SettingsContext";
-
 const SettingsGuard = ({ children }) => {
   const { needsSetup, loading, dbOffline } = useSettings();
 
