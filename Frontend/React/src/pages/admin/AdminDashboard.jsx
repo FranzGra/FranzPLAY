@@ -19,6 +19,8 @@ import {
   Loader2,
   RotateCcw,
   Zap,
+  UserPlus,
+  UserX,
 } from "lucide-react";
 import { apiRequest } from "../../services/api";
 import { useSettings } from "../../context/SettingsContext";
@@ -36,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 
 // Framer motion variants
 const containerVariants = {
@@ -126,7 +129,7 @@ function PipelineRow({ icon: Icon, accent, label, value, hint, badge, badgeTone 
 
 export default function AdminDashboard() {
   useDocumentTitle("Dashboard Admin");
-  const { logoParts, defaultTheme, fetchSettings } = useSettings();
+  const { logoParts, defaultTheme, fetchSettings, registrationEnabled } = useSettings();
 
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -138,6 +141,9 @@ export default function AdminDashboard() {
 
   const [globalTheme, setGlobalTheme] = useState(defaultTheme || "#dc2626");
   const [isThemeSaving, setIsThemeSaving] = useState(false);
+
+  const [regEnabled, setRegEnabled] = useState(registrationEnabled);
+  const [isRegSaving, setIsRegSaving] = useState(false);
 
   const [message, setMessage] = useState(null);
 
@@ -160,6 +166,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     setGlobalTheme(defaultTheme || "#dc2626");
   }, [defaultTheme]);
+
+  useEffect(() => {
+    setRegEnabled(registrationEnabled);
+  }, [registrationEnabled]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -198,6 +208,28 @@ export default function AdminDashboard() {
       showMessage("error", "Errore salvataggio logo");
     } finally {
       setIsLogoSaving(false);
+    }
+  };
+
+  const handleToggleRegistration = async (next) => {
+    setRegEnabled(next); // optimistic
+    setIsRegSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("action", "salva_registrazione");
+      formData.append("abilitata", next ? "1" : "0");
+      const res = await apiRequest("/admin.php", "POST", formData);
+      if (res.success) {
+        showMessage("success", next ? "Registrazione abilitata" : "Registrazione disabilitata");
+        fetchSettings();
+      } else {
+        setRegEnabled(!next); // rollback
+      }
+    } catch (error) {
+      setRegEnabled(!next); // rollback
+      showMessage("error", "Errore salvataggio registrazione");
+    } finally {
+      setIsRegSaving(false);
     }
   };
 
@@ -530,6 +562,43 @@ export default function AdminDashboard() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+
+          {/* TOGGLE REGISTRAZIONE */}
+          <div className="flex items-center gap-3 mt-8 mb-6">
+            <div className="w-8 h-[2px] bg-emerald-500 rounded-full"></div>
+            <h2 className="text-xl font-black text-foreground uppercase tracking-wider">
+              Accesso
+            </h2>
+          </div>
+          <Card className="bg-zinc-900/40 backdrop-blur-md border-white/5">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <div
+                  className={`p-3 rounded-2xl shrink-0 transition-colors ${
+                    regEnabled ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-700/40 text-zinc-400"
+                  }`}
+                >
+                  {regEnabled ? <UserPlus size={22} /> : <UserX size={22} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-foreground leading-tight">
+                    Registrazione nuovi account
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {regEnabled
+                      ? "I visitatori possono creare un account dalla pagina di accesso."
+                      : "Disattivata: solo un admin può creare nuovi utenti. Il pulsante “Registrati” è nascosto."}
+                  </p>
+                </div>
+                <Switch
+                  checked={regEnabled}
+                  onCheckedChange={handleToggleRegistration}
+                  disabled={isRegSaving}
+                  className="mt-1 shrink-0"
+                />
+              </div>
             </CardContent>
           </Card>
         </motion.div>

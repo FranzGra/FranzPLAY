@@ -11,6 +11,7 @@ export const SettingsProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [dbOffline, setDbOffline] = useState(false); // Nuovo stato per intercettare assenza di DB (es. mancanza .env)
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
 
   const fetchSettings = async () => {
     try {
@@ -68,6 +69,9 @@ export const SettingsProvider = ({ children }) => {
         setDefaultTheme(dTheme);
         localStorage.setItem("franz_default_theme", dTheme);
 
+        // Registrazione abilitata: stringa '1'/'0' dal backend (default abilitata).
+        setRegistrationEnabled(data.registrazione_abilitata !== "0");
+
         // Se l'utente non è loggato (o non ha forzato un tema) spingiamo questo come fallback globale
         if (!localStorage.getItem("franz_theme")) {
           document.documentElement.style.setProperty("--primary-color", dTheme);
@@ -93,6 +97,7 @@ export const SettingsProvider = ({ children }) => {
         loading,
         needsSetup,
         dbOffline,
+        registrationEnabled,
       }}
     >
       {children}

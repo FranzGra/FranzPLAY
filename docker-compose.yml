@@ -2,7 +2,7 @@ services:
   # --- FRONTEND (React) ---
   frontend:
     build: ./Frontend
-    container_name: FRONTEND_React
+    container_name: ${CONTAINER_PREFIX:-}FRONTEND_React
     working_dir: /app
     volumes:
       - ./Frontend/React:/app
@@ -18,10 +18,11 @@ services:
   # --- PROXY & WEB SERVER (Nginx) ---
   nginx:
     build: ./Docker_Config/nginx
-    container_name: WEB_SERVER
+    container_name: ${CONTAINER_PREFIX:-}WEB_SERVER
+    # Porte configurabili da .env (default 80/443). Es. ZimaBlade: NGINX_HTTP_PORT=8090.
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
     links:
       - php
       - frontend
@@ -50,7 +51,7 @@ services:
   # --- BACKEND (PHP) ---
   php:
     build: ./Docker_Config/php
-    container_name: BACKEND_PHP
+    container_name: ${CONTAINER_PREFIX:-}BACKEND_PHP
     expose:
       - 9000
     links:
@@ -105,7 +106,7 @@ services:
     # 11.4 supporta IF NOT EXISTS su ALTER COLUMN/INDEX (richiesto dalle migration)
     # e gira nativamente su ARM64 (Raspberry Pi 4/5).
     image: mariadb:11.4
-    container_name: DATABASE_MySQL
+    container_name: ${CONTAINER_PREFIX:-}DATABASE_MySQL
     tmpfs:
       - /var/run/mysqld
     volumes:
@@ -155,7 +156,7 @@ services:
   # --- CACHE (Redis) ---
   redis:
     image: redis:alpine
-    container_name: CACHE_Redis
+    container_name: ${CONTAINER_PREFIX:-}CACHE_Redis
     # Redis non viene più esposto pubblicamente: solo i container sulla rete docker
     # possono raggiungerlo. Se REDIS_PASSWORD è definita in .env, viene richiesta
     # autenticazione anche internamente. maxmemory ottimizzato per Raspberry Pi.
@@ -199,8 +200,9 @@ services:
     # scarichi sempre la variante ARM64 corretta, senza ambiguità di manifest
     # multi-arch o "platform not provided" che davano problemi con
     # phpmyadmin/phpmyadmin:latest.
-    image: arm64v8/phpmyadmin:latest
-    container_name: TOOLS_PhpMyAdmin
+    # Override via .env per host x86 (es. ZimaBlade): PHPMYADMIN_IMAGE=phpmyadmin/phpmyadmin:latest
+    image: ${PHPMYADMIN_IMAGE:-arm64v8/phpmyadmin:latest}
+    container_name: ${CONTAINER_PREFIX:-}TOOLS_PhpMyAdmin
     environment:
       TZ: Europe/Rome
       PMA_HOST: mysql
@@ -218,7 +220,7 @@ services:
   # --- AUTOMATION (Python) ---
   python_watcher:
     build: ./Docker_Config/Python
-    container_name: AUTO_Watcher
+    container_name: ${CONTAINER_PREFIX:-}AUTO_Watcher
     environment:
       - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
@@ -250,7 +252,7 @@ services:
 
   python_worker_meta:
     build: ./Docker_Config/Python
-    container_name: AUTO_Worker_Meta
+    container_name: ${CONTAINER_PREFIX:-}AUTO_Worker_Meta
     environment:
       - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
@@ -283,7 +285,7 @@ services:
 
   python_worker_assets:
     build: ./Docker_Config/Python
-    container_name: AUTO_Worker_Assets
+    container_name: ${CONTAINER_PREFIX:-}AUTO_Worker_Assets
     environment:
       - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
@@ -322,7 +324,7 @@ services:
   # anche per file 4K. Cleanup originale dopo 24h (failsafe).
   python_worker_optimizer:
     build: ./Docker_Config/Python
-    container_name: AUTO_Worker_Optimizer
+    container_name: ${CONTAINER_PREFIX:-}AUTO_Worker_Optimizer
     environment:
       - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
@@ -363,7 +365,7 @@ services:
   # container libretranslate via HTTP.
   python_worker_subtitles:
     build: ./Docker_Config/Python_Subtitles
-    container_name: AUTO_Worker_Subtitles
+    container_name: ${CONTAINER_PREFIX:-}AUTO_Worker_Subtitles
     environment:
       - TZ=Europe/Rome
       - MYSQL_DATABASE=${MYSQL_DATABASE}
@@ -410,7 +412,7 @@ services:
   # delle lingue effettivamente usate per ridurre RAM/avvio.
   libretranslate:
     image: libretranslate/libretranslate:latest
-    container_name: AUTO_Translate
+    container_name: ${CONTAINER_PREFIX:-}AUTO_Translate
     expose:
       - 5000
     environment:

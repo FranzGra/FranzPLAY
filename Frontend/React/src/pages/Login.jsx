@@ -13,7 +13,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { logoParts } = useSettings();
+  const { logoParts, registrationEnabled } = useSettings();
   const { login, user } = useAuth();
   const navigate = useNavigate();
 
@@ -126,15 +126,17 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-white/10 text-center text-sm text-zinc-500">
-          Non hai un account?{" "}
-          <Link
-            to="/register"
-            className="text-[var(--primary-color)] hover:underline font-medium transition-colors"
-          >
-            Registrati
-          </Link>
-        </div>
+        {registrationEnabled && (
+          <div className="mt-8 pt-6 border-t border-white/10 text-center text-sm text-zinc-500">
+            Non hai un account?{" "}
+            <Link
+              to="/register"
+              className="text-[var(--primary-color)] hover:underline font-medium transition-colors"
+            >
+              Registrati
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

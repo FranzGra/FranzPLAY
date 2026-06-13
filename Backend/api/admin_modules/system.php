@@ -29,6 +29,30 @@ switch ($action) {
         }
         break;
 
+    case 'salva_registrazione':
+        // Abilita/disabilita la registrazione guest. Accetta valori truthy/falsy.
+        $raw = $_POST['abilitata'] ?? null;
+        if ($raw === null) {
+            inviaRisposta(false, 'Parametro mancante', 400);
+        }
+        $val = in_array((string) $raw, ['1', 'true', 'on', 'yes'], true) ? '1' : '0';
+
+        executePreparedQuery(
+            "INSERT INTO Impostazioni (Chiave_Impostazione, Valore_Impostazione, Descrizione)
+             VALUES ('registrazione_abilitata', ?, 'Se 1 i guest possono registrarsi; se 0 la registrazione e disabilitata')
+             ON DUPLICATE KEY UPDATE Valore_Impostazione = ?",
+            "ss",
+            [$val, $val]
+        );
+
+        // Invalida la cache delle impostazioni pubbliche (lette da impostazioni.php).
+        global $Cache;
+        if (isset($Cache) && is_object($Cache)) {
+            $Cache->delete('impostazioni_globali');
+        }
+        inviaRisposta(true, $val === '1' ? 'Registrazione abilitata' : 'Registrazione disabilitata', 200, ['abilitata' => $val]);
+        break;
+
     case 'stato_server':
         global $BASE_VIDEO_PATH;
         $path = $BASE_VIDEO_PATH;

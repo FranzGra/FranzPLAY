@@ -50,12 +50,13 @@ try {
 
     // 2. Fallback su database in caso di cache miss
     if (!$logo_data) {
-        $res = $database->query("SELECT Chiave_Impostazione, Valore_Impostazione FROM Impostazioni WHERE Chiave_Impostazione IN ('logo_part_1', 'logo_part_2', 'colore_tema_default')");
+        $res = $database->query("SELECT Chiave_Impostazione, Valore_Impostazione FROM Impostazioni WHERE Chiave_Impostazione IN ('logo_part_1', 'logo_part_2', 'colore_tema_default', 'registrazione_abilitata')");
 
         $logo_data = [
             'logo_part_1' => 'FRANZ',
             'logo_part_2' => 'PLAY',
-            'colore_tema_default' => '#dc2626'
+            'colore_tema_default' => '#dc2626',
+            'registrazione_abilitata' => '1'
         ];
 
         if ($res) {
@@ -83,7 +84,8 @@ try {
         "dati" => [
             "logo_part_1" => "FRANZ",
             "logo_part_2" => "PLAY",
-            "colore_tema_default" => "#dc2626"
+            "colore_tema_default" => "#dc2626",
+            "registrazione_abilitata" => "1"
         ],
         "avviso" => "Impostazioni temporanee (fallback)"
     ]);

@@ -97,3 +97,8 @@ ALTER TABLE `Sottotitoli`
 -- Modello Whisper di default per la generazione sottotitoli (configurabile da Admin).
 INSERT IGNORE INTO `Impostazioni` (`Chiave_Impostazione`, `Valore_Impostazione`, `Descrizione`) VALUES
 ('whisper_modello', 'small', 'Modello faster-whisper per i sottotitoli (tiny/base/small/medium)');
+
+-- Abilita/disabilita la registrazione di nuovi account da parte dei guest.
+-- '1' = registrazione aperta, '0' = solo l'admin puo' creare utenti.
+INSERT IGNORE INTO `Impostazioni` (`Chiave_Impostazione`, `Valore_Impostazione`, `Descrizione`) VALUES
+('registrazione_abilitata', '1', 'Se 1 i guest possono registrarsi; se 0 la registrazione e disabilitata');

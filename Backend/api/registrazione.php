@@ -36,6 +36,23 @@ if (strpos($ip_addr_reg, ',') !== false) {
 }
 checkRateLimit('registrazione', $ip_addr_reg, 5, 300);
 
+// Blocco registrazione se l'admin l'ha disabilitata (Impostazioni.registrazione_abilitata).
+// Controllo server-side: il nascondere il bottone nel frontend NON basta, l'API
+// deve rifiutare comunque le richieste dirette. Default permissivo se la chiave
+// manca (DB pre-migrazione), coerente con l'INSERT IGNORE '1' in 02_migrations.sql.
+$reg_enabled = '1';
+$stmt_reg = $database->prepare("SELECT Valore_Impostazione FROM Impostazioni WHERE Chiave_Impostazione = 'registrazione_abilitata' LIMIT 1");
+if ($stmt_reg && $stmt_reg->execute()) {
+    $stmt_reg->bind_result($reg_val);
+    if ($stmt_reg->fetch() && $reg_val !== null) {
+        $reg_enabled = $reg_val;
+    }
+    $stmt_reg->close();
+}
+if ($reg_enabled === '0') {
+    inviaRisposta(false, 'La registrazione di nuovi account è disabilitata.', 403);
+}
+
 
 // ============================================================================
 // SEZIONE 2: VALIDAZIONE E SICUREZZA INPUT

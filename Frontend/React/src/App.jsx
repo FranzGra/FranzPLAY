@@ -11,7 +11,7 @@ import { Loader2 } from "lucide-react";
 
 // --- CONTESTI E COMPONENTI ---
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { SettingsProvider } from "./context/SettingsContext";
+import { SettingsProvider, useSettings } from "./context/SettingsContext";
 import Navbar from "./components/Navbar";
 import PageTransition from "./components/PageTransition";
 
@@ -95,6 +95,13 @@ const Layout = ({ children }) => {
   );
 };
 
+// Guard della rotta /register: se l'admin ha disabilitato la registrazione,
+// reindirizza al login (copre anche l'accesso diretto via URL).
+const RegisterGate = () => {
+  const { registrationEnabled } = useSettings();
+  return registrationEnabled ? <Register /> : <Navigate to="/login" replace />;
+};
+
 export default function App() {
   const LayoutOutlet = () => (
     <Layout>
@@ -130,7 +137,7 @@ export default function App() {
                 <Route element={<LayoutOutlet />}>
                   {/* PUBLIC */}
                   <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
+                  <Route path="/register" element={<RegisterGate />} />
 
                   {/* PROTECTED */}
                   <Route
