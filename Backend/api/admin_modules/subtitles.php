@@ -162,6 +162,12 @@ switch ($action) {
             throw new Exception("Lingua origine non valida");
         }
 
+        // Modello Whisper scelto per questo job (small/medium). Default 'small'.
+        $modello = $_POST['modello'] ?? 'small';
+        if (!in_array($modello, ['small', 'medium'], true)) {
+            $modello = 'small';
+        }
+
         // Lingue dei sottotitoli da produrre (array di codici).
         $lingue = $_POST['lingue'] ?? [];
         if (!is_array($lingue)) $lingue = [$lingue];
@@ -187,15 +193,16 @@ switch ($action) {
                 ? 'trascrizione' : 'traduzione';
 
             executePreparedQuery(
-                "INSERT INTO Sottotitoli (id_Video, lingua, lingua_origine, tipo, stato)
-                 VALUES (?, ?, ?, ?, 'in_coda')
+                "INSERT INTO Sottotitoli (id_Video, lingua, lingua_origine, tipo, modello_richiesto, stato)
+                 VALUES (?, ?, ?, ?, ?, 'in_coda')
                  ON DUPLICATE KEY UPDATE
                     lingua_origine = VALUES(lingua_origine),
                     tipo = VALUES(tipo),
+                    modello_richiesto = VALUES(modello_richiesto),
                     stato = 'in_coda',
                     errore_msg = NULL,
                     locked_at = NULL",
-                "isss", [$id_video, $lang, $lingua_origine, $tipo]
+                "issss", [$id_video, $lang, $lingua_origine, $tipo, $modello]
             );
             $accodate++;
         }
@@ -215,6 +222,48 @@ switch ($action) {
             "i", [$id_sub]
         );
         inviaRisposta(true, "Sottotitolo rimesso in coda");
+        break;
+
+    // ------------------------------------------------------------------
+    // ANNULLA LA GENERAZIONE DI UN VIDEO
+    // Rimuove le righe ancora 'in_coda' o 'elaborazione' (i job pendenti e quello
+    // in corso) di un video, lasciando intatti i sottotitoli gia' 'completato'.
+    // Il worker non ha cancel cooperativo: se un job e' a meta' trascrizione la
+    // finira', ma le sue UPDATE finali colpiranno righe inesistenti (no-op) e il
+    // risultato non verra' salvato. Eventuali .vtt parziali vengono rimossi.
+    // ------------------------------------------------------------------
+    case 'annulla_sottotitoli':
+        $id_video = (int) ($_POST['id_video'] ?? 0);
+        if ($id_video <= 0) throw new Exception("ID Video non valido");
+
+        // Recupera i .vtt eventualmente gia' scritti dalle righe da annullare.
+        $resF = executePreparedQuery(
+            "SELECT percorso_file FROM Sottotitoli
+             WHERE id_Video = ? AND stato IN ('in_coda','elaborazione')",
+            "i", [$id_video]
+        );
+        $files = $resF ? $resF->fetch_all(MYSQLI_ASSOC) : [];
+
+        executePreparedQuery(
+            "DELETE FROM Sottotitoli
+             WHERE id_Video = ? AND stato IN ('in_coda','elaborazione')",
+            "i", [$id_video]
+        );
+        global $last_affected_rows;
+        $annullate = (int) ($last_affected_rows ?? 0);
+
+        global $BASE_VIDEO_PATH;
+        foreach ($files as $f) {
+            if (empty($f['percorso_file'])) continue;
+            $full = safeJoinPath($BASE_VIDEO_PATH, ltrim($f['percorso_file'], '/\\'));
+            if ($full === null) {
+                error_log("🚨 [SECURITY] Path traversal bloccato in annulla_sottotitoli: " . $f['percorso_file']);
+            } elseif (file_exists($full)) {
+                @unlink($full);
+            }
+        }
+
+        inviaRisposta(true, "Generazione annullata ($annullate job)", 200, ['annullate' => $annullate]);
         break;
 
     // ------------------------------------------------------------------

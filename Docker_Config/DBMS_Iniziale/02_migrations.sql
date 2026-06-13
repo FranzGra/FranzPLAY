@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS `Sottotitoli` (
     `tipo` ENUM('trascrizione','traduzione') NOT NULL DEFAULT 'trascrizione',
     `percorso_file` VARCHAR(512) NULL COMMENT 'Path relativo del file .vtt generato',
     `stato` ENUM('in_coda','elaborazione','completato','errore') NOT NULL DEFAULT 'in_coda',
-    `modello_usato` VARCHAR(32) NULL COMMENT 'Modello Whisper usato (es. small)',
+    `modello_richiesto` VARCHAR(32) NULL COMMENT 'Modello Whisper scelto dall_admin per questo job (small/medium). NULL = usa default globale',
+    `modello_usato` VARCHAR(32) NULL COMMENT 'Modello Whisper effettivamente usato (es. small)',
     `errore_msg` VARCHAR(500) NULL,
     `locked_at` DATETIME NULL,
     `generato_at` DATETIME NULL,
@@ -86,6 +87,12 @@ CREATE TABLE IF NOT EXISTS `Sottotitoli` (
     CONSTRAINT `fk_sottotitoli_video` FOREIGN KEY (`id_Video`)
         REFERENCES `Video`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Sottotitoli generati on-demand (Whisper + traduzione)';
+
+-- Colonna modello_richiesto per i DB pre-esistenti (idempotente, MariaDB 10.3+).
+ALTER TABLE `Sottotitoli`
+    ADD COLUMN IF NOT EXISTS `modello_richiesto` VARCHAR(32) NULL
+    COMMENT 'Modello Whisper scelto dall_admin per questo job (small/medium). NULL = usa default globale'
+    AFTER `stato`;
 
 -- Modello Whisper di default per la generazione sottotitoli (configurabile da Admin).
 INSERT IGNORE INTO `Impostazioni` (`Chiave_Impostazione`, `Valore_Impostazione`, `Descrizione`) VALUES

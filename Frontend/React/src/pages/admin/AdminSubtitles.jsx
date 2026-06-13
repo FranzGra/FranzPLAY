@@ -25,6 +25,8 @@ import {
   Mic,
   Inbox,
   X,
+  StopCircle,
+  Cpu,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -412,6 +414,7 @@ function SubtitleModalContent({ video, onClose, onChanged }) {
   const [loadingRows, setLoadingRows] = useState(true);
   const [source, setSource] = useState("auto");
   const [targets, setTargets] = useState(["en", "it"]);
+  const [modello, setModello] = useState("small");
   const [submitting, setSubmitting] = useState(false);
 
   const loadRows = useCallback(async (silent = false) => {
@@ -439,7 +442,7 @@ function SubtitleModalContent({ video, onClose, onChanged }) {
     if (targets.length === 0) return toast.error("Seleziona almeno una lingua sottotitoli");
     setSubmitting(true);
     try {
-      const res = await apiRequest("/admin.php", "POST", { action: "genera_sottotitoli", id_video: video.id, lingua_origine: source, lingue: targets });
+      const res = await apiRequest("/admin.php", "POST", { action: "genera_sottotitoli", id_video: video.id, lingua_origine: source, lingue: targets, modello });
       if (res.success) {
         toast.success(res.message || "Generazione accodata");
         await loadRows(true);
@@ -552,6 +555,43 @@ function SubtitleModalContent({ video, onClose, onChanged }) {
               La lingua uguale a quella parlata diventa la <strong>trascrizione</strong>; le altre vengono <strong>tradotte</strong> automaticamente.
             </p>
           </div>
+
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-2">Modello di trascrizione</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { code: "small", titolo: "Small", desc: "Veloce · leggero", hint: "Consigliato" },
+                { code: "medium", titolo: "Medium", desc: "Più preciso · più lento", hint: "Più RAM/CPU" },
+              ].map((m) => {
+                const active = modello === m.code;
+                return (
+                  <button
+                    key={m.code}
+                    type="button"
+                    onClick={() => setModello(m.code)}
+                    className={`text-left rounded-2xl border p-3 transition-colors ${
+                      active
+                        ? "bg-primary/15 border-primary/50 ring-1 ring-primary/50"
+                        : "bg-zinc-900/50 border-white/5 hover:border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-primary/20 text-primary" : "bg-zinc-800 text-zinc-400"}`}>
+                        <Cpu size={15} />
+                      </span>
+                      <span className={`font-black text-sm ${active ? "text-foreground" : "text-zinc-300"}`}>{m.titolo}</span>
+                      {active && <Check size={15} className="ml-auto text-primary" />}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-semibold mt-1.5">{m.desc}</p>
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold mt-0.5">{m.hint}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-zinc-600 mt-2 leading-relaxed">
+              Il modello <strong>Medium</strong> migliora l'accuratezza su audio difficili (accenti, rumore) ma richiede più tempo e memoria. Viene scaricato alla prima esecuzione.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -606,22 +646,30 @@ function analyzeGroup(rows) {
 }
 
 const STEP_COLORS = {
-  done: { ring: "border-emerald-500/40 bg-emerald-500/15 text-emerald-400", line: "bg-emerald-500/40", label: "text-emerald-300" },
-  active: { ring: "border-primary bg-primary/20 text-primary animate-pulse", line: "bg-zinc-700", label: "text-foreground" },
-  pending: { ring: "border-zinc-700 bg-zinc-900 text-zinc-600", line: "bg-zinc-800", label: "text-zinc-600" },
-  errore: { ring: "border-red-500/40 bg-red-500/15 text-red-400", line: "bg-zinc-800", label: "text-red-300" },
+  done: { ring: "border-emerald-500/40 bg-emerald-500/15 text-emerald-400", label: "text-emerald-300", sub: "text-emerald-400/70" },
+  active: { ring: "border-primary bg-primary/20 text-primary shadow-lg shadow-primary/20", label: "text-foreground", sub: "text-primary" },
+  pending: { ring: "border-zinc-700 bg-zinc-900 text-zinc-600", label: "text-zinc-600", sub: "text-zinc-700" },
+  errore: { ring: "border-red-500/40 bg-red-500/15 text-red-400", label: "text-red-300", sub: "text-red-400/80" },
 };
 
-function FlowStep({ Icon, label, sub, status, isLast }) {
+// Una "tacca" della timeline: icona centrata nella propria colonna (flex-1, quindi
+// distribuita uniformemente) con i due semi-connettori allineati alla riga dell'icona.
+function FlowStep({ Icon, label, sub, status, isFirst, isLast, lineInDone, lineOutDone }) {
   const c = STEP_COLORS[status] || STEP_COLORS.pending;
+  const lineColor = (filled) => (filled ? "bg-emerald-500/40" : "bg-zinc-800");
   return (
-    <div className="flex items-center flex-1 min-w-0">
-      <div className="flex flex-col items-center text-center min-w-0">
-        <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center ${c.ring}`}><Icon size={18} /></div>
-        <p className={`mt-2 text-[10px] font-black uppercase tracking-wider ${c.label}`}>{label}</p>
-        {sub && <p className="text-[9px] text-muted-foreground font-bold truncate max-w-[90px]">{sub}</p>}
+    <div className="flex flex-col items-center flex-1 min-w-0">
+      {/* Riga icona + connettori: tutto allineato verticalmente all'icona */}
+      <div className="flex items-center w-full">
+        <div className={`h-0.5 flex-1 rounded-full ${isFirst ? "opacity-0" : lineColor(lineInDone)}`} />
+        <div className={`w-11 h-11 shrink-0 rounded-2xl border flex items-center justify-center transition-colors ${c.ring}`}>
+          <Icon size={18} className={status === "active" ? "animate-pulse" : ""} />
+        </div>
+        <div className={`h-0.5 flex-1 rounded-full ${isLast ? "opacity-0" : lineColor(lineOutDone)}`} />
       </div>
-      {!isLast && <div className={`h-0.5 flex-1 mx-2 rounded-full ${c.line}`} />}
+      {/* Etichette centrate sotto l'icona */}
+      <p className={`mt-2 text-[10px] font-black uppercase tracking-wider text-center ${c.label}`}>{label}</p>
+      {sub && <p className={`text-[9px] font-bold text-center truncate max-w-[100px] ${c.sub}`}>{sub}</p>}
     </div>
   );
 }
@@ -630,6 +678,9 @@ function QueueCard({ rows, reload }) {
   const a = analyzeGroup(rows);
   const v = rows[0];
   const pct = a.total > 0 ? Math.round((a.done / a.total) * 100) : 0;
+  const [cancelling, setCancelling] = useState(false);
+  // C'è ancora qualcosa da fermare? (job in coda o in elaborazione)
+  const canCancel = rows.some((r) => r.stato === "in_coda" || r.stato === "elaborazione");
 
   const rigenera = async (id) => {
     try {
@@ -639,28 +690,56 @@ function QueueCard({ rows, reload }) {
     } catch (e) { toast.error("Errore: " + e.message); }
   };
 
+  const annulla = async () => {
+    if (!window.confirm(`Annullare la generazione dei sottotitoli per "${v.Titolo}"?\nI sottotitoli già completati resteranno disponibili.`)) return;
+    setCancelling(true);
+    try {
+      await apiRequest("/admin.php", "POST", { action: "annulla_sottotitoli", id_video: v.id_Video });
+      toast.success("Generazione annullata");
+      reload();
+    } catch (e) {
+      toast.error("Errore annullamento: " + e.message);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   return (
     <Card className="p-5 bg-zinc-900/30 border-white/5 space-y-5 rounded-3xl">
-      <div className="flex items-center gap-4">
-        <div className="relative w-24 aspect-video rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-white/10 flex-shrink-0">
+      <div className="flex items-center gap-5">
+        <div className="relative w-28 aspect-video rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-white/10 flex-shrink-0">
           <CoverThumb video={v} />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-foreground font-bold text-sm truncate" title={v.Titolo}>{v.Titolo}</h3>
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            <Badge variant="outline" className="text-[10px] uppercase tracking-widest bg-zinc-950/50 border-white/5">
+          <h3 className="text-foreground font-black text-lg md:text-xl leading-tight truncate" title={v.Titolo}>{v.Titolo}</h3>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <Badge variant="outline" className="text-xs uppercase tracking-wider bg-zinc-950/50 border-white/5 px-2.5 py-1">
               Sorgente: {a.source === "auto" ? "auto (rileva)" : (LABEL_LINGUA[a.source] || a.source)}
             </Badge>
             {a.modello && (
-              <Badge variant="outline" className="text-[10px] uppercase tracking-widest bg-zinc-950/50 border-white/5">
+              <Badge variant="outline" className="text-xs uppercase tracking-wider bg-zinc-950/50 border-white/5 px-2.5 py-1">
                 Whisper · {a.modello}
               </Badge>
             )}
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-2xl font-black text-foreground leading-none">{pct}%</p>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{a.done}/{a.total} pronte</p>
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-right">
+            <p className="text-3xl font-black text-foreground leading-none">{pct}%</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mt-1">{a.done}/{a.total} pronte</p>
+          </div>
+          {canCancel && (
+            <Button
+              variant="outline"
+              onClick={annulla}
+              disabled={cancelling}
+              title="Ferma e annulla la generazione"
+              className="gap-2 rounded-xl font-black uppercase tracking-wider text-xs bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500"
+            >
+              {cancelling ? <Loader2 size={16} className="animate-spin" /> : <StopCircle size={16} />}
+              Annulla
+            </Button>
+          )}
         </div>
       </div>
 
@@ -668,13 +747,47 @@ function QueueCard({ rows, reload }) {
         <div className={`h-full rounded-full transition-all duration-700 ${a.phase === "errore" ? "bg-red-500" : "bg-primary"}`} style={{ width: `${Math.max(pct, a.phase !== "in_coda" ? 8 : 0)}%` }} />
       </div>
 
-      <div className="flex items-center bg-zinc-950/40 rounded-2xl p-4 border border-white/5">
-        <FlowStep Icon={Inbox} label="In coda" status={a.stepStatus("in_coda")} />
-        <FlowStep Icon={AudioLines} label="Audio" sub="estrazione" status={a.stepStatus("trascrizione")} />
-        <FlowStep Icon={Mic} label="Trascrizione" sub={`Whisper${a.modello ? " · " + a.modello : ""}`} status={a.stepStatus("trascrizione")} />
-        <FlowStep Icon={Languages} label="Traduzione" sub={a.hasTranslations ? "LibreTranslate" : "non richiesta"} status={a.hasTranslations ? a.stepStatus("traduzione") : "pending"} />
-        <FlowStep Icon={CheckCircle2} label="Completato" status={a.stepStatus("completato")} isLast />
-      </div>
+      {(() => {
+        // Stato e testo chiaro per ciascuna tacca della pipeline.
+        const subText = (key, status) => {
+          if (key === "traduzione" && !a.hasTranslations) return "Non richiesta";
+          if (status === "errore") return "Errore";
+          switch (key) {
+            case "in_coda": return status === "done" ? "Ricevuto" : "In attesa";
+            case "audio": return status === "active" ? "Estrazione…" : status === "done" ? "Estratto" : "In attesa";
+            case "trascrizione": return status === "active" ? "In corso…" : status === "done" ? "Completata" : "In attesa";
+            case "traduzione": return status === "active" ? "In corso…" : status === "done" ? "Completata" : "In attesa";
+            case "completato": return status === "done" ? "Pronto" : "In attesa";
+            default: return "";
+          }
+        };
+
+        const steps = [
+          { key: "in_coda", Icon: Inbox, label: "In coda", status: a.stepStatus("in_coda") },
+          { key: "audio", Icon: AudioLines, label: "Audio", status: a.stepStatus("trascrizione") },
+          { key: "trascrizione", Icon: Mic, label: "Trascrizione", status: a.stepStatus("trascrizione") },
+          { key: "traduzione", Icon: Languages, label: "Traduzione", status: a.hasTranslations ? a.stepStatus("traduzione") : "pending" },
+          { key: "completato", Icon: CheckCircle2, label: "Completato", status: a.stepStatus("completato") },
+        ];
+
+        return (
+          <div className="flex items-start bg-zinc-950/40 rounded-2xl px-4 py-5 border border-white/5">
+            {steps.map((s, i) => (
+              <FlowStep
+                key={s.key}
+                Icon={s.Icon}
+                label={s.label}
+                sub={subText(s.key, s.status)}
+                status={s.status}
+                isFirst={i === 0}
+                isLast={i === steps.length - 1}
+                lineInDone={i > 0 && (steps[i - 1].status === "done")}
+                lineOutDone={s.status === "done"}
+              />
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="flex flex-wrap gap-2">
         {rows.map((r) => {
@@ -735,25 +848,25 @@ function QueueView({ onCount }) {
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
       <div className="grid grid-cols-3 gap-4">
-        <Card className="p-4 bg-zinc-900/30 border-white/5 flex items-center gap-3 rounded-3xl">
-          <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center"><AudioLines size={20} /></div>
-          <div>
+        <Card className="p-4 bg-zinc-900/30 border-white/5 flex-row items-center gap-4 rounded-3xl">
+          <div className="w-11 h-11 shrink-0 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center"><AudioLines size={20} /></div>
+          <div className="text-left min-w-0">
             <p className="text-2xl font-black text-foreground leading-none">{attivi}</p>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">In lavorazione</p>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">In lavorazione</p>
           </div>
         </Card>
-        <Card className="p-4 bg-zinc-900/30 border-white/5 flex items-center gap-3 rounded-3xl">
-          <div className="w-11 h-11 rounded-2xl bg-sky-500/15 text-sky-400 flex items-center justify-center"><ListVideo size={20} /></div>
-          <div>
+        <Card className="p-4 bg-zinc-900/30 border-white/5 flex-row items-center gap-4 rounded-3xl">
+          <div className="w-11 h-11 shrink-0 rounded-2xl bg-sky-500/15 text-sky-400 flex items-center justify-center"><ListVideo size={20} /></div>
+          <div className="text-left min-w-0">
             <p className="text-2xl font-black text-foreground leading-none">{groups.length}</p>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Video coinvolti</p>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">Video coinvolti</p>
           </div>
         </Card>
-        <Card className="p-4 bg-zinc-900/30 border-white/5 flex items-center gap-3 rounded-3xl">
-          <div className="w-11 h-11 rounded-2xl bg-red-500/15 text-red-400 flex items-center justify-center"><AlertCircle size={20} /></div>
-          <div>
+        <Card className="p-4 bg-zinc-900/30 border-white/5 flex-row items-center gap-4 rounded-3xl">
+          <div className="w-11 h-11 shrink-0 rounded-2xl bg-red-500/15 text-red-400 flex items-center justify-center"><AlertCircle size={20} /></div>
+          <div className="text-left min-w-0">
             <p className="text-2xl font-black text-foreground leading-none">{errori}</p>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Errori</p>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">Errori</p>
           </div>
         </Card>
       </div>

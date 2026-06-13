@@ -48,6 +48,9 @@ WHISPER_COMPUTE_TYPE = os.environ.get('WHISPER_COMPUTE_TYPE', 'int8')
 WHISPER_DEFAULT_MODEL = os.environ.get('WHISPER_DEFAULT_MODEL', 'small')
 WHISPER_BEAM_SIZE = int(os.environ.get('WHISPER_BEAM_SIZE', '5'))
 
+# Modelli selezionabili per-job dall'admin (whitelist, coerente col backend PHP).
+ALLOWED_MODELS = {'small', 'medium'}
+
 # LibreTranslate (container separato per la traduzione multilingua)
 LIBRETRANSLATE_URL = os.environ.get('LIBRETRANSLATE_URL', 'http://libretranslate:5000').rstrip('/')
 LIBRETRANSLATE_API_KEY = os.environ.get('LIBRETRANSLATE_API_KEY') or None
@@ -105,6 +108,7 @@ def _ensure_subtitles_table(conn):
                     `tipo` ENUM('trascrizione','traduzione') NOT NULL DEFAULT 'trascrizione',
                     `percorso_file` VARCHAR(512) NULL,
                     `stato` ENUM('in_coda','elaborazione','completato','errore') NOT NULL DEFAULT 'in_coda',
+                    `modello_richiesto` VARCHAR(32) NULL,
                     `modello_usato` VARCHAR(32) NULL,
                     `errore_msg` VARCHAR(500) NULL,
                     `locked_at` DATETIME NULL,
@@ -116,6 +120,12 @@ def _ensure_subtitles_table(conn):
                     CONSTRAINT `fk_sottotitoli_video` FOREIGN KEY (`id_Video`)
                         REFERENCES `Video`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            # Colonna aggiunta in un secondo momento: ALTER idempotente per i DB
+            # gia' esistenti (l'init SQL non rigira su volume non vergine).
+            cursor.execute("""
+                ALTER TABLE `Sottotitoli`
+                ADD COLUMN IF NOT EXISTS `modello_richiesto` VARCHAR(32) NULL AFTER `stato`
             """)
     except Exception as e:
         logging.warning(f"_ensure_subtitles_table skip: {e}")
@@ -190,7 +200,17 @@ def write_vtt(segments, full_vtt_path):
     Scrive i segmenti in formato WebVTT. `segments` = lista di dict
     {'start': float, 'end': float, 'text': str}.
     """
-    os.makedirs(Path(full_vtt_path).parent, exist_ok=True)
+    # Crea la cartella sottotitoli con permessi ampi: su alcuni mount (es. drvfs su
+    # Windows, o share di rete) le nuove dir nascono di proprieta' di un uid diverso
+    # da quello del worker; senza il bit di scrittura per il gruppo/altri il worker
+    # non potrebbe scrivere il .vtt. Best-effort: se non siamo owner, chmod fallisce
+    # silenziosamente (su Linux nativo la dir e' gia' nostra e scrivibile).
+    parent = Path(full_vtt_path).parent
+    os.makedirs(parent, mode=0o777, exist_ok=True)
+    try:
+        os.chmod(parent, 0o777)
+    except OSError:
+        pass
     lines = ["WEBVTT", ""]
     for seg in segments:
         text = (seg['text'] or '').strip()
@@ -384,7 +404,7 @@ def process_jobs(conn, model_name):
     # 5. Carica le righe in elaborazione di questo video.
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(
-            "SELECT id, lingua, lingua_origine, tipo FROM Sottotitoli "
+            "SELECT id, lingua, lingua_origine, tipo, modello_richiesto FROM Sottotitoli "
             "WHERE id_Video = %s AND stato = 'elaborazione'", (video_id,)
         )
         rows = cursor.fetchall()
@@ -393,6 +413,14 @@ def process_jobs(conn, model_name):
 
     # Lingua sorgente scelta dall'admin (coerente tra le righe del batch).
     source_lang = next((r['lingua_origine'] for r in rows if r['lingua_origine']), 'auto')
+
+    # Modello scelto dall'admin per QUESTO video (modello_richiesto). Se le righe
+    # non lo specificano, si usa il default globale passato dal loop principale.
+    requested = next((r['modello_richiesto'] for r in rows if r.get('modello_richiesto')), None)
+    if requested in ALLOWED_MODELS:
+        model_name = requested
+    elif requested:
+        logging.warning(f"[Subs] Modello richiesto '{requested}' non ammesso (id={video_id}): uso '{model_name}'.")
 
     logging.info(f"[Subs] Video id={video_id} ('{relative_path}'): {len(rows)} lingua/e, "
                  f"sorgente='{source_lang}', modello='{model_name}'.")
@@ -513,6 +541,10 @@ def _finalize_transcription_row(conn, video_id, trans_row, actual_source, db_src
 # Entrypoint
 # ============================================================================
 if __name__ == "__main__":
+    # umask 0: le cartelle/file creati ereditano i permessi richiesti (0o777/0o666)
+    # senza che la umask di default (022) tolga la scrittura a gruppo/altri. Serve
+    # perche' i .vtt finiscono in dir che su alcuni mount appartengono ad altro uid.
+    os.umask(0)
     logging.info("--- Avvio Worker Sottotitoli (faster-whisper) ---")
     if not all([DB_HOST, DB_USER, DB_PASS, DB_NAME]):
         logging.critical("Variabili d'ambiente del database non impostate!")

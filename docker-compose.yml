@@ -262,6 +262,10 @@ services:
       - WATCH_DIR=/percorsoVideo
       - PYTHONUNBUFFERED=1
       - HOME=/tmp
+      # Reattivita': tetto del backoff idle basso (un SELECT ogni ~15s e' trascurabile).
+      # Senza questo il worker, dopo un po' di inattivita', dormiva fino a 60s
+      # prima di promuovere un nuovo video da Video_Temp a Video.
+      - WORKER_BACKOFF_MAX=${WORKER_BACKOFF_MAX:-15}
     user: "33:33"  # www-data: vedi nota in python_watcher.
     volumes:
       - ./Backend/python_server:/app
@@ -291,6 +295,9 @@ services:
       - WATCH_DIR=/percorsoVideo
       - PYTHONUNBUFFERED=1
       - HOME=/tmp
+      # Reattivita': senza questo, in idle prolungato, copertine/anteprime venivano
+      # generate fino a 120s dopo la comparsa del video.
+      - WORKER_BACKOFF_MAX=${WORKER_BACKOFF_MAX:-15}
     user: "33:33"  # www-data: vedi nota in python_watcher.
     volumes:
       - ./Backend/python_server:/app
@@ -373,7 +380,10 @@ services:
       - WHISPER_DEFAULT_MODEL=${WHISPER_DEFAULT_MODEL:-small}
       - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
       - LIBRETRANSLATE_URL=http://libretranslate:5000
-      - SUBTITLES_POLL_INTERVAL=${SUBTITLES_POLL_INTERVAL:-15}
+      - SUBTITLES_POLL_INTERVAL=${SUBTITLES_POLL_INTERVAL:-10}
+      # On-demand: l'admin attende attivamente, quindi niente backoff lungo.
+      # Prima il worker dormiva fino a 120s prima di accorgersi di un job in coda.
+      - SUBTITLES_BACKOFF_MAX=${SUBTITLES_BACKOFF_MAX:-10}
     user: "33:33"  # www-data: scrive i .vtt nelle cartelle asset di /percorsoVideo (vedi python_watcher).
     volumes:
       - ./Backend/python_server:/app
