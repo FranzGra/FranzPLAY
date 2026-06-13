@@ -45,6 +45,16 @@ switch ($action) {
         $used = $total - $free;
 
         global $database;
+
+        // Helper locale: ritorna il singolo valore scalare di una COUNT/aggregazione, 0 se fallisce
+        $scalar = function ($query) {
+            $res = executePreparedQuery($query);
+            if ($res && ($row = $res->fetch_row())) {
+                return (int) $row[0];
+            }
+            return 0;
+        };
+
         $stats = [
             'disco_totale_gb' => $total > 0 ? round($total / 1073741824, 2) : 0,
             'disco_usato_gb' => $total > 0 ? round($used / 1073741824, 2) : 0,
@@ -52,7 +62,20 @@ switch ($action) {
             'disco_percentuale' => $total > 0 ? round(($used / $total) * 100, 1) : 0,
             'php_upload_max' => ini_get('upload_max_filesize'),
             'php_post_max' => ini_get('post_max_size'),
-            'db_version' => $database->server_info
+            'db_version' => $database->server_info,
+
+            // --- Statistiche libreria (Drop & Watch pipeline) ---
+            'video_totali' => $scalar("SELECT COUNT(*) FROM Video"),
+            'video_ottimizzati' => $scalar("SELECT COUNT(*) FROM Video WHERE ottimizzato = 1"),
+            'video_da_analizzare' => $scalar("SELECT COUNT(*) FROM Video WHERE ottimizzato IS NULL"),
+            'video_in_ingestione' => $scalar("SELECT COUNT(*) FROM Video_Temp"),
+            'asset_mancanti' => $scalar("SELECT COUNT(*) FROM Video WHERE percorso_copertina IS NULL OR percorso_anteprima IS NULL"),
+            'categorie_totali' => $scalar("SELECT COUNT(*) FROM Categorie"),
+            'utenti_totali' => $scalar("SELECT COUNT(*) FROM Utenti"),
+            'utenti_admin' => $scalar("SELECT COUNT(*) FROM Utenti WHERE Admin = 1"),
+            'commenti_totali' => $scalar("SELECT COUNT(*) FROM Commenti"),
+            'sottotitoli_totali' => $scalar("SELECT COUNT(*) FROM Sottotitoli WHERE stato = 'completato'"),
+            'sottotitoli_in_coda' => $scalar("SELECT COUNT(*) FROM Sottotitoli WHERE stato IN ('in_coda','elaborazione')"),
         ];
 
         inviaRisposta(true, 'Statistiche server aggiornate', 200, ['dati' => $stats]);

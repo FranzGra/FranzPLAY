@@ -105,6 +105,16 @@ try {
             $video['is_liked'] = (bool) $video['is_liked'];
             $video['is_saved'] = (bool) $video['is_saved'];
             $video['progresso_secondi'] = (int) ($video['progresso_secondi'] ?? 0);
+
+            // Sottotitoli pronti (WebVTT) per il player: solo quelli completati.
+            $resSub = executePreparedQuery(
+                "SELECT lingua, tipo, percorso_file FROM Sottotitoli
+                 WHERE id_Video = ? AND stato = 'completato' AND percorso_file IS NOT NULL
+                 ORDER BY tipo ASC, lingua ASC",
+                "i", [$video['id']]
+            );
+            $video['sottotitoli'] = $resSub ? $resSub->fetch_all(MYSQLI_ASSOC) : [];
+
             inviaRisposta(true, "Video trovato", 200, ['video' => $video]);
         } else {
             inviaRisposta(false, "Video non trovato", 404);

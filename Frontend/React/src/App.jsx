@@ -32,6 +32,7 @@ const AdminVideos = lazy(() => import("./pages/admin/AdminVideos"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminAccessi = lazy(() => import("./pages/admin/AdminAccessi"));
+const AdminSubtitles = lazy(() => import("./pages/admin/AdminSubtitles"));
 
 // --- WIZARD (Lazy Loaded) ---
 const SetupWizard = lazy(() => import("./pages/SetupWizard"));
@@ -121,6 +122,7 @@ export default function App() {
                   <Route path="videos" element={<AdminVideos />} />
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="categories" element={<AdminCategories />} />
+                  <Route path="subtitles" element={<AdminSubtitles />} />
                   <Route path="accessi" element={<AdminAccessi />} />
                 </Route>
 

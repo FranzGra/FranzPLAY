@@ -348,8 +348,95 @@ services:
           memory: 256M
     restart: always
 
+  # --- SOTTOTITOLI (faster-whisper, on-demand via Admin) ---
+  # Worker che genera sottotitoli SOLO per i video accodati manualmente dall'admin
+  # (Admin > Sottotitoli). Usa un Dockerfile DEDICATO (Python_Subtitles) per non
+  # gonfiare gli altri 4 worker con CTranslate2/faster-whisper. La trascrizione gira
+  # su CPU INT8 (target ZimaBlade x86). La traduzione multilingua e' delegata al
+  # container libretranslate via HTTP.
+  python_worker_subtitles:
+    build: ./Docker_Config/Python_Subtitles
+    container_name: AUTO_Worker_Subtitles
+    environment:
+      - TZ=Europe/Rome
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - WATCH_DIR=/percorsoVideo
+      - PYTHONUNBUFFERED=1
+      - HOME=/tmp
+      - WHISPER_MODEL_DIR=/models
+      - HF_HOME=/models
+      - WHISPER_DEFAULT_MODEL=${WHISPER_DEFAULT_MODEL:-small}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+      - LIBRETRANSLATE_URL=http://libretranslate:5000
+      - SUBTITLES_POLL_INTERVAL=${SUBTITLES_POLL_INTERVAL:-15}
+    user: "33:33"  # www-data: scrive i .vtt nelle cartelle asset di /percorsoVideo (vedi python_watcher).
+    volumes:
+      - ./Backend/python_server:/app
+      - ${PERCORSO_VIDEO}:/percorsoVideo
+      - whisper_models:/models    # cache modelli Whisper (no re-download a ogni restart)
+    command: ["python3", "/app/worker_subtitles.py"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      libretranslate:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          # ZimaBlade x86 16GB: il modello 'small' INT8 ha picchi ~1-2GB.
+          # Lasciamo margine per eventuale upgrade a 'medium'.
+          cpus: '3.0'
+          memory: 3G
+    restart: always
+
+  # --- TRADUZIONE (LibreTranslate, locale e offline) ---
+  # Motore di traduzione open-source self-hosted, usato dal worker sottotitoli.
+  # Non esposto pubblicamente (solo rete interna Docker). Carica solo i modelli
+  # delle lingue effettivamente usate per ridurre RAM/avvio.
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: AUTO_Translate
+    expose:
+      - 5000
+    environment:
+      - TZ=Europe/Rome
+      # Lingue caricate: italiano + inglese (il caso d'uso principale). Aggiungere
+      # qui altri codici ISO se servono nuove lingue target (es. es,fr,de,pt).
+      - LT_LOAD_ONLY=${LT_LOAD_ONLY:-en,it}
+      - LT_UPDATE_MODELS=false
+    volumes:
+      # Montiamo l'INTERA .local (non la sottocartella argos-translate): è il mount
+      # documentato ufficialmente. Un volume nominato su un path che ESISTE già
+      # nell'immagine eredita owner/permessi corretti (utente libretranslate);
+      # montando invece direttamente .../argos-translate il volume nasce root-owned
+      # e il processo non-root non può crearci dentro 'packages' (PermissionError).
+      - libretranslate_models:/home/libretranslate/.local
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:5000/languages'); \" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    restart: always
+
 volumes:
   npm_cache:
 
   redis_data:
+    driver: local
+
+  whisper_models:
+    driver: local
+
+  libretranslate_models:
     driver: local

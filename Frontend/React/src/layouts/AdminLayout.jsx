@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   Github,
   Activity,
+  Captions,
   Menu,
   X,
 } from "lucide-react";
@@ -44,6 +45,7 @@ export default function AdminLayout() {
     { path: "/admin/videos", icon: Film, label: "Video" },
     { path: "/admin/users", icon: Users, label: "Utenti" },
     { path: "/admin/categories", icon: FolderOpen, label: "Categorie" },
+    { path: "/admin/subtitles", icon: Captions, label: "Sottotitoli" },
     { path: "/admin/accessi", icon: Activity, label: "Accessi" },
   ];
 

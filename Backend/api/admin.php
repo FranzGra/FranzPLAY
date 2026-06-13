@@ -73,7 +73,8 @@ try {
         'assets' => ['upload_copertina', 'rimuovi_copertina', 'upload_anteprima', 'rimuovi_anteprima'],
         'categories' => ['lista_categorie', 'aggiorna_categoria', 'salva_colore_categoria', 'upload_sfondo_categoria', 'rimuovi_sfondo_categoria'],
         'users' => ['lista_utenti', 'toggle_admin', 'elimina_utente', 'aggiungi_utente', 'reset_password_utente', 'lista_accessi'],
-        'system' => ['salva_impostazioni_globali', 'stato_server', 'salva_logo']
+        'system' => ['salva_impostazioni_globali', 'stato_server', 'salva_logo'],
+        'subtitles' => ['lista_video_sottotitoli', 'coda_sottotitoli', 'stato_sottotitoli', 'genera_sottotitoli', 'rigenera_sottotitolo', 'elimina_sottotitolo']
     ];
 
     $module_found = false;

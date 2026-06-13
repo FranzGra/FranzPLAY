@@ -12,6 +12,7 @@ import {
   Clock,
   AlertTriangle,
   MonitorPlay,
+  Captions,
 } from "lucide-react";
 
 import VideoPlayer from "../components/VideoPlayer";
@@ -159,6 +160,7 @@ export default function Player() {
               poster={getAssetUrl(video.percorso_copertina)}
               videoId={video.id}
               startTime={Number(video.progresso_secondi || 0)}
+              subtitles={video.sottotitoli || []}
             />
           </div>
 
@@ -185,6 +187,16 @@ export default function Player() {
               {video.altezza_video > 0 && (
                 <span className="flex items-center gap-1.5 uppercase">
                   <MonitorPlay size={16} /> {video.altezza_video}p
+                </span>
+              )}
+              {/* Subtitles Badge: mostrato se il video ha sottotitoli pronti */}
+              {video.sottotitoli?.length > 0 && (
+                <span
+                  title={`Sottotitoli disponibili: ${[...new Set(video.sottotitoli.map((s) => (s.lingua || "").toUpperCase()))].join(", ")}`}
+                  className="flex items-center gap-1.5 uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wider"
+                >
+                  <Captions size={16} /> Sottotitoli{" "}
+                  {[...new Set(video.sottotitoli.map((s) => (s.lingua || "").toUpperCase()))].join("/")}
                 </span>
               )}
               {/* Optimization Badge (nascosto se = 1, visibile solo in errore/in corso) */}

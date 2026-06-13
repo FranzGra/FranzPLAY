@@ -140,7 +140,7 @@ def sanitize_path(absolute_path):
 
         if basename.startswith('.'):
             return absolute_path
-        if basename.startswith('anteprime_') or basename.startswith('copertine_'):
+        if basename.startswith('anteprime_') or basename.startswith('copertine_') or basename.startswith('sottotitoli_'):
             return absolute_path
 
         is_dir = os.path.isdir(absolute_path)
@@ -201,12 +201,13 @@ def pre_scan_sanitize(base_path):
         for root, dirs, files in os.walk(base_path, topdown=False):
             # Filtra dirs in-place per escludere cartelle nascoste e speciali
             dirs[:] = [
-                d for d in dirs 
-                if not d.startswith('.') and 
-                   not d.startswith('anteprime_') and 
-                   not d.startswith('copertine_')
+                d for d in dirs
+                if not d.startswith('.') and
+                   not d.startswith('anteprime_') and
+                   not d.startswith('copertine_') and
+                   not d.startswith('sottotitoli_')
             ]
-            
+
             # Rinomina prima i file
             for file in files:
                 if file.startswith('.'):
@@ -331,7 +332,7 @@ class VideoHandler(FileSystemEventHandler):
 
             parts = Path(relative_path_str).parts
             for part in parts:
-                if part.startswith('anteprime_') or part.startswith('copertine_'):
+                if part.startswith('anteprime_') or part.startswith('copertine_') or part.startswith('sottotitoli_'):
                     return True
             return False
         except Exception:
@@ -580,6 +581,20 @@ class VideoHandler(FileSystemEventHandler):
                 cursor.execute(query_find, (relative_path,))
                 asset_result = cursor.fetchone()
 
+                # Sottotitoli (.vtt) collegati: vanno rimossi dal disco prima del
+                # DELETE FROM Video (la FK ON DELETE CASCADE cancella le righe DB,
+                # ma non i file). Li raccogliamo qui finché il join è possibile.
+                sub_files = []
+                try:
+                    cursor.execute(
+                        "SELECT s.percorso_file FROM Sottotitoli s "
+                        "JOIN Video v ON s.id_Video = v.id WHERE v.percorso_file = %s",
+                        (relative_path,)
+                    )
+                    sub_files = [r['percorso_file'] for r in cursor.fetchall() if r.get('percorso_file')]
+                except mysql.connector.Error:
+                    sub_files = []  # tabella assente (feature non migrata)
+
                 # Elimina da DB
                 query_temp = "DELETE FROM Video_Temp WHERE percorso_file = %s"
                 cursor.execute(query_temp, (relative_path,))
@@ -613,6 +628,19 @@ class VideoHandler(FileSystemEventHandler):
                             logging.warning(f"File anteprima {full_preview} non trovato, impossibile eliminare.")
                         except Exception as e:
                             logging.error(f"Errore eliminazione anteprima {full_preview}: {e}")
+
+                # Rimuovi i file .vtt dei sottotitoli rimasti orfani dopo il cascade.
+                for sub_rel in sub_files:
+                    if not sub_rel or sub_rel == 'mancante':
+                        continue
+                    sub_full = os.path.join(PATH_TO_MONITOR, sub_rel)
+                    try:
+                        os.remove(sub_full)
+                        logging.info(f"File sottotitolo eliminato: {sub_rel}")
+                    except FileNotFoundError:
+                        pass
+                    except Exception as e:
+                        logging.error(f"Errore eliminazione sottotitolo {sub_full}: {e}")
 
             db_changed = True
         except mysql.connector.Error as err:
@@ -682,6 +710,19 @@ class VideoHandler(FileSystemEventHandler):
                 except Exception as e:
                     logging.error(f"Fallita rinomina cartella Anteprime {current_preview_dir_path}: {e}")
 
+            # 3-bis. Rinomina cartella Sottotitoli (stesso schema di copertine/anteprime).
+            old_subs_dir_name = f"sottotitoli_{old_category_name}"
+            new_subs_dir_name = f"sottotitoli_{new_category_name}"
+            current_subs_dir_path = os.path.join(new_full_path_dir, old_subs_dir_name)
+            target_subs_dir_path = os.path.join(new_full_path_dir, new_subs_dir_name)
+
+            if os.path.exists(current_subs_dir_path):
+                try:
+                    os.rename(current_subs_dir_path, target_subs_dir_path)
+                    logging.info(f"RINOMINATA cartella Sottotitoli: {old_subs_dir_name} -> {new_subs_dir_name}")
+                except Exception as e:
+                    logging.error(f"Fallita rinomina cartella Sottotitoli {current_subs_dir_path}: {e}")
+
             # --- NUOVA LOGICA: Rinomina Sfondo Categoria ---
             # Cerchiamo il file cover_VecchioNome.* DENTRO la cartella (già rinominata)
             old_cover_prefix = f'cover_{old_category_name.lower()}.'
@@ -718,9 +759,28 @@ class VideoHandler(FileSystemEventHandler):
                 cursor = conn.cursor()
                 query = "UPDATE Categorie SET Nome = %s, Percorso = %s WHERE Percorso = %s"
                 cursor.execute(query, (new_category_display_name, new_db_path, old_db_path))
+                cat_rowcount = cursor.rowcount  # cattura PRIMA di altre query sullo stesso cursore
+
+                # Aggiorna i path dei sottotitoli (.vtt): la cartella sottotitoli_<old>
+                # è stata rinominata e il parent è cambiato. I percorso_file sono
+                # salvati senza slash iniziale (es. "Cat/sottotitoli_Cat/video.en.vtt").
+                old_subs_prefix = f"{old_rel_path}/sottotitoli_{old_category_name}/"
+                new_subs_prefix = f"{new_rel_path}/sottotitoli_{new_category_name}/"
+                try:
+                    cursor.execute(
+                        "UPDATE Sottotitoli SET percorso_file = REPLACE(percorso_file, %s, %s) "
+                        "WHERE percorso_file LIKE %s",
+                        (old_subs_prefix, new_subs_prefix, old_subs_prefix + '%')
+                    )
+                    if cursor.rowcount > 0:
+                        logging.info(f"Aggiornati {cursor.rowcount} path sottotitoli per rinomina categoria.")
+                except mysql.connector.Error as err_sub:
+                    # Tabella Sottotitoli assente (feature non ancora migrata): ignora.
+                    logging.debug(f"Update Sottotitoli saltato: {err_sub}")
+
                 conn.commit()
 
-                if cursor.rowcount > 0:
+                if cat_rowcount > 0:
                     logging.info(f"CATEGORIA Aggiornata: Nome='{new_category_display_name}', Percorso='{new_db_path}'")
                     invalidate_videos_and_categories(reason=f"rinomina categoria {old_db_path} -> {new_db_path}")
                 else:
@@ -1294,7 +1354,8 @@ def perform_scan(handler, conn=None):
                 d for d in dirs
                 if not d.startswith('.') and
                    not d.startswith('anteprime_') and
-                   not d.startswith('copertine_')
+                   not d.startswith('copertine_') and
+                   not d.startswith('sottotitoli_')
             ]
 
             for file in files:

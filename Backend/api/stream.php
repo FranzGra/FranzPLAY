@@ -96,6 +96,7 @@ $tipi_ammessi = [
     'jpeg' => 'image/jpeg',
     'png'  => 'image/png',
     'webp' => 'image/webp',
+    'vtt'  => 'text/vtt; charset=utf-8',
 ];
 $is_video = in_array($estensione, ['mp4', 'mkv', 'webm', 'avi', 'mov']);
 $content_type = $tipi_ammessi[$estensione] ?? 'application/octet-stream';

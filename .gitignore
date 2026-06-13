@@ -21,3 +21,10 @@ CONTENUTO *
 
 # Claude Code worktrees (file di lavoro del tool, non parte del repo)
 .claude/
+
+# Python bytecode cache
+**/__pycache__/
+*.pyc
+
+# Script di debug locali
+db_check.py

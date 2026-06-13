@@ -69,13 +69,10 @@ $logo_part_1 = trim($data['logo_part_1'] ?? 'FRANZ');
 $logo_part_2 = trim($data['logo_part_2'] ?? 'PLAY');
 $colore_tema_default = trim($data['colore_tema_default'] ?? '#dc2626');
 
-// Validazione base
+// Validazione base: l'unico requisito è che non siano vuoti.
+// Nessuna limitazione di lunghezza/complessità sulla password (scelta voluta).
 if (empty($username) || empty($password)) {
     inviaRisposta(false, "Username e Password sono obbligatori", 400);
-}
-
-if (strlen($password) < 8) {
-    inviaRisposta(false, "La password deve contenere almeno 8 caratteri", 400);
 }
 
 // 3. ESECUZIONE SETUP

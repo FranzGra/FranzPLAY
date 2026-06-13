@@ -1,0 +1,4 @@
+faster-whisper
+mysql-connector-python
+redis
+requests

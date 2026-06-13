@@ -34,12 +34,10 @@ export default function SetupWizard() {
 
   const nextStep = () => {
     if (step === 2) {
+      // Unico requisito: username e password non vuoti. Nessuna limitazione
+      // di lunghezza/complessità sulla password (scelta voluta).
       if (!formData.username || !formData.password) {
         setError("Username e password sono obbligatori.");
-        return;
-      }
-      if (formData.password.length < 4) {
-        setError("La password deve contenere almeno 4 caratteri.");
         return;
       }
     }
@@ -176,7 +174,7 @@ export default function SetupWizard() {
                       value={formData.password}
                       onChange={handleChange}
                       className="w-full bg-zinc-950/50 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                      placeholder="Minimo 4 caratteri"
+                      placeholder="Scegli la tua password"
                     />
                   </div>
                 </div>

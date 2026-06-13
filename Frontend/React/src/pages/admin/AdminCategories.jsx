@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api";
 import { getAssetUrl } from "../../services/helpers";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Edit,
-  Save,
-  ImageIcon,
   Upload,
   Check,
   Folder,
@@ -12,8 +11,16 @@ import {
   Trash2,
   Palette,
   X,
-  AlertCircle,
 } from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
 const CARD_GRADIENTS = [
   "from-red-600 to-red-950",
@@ -26,6 +33,23 @@ const CARD_GRADIENTS = [
   "from-indigo-600 to-indigo-950",
 ];
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { type: "spring", stiffness: 300, damping: 24 }
+  }
+};
+
 export default function AdminCategories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,23 +59,13 @@ export default function AdminCategories() {
   const [uploadingId, setUploadingId] = useState(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(null);
 
-  const [notification, setNotification] = useState(null);
-
-  const showNotification = (message, type = "success") => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest("/admin.php", "POST", {
-        action: "lista_categorie",
-      });
+      const res = await apiRequest("/admin.php", "POST", { action: "lista_categorie" });
       if (res.success) setCategories(res.data || res.dati);
     } catch (error) {
-      console.error(error);
-      showNotification("Errore caricamento categorie", "error");
+      toast.error("Errore caricamento categorie");
     } finally {
       setLoading(false);
     }
@@ -77,9 +91,9 @@ export default function AdminCategories() {
         prev.map((c) => (c.id === editingId ? { ...c, Nome: editName } : c)),
       );
       setEditingId(null);
-      showNotification("Categoria aggiornata");
+      toast.success("Categoria aggiornata");
     } catch (error) {
-      showNotification("Errore: " + error.message, "error");
+      toast.error("Errore: " + error.message);
     }
   };
 
@@ -90,13 +104,13 @@ export default function AdminCategories() {
         id_categoria: id,
         colore: colore,
       });
-      showNotification("Colore aggiornato");
+      toast.success("Colore aggiornato");
       setCategories((prev) =>
         prev.map((c) => (c.id === id ? { ...c, Colore_Default: colore } : c)),
       );
       setColorPickerOpen(null);
     } catch (error) {
-      showNotification("Errore: " + error.message, "error");
+      toast.error("Errore: " + error.message);
     }
   };
 
@@ -113,14 +127,12 @@ export default function AdminCategories() {
       const res = await apiRequest("/admin.php", "POST", formData);
       if (res.success) {
         setCategories((prev) =>
-          prev.map((c) =>
-            c.id === id ? { ...c, Immagine_Sfondo: res.nuovo_path } : c,
-          ),
+          prev.map((c) => (c.id === id ? { ...c, Immagine_Sfondo: res.nuovo_path } : c)),
         );
-        showNotification("Sfondo aggiornato");
+        toast.success("Sfondo aggiornato");
       }
     } catch (error) {
-      showNotification("Errore upload: " + error.message, "error");
+      toast.error("Errore upload: " + error.message);
     } finally {
       setUploadingId(null);
     }
@@ -139,236 +151,190 @@ export default function AdminCategories() {
         setCategories((prev) =>
           prev.map((c) => (c.id === id ? { ...c, Immagine_Sfondo: null } : c)),
         );
-        showNotification("Sfondo rimosso");
+        toast.success("Sfondo rimosso");
       }
     } catch (error) {
-      showNotification("Errore rimozione: " + error.message, "error");
+      toast.error("Errore rimozione: " + error.message);
     }
   };
 
   return (
-    <div className="space-y-8 page-enter relative">
-      {/* Toast Notification */}
-      {notification && (
-        <div
-          className={`fixed top-6 right-6 z-[150] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 toast-enter ${notification.type === "error" ? "bg-red-500 text-white" : "bg-zinc-900 text-white border border-white/10"}`}
-        >
-          {notification.type === "error" ? (
-            <AlertCircle size={20} />
-          ) : (
-            <Check size={20} className="text-green-400" />
-          )}
-          <span className="font-bold text-sm">{notification.message}</span>
-        </div>
-      )}
-
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="space-y-8 relative"
+    >
       <div>
-        <h1 className="text-4xl font-black text-white tracking-tight">
-          Categorie
-        </h1>
-        <p className="text-zinc-500 font-medium mt-1">
-          Organizza i contenuti e gestisci le copertine dei cataloghi.
-        </p>
+        <h1 className="text-4xl font-black text-foreground tracking-tight">Categorie</h1>
+        <p className="text-muted-foreground font-medium mt-1">Organizza i contenuti e gestisci le copertine dei cataloghi.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading
           ? [1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-64 bg-zinc-900/50 rounded-[2rem] animate-pulse"
-              ></div>
+              <Card key={i} className="h-64 bg-zinc-900/50 rounded-3xl animate-pulse border-white/5" />
             ))
           : categories.map((cat) => (
-              <div
-                key={cat.id}
-                className="admin-card group !p-0 !rounded-[2rem] overflow-hidden flex flex-col h-full bg-zinc-900/20 hover:bg-zinc-900/40"
-              >
-                {/* Anteprima Sfondo con Glass Overlay */}
-                <div className="relative h-48 bg-zinc-950 overflow-hidden">
-                  {cat.Immagine_Sfondo ? (
-                    <img
-                      src={`${getAssetUrl(cat.Immagine_Sfondo)}&t=${Date.now()}`}
-                      alt={cat.Nome}
-                      className="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-110 transition-all duration-700"
-                      onError={(e) => (e.target.style.display = "none")}
-                    />
-                  ) : (
-                    <>
-                      {cat.Colore_Default ? (
-                        <>
-                          <div
-                            className={`absolute inset-0 bg-gradient-to-br ${cat.Colore_Default} opacity-100 transition-colors duration-500`}
-                          />
-                          <div className="absolute inset-0 opacity-50 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
-                          <Folder className="absolute -right-4 -bottom-8 h-32 w-32 sm:h-45 sm:w-45 text-white/5 -rotate-12 group-hover:-bottom-0 group-hover:-right-0 group-hover:h-40 group-hover:w-40 group-hover:rotate-0 transition-all duration-500" />
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800 bg-zinc-900/50">
-                          <Folder size={48} className="mb-2 opacity-50" />
-                          <span className="text-[10px] font-black uppercase tracking-widest italic opacity-50">
-                            Nessuno Sfondo
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Overlay flottante per upload e rimozione */}
-                  <div
-                    className={`absolute top-4 right-4 z-20 md:-translate-y-[150%] md:opacity-0 md:pointer-events-none translate-y-0 opacity-100 pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-300 flex gap-2 ${colorPickerOpen === cat.id ? "!translate-y-0 !opacity-100 !pointer-events-auto" : ""}`}
-                  >
-                    {cat.Immagine_Sfondo && (
-                      <button
-                        onClick={() => handleRemoveBackground(cat.id)}
-                        className="w-10 h-10 flex items-center justify-center rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-400 hover:text-red-500 cursor-pointer transition-all active:scale-90 overflow-hidden shadow-lg hover:bg-red-500/10 hover:border-red-500/50"
-                        title="Rimuovi Sfondo"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    )}
-
-                    <label className="w-10 h-10 flex items-center justify-center rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-400 hover:text-white cursor-pointer transition-all active:scale-90 overflow-hidden shadow-lg hover:bg-primary hover:border-primary">
-                      {uploadingId === cat.id ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <Upload size={18} />
-                      )}
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="image/*"
-                        onChange={(e) =>
-                          handleUploadBackground(cat.id, e.target.files[0])
-                        }
-                        disabled={uploadingId === cat.id}
+              <motion.div variants={itemVariants} key={cat.id}>
+                <Card className="group overflow-hidden flex flex-col h-full bg-zinc-900/20 hover:bg-zinc-900/40 border-white/5 hover:border-white/10 transition-colors p-0 rounded-3xl">
+                  {/* Anteprima Sfondo con Glass Overlay */}
+                  <div className="relative h-48 bg-zinc-950 overflow-hidden">
+                    {cat.Immagine_Sfondo ? (
+                      <img
+                        src={`${getAssetUrl(cat.Immagine_Sfondo)}&t=${Date.now()}`}
+                        alt={cat.Nome}
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-110 transition-all duration-700"
+                        onError={(e) => (e.target.style.display = "none")}
                       />
-                    </label>
-
-                    {!cat.Immagine_Sfondo && (
-                      <button
-                        onClick={() =>
-                          setColorPickerOpen(
-                            colorPickerOpen === cat.id ? null : cat.id,
-                          )
-                        }
-                        className="w-10 h-10 flex items-center justify-center rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-400 hover:text-white cursor-pointer transition-all active:scale-90 overflow-hidden shadow-lg hover:bg-emerald-500 hover:border-emerald-500"
-                        title="Scegli Colore"
-                      >
-                        <Palette size={18} />
-                      </button>
+                    ) : (
+                      <>
+                        {cat.Colore_Default ? (
+                          <>
+                            <div className={`absolute inset-0 bg-gradient-to-br ${cat.Colore_Default} opacity-100 transition-colors duration-500`} />
+                            <div className="absolute inset-0 opacity-50 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
+                            <Folder className="absolute -right-4 -bottom-8 h-32 w-32 sm:h-45 sm:w-45 text-white/5 -rotate-12 group-hover:-bottom-0 group-hover:-right-0 group-hover:h-40 group-hover:w-40 group-hover:rotate-0 transition-all duration-500" />
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800 bg-zinc-900/50">
+                            <Folder size={48} className="mb-2 opacity-50" />
+                            <span className="text-[10px] font-black uppercase tracking-widest italic opacity-50">Nessuno Sfondo</span>
+                          </div>
+                        )}
+                      </>
                     )}
-                  </div>
 
-                  {/* Selezione Colore in Overlay (Se aperto) */}
-                  {colorPickerOpen === cat.id && !cat.Immagine_Sfondo && (
-                    <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm z-30 flex flex-col p-3 animate-in fade-in duration-200">
-                      <div className="flex justify-between items-center mb-2 border-b border-white/10 pb-2">
-                        <span className="text-xs font-black uppercase tracking-widest text-zinc-400">
-                          Tinta Unita
-                        </span>
-                        <button
-                          onClick={() => setColorPickerOpen(null)}
-                          className="text-zinc-500 hover:text-white"
+                    {/* Overlay flottante per upload e rimozione */}
+                    <div className={`absolute top-4 right-4 z-20 md:-translate-y-[150%] md:opacity-0 md:pointer-events-none translate-y-0 opacity-100 pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-300 flex gap-2 ${colorPickerOpen === cat.id ? "!translate-y-0 !opacity-100 !pointer-events-auto" : ""}`}>
+                      {cat.Immagine_Sfondo && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleRemoveBackground(cat.id)}
+                          className="w-10 h-10 rounded-2xl bg-zinc-950/80 backdrop-blur-md border-white/10 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/50"
+                          title="Rimuovi Sfondo"
                         >
-                          <X size={16} />
-                        </button>
-                      </div>
-                      <div
-                        className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar"
-                        style={{
-                          scrollbarWidth: "none",
-                          msOverflowStyle: "none",
-                          WebkitOverflowScrolling: "touch",
-                        }}
-                      >
-                        <style>{`
-                                                .no-scrollbar::-webkit-scrollbar { display: none !important; }
-                                            `}</style>
-                        <div className="grid grid-cols-5 gap-4 px-6 py-4 content-start">
-                          <button
-                            onClick={() => handleSaveColor(cat.id, "")}
-                            className={`w-11 h-11 rounded-xl bg-zinc-800 transition-all flex items-center justify-center outline-none shrink-0 relative ${!cat.Colore_Default ? "ring-2 ring-primary ring-offset-2 ring-offset-zinc-950" : "hover:scale-105"}`}
-                            title="Predefinito / Nessuno"
-                          >
-                            {!cat.Colore_Default && (
-                              <Check size={20} className="text-primary" />
-                            )}
-                          </button>
+                          <Trash2 size={18} />
+                        </Button>
+                      )}
 
-                          {CARD_GRADIENTS.map((grad, i) => (
-                            <button
-                              key={i}
-                              onClick={() => handleSaveColor(cat.id, grad)}
-                              className={`w-11 h-11 rounded-xl bg-gradient-to-br ${grad} transition-all flex items-center justify-center outline-none shrink-0 relative ${cat.Colore_Default === grad ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-105 z-10" : "hover:scale-105"}`}
-                            >
-                              {cat.Colore_Default === grad && (
-                                <Check
-                                  size={22}
-                                  className="text-white drop-shadow-md"
-                                />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                      <Label className="w-10 h-10 flex items-center justify-center rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-400 hover:text-white cursor-pointer transition-all active:scale-90 hover:bg-primary hover:border-primary m-0">
+                        {uploadingId === cat.id ? (
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <Upload size={18} />
+                        )}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={(e) => handleUploadBackground(cat.id, e.target.files[0])}
+                          disabled={uploadingId === cat.id}
+                        />
+                      </Label>
 
-                  {/* Titolo in overlay */}
-                  <div className="absolute inset-0 p-6 flex items-end bg-gradient-to-t from-zinc-950/90 to-transparent">
-                    <div className="w-full">
-                      {editingId === cat.id ? (
-                        <div className="flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-300">
-                          <input
-                            type="text"
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="bg-zinc-950/80 backdrop-blur-xl border-2 border-primary/50 rounded-2xl px-4 py-2 text-white font-bold text-lg w-full outline-none focus:bg-zinc-900"
-                            autoFocus
-                            onKeyDown={(e) => e.key === "Enter" && saveEdit()}
-                          />
-                          <button
-                            onClick={saveEdit}
-                            className="w-10 h-10 flex items-center justify-center rounded-2xl bg-primary text-white shadow-lg active:scale-90 transition-transform flex-shrink-0"
-                          >
-                            <Check size={20} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between group/title">
-                          <h3 className="font-black text-2xl text-white tracking-tight drop-shadow-2xl">
-                            {cat.Nome}
-                          </h3>
-                          <button
-                            onClick={() => startEdit(cat)}
-                            className="opacity-100 translate-x-0 md:opacity-0 group-hover:opacity-100 md:translate-x-2 group-hover:translate-x-0 transition-all duration-300 p-2 bg-white/10 backdrop-blur-md rounded-xl text-white hover:bg-white hover:text-black"
-                          >
-                            <Edit size={16} />
-                          </button>
-                        </div>
+                      {!cat.Immagine_Sfondo && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setColorPickerOpen(colorPickerOpen === cat.id ? null : cat.id)}
+                          className="w-10 h-10 rounded-2xl bg-zinc-950/80 backdrop-blur-md border-white/10 text-zinc-400 hover:text-white hover:bg-emerald-500 hover:border-emerald-500"
+                          title="Scegli Colore"
+                        >
+                          <Palette size={18} />
+                        </Button>
                       )}
                     </div>
-                  </div>
-                </div>
 
-                {/* Info Footer */}
-                <div className="p-6 bg-zinc-900/30 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 bg-zinc-800 rounded-lg text-zinc-500">
-                      <Film size={14} />
+                    {/* Selezione Colore in Overlay */}
+                    <AnimatePresence>
+                      {colorPickerOpen === cat.id && !cat.Immagine_Sfondo && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm z-30 flex flex-col p-3"
+                        >
+                          <div className="flex justify-between items-center mb-2 border-b border-white/10 pb-2">
+                            <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Tinta Unita</span>
+                            <button onClick={() => setColorPickerOpen(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+                          </div>
+                          <div className="flex-1 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+                            <div className="grid grid-cols-5 gap-4 px-6 py-4 content-start">
+                              <button
+                                onClick={() => handleSaveColor(cat.id, "")}
+                                className={`w-11 h-11 rounded-xl bg-zinc-800 transition-all flex items-center justify-center outline-none shrink-0 relative ${!cat.Colore_Default ? "ring-2 ring-primary ring-offset-2 ring-offset-zinc-950" : "hover:scale-105"}`}
+                                title="Predefinito / Nessuno"
+                              >
+                                {!cat.Colore_Default && <Check size={20} className="text-primary" />}
+                              </button>
+                              {CARD_GRADIENTS.map((grad, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => handleSaveColor(cat.id, grad)}
+                                  className={`w-11 h-11 rounded-xl bg-gradient-to-br ${grad} transition-all flex items-center justify-center outline-none shrink-0 relative ${cat.Colore_Default === grad ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-105 z-10" : "hover:scale-105"}`}
+                                >
+                                  {cat.Colore_Default === grad && <Check size={22} className="text-white drop-shadow-md" />}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Titolo in overlay */}
+                    <div className="absolute inset-0 p-6 flex items-end bg-gradient-to-t from-zinc-950/90 to-transparent pointer-events-none">
+                      <div className="w-full pointer-events-auto">
+                        {editingId === cat.id ? (
+                          <div className="flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-300">
+                            <Input
+                              type="text"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="bg-zinc-950/80 backdrop-blur-xl border-primary/50 text-white font-bold h-10"
+                              autoFocus
+                              onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+                            />
+                            <Button onClick={saveEdit} size="icon" className="w-10 h-10 rounded-xl flex-shrink-0 shadow-lg">
+                              <Check size={18} />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between group/title">
+                            <h3 className="font-black text-2xl text-white tracking-tight drop-shadow-2xl">{cat.Nome}</h3>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => startEdit(cat)}
+                              className="opacity-100 translate-x-0 md:opacity-0 group-hover:opacity-100 md:translate-x-2 group-hover:translate-x-0 transition-all duration-300 w-8 h-8 bg-white/10 backdrop-blur-md rounded-lg text-white hover:bg-white hover:text-black"
+                            >
+                              <Edit size={14} />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">
-                      {cat.num_video} Contenuti
-                    </span>
                   </div>
-                  <div className="px-3 py-1 bg-zinc-950/50 rounded-full border border-white/5 text-[10px] font-black text-zinc-600 tracking-tighter tabular-nums">
-                    ID #{cat.id}
-                  </div>
-                </div>
-              </div>
+
+                  {/* Info Footer */}
+                  <CardContent className="p-6 bg-zinc-900/30 flex items-center justify-between mt-auto">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 bg-zinc-800/50 rounded-lg text-muted-foreground">
+                        <Film size={14} />
+                      </div>
+                      <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                        {cat.num_video} Contenuti
+                      </span>
+                    </div>
+                    <div className="px-3 py-1.5 bg-zinc-950/50 rounded-full border border-white/5 text-[9px] font-black text-zinc-500 tracking-widest uppercase">
+                      ID #{cat.id}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
       </div>
-    </div>
+    </motion.div>
   );
 }
