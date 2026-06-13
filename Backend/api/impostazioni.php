@@ -61,7 +61,10 @@ try {
 
         if ($res) {
             while ($row = $res->fetch_assoc()) {
-                if ($row['Valore_Impostazione']) {
+                // ATTENZIONE: NON usare if ($valore) — in PHP la stringa '0' è
+                // falsy, quindi un toggle salvato come '0' (es. registrazione
+                // disabilitata) verrebbe scartato e resterebbe il default '1'.
+                if ($row['Valore_Impostazione'] !== null && $row['Valore_Impostazione'] !== '') {
                     $logo_data[$row['Chiave_Impostazione']] = $row['Valore_Impostazione'];
                 }
             }
