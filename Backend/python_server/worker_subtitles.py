@@ -615,9 +615,12 @@ def discover_manual_subtitles(conn):
         by_parent.setdefault(parent, []).append((p.stem, r['id']))
         langs_by_id[r['id']] = set()
 
-    # 2. Lingue gia' registrate (qualsiasi stato): non le tocchiamo.
+    # 2. Lingue gia' COMPLETATE: solo queste sono intoccabili. Le lingue con
+    #    riga 'in_coda'/'elaborazione'/'errore' NON bloccano l'import: un file
+    #    manuale per una lingua il cui job automatico e' fallito (o in attesa)
+    #    deve poter vincere e sbloccare la situazione.
     with conn.cursor(dictionary=True) as cur:
-        cur.execute("SELECT id_Video, lingua FROM Sottotitoli")
+        cur.execute("SELECT id_Video, lingua FROM Sottotitoli WHERE stato = 'completato'")
         for r in cur.fetchall():
             if r['id_Video'] in langs_by_id:
                 langs_by_id[r['id_Video']].add((r['lingua'] or '').lower())
@@ -665,9 +668,10 @@ def discover_manual_subtitles(conn):
                 continue
 
             try:
-                # override=False: la scansione bulk riempie SOLO le lingue mancanti
-                # e non ri-tocca righe esistenti (niente cache-invalidation a vuoto).
-                subs_common.register_subtitle_row(conn, vid, lang, db_rel, override=False)
+                # override=True: il file manuale vince e sblocca eventuali righe
+                # 'errore'/'in_coda'. Le lingue gia' 'completato' sono escluse a
+                # monte (langs_by_id), quindi niente re-import a vuoto delle righe ok.
+                subs_common.register_subtitle_row(conn, vid, lang, db_rel, override=True)
                 langs_by_id.setdefault(vid, set()).add(lang)
                 imported += 1
                 logging.info(f"[Discovery] Sottotitolo manuale importato: video={vid} lingua={lang} file={db_rel}")

@@ -679,8 +679,11 @@ function QueueCard({ rows, reload }) {
   const v = rows[0];
   const pct = a.total > 0 ? Math.round((a.done / a.total) * 100) : 0;
   const [cancelling, setCancelling] = useState(false);
-  // C'è ancora qualcosa da fermare? (job in coda o in elaborazione)
-  const canCancel = rows.some((r) => r.stato === "in_coda" || r.stato === "elaborazione");
+  // C'è ancora qualcosa di attivo da fermare? (job in coda o in elaborazione)
+  const hasActive = rows.some((r) => r.stato === "in_coda" || r.stato === "elaborazione");
+  // Mostriamo il pulsante anche se ci sono SOLO errori: serve per ripulire dalla
+  // coda i vecchi job falliti, che altrimenti resterebbero qui per sempre.
+  const canCancel = rows.some((r) => r.stato !== "completato");
 
   const rigenera = async (id) => {
     try {
@@ -691,14 +694,17 @@ function QueueCard({ rows, reload }) {
   };
 
   const annulla = async () => {
-    if (!window.confirm(`Annullare la generazione dei sottotitoli per "${v.Titolo}"?\nI sottotitoli già completati resteranno disponibili.`)) return;
+    const msg = hasActive
+      ? `Annullare la generazione dei sottotitoli per "${v.Titolo}"?\nI sottotitoli già completati resteranno disponibili.`
+      : `Rimuovere dalla coda i sottotitoli falliti di "${v.Titolo}"?\nI sottotitoli già completati resteranno disponibili.`;
+    if (!window.confirm(msg)) return;
     setCancelling(true);
     try {
       await apiRequest("/admin.php", "POST", { action: "annulla_sottotitoli", id_video: v.id_Video });
-      toast.success("Generazione annullata");
+      toast.success(hasActive ? "Generazione annullata" : "Rimossi dalla coda");
       reload();
     } catch (e) {
-      toast.error("Errore annullamento: " + e.message);
+      toast.error("Errore: " + e.message);
     } finally {
       setCancelling(false);
     }
@@ -733,11 +739,11 @@ function QueueCard({ rows, reload }) {
               variant="outline"
               onClick={annulla}
               disabled={cancelling}
-              title="Ferma e annulla la generazione"
+              title={hasActive ? "Ferma e annulla la generazione" : "Rimuovi dalla coda i job falliti"}
               className="gap-2 rounded-xl font-black uppercase tracking-wider text-xs bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500"
             >
-              {cancelling ? <Loader2 size={16} className="animate-spin" /> : <StopCircle size={16} />}
-              Annulla
+              {cancelling ? <Loader2 size={16} className="animate-spin" /> : (hasActive ? <StopCircle size={16} /> : <Trash2 size={16} />)}
+              {hasActive ? "Annulla" : "Rimuovi"}
             </Button>
           )}
         </div>

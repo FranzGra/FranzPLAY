@@ -226,8 +226,10 @@ switch ($action) {
 
     // ------------------------------------------------------------------
     // ANNULLA LA GENERAZIONE DI UN VIDEO
-    // Rimuove le righe ancora 'in_coda' o 'elaborazione' (i job pendenti e quello
-    // in corso) di un video, lasciando intatti i sottotitoli gia' 'completato'.
+    // Rimuove le righe NON completate ('in_coda', 'elaborazione' E 'errore') di
+    // un video, lasciando intatti i sottotitoli gia' 'completato'. Include gli
+    // 'errore' cosi' l'admin puo' ripulire dalla coda anche i job vecchi falliti
+    // (es. traduzioni andate in timeout) senza doverli rigenerare.
     // Il worker non ha cancel cooperativo: se un job e' a meta' trascrizione la
     // finira', ma le sue UPDATE finali colpiranno righe inesistenti (no-op) e il
     // risultato non verra' salvato. Eventuali .vtt parziali vengono rimossi.
@@ -239,14 +241,14 @@ switch ($action) {
         // Recupera i .vtt eventualmente gia' scritti dalle righe da annullare.
         $resF = executePreparedQuery(
             "SELECT percorso_file FROM Sottotitoli
-             WHERE id_Video = ? AND stato IN ('in_coda','elaborazione')",
+             WHERE id_Video = ? AND stato IN ('in_coda','elaborazione','errore')",
             "i", [$id_video]
         );
         $files = $resF ? $resF->fetch_all(MYSQLI_ASSOC) : [];
 
         executePreparedQuery(
             "DELETE FROM Sottotitoli
-             WHERE id_Video = ? AND stato IN ('in_coda','elaborazione')",
+             WHERE id_Video = ? AND stato IN ('in_coda','elaborazione','errore')",
             "i", [$id_video]
         );
         global $last_affected_rows;
