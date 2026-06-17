@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { apiRequest } from "../../services/api";
 import { getAssetUrl, hasAsset } from "../../services/helpers";
 import ThumbnailPlaceholder from "../../components/ThumbnailPlaceholder";
+import OpenInPlayerButton from "../../components/admin/OpenInPlayerButton";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -292,6 +293,7 @@ function LibraryView() {
                     {/* Cover full-bleed con overlay durata e stato sottotitoli */}
                     <div data-slot="card-media" className="relative aspect-video overflow-hidden bg-zinc-950">
                       <CoverThumb video={video} className="transition-transform duration-700 group-hover:scale-[1.06]" />
+                      <OpenInPlayerButton videoId={video.id} />
                       <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/85 via-black/30 to-transparent pointer-events-none" />
                       {video.Durata && (
                         <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold">
@@ -360,6 +362,7 @@ function LibraryView() {
                         <div className="flex items-center gap-4">
                           <div className="relative w-20 aspect-video rounded-lg overflow-hidden bg-zinc-950 border border-white/10 shrink-0">
                             <CoverThumb video={video} />
+                            <OpenInPlayerButton videoId={video.id} className="top-0.5 right-0.5 w-6 h-6 rounded-md" />
                           </div>
                           <h3 className="text-foreground font-bold text-sm leading-tight max-w-[300px] truncate" title={video.Titolo}>{video.Titolo}</h3>
                         </div>
@@ -713,8 +716,9 @@ function QueueCard({ rows, reload }) {
   return (
     <Card className="p-5 bg-zinc-900/30 border-white/5 space-y-5 rounded-3xl">
       <div className="flex items-center gap-5">
-        <div className="relative w-28 aspect-video rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-white/10 flex-shrink-0">
+        <div className="group relative w-28 aspect-video rounded-xl overflow-hidden bg-zinc-950 ring-1 ring-white/10 flex-shrink-0">
           <CoverThumb video={v} />
+          <OpenInPlayerButton videoId={v.id_Video} className="top-1 right-1 w-7 h-7 rounded-lg" />
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-foreground font-black text-lg md:text-xl leading-tight truncate" title={v.Titolo}>{v.Titolo}</h3>

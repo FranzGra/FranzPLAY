@@ -5,6 +5,7 @@ import { apiRequest } from "../../services/api";
 import { getAssetUrl, hasAsset } from "../../services/helpers";
 import ImageCropper from "../../components/ImageCropper";
 import ThumbnailPlaceholder from "../../components/ThumbnailPlaceholder";
+import OpenInPlayerButton from "../../components/admin/OpenInPlayerButton";
 import {
   Search,
   Trash2,
@@ -542,6 +543,7 @@ export default function AdminVideos() {
                 <Card className="group flex flex-col h-full gap-0 py-0 bg-zinc-900/20 hover:bg-zinc-900/60 border-white/5 hover:border-white/10 transition-colors overflow-hidden">
                   <div data-slot="card-media" className="relative w-full aspect-video shrink-0 overflow-hidden bg-zinc-950/50 border-b border-white/5">
                     <AdminCoverThumb video={video} />
+                    <OpenInPlayerButton videoId={video.id} />
                   </div>
                   <CardContent className="p-4 flex-col flex-1 flex">
                     <h3 className="text-foreground font-bold text-sm truncate mb-3" title={video.Titolo}>
@@ -600,6 +602,7 @@ export default function AdminVideos() {
                       <div className="flex items-center gap-4">
                         <div className="relative w-20 aspect-video rounded-md overflow-hidden bg-zinc-950 border border-white/10 shrink-0">
                           <AdminCoverThumb video={video} />
+                          <OpenInPlayerButton videoId={video.id} className="top-0.5 right-0.5 w-6 h-6 rounded-md" />
                         </div>
                         <div>
                           <h3 className="text-foreground font-bold text-sm leading-tight max-w-[300px] truncate" title={video.Titolo}>
