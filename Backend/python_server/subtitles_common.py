@@ -29,6 +29,46 @@ def srt_to_vtt(srt_text):
     return "WEBVTT\n\n" + text.strip() + "\n"
 
 
+_VTT_TS_RE = re.compile(
+    r'(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})'
+)
+
+
+def parse_vtt(full_path):
+    """
+    Legge un file WebVTT e ritorna i segmenti come lista di dict
+    {'start': float, 'end': float, 'text': str}. Tollerante: ignora header,
+    numeri di cue e righe non riconosciute. Ritorna lista vuota su errore.
+    Serve al worker per RIUSARE una trascrizione gia' fatta (evitando di
+    ri-estrarre l'audio e ri-passare Whisper) quando deve solo tradurre.
+    """
+    segments = []
+    try:
+        with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return segments
+
+    i, n = 0, len(lines)
+    while i < n:
+        m = _VTT_TS_RE.search(lines[i])
+        if not m:
+            i += 1
+            continue
+        g = m.groups()
+        start = int(g[0]) * 3600 + int(g[1]) * 60 + int(g[2]) + int(g[3]) / 1000.0
+        end = int(g[4]) * 3600 + int(g[5]) * 60 + int(g[6]) + int(g[7]) / 1000.0
+        i += 1
+        text_lines = []
+        while i < n and lines[i].strip() != '':
+            text_lines.append(lines[i].strip())
+            i += 1
+        text = ' '.join(text_lines).strip()
+        if text:
+            segments.append({'start': start, 'end': end, 'text': text})
+    return segments
+
+
 def validate_under_base(full_path, base):
     """Rifiuta path fuori da `base` e symlink (anti traversal)."""
     try:

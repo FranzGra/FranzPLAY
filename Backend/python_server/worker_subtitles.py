@@ -476,30 +476,47 @@ def process_jobs(conn, model_name):
 
     wav_path = None
     try:
-        # 6. Estrazione audio + trascrizione (una sola volta per video).
-        fd, wav_path = tempfile.mkstemp(suffix='.wav')
-        os.close(fd)
-        logging.info(f"[Subs] Estrazione audio per id={video_id}...")
-        extract_audio(full_video_path, wav_path)
+        # 6. Trascrizione. La RIUSIAMO se esiste gia' completata e l'admin non ha
+        #    chiesto una nuova trascrizione (batch di sole traduzioni): cosi'
+        #    evitiamo di ri-estrarre l'audio e ri-passare Whisper (decine di minuti
+        #    di CPU) solo per produrre una traduzione di sottotitoli gia' esistenti.
+        needs_fresh = any(r['tipo'] == 'trascrizione' for r in rows)
+        segments = None
+        actual_source = None
+        db_src_vtt = None
 
-        logging.info(f"[Subs] Trascrizione id={video_id} in corso...")
-        segments, detected_lang = transcribe(wav_path, model_name, source_lang)
-        actual_source = detected_lang if (not source_lang or source_lang == 'auto') else source_lang
-        logging.info(f"[Subs] Trascrizione completata: {len(segments)} segmenti, lingua='{actual_source}'.")
+        if not needs_fresh:
+            existing = _find_existing_transcription(conn, video_id, source_lang)
+            if existing:
+                seg = subs_common.parse_vtt(os.path.join(PATH_TO_MONITOR, existing['percorso_file']))
+                if seg:
+                    segments = seg
+                    actual_source = existing['lingua']
+                    db_src_vtt = existing['percorso_file']
+                    logging.info(f"[Subs] Riuso trascrizione esistente '{actual_source}' "
+                                 f"({len(segments)} segmenti) per id={video_id}: salto la ri-trascrizione.")
 
-        # 7. Scrivi prima la trascrizione (serve come sorgente per le traduzioni).
-        full_src_vtt, db_src_vtt = _get_subtitle_paths(relative_path, category_name, actual_source)
-        write_vtt(segments, full_src_vtt)
+        if segments is None:
+            # Nessuna trascrizione riusabile: estrazione audio + Whisper.
+            fd, wav_path = tempfile.mkstemp(suffix='.wav')
+            os.close(fd)
+            logging.info(f"[Subs] Estrazione audio per id={video_id}...")
+            extract_audio(full_video_path, wav_path)
 
-        # Individua la riga 'trascrizione' del batch e finalizzala (gestendo il caso
-        # 'auto' che va riscritto col codice rilevato, con dedup anti-UNIQUE).
-        trans_row = next((r for r in rows if r['tipo'] == 'trascrizione'), None)
-        if trans_row:
-            _finalize_transcription_row(conn, video_id, trans_row, actual_source, db_src_vtt, model_name)
-        else:
-            # Nessuna riga trascrizione esplicita: assicuriamo comunque la sorgente
-            # su disco (gia' fatto) per le traduzioni; niente DB update.
-            pass
+            logging.info(f"[Subs] Trascrizione id={video_id} in corso...")
+            segments, detected_lang = transcribe(wav_path, model_name, source_lang)
+            actual_source = detected_lang if (not source_lang or source_lang == 'auto') else source_lang
+            logging.info(f"[Subs] Trascrizione completata: {len(segments)} segmenti, lingua='{actual_source}'.")
+
+            # Scrivi la trascrizione (serve come sorgente per le traduzioni).
+            full_src_vtt, db_src_vtt = _get_subtitle_paths(relative_path, category_name, actual_source)
+            write_vtt(segments, full_src_vtt)
+
+            # Finalizza la riga 'trascrizione' del batch (gestendo il caso 'auto'
+            # che va riscritto col codice rilevato, con dedup anti-UNIQUE).
+            trans_row = next((r for r in rows if r['tipo'] == 'trascrizione'), None)
+            if trans_row:
+                _finalize_transcription_row(conn, video_id, trans_row, actual_source, db_src_vtt, model_name)
 
         # 8. Traduzioni: ogni riga 'traduzione' con target != sorgente.
         for r in rows:
@@ -551,6 +568,30 @@ def process_jobs(conn, model_name):
                 os.remove(wav_path)
             except OSError:
                 pass
+
+
+def _find_existing_transcription(conn, video_id, source_lang):
+    """
+    Cerca una riga 'trascrizione' gia' COMPLETATA e con file .vtt presente su
+    disco, riusabile come sorgente per le traduzioni. Con source_lang esplicito
+    deve combaciare la lingua; con 'auto' va bene qualsiasi trascrizione. Ritorna
+    il dict {lingua, percorso_file} oppure None.
+    """
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(
+            "SELECT lingua, percorso_file FROM Sottotitoli "
+            "WHERE id_Video = %s AND tipo = 'trascrizione' AND stato = 'completato' "
+            "AND percorso_file IS NOT NULL LIMIT 1",
+            (video_id,)
+        )
+        row = cursor.fetchone()
+    if not row:
+        return None
+    if source_lang and source_lang != 'auto' and row['lingua'] != source_lang:
+        return None
+    if not os.path.exists(os.path.join(PATH_TO_MONITOR, row['percorso_file'])):
+        return None
+    return row
 
 
 def _finalize_transcription_row(conn, video_id, trans_row, actual_source, db_src_vtt, model_name):
