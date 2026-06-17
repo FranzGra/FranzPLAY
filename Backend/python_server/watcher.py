@@ -14,6 +14,7 @@ import re
 import unicodedata
 
 from cache_invalidation import invalidate_videos_and_categories
+import subtitles_common as subs_common
 
 # --- Impostazioni (Invariate) ---
 VIDEO_EXTENSIONS = (
@@ -321,6 +322,64 @@ class VideoHandler(FileSystemEventHandler):
             return False
         return os.path.basename(file_path).lower() in COVER_NAMES
 
+    def _is_subtitle_file(self, file_path):
+        """
+        File sottotitolo manuale (.vtt/.srt) messo a mano nelle cartelle.
+        Gestito a parte PRIMA dell'esclusione perche' spesso vive dentro
+        sottotitoli_<categoria> (che _is_path_excluded scarterebbe).
+        """
+        basename = os.path.basename(file_path)
+        if basename.startswith('.'):
+            return False
+        if os.path.isdir(file_path) or os.path.islink(file_path):
+            return False
+        return file_path.lower().endswith(subs_common.SUB_EXTENSIONS)
+
+    def _handle_subtitle_upsert(self, absolute_path):
+        """
+        Importa/aggiorna in tempo reale un sottotitolo manuale comparso o
+        modificato su disco: trova il video, ricava la lingua, converte
+        l'eventuale .srt, scrive la riga Sottotitoli e invalida la cache.
+        """
+        conn = None
+        try:
+            conn = get_db_connection()
+            result = subs_common.import_subtitle_file(
+                conn, absolute_path, PATH_TO_MONITOR, log=logging, override=True
+            )
+            conn.commit()
+        except Exception as e:
+            logging.error(f"[Subs] Import sottotitolo manuale fallito per {absolute_path}: {e}")
+            result = None
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+
+        if result:
+            vid, lang, db_rel = result
+            logging.info(f"[Subs] Sottotitolo manuale '{lang}' importato in tempo reale: video={vid} file={db_rel}")
+            invalidate_videos_and_categories(reason=f"sottotitolo manuale {db_rel}")
+
+    def _handle_subtitle_delete(self, absolute_path):
+        """Rimuove la riga Sottotitoli quando il file .vtt/.srt viene eliminato/spostato."""
+        relative_path = self._get_relative_path(absolute_path)
+        if not relative_path:
+            return
+        conn = None
+        removed = False
+        try:
+            conn = get_db_connection()
+            removed = subs_common.remove_subtitle_row(conn, relative_path)
+            conn.commit()
+        except Exception as e:
+            logging.error(f"[Subs] Rimozione riga sottotitolo fallita per {relative_path}: {e}")
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+        if removed:
+            logging.info(f"[Subs] Sottotitolo manuale rimosso dal DB: {relative_path}")
+            invalidate_videos_and_categories(reason=f"sottotitolo rimosso {relative_path}")
+
     def _is_path_excluded(self, absolute_path):
         """
         Controlla se il percorso è IN una cartella asset (anteprime/copertine).
@@ -385,10 +444,20 @@ class VideoHandler(FileSystemEventHandler):
     # --- GESTORI EVENTI ---
 
     def on_created(self, event):
+        # Sottotitoli manuali: gestiti PRIMA dell'esclusione (vivono spesso in
+        # sottotitoli_<categoria>). Rilevamento in tempo reale = aggiornamento DB
+        # immediato, senza attendere la scansione bulk del worker.
+        if not event.is_directory and self._is_subtitle_file(event.src_path):
+            sanitized = sanitize_path(event.src_path)
+            if sanitized != event.src_path:
+                return  # rinominato: il nuovo nome rigenera l'evento
+            self._handle_subtitle_upsert(sanitized)
+            return
+
         if self._is_path_excluded(event.src_path):
             logging.debug(f"[+ IGNORATA] CREAZIONE: Ignorato evento in percorso escluso: {event.src_path}")
             return
-        
+
         # Bonifica immediata del nome se non conforme
         sanitized_path = sanitize_path(event.src_path)
         if sanitized_path != event.src_path:
@@ -472,9 +541,17 @@ class VideoHandler(FileSystemEventHandler):
             if conn and conn.is_connected(): conn.close()
 
     def on_modified(self, event):
+        # Sottotitolo manuale sovrascritto: ri-allinea il DB (idempotente).
+        if not event.is_directory and self._is_subtitle_file(event.src_path):
+            sanitized = sanitize_path(event.src_path)
+            if sanitized != event.src_path:
+                return
+            self._handle_subtitle_upsert(sanitized)
+            return
+
         if self._is_path_excluded(event.src_path):
             return
-        
+
         if event.is_directory:
             return
         
@@ -514,6 +591,13 @@ class VideoHandler(FileSystemEventHandler):
         Tutti questi cambi richiedono invalidazione cache Redis per riflettere
         subito in UI lo stato post-eliminazione.
         """
+        # Sottotitolo manuale eliminato: rimuovi la riga dal DB (gestito a parte,
+        # prima della logica asset/video). Nota: il file non esiste piu', quindi
+        # _is_subtitle_file si basa solo sull'estensione.
+        if not event.is_directory and event.src_path.lower().endswith(subs_common.SUB_EXTENSIONS):
+            self._handle_subtitle_delete(event.src_path)
+            return
+
         relative_path = self._get_relative_path(event.src_path)
         if not relative_path:
             return
@@ -657,6 +741,19 @@ class VideoHandler(FileSystemEventHandler):
         """
         Gestisce lo spostamento/rinomina di file, asset E directory (Categorie).
         """
+        # Sottotitoli manuali (.vtt/.srt): rinomina/spostamento. Rimuovi la riga
+        # vecchia e, se la destinazione e' ancora un sottotitolo, re-importa.
+        src_is_sub = (not event.is_directory) and event.src_path.lower().endswith(subs_common.SUB_EXTENSIONS)
+        dest_is_sub = (not event.is_directory) and event.dest_path.lower().endswith(subs_common.SUB_EXTENSIONS)
+        if src_is_sub or dest_is_sub:
+            if src_is_sub:
+                self._handle_subtitle_delete(event.src_path)
+            if dest_is_sub:
+                sanitized = sanitize_path(event.dest_path)
+                if sanitized == event.dest_path:
+                    self._handle_subtitle_upsert(sanitized)
+            return
+
         # Bonifica immediata della destinazione se non conforme
         sanitized_dest = sanitize_path(event.dest_path)
         

@@ -382,6 +382,15 @@ services:
       - WHISPER_DEFAULT_MODEL=${WHISPER_DEFAULT_MODEL:-small}
       - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
       - LIBRETRANSLATE_URL=http://libretranslate:5000
+      # Traduzione a batch: ogni richiesta a LibreTranslate copre N segmenti, così
+      # nessuna chiamata sfora il timeout (il vecchio invio monolitico di ~1000
+      # segmenti andava sempre in Read timeout). Tunabili da .env.
+      - LIBRETRANSLATE_TIMEOUT=${LIBRETRANSLATE_TIMEOUT:-300}
+      - LIBRETRANSLATE_BATCH_SIZE=${LIBRETRANSLATE_BATCH_SIZE:-40}
+      - LIBRETRANSLATE_RETRIES=${LIBRETRANSLATE_RETRIES:-2}
+      # Discovery sub manuali = solo rete di sicurezza: il rilevamento in tempo
+      # reale lo fa il watcher. Intervallo alto per non rubare CPU alle trascrizioni.
+      - SUBTITLES_DISCOVERY_INTERVAL=${SUBTITLES_DISCOVERY_INTERVAL:-900}
       - SUBTITLES_POLL_INTERVAL=${SUBTITLES_POLL_INTERVAL:-10}
       # On-demand: l'admin attende attivamente, quindi niente backoff lungo.
       # Prima il worker dormiva fino a 120s prima di accorgersi di un job in coda.

@@ -20,7 +20,6 @@
 
 import sys
 import os
-import re
 import time
 import json
 import logging
@@ -31,6 +30,9 @@ from pathlib import Path
 
 import mysql.connector
 import requests
+
+import subtitles_common as subs_common
+from cache_invalidation import invalidate_videos_and_categories
 
 # --- Impostazioni ambiente ---
 PATH_TO_MONITOR = os.environ.get('WATCH_DIR', '/percorsoVideo')
@@ -53,17 +55,29 @@ WHISPER_BEAM_SIZE = int(os.environ.get('WHISPER_BEAM_SIZE', '5'))
 ALLOWED_MODELS = {'small', 'medium'}
 
 # --- Discovery sottotitoli manuali ---
-# Estensioni riconosciute quando l'utente mette i sottotitoli a mano nel filesystem.
-SUB_EXTENSIONS = ('.vtt', '.srt')
-# Lingua assegnata quando il nome file non contiene un codice (es. "video.vtt").
-MANUAL_DEFAULT_LANG = (os.environ.get('SUBTITLES_MANUAL_DEFAULT_LANG', 'it') or 'it').lower()
+# Estensioni e default lingua vivono in subtitles_common (condivise col watcher).
+SUB_EXTENSIONS = subs_common.SUB_EXTENSIONS
+MANUAL_DEFAULT_LANG = subs_common.MANUAL_DEFAULT_LANG
 # Ogni quanto ri-scansionare il disco per nuovi sottotitoli manuali (secondi).
-DISCOVERY_INTERVAL = int(os.environ.get('SUBTITLES_DISCOVERY_INTERVAL', '300'))
+# Ora e' solo una RETE DI SICUREZZA: il rilevamento in tempo reale e' fatto dal
+# watcher (watcher.py) all'istante in cui il file compare nella cartella. Per
+# questo l'intervallo e' alto (default 15 min), cosi' il worker dedica il tempo
+# alle trascrizioni invece che a scansionare il disco.
+DISCOVERY_INTERVAL = int(os.environ.get('SUBTITLES_DISCOVERY_INTERVAL', '900'))
 
 # LibreTranslate (container separato per la traduzione multilingua)
 LIBRETRANSLATE_URL = os.environ.get('LIBRETRANSLATE_URL', 'http://libretranslate:5000').rstrip('/')
 LIBRETRANSLATE_API_KEY = os.environ.get('LIBRETRANSLATE_API_KEY') or None
-LIBRETRANSLATE_TIMEOUT = int(os.environ.get('LIBRETRANSLATE_TIMEOUT', '120'))
+# Timeout PER BATCH (non piu' per l'intero video): con i batch ogni richiesta
+# resta piccola, quindi 120s sono abbondanti. Alzato a 300 come margine.
+LIBRETRANSLATE_TIMEOUT = int(os.environ.get('LIBRETRANSLATE_TIMEOUT', '300'))
+# Segmenti per richiesta. LibreTranslate (argos) traduce su CPU un testo alla
+# volta: mandare 1000 segmenti in un colpo solo sforava i 120s -> timeout e
+# traduzione persa per intero. Spezzando in batch ogni richiesta finisce in
+# pochi secondi e la traduzione regge qualsiasi durata.
+LIBRETRANSLATE_BATCH_SIZE = max(1, int(os.environ.get('LIBRETRANSLATE_BATCH_SIZE', '40')))
+# Tentativi per batch su errore transitorio (timeout/connessione).
+LIBRETRANSLATE_RETRIES = max(0, int(os.environ.get('LIBRETRANSLATE_RETRIES', '2')))
 
 FFMPEG_AUDIO_TIMEOUT = int(os.environ.get('SUBTITLES_FFMPEG_TIMEOUT', '600'))
 
@@ -280,12 +294,12 @@ def transcribe(wav_path, model_name, source_lang):
     return segments, detected
 
 
-def translate_segments(segments, source_lang, target_lang):
+def _translate_batch(texts, source_lang, target_lang):
     """
-    Traduce il testo dei segmenti via LibreTranslate, preservando i timestamp.
-    Invia tutti i testi in un'unica richiesta (q come array) per efficienza.
+    Traduce una lista di testi in UNA richiesta a LibreTranslate, con retry sui
+    fallimenti transitori (timeout/connessione). Ritorna la lista tradotta,
+    stessa lunghezza di `texts`.
     """
-    texts = [(seg['text'] or '').strip() for seg in segments]
     payload = {
         'q': texts,
         'source': source_lang,
@@ -295,23 +309,49 @@ def translate_segments(segments, source_lang, target_lang):
     if LIBRETRANSLATE_API_KEY:
         payload['api_key'] = LIBRETRANSLATE_API_KEY
 
-    resp = requests.post(
-        f"{LIBRETRANSLATE_URL}/translate",
-        json=payload, timeout=LIBRETRANSLATE_TIMEOUT
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    translated = data.get('translatedText')
+    last_err = None
+    for attempt in range(LIBRETRANSLATE_RETRIES + 1):
+        try:
+            resp = requests.post(
+                f"{LIBRETRANSLATE_URL}/translate",
+                json=payload, timeout=LIBRETRANSLATE_TIMEOUT
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            translated = data.get('translatedText')
+            # LibreTranslate ritorna una lista se q e' una lista; stringa se q e' stringa.
+            if isinstance(translated, str):
+                translated = [translated]
+            if not isinstance(translated, list) or len(translated) != len(texts):
+                raise RuntimeError(
+                    f"Risposta LibreTranslate inattesa "
+                    f"(len {len(translated) if isinstance(translated, list) else 'n/a'} vs {len(texts)})"
+                )
+            return translated
+        except (requests.RequestException, RuntimeError) as e:
+            last_err = e
+            if attempt < LIBRETRANSLATE_RETRIES:
+                wait = 2 * (attempt + 1)
+                logging.warning(f"[Subs] Batch traduzione fallito (tentativo {attempt + 1}): {e}. Riprovo tra {wait}s.")
+                time.sleep(wait)
+    raise last_err
 
-    # LibreTranslate ritorna una lista se q e' una lista; una stringa se q e' stringa.
-    if isinstance(translated, str):
-        translated = [translated]
-    if not isinstance(translated, list) or len(translated) != len(segments):
-        raise RuntimeError(f"Risposta LibreTranslate inattesa (len {len(translated) if isinstance(translated, list) else 'n/a'} vs {len(segments)})")
 
+def translate_segments(segments, source_lang, target_lang):
+    """
+    Traduce il testo dei segmenti via LibreTranslate, preservando i timestamp.
+    Lavora a BATCH (LIBRETRANSLATE_BATCH_SIZE segmenti per richiesta): ogni
+    chiamata resta piccola e rapida, evitando il timeout che colpiva la vecchia
+    richiesta monolitica con centinaia/migliaia di segmenti.
+    """
     out = []
-    for seg, txt in zip(segments, translated):
-        out.append({'start': seg['start'], 'end': seg['end'], 'text': txt})
+    total = len(segments)
+    for start in range(0, total, LIBRETRANSLATE_BATCH_SIZE):
+        batch = segments[start:start + LIBRETRANSLATE_BATCH_SIZE]
+        texts = [(seg['text'] or '').strip() for seg in batch]
+        translated = _translate_batch(texts, source_lang, target_lang)
+        for seg, txt in zip(batch, translated):
+            out.append({'start': seg['start'], 'end': seg['end'], 'text': txt})
     return out
 
 
@@ -549,14 +589,6 @@ def _finalize_transcription_row(conn, video_id, trans_row, actual_source, db_src
 # ============================================================================
 # Discovery sottotitoli manuali (file .vtt/.srt messi a mano nel filesystem)
 # ============================================================================
-def _srt_to_vtt(srt_text):
-    """Converte il testo di un .srt in WebVTT (timestamp con '.' e header WEBVTT)."""
-    text = srt_text.lstrip('﻿')
-    # SRT usa la virgola per i millisecondi: 00:00:01,000 -> 00:00:01.000
-    text = re.sub(r'(\d{2}:\d{2}:\d{2}),(\d{3})', r'\1.\2', text)
-    return "WEBVTT\n\n" + text.strip() + "\n"
-
-
 def discover_manual_subtitles(conn):
     """
     Scansiona /percorsoVideo e importa i sottotitoli messi a mano dall'utente:
@@ -606,7 +638,7 @@ def discover_manual_subtitles(conn):
             low = f.lower()
             if not low.endswith(SUB_EXTENSIONS):
                 continue
-            name, ext = f[:-4], low[-4:]
+            name = f[:-4]
 
             # Match col video il cui stem combacia (preferisci lo stem piu' lungo).
             matched = None
@@ -618,8 +650,7 @@ def discover_manual_subtitles(conn):
                 continue
             stem, vid = matched
 
-            suffix = name[len(stem):].lstrip('.')          # 'en' | '' | 'en.forced'
-            lang = (suffix.split('.')[0].lower() if suffix else MANUAL_DEFAULT_LANG) or MANUAL_DEFAULT_LANG
+            lang = subs_common.lang_from_name(name, stem)
             if lang in langs_by_id.get(vid, set()):
                 continue  # lingua gia' presente: non sovrascrivere
 
@@ -627,30 +658,16 @@ def discover_manual_subtitles(conn):
             if not _validate_under_base(full_src):
                 continue
 
-            # Determina il .vtt finale (convertendo l'eventuale .srt).
-            if ext == '.srt':
-                full_vtt = os.path.join(root, f"{name}.vtt")
-                try:
-                    with open(full_src, 'r', encoding='utf-8', errors='replace') as fh:
-                        srt_text = fh.read()
-                    with open(full_vtt, 'w', encoding='utf-8') as fh:
-                        fh.write(_srt_to_vtt(srt_text))
-                except Exception as e:
-                    logging.warning(f"[Discovery] conversione SRT fallita {full_src}: {e}")
-                    continue
-                db_rel = os.path.relpath(full_vtt, PATH_TO_MONITOR).replace('\\', '/').lstrip('/')
-            else:
-                db_rel = os.path.relpath(full_src, PATH_TO_MONITOR).replace('\\', '/').lstrip('/')
+            # Determina il .vtt finale (convertendo l'eventuale .srt) tramite il
+            # modulo condiviso, cosi' la logica e' identica a quella del watcher.
+            db_rel = subs_common._materialize_vtt(full_src, PATH_TO_MONITOR, logging)
+            if db_rel is None:
+                continue
 
             try:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "INSERT INTO Sottotitoli "
-                        "(id_Video, lingua, lingua_origine, tipo, percorso_file, stato, modello_usato, generato_at) "
-                        "VALUES (%s, %s, %s, 'trascrizione', %s, 'completato', 'manuale', NOW()) "
-                        "ON DUPLICATE KEY UPDATE id = id",
-                        (vid, lang, lang, db_rel)
-                    )
+                # override=False: la scansione bulk riempie SOLO le lingue mancanti
+                # e non ri-tocca righe esistenti (niente cache-invalidation a vuoto).
+                subs_common.register_subtitle_row(conn, vid, lang, db_rel, override=False)
                 langs_by_id.setdefault(vid, set()).add(lang)
                 imported += 1
                 logging.info(f"[Discovery] Sottotitolo manuale importato: video={vid} lingua={lang} file={db_rel}")
@@ -659,6 +676,8 @@ def discover_manual_subtitles(conn):
 
     if imported:
         logging.info(f"[Discovery] {imported} sottotitolo/i manuale/i importato/i.")
+        # Aggiorna la UI: nuove lingue disponibili nel player.
+        invalidate_videos_and_categories(reason=f"discovery {imported} sottotitoli manuali")
 
 
 # ============================================================================
