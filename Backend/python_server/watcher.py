@@ -29,6 +29,11 @@ DB_PASS = os.environ.get('MYSQL_PASSWORD')
 DB_NAME = os.environ.get('MYSQL_DATABASE')
 POLL_TIMEOUT = int(os.environ.get('WATCHER_POLL_TIMEOUT', '5'))  # Scansione ogni 5s di default (era 2s, troppo aggressivo per ARM)
 POLL_BACKOFF_MAX = int(os.environ.get('WATCHER_POLL_BACKOFF_MAX', '30'))  # Ceiling backoff esponenziale
+# Re-scan periodico di sicurezza: ri-accoda i video che l'observer real-time non
+# ri-emette (es. video droppati da Video_Temp dopo troppi ffprobe falliti mentre
+# il file era ancora in sync, o file conformi mai accodati). Senza questo, un
+# fallimento transitorio rendeva il video invisibile fino al restart del container.
+RESCAN_INTERVAL = int(os.environ.get('WATCHER_RESCAN_INTERVAL', '900'))  # 15 min
 
 # --- Helper per la Sanificazione dei Nomi dei File ---
 def sanitize_component_string(name):
@@ -509,6 +514,18 @@ class VideoHandler(FileSystemEventHandler):
 
         if not self._is_video_file(event.src_path):
             return
+
+        # GUARD anti-riga-sporca: se il nome NON e' ancora conforme significa che
+        # sanitize_path ha RIMANDATO la rinomina (file ancora in scrittura/sync:
+        # size non stabile). NON accodiamo il nome con spazi/accenti: creerebbe una
+        # riga Video_Temp orfana che, dopo la rinomina, punta a un file inesistente
+        # (ffprobe exit 1 -> 10 retry -> drop -> video mai indicizzato). Aspettiamo
+        # il prossimo evento di polling: a sync completato sanitize rinominera' e
+        # sara' il nome pulito ad essere accodato.
+        if not is_conforming(os.path.basename(event.src_path), is_file=True):
+            logging.debug(f"[+] '{event.src_path}' non ancora conforme/stabile: rimando l'accodamento.")
+            return
+
         relative_path = self._get_relative_path(event.src_path)
         if not relative_path:
             return
@@ -561,6 +578,12 @@ class VideoHandler(FileSystemEventHandler):
             return
 
         if not self._is_video_file(event.src_path):
+            return
+
+        # Stessa guardia di on_created: non accodare nomi non ancora conformi
+        # (rinomina rimandata perche' il file e' ancora in scrittura/sync).
+        if not is_conforming(os.path.basename(event.src_path), is_file=True):
+            logging.debug(f"[*] '{event.src_path}' non ancora conforme/stabile: rimando l'accodamento.")
             return
 
         relative_path = self._get_relative_path(event.src_path)
@@ -1532,11 +1555,27 @@ if __name__ == "__main__":
     observer = Observer(timeout=POLL_TIMEOUT) 
     observer.schedule(event_handler, PATH_TO_MONITOR, recursive=True)
     observer.start()
-    logging.info(f"--- Server Watcher avviato. In attesa di modifiche (Polling ogni {POLL_TIMEOUT}s) ---")
-    
+    logging.info(f"--- Server Watcher avviato. In attesa di modifiche (Polling ogni {POLL_TIMEOUT}s, re-scan ogni {RESCAN_INTERVAL}s) ---")
+
     try:
+        last_rescan = time.time()
         while True:
             time.sleep(1)
+            # Rete di sicurezza: ogni RESCAN_INTERVAL ri-scansiona il disco per
+            # ri-accodare i video che l'observer non ri-emette (dropped da
+            # Video_Temp dopo fallimenti transitori, o mai accodati). Usa una
+            # connessione dedicata e a vita breve per non tenere risorse aperte.
+            if time.time() - last_rescan >= RESCAN_INTERVAL:
+                last_rescan = time.time()
+                rescan_conn = None
+                try:
+                    rescan_conn = get_db_connection()
+                    perform_scan(event_handler, conn=rescan_conn)
+                except Exception as e:
+                    logging.error(f"[Re-scan] Errore durante il re-scan periodico: {e}")
+                finally:
+                    if rescan_conn and rescan_conn.is_connected():
+                        rescan_conn.close()
     except KeyboardInterrupt:
         logging.info("Richiesta di interruzione ricevuta. Arresto...")
         observer.stop()

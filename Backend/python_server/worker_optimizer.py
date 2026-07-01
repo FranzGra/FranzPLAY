@@ -96,6 +96,9 @@ def get_db_connection():
             return mysql.connector.connect(
                 host=DB_HOST, user=DB_USER, password=DB_PASS,
                 database=DB_NAME, autocommit=True,
+                # Evita che un connect verso un MySQL a meta' avvio (socket aperto
+                # ma handshake non pronto) resti appeso a tempo indeterminato.
+                connection_timeout=10,
             )
         except mysql.connector.Error as err:
             logging.warning(f"DB connection retry: {err}")

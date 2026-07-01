@@ -354,7 +354,12 @@ services:
           # Remux -c copy non satura CPU (I/O-bound). Audio re-encode AAC è leggero.
           # Bassa priorità: non vogliamo competere con worker_assets per ffmpeg.
           cpus: '0.8'
-          memory: 256M
+          # 512M (allineato a worker_assets): 256M era il budget ffmpeg piu' basso
+          # tra i worker e l'Optimizer e' l'unico a girare ffmpeg su file INTERI
+          # (4K/GB). Il +faststart su MKV grandi puo' spikeare la RAM oltre 256M ->
+          # OOM-kill del cgroup -> crash-restart loop (il container ripartiva col
+          # backoff Docker saturato a ~60s, atterrando su MySQL non ancora pronto).
+          memory: 512M
     restart: always
 
   # --- SOTTOTITOLI (faster-whisper, on-demand via Admin) ---
