@@ -277,6 +277,39 @@ def _ensure_asset_retry_column(conn):
 # il lock. L'admin puo' sempre riaccodare manualmente via "Rigenera" nel modale.
 MAX_ASSET_RETRIES = 5
 
+# Ogni tanto ri-accodiamo AUTOMATICAMENTE i video con asset marcati 'mancante'
+# (generazione fallita e messa in quarantena): riportiamo i path a NULL cosi'
+# rientrano tra i candidati e il worker ritenta. E' l'equivalente automatico del
+# "Rigenera" manuale dell'admin. Intervallo alto: molti di questi file possono
+# essere corrotti e li ritenteremmo di continuo, sprecando CPU. Tunable da .env.
+ASSET_REQUEUE_INTERVAL = int(os.environ.get('ASSET_REQUEUE_INTERVAL', '21600'))  # 6h
+
+
+def requeue_failed_assets(conn):
+    """
+    Rimette in coda i video con copertina/anteprima = 'mancante' azzerando i path
+    (torna a NULL) e il contatore tentativi. Ritorna il numero di video toccati.
+    Il worker li ripeschera' al prossimo ciclo tramite il normale SELECT candidati.
+    """
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE Video SET "
+                "  percorso_copertina = IF(percorso_copertina = 'mancante', NULL, percorso_copertina), "
+                "  percorso_anteprima = IF(percorso_anteprima = 'mancante', NULL, percorso_anteprima), "
+                "  asset_retry_count = 0 "
+                "WHERE (percorso_copertina = 'mancante' OR percorso_anteprima = 'mancante') "
+                "  AND locked_at IS NULL"
+            )
+            affected = cursor.rowcount
+        if affected > 0:
+            logging.info(f"[Assets][Requeue] Ri-accodati {affected} video con asset falliti ('mancante' -> NULL).")
+            invalidate_videos_only(reason=f"requeue {affected} asset falliti")
+        return affected
+    except Exception as e:
+        logging.error(f"[Assets][Requeue] Errore durante il ri-accodamento: {e}")
+        return 0
+
 
 # --- Funzione Principale (Solo Asset) ---
 def process_missing_assets(conn, settings):
@@ -518,12 +551,21 @@ if __name__ == "__main__":
     conn = None
     idle_streak = 0
     BACKOFF_MAX = int(os.environ.get('WORKER_BACKOFF_MAX', '120'))
+    # last_requeue = 0 -> il primo giro esegue subito lo sweep, cosi' i video gia'
+    # in stato 'mancante' (accumulati) vengono ripresi appena riavvii il worker.
+    last_requeue = 0
 
     while True:
         work_done = False
         try:
             if conn is None or not conn.is_connected():
                 conn = get_db_connection()
+
+            # Sweep periodico: ri-accoda automaticamente gli asset falliti.
+            if time.time() - last_requeue >= ASSET_REQUEUE_INTERVAL:
+                last_requeue = time.time()
+                requeue_failed_assets(conn)
+
             settings = fetch_settings(conn)
             work_done = process_missing_assets(conn, settings)
 
