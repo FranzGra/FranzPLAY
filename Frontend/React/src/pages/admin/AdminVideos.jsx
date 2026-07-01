@@ -274,6 +274,7 @@ export default function AdminVideos() {
   const [categories, setCategories] = useState([]);
   const [viewMode, setViewMode] = useState("grid");
   const [cropImage, setCropImage] = useState(null);
+  const [rescanning, setRescanning] = useState(false);
 
   const searchTimeout = useRef(null);
   const isFirstMount = useRef(true);
@@ -328,6 +329,31 @@ export default function AdminVideos() {
       (res) => res.success && setCategories(res.data || res.dati),
     );
   }, []);
+
+  const handleRescan = async () => {
+    setRescanning(true);
+    try {
+      const res = await apiRequest("/admin.php", "POST", { action: "rescan_video" });
+      if (res.success) {
+        const n = res.accodati ?? 0;
+        if (n > 0) {
+          toast.success(`Rescan completato: ${n} nuovi video accodati per l'elaborazione.`);
+          fetchVideos();
+        } else {
+          toast.info("Rescan completato: nessun nuovo video trovato sul disco.");
+        }
+        if (res.da_sanificare > 0) {
+          toast.info(`${res.da_sanificare} file con nomi non conformi saranno sanificati e accodati dal watcher.`);
+        }
+      } else {
+        toast.error(res.message || "Errore durante il rescan");
+      }
+    } catch (error) {
+      toast.error("Errore rescan: " + error.message);
+    } finally {
+      setRescanning(false);
+    }
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Sei sicuro di voler eliminare questo video? L'azione è irreversibile.")) return;
@@ -482,6 +508,21 @@ export default function AdminVideos() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleRescan}
+            disabled={rescanning}
+            className="h-12 gap-2 font-bold bg-background"
+            title="Scansiona il disco e accoda i video non ancora presenti nel database"
+          >
+            {rescanning ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <RotateCw size={18} />
+            )}
+            <span className="hidden sm:inline">{rescanning ? "Scansione…" : "Rescan"}</span>
+          </Button>
+
           <div className="inline-flex h-12 items-center justify-center rounded-xl bg-muted p-1.5 text-muted-foreground border">
             <button
               onClick={() => setViewMode("grid")}

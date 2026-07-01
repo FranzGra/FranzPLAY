@@ -4,6 +4,38 @@ if (!defined('ADMIN_API'))
 
 require_once __DIR__ . '/../path_safety.php';
 
+/**
+ * Conformità di un singolo componente di path secondo le stesse regole del
+ * watcher (is_conforming): solo [a-zA-Z0-9._-], niente __/../-- né _/-/ ai bordi,
+ * estensione lowercase. Serve al rescan per NON accodare in Video_Temp nomi
+ * "sporchi" (spazi/accenti) che poi fallirebbero ffprobe: quelli li sanifica
+ * e li accoda il watcher.
+ */
+function adminRescanIsConformingComponent($name, $isFile)
+{
+    if ($name === '') return false;
+    if (preg_match('/[^a-zA-Z0-9._-]/', $name)) return false;
+    if (strpos($name, '__') !== false || strpos($name, '..') !== false || strpos($name, '--') !== false) return false;
+    if ($name[0] === '_' || $name[0] === '-') return false;
+    $last = substr($name, -1);
+    if ($last === '_' || $last === '-') return false;
+    if ($isFile) {
+        $ext = pathinfo($name, PATHINFO_EXTENSION);
+        if ($ext !== '' && $ext !== strtolower($ext)) return false;
+    }
+    return true;
+}
+
+function adminRescanIsConforming($rel)
+{
+    $parts = explode('/', $rel);
+    $lastIdx = count($parts) - 1;
+    foreach ($parts as $i => $p) {
+        if (!adminRescanIsConformingComponent($p, $i === $lastIdx)) return false;
+    }
+    return true;
+}
+
 switch ($action) {
     case 'lista_video':
         $limit = (int) ($_POST['limit'] ?? 20);
@@ -98,6 +130,82 @@ switch ($action) {
             $Cache->deletePattern('videos_list_*');
         }
         inviaRisposta(true, 'Video ri-accodato per ottimizzazione');
+        break;
+
+    case 'rescan_video':
+        // Scansiona il filesystem e accoda in Video_Temp i video presenti su
+        // disco ma assenti sia da Video sia da Video_Temp. Equivale a un perform_scan
+        // del watcher lanciato on-demand dall'admin, senza attendere restart/re-scan.
+        global $BASE_VIDEO_PATH;
+
+        $base_real = realpath($BASE_VIDEO_PATH);
+        if ($base_real === false || !is_dir($base_real)) {
+            inviaRisposta(false, "Cartella video non accessibile ($BASE_VIDEO_PATH)", 500);
+        }
+
+        // Set dei path già noti (Video + Video_Temp): niente ri-accodamento.
+        $known = [];
+        if ($r = $database->query("SELECT percorso_file FROM Video")) {
+            while ($row = $r->fetch_row()) { $known[$row[0]] = true; }
+        }
+        if ($r = $database->query("SELECT percorso_file FROM Video_Temp")) {
+            while ($row = $r->fetch_row()) { $known[$row[0]] = true; }
+        }
+
+        $video_exts = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'];
+        $enqueued = 0;
+        $already = 0;
+        $to_sanitize = 0;
+
+        try {
+            $dir = new RecursiveDirectoryIterator($base_real, FilesystemIterator::SKIP_DOTS);
+            // Esclude cartelle nascoste e cartelle asset generate dai worker.
+            $filter = new RecursiveCallbackFilterIterator($dir, function ($current) {
+                $name = $current->getFilename();
+                if ($current->isDir()) {
+                    if ($name === '' || $name[0] === '.') return false;
+                    if (strncmp($name, 'copertine_', 10) === 0) return false;
+                    if (strncmp($name, 'anteprime_', 10) === 0) return false;
+                    if (strncmp($name, 'sottotitoli_', 12) === 0) return false;
+                }
+                return true;
+            });
+            $it = new RecursiveIteratorIterator($filter, RecursiveIteratorIterator::LEAVES_ONLY);
+
+            foreach ($it as $file) {
+                if (!$file->isFile() || $file->isLink()) continue;
+                $fname = $file->getFilename();
+                if ($fname === '' || $fname[0] === '.') continue;
+                // Backup/temporanei del worker_optimizer: non sono video reali.
+                if (strpos($fname, '.bak.') !== false || strpos($fname, '.tmp.') !== false) continue;
+                $ext = strtolower(pathinfo($fname, PATHINFO_EXTENSION));
+                if (!in_array($ext, $video_exts, true)) continue;
+
+                // Path relativo POSIX, come lo salva il watcher.
+                $rel = ltrim(str_replace('\\', '/', substr($file->getPathname(), strlen($base_real))), '/');
+                if ($rel === '') continue;
+
+                if (isset($known[$rel])) { $already++; continue; }
+
+                // Nomi non conformi: li lasciamo al watcher (che sanifica + accoda),
+                // per non reintrodurre righe Video_Temp con spazi/accenti.
+                if (!adminRescanIsConforming($rel)) { $to_sanitize++; continue; }
+
+                executePreparedQuery("INSERT IGNORE INTO Video_Temp (percorso_file) VALUES (?)", "s", [$rel]);
+                $known[$rel] = true;
+                $enqueued++;
+            }
+        } catch (Throwable $e) {
+            error_log("❌ [RESCAN] Errore scansione: " . $e->getMessage());
+            inviaRisposta(false, "Errore durante la scansione: " . $e->getMessage(), 500);
+        }
+
+        inviaRisposta(
+            true,
+            "Rescan completato: $enqueued nuovi video accodati.",
+            200,
+            ['accodati' => $enqueued, 'gia_presenti' => $already, 'da_sanificare' => $to_sanitize]
+        );
         break;
 
     case 'elimina_video':
