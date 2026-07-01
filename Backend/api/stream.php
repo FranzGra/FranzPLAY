@@ -38,7 +38,23 @@ while (ob_get_level() > 0) { @ob_end_clean(); }
 // SEZIONE 2: AUTENTICAZIONE
 // ============================================================================
 
-if (!isset($_SESSION['id_utente'])) {
+$token = $_GET['stream_token'] ?? '';
+$token_valid = false;
+
+if ($token) {
+    $decoded = base64_decode($token);
+    $parts = explode(':', $decoded);
+    if (count($parts) === 2) {
+        $uid = $parts[0];
+        $hash = $parts[1];
+        $expected = hash_hmac('sha256', $uid, 'FranzPLAY_Stream_Auth_Key');
+        if (hash_equals($expected, $hash)) {
+            $token_valid = true;
+        }
+    }
+}
+
+if (!$token_valid && !isset($_SESSION['id_utente'])) {
     http_response_code(403);
     die("⛔ Accesso negato: Autenticazione richiesta per visualizzare il contenuto.");
 }
@@ -108,16 +124,21 @@ header('Content-Disposition: inline');
 header('Accept-Ranges: bytes'); // Anche per Nginx, aiuta il client a sapere che può chiedere range.
 
 // Strategia di caching:
-// - Immagini: cache aggressiva (1g): cambia URL se cambia il file.
-// - Video: short-cache (immutable per qualche minuto) per permettere seek
-//   senza dover rifare l'autorizzazione PHP ad ogni richiesta Range del browser.
-if (in_array($estensione, ['jpg', 'jpeg', 'png', 'webp'])) {
-    // NIENTE `immutable`: quando un admin sostituisce una copertina,
-    // l'URL non sempre cambia (filename uguale) e `immutable` impedirebbe
-    // al browser di rivalidare per giorni. Con must-revalidate + ETag/Last-Modified
-    // il browser fa una richiesta condizionale che torna 304 nel caso comune,
-    // e scarica il file nuovo non appena mtime/etag cambiano.
-    header('Cache-Control: public, max-age=3600, must-revalidate');
+// - Copertine/anteprime (asset thumbnail): `no-cache`, sempre rivalidate → una
+//   cover/anteprima rigenerata (stesso filename) è visibile subito.
+// - Video principali: short-cache range-friendly per seek/rewatch.
+// Le anteprime sono .mp4 dentro cartelle "anteprime_*": vanno trattate come le
+// copertine, NON come i video, altrimenti resterebbero stale come le cover.
+$is_thumbnail_asset = in_array($estensione, ['jpg', 'jpeg', 'png', 'webp'])
+    || preg_match('#/anteprime_[^/]+/[^/]+\.mp4$#i', '/' . $file_clean);
+if ($is_thumbnail_asset) {
+    // Copertine (filename STABILE ma contenuto mutevole): `no-cache` -> il
+    // browser rivalida SEMPRE prima di riusare la copia in cache. Con
+    // ETag/Last-Modified (nginx sul file statico in prod, PHP nel fallback dev)
+    // la richiesta condizionale torna 304 quando la cover non è cambiata e 200
+    // coi byte nuovi appena viene rigenerata/sostituita. Con `max-age=3600` il
+    // browser mostrava invece la copertina vecchia fino a un'ora.
+    header('Cache-Control: no-cache');
 } else {
     // Cache estesa per consentire rewatch entro 5 min senza ri-fetch, e
     // stale-while-revalidate per evitare buffering visibile durante refresh.

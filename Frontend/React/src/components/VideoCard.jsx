@@ -35,6 +35,15 @@ function VideoCard({ video, onRemove, RemoveIcon = X }) {
   // Stato animazione rimozione
   const [isRemoving, setIsRemoving] = useState(false);
 
+  // Reset del flag di errore quando cambia la copertina: senza questo, una card
+  // che aveva fallito un caricamento transitorio (es. cover non ancora servibile
+  // quando il video era appena stato caricato) restava bloccata per sempre su
+  // "In elaborazione" anche dopo che il worker aveva generato l'asset. Ora, appena
+  // arriva il nuovo percorso_copertina, ritentiamo il caricamento dell'immagine.
+  useEffect(() => {
+    setCoverLoadFailed(false);
+  }, [video.percorso_copertina]);
+
   // Asset Paths
   const hasCover = hasAsset(video.percorso_copertina) && !coverLoadFailed;
   const hasPreview = hasAsset(video.percorso_anteprima);
