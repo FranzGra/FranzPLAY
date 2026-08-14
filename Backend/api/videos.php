@@ -98,7 +98,8 @@ try {
                   LEFT JOIN Categorie c ON v.id_Categoria = c.id 
                   WHERE v.id = ?";
 
-        $res = executePreparedQuery($query, "iiii", [$id_utente, $id_utente, $id_utente, $id_video_target]);
+        $res = queryOrFail($query, "iiii", [$id_utente, $id_utente, $id_utente, $id_video_target],
+                           "Impossibile caricare il video richiesto.");
         $video = $res->fetch_assoc();
 
         if ($video) {
@@ -246,7 +247,7 @@ try {
     $types .= "ii";
 
     // 7. Esecuzione e salvataggio in Cache
-    $res = executePreparedQuery($query, $types, $params);
+    $res = queryOrFail($query, $types, $params, "Impossibile caricare la lista dei video.");
     $dati = $res->fetch_all(MYSQLI_ASSOC);
 
     if ($shouldCache && !empty($dati)) {

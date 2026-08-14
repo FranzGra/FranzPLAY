@@ -100,7 +100,52 @@ switch ($action) {
             'commenti_totali' => $scalar("SELECT COUNT(*) FROM Commenti"),
             'sottotitoli_totali' => $scalar("SELECT COUNT(*) FROM Sottotitoli WHERE stato = 'completato'"),
             'sottotitoli_in_coda' => $scalar("SELECT COUNT(*) FROM Sottotitoli WHERE stato IN ('in_coda','elaborazione')"),
+
+            // --- Copertine online (worker_covers) ---
+            // La tabella puo' non esistere su installazioni aggiornate a caldo
+            // prima che il worker abbia girato la sua migrazione idempotente:
+            // $scalar ritorna 0 in quel caso, senza rompere la dashboard.
+            'copertine_online_applicate' => $scalar("SELECT COUNT(*) FROM Metadati_Online WHERE stato = 'applicato'"),
+            'copertine_online_in_coda' => $scalar("SELECT COUNT(*) FROM Metadati_Online WHERE stato IN ('in_coda','elaborazione')"),
+            'copertine_online_da_confermare' => $scalar("SELECT COUNT(*) FROM Metadati_Online WHERE stato = 'da_confermare'"),
+            'copertine_online_errore' => $scalar("SELECT COUNT(*) FROM Metadati_Online WHERE stato = 'errore'"),
         ];
+
+        // --- Stato reale della cache Redis ---
+        // La dashboard dichiarava "stato servizi" senza misurarne nessuno.
+        // Qui diciamo la verita': se Redis e' giu' il sito continua a funzionare
+        // (sessioni su file, letture dal DB) ma l'admin deve saperlo, perche' e'
+        // un degrado di prestazioni, non un guasto visibile.
+        global $Cache;
+        $redis_attivo = false;
+        $redis_memoria = null;
+        if (isset($GLOBALS['__REDIS_DISPONIBILE'])) {
+            // Il probe di gestione_richiesta.php ha gia' misurato in questa
+            // richiesta: riusiamo l'esito invece di aprire una seconda connessione.
+            $redis_attivo = (bool) $GLOBALS['__REDIS_DISPONIBILE'];
+        }
+        if ($redis_attivo && isset($Cache) && is_object($Cache)) {
+            // Un set/get di prova conferma che non solo risponde, ma serve.
+            $sonda = 'health_' . bin2hex(random_bytes(4));
+            $redis_attivo = ($Cache->set($sonda, ['ok' => 1], 10) !== false)
+                            && is_array($Cache->get($sonda));
+            $Cache->delete($sonda);
+        }
+        $stats['redis_attivo'] = $redis_attivo;
+        $stats['redis_memoria'] = $redis_memoria;
+        $stats['sessioni_su_file'] = !$redis_attivo;
+
+        // --- Ultima attivita' dei worker ---
+        // Un worker fermo non genera errori: semplicemente la coda non scende.
+        // Esporre l'ultimo lock acquisito permette di accorgersene dalla UI.
+        $stats['worker_copertine_ultimo'] = null;
+        $res_w = executePreparedQuery(
+            "SELECT MAX(GREATEST(creato_at, IFNULL(aggiornato_at, creato_at))) AS ultimo
+             FROM Metadati_Online WHERE stato IN ('applicato','nessun_match','errore')"
+        );
+        if ($res_w && ($r = $res_w->fetch_assoc())) {
+            $stats['worker_copertine_ultimo'] = $r['ultimo'];
+        }
 
         inviaRisposta(true, 'Statistiche server aggiornate', 200, ['dati' => $stats]);
         break;

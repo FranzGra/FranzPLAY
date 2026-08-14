@@ -11,8 +11,13 @@ services:
       - npm_cache:/root/.npm   # Cache
     environment:
       - TZ=Europe/Rome
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
+      # POLLING DEL FILE WATCHER — vedi nota sotto.
+      # Serve per l'hot-reload quando i sorgenti stanno su un bind mount
+      # Windows/Mac (9p non propaga gli eventi inotify). Su host Linux
+      # (ZimaBlade/Raspberry) e' INUTILE: inotify funziona nativamente.
+      # Impostabile da .env per poterlo misurare/disattivare.
+      - WATCHPACK_POLLING=${VITE_POLLING:-true}
+      - CHOKIDAR_USEPOLLING=${VITE_POLLING:-true}
     restart: always
 
   # --- PROXY & WEB SERVER (Nginx) ---
@@ -71,11 +76,27 @@ services:
       MYSQL_HOST: mysql
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # --- Resilienza sessioni (vedi gestione_richiesta.php) ---
+      # Se Redis non risponde, le sessioni ripiegano su file qui dentro invece
+      # di far fallire tutta l'API. La cartella e' gia' creata e assegnata a
+      # www-data dall'entrypoint.
+      SESSION_FALLBACK_DIR: ${SESSION_FALLBACK_DIR:-/App_Data/Sessions}
+      # Timeout del probe di raggiungibilita' (secondi). Redis e' sulla rete
+      # docker interna: 0.3s e' gia' molto generoso.
+      REDIS_SESSION_PROBE_TIMEOUT: ${REDIS_SESSION_PROBE_TIMEOUT:-0.3}
+      # Per quanti secondi ricordare che Redis e' giu' senza riprovare. Evita
+      # che OGNI richiesta paghi il timeout del probe (misurato: ~500ms).
+      REDIS_DOWN_TTL: ${REDIS_DOWN_TTL:-10}
     depends_on:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_healthy
+        # service_started, NON service_healthy: Redis e' una CACHE, non una
+        # dipendenza dura. gestione_richiesta.php fa il probe e ripiega su
+        # sessioni file se Redis non risponde, cache.php e rate_limit.php sono
+        # gia' fail-open. Con service_healthy un Redis malato teneva giu' tutto
+        # il backend, catalogo pubblico compreso.
+        condition: service_started
     healthcheck:
       # Verifica che il pool PHP-FPM risponda (cgi-fcgi via SCRIPT_NAME=/fpm-ping).
       # Se cgi-fcgi non è installato, uno semplice TCP check è sufficiente.
@@ -110,7 +131,24 @@ services:
     tmpfs:
       - /var/run/mysqld
     volumes:
-      - ./App_Data/Database_Data:/var/lib/mysql
+      # Sorgente dei dati MariaDB, configurabile da .env (MYSQL_DATA_SOURCE).
+      #
+      # DEFAULT = bind mount ./App_Data/Database_Data -> comportamento storico,
+      # corretto su host LINUX (ZimaBlade, Raspberry): li' il bind mount e' un
+      # filesystem nativo ext4 e InnoDB funziona senza problemi.
+      #
+      # SU DOCKER DESKTOP PER WINDOWS/MAC il bind mount NON e' nativo: passa per
+      # il protocollo 9p (verificabile con `df -T /var/lib/mysql` dentro il
+      # container). Su 9p le RINOMINE di file falliscono, e InnoDB le usa per
+      # ricostruire una tabella. Effetto: ogni ALTER TABLE sulla tabella `Video`
+      # (che ha un indice FULLTEXT, quindi tabelle ausiliarie FTS_*.ibd da
+      # rinominare) muore con "Got error 41 from storage engine InnoDB", e la
+      # colonna non viene creata. Su tabelle senza FULLTEXT l'ALTER passa: e'
+      # proprio la rinomina degli ausiliari FTS a rompersi.
+      #
+      # Su Windows/Mac impostare quindi in .env:  MYSQL_DATA_SOURCE=mysql_data
+      # (volume Docker nominato -> ext4 dentro la VM, niente 9p).
+      - ${MYSQL_DATA_SOURCE:-./App_Data/Database_Data}:/var/lib/mysql
       - ./Docker_Config/DBMS_Iniziale/:/docker-entrypoint-initdb.d
     environment:
       TZ: Europe/Rome
@@ -362,6 +400,54 @@ services:
           memory: 512M
     restart: always
 
+  # --- COPERTINE ONLINE (ricerca su database esterni, es. ThePornDB) ---
+  # Cerca la copertina di un video su un provider esterno partendo dal nome file
+  # e la scarica in copertine_<Categoria>/. NON sostituisce worker_assets: il
+  # frame ffmpeg resta il fallback sempre rigenerabile.
+  # Riusa l'immagine ./Docker_Config/Python degli altri worker (unica dipendenza
+  # aggiunta: `requests`). E' I/O-bound puro, non gira ffmpeg: risorse minime.
+  # A master switch spento (default) NON effettua alcuna chiamata di rete.
+  python_worker_covers:
+    build: ./Docker_Config/Python
+    container_name: ${CONTAINER_PREFIX:-}AUTO_Worker_Covers
+    environment:
+      - TZ=Europe/Rome
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - WATCH_DIR=/percorsoVideo
+      - PYTHONUNBUFFERED=1
+      - HOME=/tmp
+      - COVERS_POLL_INTERVAL=${COVERS_POLL_INTERVAL:-20}
+      - COVERS_BACKOFF_MAX=${COVERS_BACKOFF_MAX:-300}
+      - COVERS_HTTP_TIMEOUT=${COVERS_HTTP_TIMEOUT:-20}
+      - COVERS_MAX_IMAGE_BYTES=${COVERS_MAX_IMAGE_BYTES:-8388608}
+      - COVERS_STALE_LOCK_MINUTES=${COVERS_STALE_LOCK_MINUTES:-15}
+      - COVERS_DISCOVERY_BATCH=${COVERS_DISCOVERY_BATCH:-50}
+      - COVERS_RATE_LIMIT_COOLDOWN=${COVERS_RATE_LIMIT_COOLDOWN:-900}
+      # Backoff esponenziale tra i tentativi falliti: primo ritardo e tetto.
+      # Senza backoff un blip di rete bruciava tutti i tentativi in pochi secondi.
+      - COVERS_RETRY_BASE=${COVERS_RETRY_BASE:-60}
+      - COVERS_RETRY_MAX=${COVERS_RETRY_MAX:-3600}
+    user: "33:33"  # www-data: vedi nota in python_watcher. Le copertine scaricate
+                   # finiscono nelle stesse cartelle che PHP usa per gli upload manuali.
+    volumes:
+      - ./Backend/python_server:/app
+      - ${PERCORSO_VIDEO}:/percorsoVideo
+    command: ["python3", "/app/worker_covers.py"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+    restart: always
+
   # --- SOTTOTITOLI (faster-whisper, on-demand via Admin) ---
   # Worker che genera sottotitoli SOLO per i video accodati manualmente dall'admin
   # (Admin > Sottotitoli). Usa un Dockerfile DEDICATO (Python_Subtitles) per non
@@ -456,6 +542,12 @@ services:
     restart: always
 
 volumes:
+  # Dati MariaDB. Usato SOLO se in .env si imposta MYSQL_DATA_SOURCE=mysql_data
+  # (necessario su Docker Desktop Windows/Mac: vedi la nota nel servizio mysql).
+  # Su host Linux resta inutilizzato e i dati restano nel bind mount storico.
+  mysql_data:
+    driver: local
+
   npm_cache:
 
   redis_data:

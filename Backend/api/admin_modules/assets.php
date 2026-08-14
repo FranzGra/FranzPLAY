@@ -140,7 +140,10 @@ switch ($action) {
             $db_rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $video_rel_dir);
             $db_path = ($db_rel_path ? $db_rel_path . '/' : '') . $new_filename;
 
-            executePreparedQuery("UPDATE Video SET percorso_copertina = ? WHERE id = ?", "si", [$db_path, $id_video]);
+            // copertina_origine = 'manuale': marchia questa copertina come
+            // intoccabile dal modulo copertine online (worker_covers non la
+            // sovrascrive MAI, nemmeno con la sovrascrittura attiva).
+            executePreparedQuery("UPDATE Video SET percorso_copertina = ?, copertina_origine = 'manuale' WHERE id = ?", "si", [$db_path, $id_video]);
             global $Cache;
             if (isset($Cache) && is_object($Cache)) {
                 // Invalidazione mirata: lista pubblica + categorie.
@@ -170,7 +173,9 @@ switch ($action) {
             }
         }
 
-        executePreparedQuery("UPDATE Video SET percorso_copertina = NULL WHERE id = ?", "i", [$id]);
+        // Azzeriamo anche l'origine: il video torna candidato per worker_assets
+        // (frame ffmpeg) e per un'eventuale nuova ricerca online.
+        executePreparedQuery("UPDATE Video SET percorso_copertina = NULL, copertina_origine = NULL WHERE id = ?", "i", [$id]);
         global $Cache;
         if (isset($Cache) && is_object($Cache)) {
             // Invalidazione mirata: solo la lista video pubblica (Home/Categorie)

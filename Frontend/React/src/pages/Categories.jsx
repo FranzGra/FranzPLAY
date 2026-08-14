@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Loader2, Folder, LayoutGrid } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getAssetUrl } from "../services/helpers";
+import { apiRequest } from "../services/api";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 const CARD_GRADIENTS = [
@@ -24,9 +25,8 @@ export default function Categories() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await fetch("/api/categorie.php");
-        const json = await res.json();
-        if (json.success) setCategories(json.data || json.dati);
+        const json = await apiRequest("/categorie.php");
+        setCategories(json.data || json.dati);
       } catch (err) {
         console.error("Errore categorie:", err);
       } finally {

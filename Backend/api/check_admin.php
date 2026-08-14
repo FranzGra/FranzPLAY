@@ -53,7 +53,8 @@ if (!isset($_SESSION['id_utente'])) {
 // Non ci fidiamo ciecamente della variabile di sessione per operazioni critiche.
 try {
     $id_utente = $_SESSION['id_utente'];
-    $res = executePreparedQuery("SELECT Admin FROM Utenti WHERE id = ?", "i", [$id_utente]);
+    $res = queryOrFail("SELECT Admin FROM Utenti WHERE id = ?", "i", [$id_utente],
+                       "Errore durante la verifica dei privilegi.");
     $user = $res->fetch_assoc();
 
     if (!$user || (int) $user['Admin'] !== 1) {

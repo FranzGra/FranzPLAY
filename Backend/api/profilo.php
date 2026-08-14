@@ -59,10 +59,11 @@ try {
 
         // --- RECUPERA DATI UTENTE ---
         case 'ottieni_info_utente':
-            $res = executePreparedQuery(
+            $res = queryOrFail(
                 "SELECT Nome_Utente, Immagine_Profilo, Admin, colore_Tema, preferenze_home FROM Utenti WHERE id = ?",
                 "i",
-                [$id_utente]
+                [$id_utente],
+                "Impossibile caricare il profilo."
             );
             $row = $res->fetch_assoc();
 
@@ -75,6 +76,8 @@ try {
                 $row_default = $res_default->fetch_assoc();
                 $app_default_theme = $row_default ? $row_default['Valore_Impostazione'] : '#dc2626';
 
+                $stream_token = base64_encode($id_utente . ':' . hash_hmac('sha256', (string)$id_utente, 'FranzPLAY_Stream_Auth_Key'));
+
                 inviaRisposta(true, 'Profilo caricato', 200, [
                     'user' => [
                         'username' => $row['Nome_Utente'],
@@ -83,7 +86,8 @@ try {
                         'themeColor' => $row['colore_Tema'],
                         'appDefaultThemeColor' => $app_default_theme,
                         'homePreferences' => json_decode($row['preferenze_home'] ?? '{}', true)
-                    ]
+                    ],
+                    'stream_token' => $stream_token
                 ]);
             } else {
                 session_destroy();
@@ -211,7 +215,8 @@ try {
             }
 
             // Verifica che la password attuale sia corretta
-            $res = executePreparedQuery("SELECT Password FROM Utenti WHERE id = ?", "i", [$id_utente]);
+            $res = queryOrFail("SELECT Password FROM Utenti WHERE id = ?", "i", [$id_utente],
+                               "Impossibile verificare la password attuale.");
             $row = $res->fetch_assoc();
 
             if (!$row || !password_verify($old, $row['Password'])) {

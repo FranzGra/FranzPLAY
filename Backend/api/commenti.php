@@ -74,7 +74,8 @@ try {
                        WHERE c.id_Video = ?
                        ORDER BY c.data_ora_commento DESC";
 
-            $res = executePreparedQuery($query, "ii", [$id_utente, $id_video]);
+            $res = queryOrFail($query, "ii", [$id_utente, $id_video],
+                               "Impossibile caricare i commenti.");
             $lista = $res->fetch_all(MYSQLI_ASSOC);
 
             // Normalizzazione dati per il frontend

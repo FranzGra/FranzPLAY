@@ -7,6 +7,7 @@ import {
   Upload,
   Check,
   Folder,
+  FolderOpen,
   Film,
   Trash2,
   Palette,
@@ -21,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { PageShell, PageHeader, Panel, EmptyState } from "@/components/ui/layout";
 
 const CARD_GRADIENTS = [
   "from-red-600 to-red-950",
@@ -159,27 +161,41 @@ export default function AdminCategories() {
   };
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-8 relative"
-    >
-      <div>
-        <h1 className="text-4xl font-black text-foreground tracking-tight">Categorie</h1>
-        <p className="text-muted-foreground font-medium mt-1">Organizza i contenuti e gestisci le copertine dei cataloghi.</p>
-      </div>
+    <PageShell>
+      <PageHeader
+        icon={FolderOpen}
+        title="Categorie"
+        description="Organizza i contenuti e gestisci le copertine dei cataloghi."
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {!loading && categories.length === 0 && (
+        <Panel>
+          <EmptyState
+            icon={FolderOpen}
+            title="Nessuna categoria"
+            description="Le categorie nascono dalle cartelle presenti nel percorso video: creane una sul disco e comparirà qui."
+          />
+        </Panel>
+      )}
+
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+      >
         {loading
           ? [1, 2, 3].map((i) => (
-              <Card key={i} className="h-64 bg-zinc-900/50 rounded-3xl animate-pulse border-white/5" />
+              <div
+                key={i}
+                className="h-64 animate-pulse rounded-2xl border border-hairline bg-surface-1"
+              />
             ))
           : categories.map((cat) => (
               <motion.div variants={itemVariants} key={cat.id}>
-                <Card className="group overflow-hidden flex flex-col h-full bg-zinc-900/20 hover:bg-zinc-900/40 border-white/5 hover:border-white/10 transition-colors p-0 rounded-3xl">
+                <Card className="group overflow-hidden flex flex-col h-full bg-surface-1 hover:bg-surface-2 border-hairline hover:border-hairline-strong transition-colors p-0 rounded-2xl">
                   {/* Anteprima Sfondo con Glass Overlay */}
-                  <div className="relative h-48 bg-zinc-950 overflow-hidden">
+                  <div className="relative h-48 bg-background overflow-hidden">
                     {cat.Immagine_Sfondo ? (
                       <img
                         src={`${getAssetUrl(cat.Immagine_Sfondo)}&t=${Date.now()}`}
@@ -193,12 +209,12 @@ export default function AdminCategories() {
                           <>
                             <div className={`absolute inset-0 bg-gradient-to-br ${cat.Colore_Default} opacity-100 transition-colors duration-500`} />
                             <div className="absolute inset-0 opacity-50 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
-                            <Folder className="absolute -right-4 -bottom-8 h-32 w-32 sm:h-45 sm:w-45 text-white/5 -rotate-12 group-hover:-bottom-0 group-hover:-right-0 group-hover:h-40 group-hover:w-40 group-hover:rotate-0 transition-all duration-500" />
+                            <Folder className="absolute -right-4 -bottom-8 h-32 w-32 sm:h-45 sm:w-45 text-foreground/5 -rotate-12 group-hover:-bottom-0 group-hover:-right-0 group-hover:h-40 group-hover:w-40 group-hover:rotate-0 transition-all duration-500" />
                           </>
                         ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800 bg-zinc-900/50">
+                          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground bg-surface-2">
                             <Folder size={48} className="mb-2 opacity-50" />
-                            <span className="text-[10px] font-black uppercase tracking-widest italic opacity-50">Nessuno Sfondo</span>
+                            <span className="text-xs font-black uppercase tracking-widest italic opacity-50">Nessuno Sfondo</span>
                           </div>
                         )}
                       </>
@@ -211,14 +227,14 @@ export default function AdminCategories() {
                           variant="outline"
                           size="icon"
                           onClick={() => handleRemoveBackground(cat.id)}
-                          className="w-10 h-10 rounded-2xl bg-zinc-950/80 backdrop-blur-md border-white/10 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/50"
+                          className="w-10 h-10 rounded-2xl bg-background/80 backdrop-blur-md border-hairline-strong text-muted-foreground hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/50"
                           title="Rimuovi Sfondo"
                         >
                           <Trash2 size={18} />
                         </Button>
                       )}
 
-                      <Label className="w-10 h-10 flex items-center justify-center rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-400 hover:text-white cursor-pointer transition-all active:scale-90 hover:bg-primary hover:border-primary m-0">
+                      <Label className="w-10 h-10 flex items-center justify-center rounded-2xl bg-background/80 backdrop-blur-md border border-hairline-strong text-muted-foreground hover:text-white cursor-pointer transition-all active:scale-90 hover:bg-primary hover:border-primary m-0">
                         {uploadingId === cat.id ? (
                           <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         ) : (
@@ -238,7 +254,7 @@ export default function AdminCategories() {
                           variant="outline"
                           size="icon"
                           onClick={() => setColorPickerOpen(colorPickerOpen === cat.id ? null : cat.id)}
-                          className="w-10 h-10 rounded-2xl bg-zinc-950/80 backdrop-blur-md border-white/10 text-zinc-400 hover:text-white hover:bg-emerald-500 hover:border-emerald-500"
+                          className="w-10 h-10 rounded-2xl bg-background/80 backdrop-blur-md border-hairline-strong text-muted-foreground hover:text-white hover:bg-emerald-500 hover:border-emerald-500"
                           title="Scegli Colore"
                         >
                           <Palette size={18} />
@@ -253,17 +269,17 @@ export default function AdminCategories() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
-                          className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm z-30 flex flex-col p-3"
+                          className="absolute inset-0 bg-background/90 backdrop-blur-sm z-30 flex flex-col p-3"
                         >
-                          <div className="flex justify-between items-center mb-2 border-b border-white/10 pb-2">
-                            <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Tinta Unita</span>
-                            <button onClick={() => setColorPickerOpen(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+                          <div className="flex justify-between items-center mb-2 border-b border-hairline-strong pb-2">
+                            <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Tinta Unita</span>
+                            <button onClick={() => setColorPickerOpen(null)} className="text-muted-foreground hover:text-white"><X size={16} /></button>
                           </div>
                           <div className="flex-1 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                             <div className="grid grid-cols-5 gap-4 px-6 py-4 content-start">
                               <button
                                 onClick={() => handleSaveColor(cat.id, "")}
-                                className={`w-11 h-11 rounded-xl bg-zinc-800 transition-all flex items-center justify-center outline-none shrink-0 relative ${!cat.Colore_Default ? "ring-2 ring-primary ring-offset-2 ring-offset-zinc-950" : "hover:scale-105"}`}
+                                className={`w-11 h-11 rounded-xl bg-surface-3 transition-all flex items-center justify-center outline-none shrink-0 relative ${!cat.Colore_Default ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "hover:scale-105"}`}
                                 title="Predefinito / Nessuno"
                               >
                                 {!cat.Colore_Default && <Check size={20} className="text-primary" />}
@@ -272,7 +288,7 @@ export default function AdminCategories() {
                                 <button
                                   key={i}
                                   onClick={() => handleSaveColor(cat.id, grad)}
-                                  className={`w-11 h-11 rounded-xl bg-gradient-to-br ${grad} transition-all flex items-center justify-center outline-none shrink-0 relative ${cat.Colore_Default === grad ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-105 z-10" : "hover:scale-105"}`}
+                                  className={`w-11 h-11 rounded-xl bg-gradient-to-br ${grad} transition-all flex items-center justify-center outline-none shrink-0 relative ${cat.Colore_Default === grad ? "ring-2 ring-white ring-offset-2 ring-offset-background scale-105 z-10" : "hover:scale-105"}`}
                                 >
                                   {cat.Colore_Default === grad && <Check size={22} className="text-white drop-shadow-md" />}
                                 </button>
@@ -284,7 +300,7 @@ export default function AdminCategories() {
                     </AnimatePresence>
 
                     {/* Titolo in overlay */}
-                    <div className="absolute inset-0 p-6 flex items-end bg-gradient-to-t from-zinc-950/90 to-transparent pointer-events-none">
+                    <div className="absolute inset-0 p-6 flex items-end bg-gradient-to-t from-background/95 to-transparent pointer-events-none">
                       <div className="w-full pointer-events-auto">
                         {editingId === cat.id ? (
                           <div className="flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-300">
@@ -292,7 +308,7 @@ export default function AdminCategories() {
                               type="text"
                               value={editName}
                               onChange={(e) => setEditName(e.target.value)}
-                              className="bg-zinc-950/80 backdrop-blur-xl border-primary/50 text-white font-bold h-10"
+                              className="bg-background/80 backdrop-blur-xl border-primary/50 text-white font-bold h-10"
                               autoFocus
                               onKeyDown={(e) => e.key === "Enter" && saveEdit()}
                             />
@@ -307,7 +323,7 @@ export default function AdminCategories() {
                               variant="ghost"
                               size="icon"
                               onClick={() => startEdit(cat)}
-                              className="opacity-100 translate-x-0 md:opacity-0 group-hover:opacity-100 md:translate-x-2 group-hover:translate-x-0 transition-all duration-300 w-8 h-8 bg-white/10 backdrop-blur-md rounded-lg text-white hover:bg-white hover:text-black"
+                              className="opacity-100 translate-x-0 md:opacity-0 group-hover:opacity-100 md:translate-x-2 group-hover:translate-x-0 transition-all duration-300 w-8 h-8 bg-foreground/10 backdrop-blur-md rounded-lg text-white hover:bg-foreground hover:text-background"
                             >
                               <Edit size={14} />
                             </Button>
@@ -318,23 +334,23 @@ export default function AdminCategories() {
                   </div>
 
                   {/* Info Footer */}
-                  <CardContent className="p-6 bg-zinc-900/30 flex items-center justify-between mt-auto">
+                  <CardContent className="p-6 bg-surface-2 flex items-center justify-between mt-auto">
                     <div className="flex items-center gap-2">
-                      <div className="p-2 bg-zinc-800/50 rounded-lg text-muted-foreground">
+                      <div className="p-2 bg-surface-3 rounded-lg text-muted-foreground">
                         <Film size={14} />
                       </div>
-                      <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                      <span className="text-xs font-black text-muted-foreground uppercase tracking-widest">
                         {cat.num_video} Contenuti
                       </span>
                     </div>
-                    <div className="px-3 py-1.5 bg-zinc-950/50 rounded-full border border-white/5 text-[9px] font-black text-zinc-500 tracking-widest uppercase">
+                    <div className="px-3 py-1.5 bg-surface-3 rounded-full border border-hairline text-xs font-black text-muted-foreground tracking-widest uppercase">
                       ID #{cat.id}
                     </div>
                   </CardContent>
                 </Card>
               </motion.div>
             ))}
-      </div>
-    </motion.div>
+      </motion.div>
+    </PageShell>
   );
 }

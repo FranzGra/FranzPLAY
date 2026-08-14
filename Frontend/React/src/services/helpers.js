@@ -1,3 +1,5 @@
+import { getServerMediaUrl } from "./api";
+
 /**
  * Verifica se un path asset (copertina/anteprima) è valido.
  * NULL / undefined / stringa vuota / 'mancante' → no asset disponibile,
@@ -24,7 +26,7 @@ export const getAssetUrl = (path) => {
   // l'assolvere dello spacchettamento al back-end.
   // Usiamo encodeURI() per gestire *solo* gli spazi o caratteri speciali base
   // mantenendo intatti gli slash direzionali.
-  return `/api/stream.php?file=${encodeURI(cleanPath)}`;
+  return getServerMediaUrl(`/api/stream.php?file=${encodeURI(cleanPath)}`);
 };
 
 /**
@@ -37,9 +39,9 @@ export const getUserAvatarUrl = (path) => {
   // Se il path include già 'img_utenti', lo usiamo così com'è.
   // Altrimenti lo prepariamo al prefisso.
   if (cleanPath.startsWith("img_utenti/")) {
-    return `/${cleanPath}`;
+    return getServerMediaUrl(`/${cleanPath}`);
   }
-  return `/img_utenti/${cleanPath}`;
+  return getServerMediaUrl(`/img_utenti/${cleanPath}`);
 };
 
 export const formatDuration = (str) => {

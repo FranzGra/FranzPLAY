@@ -26,6 +26,7 @@ class Cache
     private $redis;
     private $enabled = false;
     private $ttl = 300; // Tempo di vita predefinito: 5 minuti
+    private $downFlag = null; // Marcatore "Redis irraggiungibile" (vedi costruttore)
 
     /**
      * Costruttore: Tenta la connessione al container Redis.
@@ -36,6 +37,38 @@ class Cache
         if (!class_exists('Redis')) {
             error_log("⚠️ [CACHE] Estensione Redis non trovata nel sistema PHP.");
             return;
+        }
+
+        // 2. Se gestione_richiesta.php ha già sondato Redis in questa richiesta
+        //    e lo ha trovato giù, non ritentiamo: pagheremmo un secondo timeout
+        //    per ogni richiesta, a fronte di un esito già noto. Restiamo
+        //    disabilitati e il sistema legge dal DB, come da design fail-open.
+        if (isset($GLOBALS['__REDIS_DISPONIBILE']) && $GLOBALS['__REDIS_DISPONIBILE'] === false) {
+            return;
+        }
+
+        // 3. Memoria su file dell'ultimo esito negativo.
+        //
+        //    ⚠️ MISURATO SUL CAMPO: con il container Redis fermo, connect()
+        //    impiega ~4 secondi, NON il timeout configurato. Il timeout limita
+        //    la connessione TCP, ma la risoluzione DNS del nome "redis" avviene
+        //    prima e non è vincolata da quel parametro.
+        //
+        //    Non basta il controllo di gestione_richiesta.php: status.php e
+        //    impostazioni.php includono cache.php SENZA passare da lì, quindi
+        //    pagavano 4 secondi a ogni richiesta con Redis giù.
+        //
+        //    Il marcatore è lo stesso file usato da gestione_richiesta.php: i
+        //    due si aggiornano a vicenda.
+        $dirFallback = getenv('SESSION_FALLBACK_DIR') ?: '/App_Data/Sessions';
+        $this->downFlag = $dirFallback . '/.redis_non_raggiungibile';
+        $downTtl = (int) (getenv('REDIS_DOWN_TTL') ?: 10);
+
+        if (is_file($this->downFlag)) {
+            $eta = time() - (int) @filemtime($this->downFlag);
+            if ($eta >= 0 && $eta < $downTtl) {
+                return; // sappiamo già che è giù: niente attesa
+            }
         }
 
         try {
@@ -61,9 +94,22 @@ class Cache
             } else {
                 error_log("⚠️ [CACHE] Connessione a Redis fallita (timeout o host non raggiungibile).");
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
+            // Throwable e non Exception: con un host non risolvibile phpredis
+            // solleva RedisException, che in PHP 8 non discende da Exception in
+            // tutte le versioni. Catturare troppo poco qui significava un fatal.
             error_log("⚠️ [CACHE ERROR] Eccezione durante l'inizializzazione: " . $e->getMessage());
             $this->enabled = false;
+        }
+
+        // Aggiorna il marcatore condiviso: se Redis è tornato lo cancelliamo
+        // (così si riprende subito), se è ancora giù lo rinfreschiamo.
+        if ($this->downFlag !== null) {
+            if ($this->enabled) {
+                if (is_file($this->downFlag)) @unlink($this->downFlag);
+            } elseif (is_dir(dirname($this->downFlag))) {
+                @touch($this->downFlag);
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { apiRequest } from "../services/api";
+import { getUserAvatarUrl } from "../services/helpers";
 
 const AuthContext = createContext(null);
 
@@ -21,11 +22,7 @@ export const AuthProvider = ({ children }) => {
 
     return {
       username: userData.username || "Utente",
-      avatar: userData.avatar
-        ? userData.avatar.startsWith("http") || userData.avatar.startsWith("/")
-          ? userData.avatar
-          : `/img_utenti/${userData.avatar}`
-        : null,
+      avatar: userData.avatar ? getUserAvatarUrl(userData.avatar) : null,
       isAdmin: Boolean(userData.isAdmin),
       themeColor: userData.themeColor || null,
       appDefaultThemeColor: userData.appDefaultThemeColor || null,
@@ -46,6 +43,7 @@ export const AuthProvider = ({ children }) => {
       const data = await apiRequest("/profilo.php", "POST", formData);
 
       if (data && data.success) {
+        if (data.stream_token) localStorage.setItem("stream_token", data.stream_token);
         const formattedUser = formatUser(data.user);
         setUser(formattedUser);
 
@@ -81,6 +79,7 @@ export const AuthProvider = ({ children }) => {
       );
 
       if (data.success) {
+        if (data.stream_token) localStorage.setItem("stream_token", data.stream_token);
         const formattedUser = formatUser(data.user);
         setUser(formattedUser);
         // Applica subito il tema appena ricevuto dal login
@@ -103,6 +102,7 @@ export const AuthProvider = ({ children }) => {
       await apiRequest("/logout.php");
       setUser(null);
       localStorage.removeItem("franz_theme");
+      localStorage.removeItem("stream_token");
       applyTheme(localStorage.getItem("franz_default_theme") || "#dc2626"); // Reset al tema globale
     } catch (error) {
       console.error("Errore Logout:", error);

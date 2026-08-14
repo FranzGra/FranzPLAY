@@ -81,11 +81,23 @@ header("Expires: 0");
 // ============================================================================
 
 /**
- * Configurazione Sessione su Redis
- * In base all'architettura per RPi4, usiamo Redis per evitare scritture su SD card.
+ * Configurazione Sessione su Redis, CON FALLBACK SU FILE.
+ *
+ * In base all'architettura per RPi4 usiamo Redis per evitare scritture su SD
+ * card. Ma Redis NON deve essere un single point of failure: se il container
+ * cade, il save_handler 'redis' fa fallire session_start() e con esso OGNI
+ * endpoint (questo file è incluso da tutti), catalogo pubblico compreso.
+ *
+ * Quindi: probe rapido, e se Redis non risponde ripieghiamo su file in
+ * /App_Data/Sessions (già creata e chownata a www-data dall'entrypoint).
+ * Le scritture su SD tornano solo nella finestra di degrado, non a regime.
+ *
+ * Il probe costa un connect() con timeout 0.5s SOLO quando Redis è giù; a
+ * regime la connessione riesce al primo colpo ed è nell'ordine dei microsecondi
+ * sulla rete docker interna.
  */
 $redisHost = getenv('REDIS_HOST') ?: 'redis';
-$redisPort = getenv('REDIS_PORT') ?: 6379;
+$redisPort = (int) (getenv('REDIS_PORT') ?: 6379);
 $redisPwd = getenv('REDIS_PASSWORD');
 
 // Costruisce la stringa di connessione per il save_path
@@ -94,8 +106,90 @@ if (!empty($redisPwd)) {
     $savePath .= "?auth=" . urlencode($redisPwd);
 }
 
-ini_set('session.save_handler', 'redis');
-ini_set('session.save_path', $savePath);
+$sessionFallbackDir = getenv('SESSION_FALLBACK_DIR') ?: '/App_Data/Sessions';
+
+/**
+ * Memoria a breve termine dell'esito del probe.
+ *
+ * MISURATO: con Redis raggiungibile il probe costa 0.02 ms (irrilevante), ma
+ * con Redis GIÙ costa ~500 ms — il timeout di connect — e lo pagherebbe OGNI
+ * richiesta di OGNI worker PHP-FPM. Su hardware come RPi/ZimaBlade significa
+ * saturare il pool e rendere il sito inusabile proprio mentre stiamo cercando
+ * di tenerlo in piedi.
+ *
+ * Con questo marcatore, in degrado solo UNA richiesta ogni REDIS_DOWN_TTL
+ * secondi paga il probe; tutte le altre pagano una filemtime() (microsecondi).
+ * Il file vive nella cartella delle sessioni di fallback, che è già garantita
+ * scrivibile da www-data; il prefisso "." lo tiene fuori dal garbage collector
+ * di PHP, che considera solo i file "sess_*".
+ */
+$redisDownFlag = $sessionFallbackDir . '/.redis_non_raggiungibile';
+$redisDownTtl = (int) (getenv('REDIS_DOWN_TTL') ?: 10);
+
+$sessionRedisOk = false;
+$saltaProbe = false;
+
+if (is_file($redisDownFlag)) {
+    $eta = time() - (int) @filemtime($redisDownFlag);
+    if ($eta >= 0 && $eta < $redisDownTtl) {
+        $saltaProbe = true;   // sappiamo già che è giù: non riproviamo adesso
+    }
+}
+
+if (!$saltaProbe && class_exists('Redis')) {
+    $probe = null;
+    try {
+        $probe = new Redis();
+        // 0.3s è abbondante: Redis vive sulla rete docker interna e risponde in
+        // meno di un millisecondo. Serve solo a non restare appesi se è morto.
+        $probeTimeout = (float) (getenv('REDIS_SESSION_PROBE_TIMEOUT') ?: 0.3);
+        if (@$probe->connect($redisHost, $redisPort, $probeTimeout)) {
+            // Con requirepass attivo, senza auth ogni comando risponde NOAUTH:
+            // dobbiamo autenticarci qui o il probe direbbe "ok" a torto.
+            $sessionRedisOk = (empty($redisPwd) || @$probe->auth($redisPwd));
+        }
+    } catch (Throwable $e) {
+        $sessionRedisOk = false;
+    }
+    if ($probe instanceof Redis) {
+        try { @$probe->close(); } catch (Throwable $e) { /* già chiuso */ }
+    }
+
+    // Aggiorna il marcatore in base all'esito appena misurato.
+    if ($sessionRedisOk) {
+        if (is_file($redisDownFlag)) {
+            @unlink($redisDownFlag);   // Redis è tornato: si riprende subito
+        }
+    } elseif (is_dir($sessionFallbackDir)) {
+        @touch($redisDownFlag);
+    }
+}
+
+// Esportiamo l'esito del probe: cache.php lo riusa per NON ripetere un secondo
+// tentativo di connessione. Senza questo, con Redis giù ogni richiesta pagava
+// 0.5s di probe + 1.0s di timeout in cache.php = 1.5s di latenza aggiunta.
+$GLOBALS['__REDIS_DISPONIBILE'] = $sessionRedisOk;
+
+if ($sessionRedisOk) {
+    ini_set('session.save_handler', 'redis');
+    ini_set('session.save_path', $savePath);
+} else {
+    // DEGRADO CONTROLLATO: niente Redis → sessioni su disco. Il sito resta in
+    // piedi (login, admin, streaming). Le sessioni già in Redis non sono
+    // leggibili da qui: gli utenti dovranno rifare login finché Redis non torna.
+    if (!is_dir($sessionFallbackDir)) {
+        @mkdir($sessionFallbackDir, 0770, true);
+    }
+    if (is_dir($sessionFallbackDir) && is_writable($sessionFallbackDir)) {
+        ini_set('session.save_handler', 'files');
+        ini_set('session.save_path', $sessionFallbackDir);
+        error_log("⚠️ [SESSION] Redis non raggiungibile: fallback su file in $sessionFallbackDir.");
+    } else {
+        // Ultima spiaggia: lasciamo il default di PHP (di solito /tmp). Meglio
+        // una sessione effimera che un 500 su tutta l'API.
+        error_log("⚠️ [SESSION] Redis giù e $sessionFallbackDir non scrivibile: uso il default di PHP.");
+    }
+}
 
 // Configurazione durata sessione (30 giorni) per un'esperienza d'uso fluida
 $session_lifetime = 30 * 24 * 60 * 60;
@@ -120,9 +214,54 @@ session_set_cookie_params([
     'samesite' => 'Lax'
 ]);
 
-// Avvio del motore delle sessioni
+// Avvio del motore delle sessioni.
+// Protetto: anche col fallback attivo un handler può fallire (disco pieno,
+// permessi). In quel caso proseguiamo SENZA sessione invece di fatalare: gli
+// endpoint pubblici continuano a rispondere JSON, quelli autenticati daranno
+// un 401 pulito da check_admin.php / dai controlli su $_SESSION.
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    try {
+        if (!@session_start()) {
+            error_log("⚠️ [SESSION] session_start() fallita: proseguo senza sessione.");
+        }
+    } catch (Throwable $e) {
+        error_log("⚠️ [SESSION] Eccezione in session_start(): " . $e->getMessage());
+    }
+}
+
+// Garantisce che $_SESSION sia sempre un array: senza sessione attiva PHP non
+// la popola, e i `isset($_SESSION['id_utente'])` sparsi negli endpoint
+// darebbero warning invece di un 401 pulito.
+if (!isset($_SESSION) || !is_array($_SESSION)) {
+    $_SESSION = [];
+}
+
+
+// ============================================================================
+// SEZIONE 2-bis: NORMALIZZAZIONE DEL BODY JSON
+// ============================================================================
+
+/**
+ * Il frontend invia i POST come JSON in php://input, che PHP non popola in
+ * $_POST. Facciamo qui il merge, PRIMA che qualunque endpoint legga $_POST.
+ *
+ * Storicamente il merge viveva in admin.php, DOPO l'include di check_admin.php:
+ * l'audit log leggeva quindi $_POST['action'] quando era ancora vuoto e
+ * registrava "action=unknown" per ogni singola operazione amministrativa,
+ * rendendo la traccia di audit inutilizzabile.
+ *
+ * Solo per Content-Type JSON: le richieste multipart (upload copertine, sfondi,
+ * immagini profilo) hanno il body gia' consumato da PHP e php://input vuoto.
+ */
+$__content_type = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
+if (stripos($__content_type, 'application/json') !== false) {
+    $__raw = file_get_contents('php://input');
+    if ($__raw !== false && $__raw !== '') {
+        $__parsed = json_decode($__raw, true);
+        if (is_array($__parsed)) {
+            $_POST = array_merge($_POST, $__parsed);
+        }
+    }
 }
 
 

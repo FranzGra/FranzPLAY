@@ -1,5 +1,7 @@
 // src/services/api.js
 
+import { Capacitor } from '@capacitor/core';
+
 /**
  * ============================================================================
  * SERVICES/API.JS
@@ -8,6 +10,38 @@
  * Layer di astrazione per le chiamate HTTP al Backend PHP.
  * Gestisce l'invio dei cookie di sessione e la normalizzazione delle risposte.
  */
+
+/**
+ * Ottiene l'URL base del server.
+ * Se gira come App Nativia (Capacitor), usa quello inserito in fase di Setup.
+ * Se gira sul Web, usa stringa vuota (path relativi).
+ */
+export const getBaseUrl = () => {
+  const url = localStorage.getItem("franzplay_server_url");
+  return url ? url : "";
+};
+
+/**
+ * Converte un path relativo in assoluto (es. per /img_utenti o /api/stream.php)
+ * Necessario sull'App nativa affinché le immagini vengano prese dal server remoto.
+ */
+export const getServerMediaUrl = (path) => {
+  if (!path) return path;
+  if (path.startsWith("http")) return path;
+  
+  const baseUrl = getBaseUrl();
+  if (!baseUrl) return path;
+
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  let finalUrl = `${baseUrl}${cleanPath}`;
+  
+  const token = localStorage.getItem("stream_token");
+  if (token) {
+    finalUrl += finalUrl.includes("?") ? `&stream_token=${token}` : `?stream_token=${token}`;
+  }
+  
+  return finalUrl;
+};
 
 /**
  * Wrapper generico per fetch().
@@ -47,7 +81,9 @@ export const apiRequest = async (endpoint, method = "GET", body = null) => {
   }
 
   try {
-    const res = await fetch(`/api${endpoint}`, options);
+    const baseUrl = getBaseUrl();
+    const fetchUrl = `${baseUrl}/api${endpoint}`;
+    const res = await fetch(fetchUrl, options);
 
     // 204 No Content (es. Logout success)
     if (res.status === 204) return null;

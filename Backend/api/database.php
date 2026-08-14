@@ -179,4 +179,44 @@ function executePreparedQuery($query, $types = "", $params = [])
         return false;
     }
 }
+
+/**
+ * Variante "non negoziabile" di executePreparedQuery: se la query fallisce,
+ * risponde 500 in JSON e termina, invece di restituire `false`.
+ *
+ * PERCHE' ESISTE:
+ * executePreparedQuery ritorna false su errore, ma i chiamanti storici ne
+ * usano subito il risultato come oggetto (`$res->fetch_all()`). Su un errore
+ * SQL transitorio — deadlock InnoDB, max_connections esaurito, timeout di
+ * lettura — questo produce "Call to a member function on bool": un fatal error
+ * che manda al client un corpo HTML dove il frontend si aspetta JSON, e
+ * `api.js` esplode con un errore di parsing invece di mostrare un messaggio.
+ *
+ * Da usare in TUTTI i punti in cui il risultato viene de-referenziato subito.
+ * Dove il chiamante gestisce già `false` esplicitamente, executePreparedQuery
+ * va benissimo.
+ *
+ * @param string $query   Query con placeholder '?'.
+ * @param string $types   Stringa dei tipi per bind_param.
+ * @param array  $params  Valori da associare.
+ * @param string $msg     Messaggio utente in caso di fallimento.
+ * @return mysqli_result|bool  Risultato della query (mai false).
+ */
+function queryOrFail($query, $types = "", $params = [], $msg = 'Errore interno del database')
+{
+    $res = executePreparedQuery($query, $types, $params);
+
+    if ($res === false) {
+        global $last_db_error;
+        error_log("❌ [SQL FATAL] " . ($last_db_error ?? 'errore sconosciuto') . " | Query: $query");
+
+        if (function_exists('inviaRisposta')) {
+            inviaRisposta(false, $msg, 500);
+        }
+        http_response_code(500);
+        die(json_encode(["success" => false, "message" => $msg], JSON_UNESCAPED_UNICODE));
+    }
+
+    return $res;
+}
 ?>

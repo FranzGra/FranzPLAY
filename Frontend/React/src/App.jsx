@@ -8,6 +8,7 @@ import {
   Outlet,
 } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { Capacitor } from '@capacitor/core';
 
 // --- CONTESTI E COMPONENTI ---
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -33,9 +34,14 @@ const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminAccessi = lazy(() => import("./pages/admin/AdminAccessi"));
 const AdminSubtitles = lazy(() => import("./pages/admin/AdminSubtitles"));
+const AdminCopertine = lazy(() => import("./pages/admin/AdminCopertine"));
+const AdminImpostazioni = lazy(() => import("./pages/admin/AdminImpostazioni"));
 
 // --- WIZARD (Lazy Loaded) ---
 const SetupWizard = lazy(() => import("./pages/SetupWizard"));
+
+// --- SERVER SELECTION (Lazy Loaded per App Mobile) ---
+const ServerSelection = lazy(() => import("./pages/ServerSelection"));
 
 /**
  * COMPONENTE: ScrollToTop
@@ -110,18 +116,19 @@ export default function App() {
   );
 
   return (
-    <SettingsProvider>
-      <SettingsGuard>
-        <AuthProvider>
-          <Router>
-            <ScrollToTop />
-            <Suspense
-              fallback={
-                <div className="h-screen w-full flex items-center justify-center bg-zinc-950">
-                  <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-                </div>
-              }
-            >
+    <ServerGuard>
+      <SettingsProvider>
+        <SettingsGuard>
+          <AuthProvider>
+            <Router>
+              <ScrollToTop />
+              <Suspense
+                fallback={
+                  <div className="h-screen w-full flex items-center justify-center bg-zinc-950">
+                    <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+                  </div>
+                }
+              >
               <Routes>
                 {/* 1. ADMIN ROUTES - Independent Layout */}
                 <Route path="/admin" element={<AdminLayout />}>
@@ -130,7 +137,9 @@ export default function App() {
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="categories" element={<AdminCategories />} />
                   <Route path="subtitles" element={<AdminSubtitles />} />
+                  <Route path="covers" element={<AdminCopertine />} />
                   <Route path="accessi" element={<AdminAccessi />} />
+                  <Route path="impostazioni" element={<AdminImpostazioni />} />
                 </Route>
 
                 {/* 2. USER ROUTES - Wrapped in Main Layout */}
@@ -198,6 +207,7 @@ export default function App() {
         </AuthProvider>
       </SettingsGuard>
     </SettingsProvider>
+    </ServerGuard>
   );
 }
 
@@ -278,6 +288,30 @@ const SettingsGuard = ({ children }) => {
         }
       >
         <SetupWizard />
+      </Suspense>
+    );
+  }
+
+  return children;
+};
+
+/**
+ * COMPONENTE: ServerGuard
+ * Descrizione: Usato SOLO se l'app è in modalità nativa (Android/iOS).
+ * Verifica che ci sia un URL del server salvato, altrimenti mostra ServerSelection.
+ */
+const ServerGuard = ({ children }) => {
+  const [serverUrl, setServerUrl] = React.useState(() => localStorage.getItem("franzplay_server_url"));
+  const isNative = Capacitor.isNativePlatform();
+
+  if (isNative && !serverUrl) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-dvh bg-zinc-950 flex items-center justify-center text-zinc-500">
+          <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        </div>
+      }>
+        <ServerSelection onServerSelected={setServerUrl} />
       </Suspense>
     );
   }

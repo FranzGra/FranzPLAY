@@ -44,6 +44,7 @@ switch ($action) {
 
         $sql = "SELECT v.id, v.Titolo, v.percorso_copertina, v.percorso_anteprima, v.Likes,
                        v.Formato, v.Durata, v.altezza_video, v.ottimizzato, v.codec_video, v.codec_audio,
+                       v.copertina_origine,
                        c.Nome as Nome_Categoria, v.id_Categoria
                 FROM Video v LEFT JOIN Categorie c ON v.id_Categoria = c.id ";
         $params = [];

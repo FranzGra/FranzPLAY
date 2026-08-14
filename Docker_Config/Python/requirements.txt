@@ -1,3 +1,5 @@
 mysql-connector-python
 watchdog
 redis
+# Chiamate HTTP ai provider di metadati online (worker_covers.py).
+requests

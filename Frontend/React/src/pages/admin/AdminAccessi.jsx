@@ -10,12 +10,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -24,22 +19,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageShell, PageHeader, Panel, EmptyState } from "@/components/ui/layout";
+import { StatusChip } from "@/components/ui/data-display";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 }
-  }
-};
+/**
+ * Admin > Accessi — migrata al design system.
+ * Nessuna misura arbitraria: intestazione, pannello e stato vuoto vengono dai
+ * componenti condivisi; i colori di stato dalla palette di data-display.
+ */
 
 const itemVariants = {
   hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { type: "spring", stiffness: 300, damping: 24 }
-  }
+  visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 300, damping: 24 } },
 };
 
 export default function AdminAccessi() {
@@ -52,9 +43,7 @@ export default function AdminAccessi() {
       const formData = new FormData();
       formData.append("action", "lista_accessi");
       const data = await apiRequest("/admin.php", "POST", formData);
-      if (data.success && data.dati) {
-        setAccessi(data.dati);
-      }
+      if (data.success && data.dati) setAccessi(data.dati);
     } catch (error) {
       console.error("Errore caricamento accessi:", error);
     } finally {
@@ -72,8 +61,7 @@ export default function AdminAccessi() {
       "i",
     );
     return (
-      searchRegex.test(a.Nome_Utente || "") ||
-      searchRegex.test(a.indirizzo_Ip || "")
+      searchRegex.test(a.Nome_Utente || "") || searchRegex.test(a.indirizzo_Ip || "")
     );
   });
 
@@ -89,111 +77,127 @@ export default function AdminAccessi() {
     }).format(d);
   };
 
-  return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-8"
-    >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-4xl font-black text-foreground tracking-tight flex items-center gap-3">
-            <Activity className="h-8 w-8 text-primary" />
-            Log Accessi
-          </h1>
-          <p className="text-muted-foreground font-medium mt-1">
-            Storico dei tentativi di autenticazione al sistema.
-          </p>
-        </div>
-        <div className="relative group w-full md:w-80">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={20} />
-          <Input
-            type="text"
-            placeholder="Cerca utente o IP..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12 w-full bg-background"
-          />
-        </div>
-      </div>
+  const intestazioni = ["Stato", "Data / Ora", "Utente tentato", "Indirizzo IP"];
 
-      <motion.div variants={itemVariants}>
-        <Card className="overflow-hidden border-white/5 bg-zinc-900/40 backdrop-blur-md">
+  return (
+    <PageShell>
+      <PageHeader
+        icon={Activity}
+        title="Log accessi"
+        description="Storico dei tentativi di autenticazione al sistema."
+        actions={
+          <div className="relative w-full md:w-80">
+            <Search
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+              size={18}
+            />
+            <Input
+              type="text"
+              placeholder="Cerca utente o IP…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12"
+            />
+          </div>
+        }
+      />
+
+      <motion.div variants={itemVariants} initial="hidden" animate="visible">
+        <Panel className="overflow-hidden">
           <Table>
-            <TableHeader className="bg-zinc-900/50">
-              <TableRow className="border-white/5 hover:bg-transparent">
-                <TableHead className="w-[100px] text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Stato</TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Data / Ora</TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Utente Tentato</TableHead>
-                <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Indirizzo IP</TableHead>
+            <TableHeader>
+              <TableRow className="border-hairline hover:bg-transparent">
+                {intestazioni.map((h, i) => (
+                  <TableHead
+                    key={h}
+                    className={`text-xs font-black uppercase text-muted-foreground ${
+                      i === 0 ? "w-[100px] text-center" : ""
+                    } ${i === intestazioni.length - 1 ? "text-right" : ""}`}
+                  >
+                    {h}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={4} className="h-64 text-center">
-                    <div className="w-8 h-8 border-4 border-zinc-800 border-t-primary rounded-full animate-spin mx-auto"></div>
+                    <div className="mx-auto size-8 animate-spin rounded-full border-4 border-surface-3 border-t-primary" />
                   </TableCell>
                 </TableRow>
               ) : filteredAccessi.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-48 text-center text-muted-foreground font-bold">
-                    Nessun log trovato.
+                  <TableCell colSpan={4}>
+                    <EmptyState
+                      icon={ShieldAlert}
+                      title="Nessun accesso registrato"
+                      description={
+                        searchTerm
+                          ? "Nessun risultato per questa ricerca."
+                          : "Qui compariranno i tentativi di autenticazione."
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredAccessi.map((accesso) => (
-                  <TableRow key={accesso.id} className="border-white/5 hover:bg-white/5 transition-colors">
-                    <TableCell className="text-center">
-                      {Number(accesso.successo) === 1 ? (
-                        <div className="w-8 h-8 rounded-lg bg-green-500/10 text-green-500 flex items-center justify-center border border-green-500/20 mx-auto">
-                          <CheckCircle size={16} />
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/20 mx-auto">
-                          <XCircle size={16} />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-zinc-800/50 text-zinc-500 flex items-center justify-center border border-white/5 shrink-0">
-                          <Clock size={14} />
-                        </div>
-                        <div>
-                          <div className="text-sm font-bold text-foreground">
-                            {formatDate(accesso.data_ora_tentativo).split(",")[1]}
+                filteredAccessi.map((accesso) => {
+                  const riuscito = Number(accesso.successo) === 1;
+                  const [data, ora] = formatDate(accesso.data_ora_tentativo).split(",");
+                  return (
+                    <TableRow
+                      key={accesso.id}
+                      className="border-hairline transition-colors hover:bg-surface-2"
+                    >
+                      <TableCell className="text-center">
+                        <span
+                          className={`mx-auto flex size-9 items-center justify-center rounded-lg border ${
+                            riuscito
+                              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                              : "border-destructive/25 bg-destructive/10 text-destructive"
+                          }`}
+                          title={riuscito ? "Accesso riuscito" : "Accesso fallito"}
+                        >
+                          {riuscito ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-hairline bg-surface-3 text-muted-foreground">
+                            <Clock size={14} />
+                          </span>
+                          <div>
+                            <div className="text-sm font-bold text-foreground">{ora}</div>
+                            <div className="text-xs font-bold uppercase text-muted-foreground">
+                              {data}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-muted-foreground font-bold uppercase">
-                            {formatDate(accesso.data_ora_tentativo).split(",")[0]}
-                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-bold text-sm text-zinc-300">
-                        {accesso.Nome_Utente || <span className="text-zinc-600 italic">Sconosciuto</span>}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="outline" className="font-mono text-[10px] bg-zinc-950/50 border-white/5 text-zinc-400 py-1 px-2">
-                        {accesso.indirizzo_Ip}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm font-bold text-foreground">
+                          {accesso.Nome_Utente || (
+                            <span className="italic text-muted-foreground">Sconosciuto</span>
+                          )}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="inline-flex rounded-md border border-hairline bg-surface-3 px-2 py-1 font-mono text-xs text-muted-foreground">
+                          {accesso.indirizzo_Ip}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
-        </Card>
+        </Panel>
       </motion.div>
 
-      <div className="text-center pt-4">
-        <Badge variant="outline" className="gap-2 bg-zinc-900/50 border-white/5 text-muted-foreground py-1.5 px-4 font-black uppercase tracking-widest text-[10px]">
-          <ShieldAlert size={14} /> Ultimi 500 Log registrati
-        </Badge>
+      <div className="text-center">
+        <StatusChip icon={ShieldAlert} label="Ultimi 500 log registrati" tone="neutral" />
       </div>
-    </motion.div>
+    </PageShell>
   );
 }

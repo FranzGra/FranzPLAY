@@ -60,7 +60,10 @@ if (is_array($input)) {
     $_POST = array_merge($_POST, $input);
 }
 
-$action = $_POST['action'] ?? '';
+// Il fallback su $_GET serve alle azioni che DEVONO essere GET perche' il
+// browser le carica direttamente in un tag <img> (es. proxy_immagine_online).
+// L'autenticazione resta identica: check_admin.php e' gia' passato.
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 
 // ============================================================================
@@ -74,7 +77,8 @@ try {
         'categories' => ['lista_categorie', 'aggiorna_categoria', 'salva_colore_categoria', 'upload_sfondo_categoria', 'rimuovi_sfondo_categoria'],
         'users' => ['lista_utenti', 'toggle_admin', 'elimina_utente', 'aggiungi_utente', 'reset_password_utente', 'lista_accessi'],
         'system' => ['salva_impostazioni_globali', 'stato_server', 'salva_logo', 'salva_registrazione'],
-        'subtitles' => ['lista_video_sottotitoli', 'coda_sottotitoli', 'stato_sottotitoli', 'genera_sottotitoli', 'rigenera_sottotitolo', 'elimina_sottotitolo', 'annulla_sottotitoli']
+        'subtitles' => ['lista_video_sottotitoli', 'coda_sottotitoli', 'stato_sottotitoli', 'genera_sottotitoli', 'rigenera_sottotitolo', 'elimina_sottotitolo', 'annulla_sottotitoli'],
+        'covers' => ['copertine_impostazioni', 'salva_copertine_impostazioni', 'salva_token_provider', 'test_provider', 'salva_provider', 'salva_ordine_provider', 'provider_per_ricerca', 'cerca_copertina_online', 'applica_copertina_online', 'conferma_copertina', 'accoda_copertina_online', 'ignora_copertina', 'ripristina_copertina_ffmpeg', 'stato_copertine', 'coda_copertine', 'proxy_immagine_online']
     ];
 
     $module_found = false;

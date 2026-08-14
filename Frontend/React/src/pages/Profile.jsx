@@ -19,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import ImageCropper from "../components/ImageCropper";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getUserAvatarUrl } from "../services/helpers";
+import { apiRequest } from "../services/api";
 
 import ThemeTab from "../components/profile/ThemeTab";
 import SecurityTab from "../components/profile/SecurityTab";
@@ -65,8 +66,7 @@ export default function Profile() {
       formData.append("action", "cambia_tema");
       formData.append("colore_tema", newColor);
 
-      // Chiamata API silenziosa (non blocchiamo l'UI con loading full screen)
-      await fetch("/api/profilo.php", { method: "POST", body: formData });
+      await apiRequest("/profilo.php", "POST", formData);
 
       // Non serve refreshUser() completo perché updateLocalTheme ha già sistemato lo stato locale
     } catch (err) {
@@ -96,17 +96,11 @@ export default function Profile() {
     formData.append("immagine_profilo", croppedBlob, "avatar.jpg");
 
     try {
-      const res = await fetch("/api/profilo.php", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success) {
-        showMessage("success", "Immagine aggiornata!");
-        refreshUser();
-      } else showMessage("error", data.message);
+      await apiRequest("/profilo.php", "POST", formData);
+      showMessage("success", "Immagine aggiornata!");
+      refreshUser();
     } catch (err) {
-      showMessage("error", "Errore upload");
+      showMessage("error", err.message || "Errore upload");
     } finally {
       setLoading(false);
     }
@@ -119,18 +113,12 @@ export default function Profile() {
     formData.append("action", "cambia_username");
     formData.append("nuovo_nome_utente", editUsername);
     try {
-      const res = await fetch("/api/profilo.php", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success) {
-        showMessage("success", "Username aggiornato!");
-        refreshUser();
-        setIsEditingName(false);
-      } else showMessage("error", data.message);
+      await apiRequest("/profilo.php", "POST", formData);
+      showMessage("success", "Username aggiornato!");
+      refreshUser();
+      setIsEditingName(false);
     } catch (err) {
-      showMessage("error", "Errore aggiornamento");
+      showMessage("error", err.message || "Errore aggiornamento");
     } finally {
       setLoading(false);
     }
@@ -147,17 +135,11 @@ export default function Profile() {
     formData.append("nuova_password", passwords.new);
     formData.append("conferma_password", passwords.confirm);
     try {
-      const res = await fetch("/api/profilo.php", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success) {
-        showMessage("success", "Password modificata!");
-        setPasswords({ current: "", new: "", confirm: "" });
-      } else showMessage("error", data.message);
+      await apiRequest("/profilo.php", "POST", formData);
+      showMessage("success", "Password modificata!");
+      setPasswords({ current: "", new: "", confirm: "" });
     } catch (err) {
-      showMessage("error", "Errore password");
+      showMessage("error", err.message || "Errore password");
     } finally {
       setLoading(false);
     }
@@ -169,20 +151,11 @@ export default function Profile() {
     const formData = new FormData();
     formData.append("action", "elimina_profilo_utente");
     try {
-      const res = await fetch("/api/profilo.php", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success) {
-        logout();
-        navigate("/login");
-      } else {
-        showMessage("error", data.message);
-        setLoading(false);
-      }
+      await apiRequest("/profilo.php", "POST", formData);
+      logout();
+      navigate("/login");
     } catch (err) {
-      showMessage("error", "Errore eliminazione");
+      showMessage("error", err.message || "Errore eliminazione");
       setLoading(false);
     }
   };

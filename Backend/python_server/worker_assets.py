@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 
 from cache_invalidation import invalidate_videos_only
+from asset_paths import get_asset_paths
 
 # --- Impostazioni ---
 PATH_TO_MONITOR = os.environ.get('WATCH_DIR', '/percorsoVideo')
@@ -141,18 +142,10 @@ def _get_asset_paths(relative_path, category_name):
     `category_name` resta nel firma per backward-compat ma viene usato solo
     come fallback se relative_path non ha parent (video nella root).
     """
-    p = Path(relative_path)
-    parent_dir = p.parent
-    video_stem = p.stem
-    folder_suffix = parent_dir.name if parent_dir.name else (category_name or "Generale")
-
-    db_cover_path = (parent_dir / f"copertine_{folder_suffix}" / f"{video_stem}.jpg").as_posix()
-    db_preview_path = (parent_dir / f"anteprime_{folder_suffix}" / f"{video_stem}.mp4").as_posix()
-
-    full_cover_path = os.path.join(PATH_TO_MONITOR, db_cover_path)
-    full_preview_path = os.path.join(PATH_TO_MONITOR, db_preview_path)
-    
-    return full_cover_path, db_cover_path, full_preview_path, db_preview_path
+    # La logica vive ora in asset_paths.py, CONDIVISA con worker_covers.py (e
+    # speculare a quella PHP di admin_modules/assets.php). Questo wrapper resta
+    # per non toccare i call site esistenti.
+    return get_asset_paths(relative_path, category_name)
 
 def get_low_priority_prefix():
     prefix = []
@@ -272,6 +265,40 @@ def _ensure_asset_retry_column(conn):
         logging.warning(f"_ensure_asset_retry_column skip: {e}")
 
 
+def _ensure_copertina_origine_column(conn):
+    """
+    Aggiunge `copertina_origine` a Video se mancante (idempotente).
+    Serve sui DB pre-esistenti: 02_migrations.sql gira solo su volume vergine.
+    """
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Video' "
+                "AND COLUMN_NAME = 'copertina_origine'"
+            )
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    "ALTER TABLE `Video` ADD COLUMN `copertina_origine` "
+                    "ENUM('ffmpeg','online','manuale') NULL"
+                )
+                logging.info("Migrazione: aggiunta colonna Video.copertina_origine")
+    except Exception as e:
+        logging.warning(f"_ensure_copertina_origine_column skip: {e}")
+
+
+def _attesa_online_attiva(settings):
+    """
+    True se l'admin ha chiesto di ATTENDERE l'esito della ricerca copertine
+    online prima di generare il frame ffmpeg. Richiede che il modulo copertine
+    sia acceso: a modulo spento questa modalita' non ha senso e bloccherebbe
+    inutilmente la generazione.
+    """
+    acceso = str(settings.get('copertine_online_abilitato', '0')).strip() == '1'
+    priorita_ffmpeg = str(settings.get('copertine_online_priorita_ffmpeg', '1')).strip() == '1'
+    return acceso and not priorita_ffmpeg
+
+
 # Soglia di tentativi falliti per copertina/anteprima. Superata, marchiamo
 # l'asset come 'mancante' (rimuove il video dai candidati SELECT) e liberamo
 # il lock. L'admin puo' sempre riaccodare manualmente via "Rigenera" nel modale.
@@ -324,6 +351,7 @@ def process_missing_assets(conn, settings):
     try:
         _ensure_lock_column(conn, 'Video', 'locked_at')
         _ensure_asset_retry_column(conn)
+        _ensure_copertina_origine_column(conn)
 
         # Rilascia lock abbandonati (più vecchi di 10 minuti).
         with conn.cursor() as cursor:
@@ -332,14 +360,38 @@ def process_missing_assets(conn, settings):
                 "WHERE locked_at IS NOT NULL AND locked_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)"
             )
 
+        # Se l'admin ha scelto "attendi l'esito della ricerca online prima di
+        # generare il frame" (copertine_online_priorita_ffmpeg = 0), i video con
+        # un job copertina online ancora aperto NON sono candidati PER LA
+        # COPERTINA. Restano candidati per l'ANTEPRIMA: se aspettassimo anche
+        # per quella, un provider lento bloccherebbe un asset che non c'entra.
+        #
+        # Il vincolo temporale (attesa_max) e' il FAILSAFE: se il provider e'
+        # irraggiungibile, dopo N minuti ffmpeg riprende il controllo e la
+        # libreria non resta mai senza copertine.
+        cover_gate = "1"
+        if _attesa_online_attiva(settings):
+            attesa = int(settings.get('copertine_online_attesa_max', 30) or 30)
+            cover_gate = (
+                "NOT EXISTS (SELECT 1 FROM Metadati_Online m "
+                " WHERE m.id_Video = Video.id "
+                "   AND m.stato IN ('in_coda','elaborazione','da_confermare') "
+                # La finestra si misura sull'ULTIMO aggiornamento, non sulla
+                # creazione: creato_at non cambia mai ai riaccodamenti, quindi
+                # il failsafe scadeva una volta sola per video e la modalita'
+                # "aspetta l'online" smetteva di funzionare per sempre.
+                "   AND GREATEST(m.creato_at, IFNULL(m.aggiornato_at, m.creato_at)) "
+                "       > DATE_SUB(NOW(), INTERVAL %d MINUTE))" % attesa
+            )
+
         # Trova un candidato.
         with conn.cursor(dictionary=True) as cursor:
             query = """
                 SELECT id FROM Video
-                WHERE (percorso_copertina IS NULL OR percorso_anteprima IS NULL)
+                WHERE ((percorso_copertina IS NULL AND {gate}) OR percorso_anteprima IS NULL)
                   AND locked_at IS NULL
                 ORDER BY id ASC LIMIT 1
-            """
+            """.format(gate=cover_gate)
             cursor.execute(query)
             candidate = cursor.fetchone()
         if not candidate:
@@ -406,20 +458,68 @@ def process_missing_assets(conn, settings):
         cover_failed = False
         preview_failed = False
 
-        if job['percorso_copertina'] is None:
+        # Il gate online vale anche qui: questo video puo' essere stato scelto
+        # perche' gli manca l'ANTEPRIMA, pur avendo un job copertina online
+        # ancora aperto. In quel caso la copertina non la tocchiamo.
+        cover_in_attesa_online = False
+        if job['percorso_copertina'] is None and _attesa_online_attiva(settings):
+            try:
+                attesa = int(settings.get('copertine_online_attesa_max', 30) or 30)
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM Metadati_Online "
+                        "WHERE id_Video = %s AND stato IN ('in_coda','elaborazione','da_confermare') "
+                        # Stesso criterio del cover_gate: si riarma al riaccodamento.
+                        "  AND GREATEST(creato_at, IFNULL(aggiornato_at, creato_at)) "
+                        "      > DATE_SUB(NOW(), INTERVAL %s MINUTE)",
+                        (video_id, attesa)
+                    )
+                    cover_in_attesa_online = cursor.fetchone()[0] > 0
+            except Exception as e:
+                # Fail-open: se la tabella non esiste ancora o la query fallisce,
+                # generiamo il frame come sempre. Mai bloccare la pipeline.
+                logging.warning(f"[Assets] Check attesa online fallito (procedo con ffmpeg): {e}")
+                cover_in_attesa_online = False
+            if cover_in_attesa_online:
+                logging.info(
+                    f"[Assets] ID {video_id}: copertina in attesa della ricerca online, "
+                    f"genero solo l'anteprima."
+                )
+
+        if job['percorso_copertina'] is None and not cover_in_attesa_online:
             success = False
+            # ADOTTATA vs GENERATA: distinzione necessaria per l'origine.
+            # Se il file esiste gia' NON lo abbiamo prodotto noi: potrebbe
+            # essere una copertina scaricata online o caricata a mano, che ha
+            # lo stesso nome (<stem>.jpg). Marcarla 'ffmpeg' sarebbe una
+            # dichiarazione falsa, e faceva comparire come "fotogramma estratto
+            # dal video" una copertina presa da un database online.
+            cover_adottata = False
             if os.path.exists(full_cover):
-                logging.info(f"[Assets] Copertina {db_cover} GIÀ ESISTENTE. Aggiorno DB.")
+                logging.info(f"[Assets] Copertina {db_cover} GIÀ ESISTENTE: la adotto "
+                             f"senza rivendicarne l'origine.")
                 success = True
+                cover_adottata = True
             else:
                 logging.info(f"[Assets] Copertina {db_cover} non trovata. Avvio generazione...")
                 success = generate_cover(full_video_path, full_cover,
                                          settings['default_Minutaggio_Copertina'], duration_sec)
 
             if success:
-                updates_to_run.append(
-                    ("UPDATE Video SET percorso_copertina = %s WHERE id = %s", (db_cover, video_id))
-                )
+                if cover_adottata:
+                    # IFNULL: se un'origine e' gia' registrata (online/manuale)
+                    # resta intatta; se manca del tutto, 'ffmpeg' e' l'ipotesi
+                    # ragionevole per un file trovato accanto al video.
+                    updates_to_run.append(
+                        ("UPDATE Video SET percorso_copertina = %s, "
+                         "copertina_origine = IFNULL(copertina_origine, 'ffmpeg') "
+                         "WHERE id = %s", (db_cover, video_id))
+                    )
+                else:
+                    updates_to_run.append(
+                        ("UPDATE Video SET percorso_copertina = %s, copertina_origine = 'ffmpeg' "
+                         "WHERE id = %s", (db_cover, video_id))
+                    )
                 logging.info(f"[Assets] Copertina per ID {video_id} impostata nel DB.")
             else:
                 cover_failed = True

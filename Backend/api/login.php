@@ -176,6 +176,8 @@ try {
     error_log("✅ [LOGIN SUCCESS] {$utente['Nome_Utente']} (ID: {$utente['id']}) IP: $ip_address");
 
 
+    $stream_token = base64_encode($utente['id'] . ':' . hash_hmac('sha256', (string)$utente['id'], 'FranzPLAY_Stream_Auth_Key'));
+
     // ============================================================================
     // SEZIONE 5: RISPOSTA AL CLIENT
     // ============================================================================
@@ -186,7 +188,8 @@ try {
             'isAdmin' => (bool) $utente['Admin'],
             'themeColor' => $utente['colore_Tema'], // Return NULL if unset
             'appDefaultThemeColor' => $app_default_theme
-        ]
+        ],
+        'stream_token' => $stream_token
     ]);
 
 } catch (Exception $e) {

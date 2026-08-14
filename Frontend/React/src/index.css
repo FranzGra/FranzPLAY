@@ -5,20 +5,22 @@
 @custom-variant dark (&:is(.dark *));
 
 @layer components {
+  /* Classi condivise portate sui token del design system: prima usavano
+     colori grezzi (zinc, white/N) e quindi non rispondevano al tema. */
   .glass-card {
-    @apply bg-zinc-950/80 backdrop-blur-xl border border-white/10 shadow-xl;
+    @apply bg-background/80 backdrop-blur-xl border border-hairline-strong shadow-xl;
   }
 
   .glass-sidebar {
-    @apply bg-zinc-950/60 backdrop-blur-2xl border-r border-white/5;
+    @apply bg-background/60 backdrop-blur-2xl border-r border-hairline;
   }
 
   .nav-item-active {
-    @apply bg-primary text-zinc-100 shadow-lg shadow-primary/20 scale-[1.02];
+    @apply bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.02];
   }
 
   .nav-item-hover {
-    @apply hover:bg-zinc-800/50 hover:text-white transition-all duration-300;
+    @apply hover:bg-surface-3 hover:text-foreground transition-all duration-300;
   }
 
   .admin-card {
@@ -117,6 +119,60 @@
 }
 
 @theme {
+  /* ==========================================================================
+     DESIGN SYSTEM — FONDAMENTA
+     ==========================================================================
+     Queste sono le UNICHE misure ammesse nelle pagine. Se serve un valore che
+     non c'e', si aggiunge qui: NON si scrive un px arbitrario nel componente.
+     Prima di questa sezione il progetto conteneva 111 dimensioni di testo
+     arbitrarie (text-[9px], text-[10px], text-[11px]) proprio perche' sotto
+     `text-xs` non esisteva alcun gradino.
+     ========================================================================== */
+
+  /* --- Scala tipografica ---------------------------------------------------
+     TARATURA "LEGGIBILE" (riferimento: Notion, Linear, Figma).
+     Principio: NULLA sotto i 12px, corpo del testo generoso, interlinee
+     ampie. Su schermi ad alta densita' un 10-11px e' leggibile solo da vicino
+     e rende l'interfaccia faticosa.
+
+     Questi valori RIDEFINISCONO anche i gradini nativi di Tailwind: e' il
+     punto di leva del design system: si cambia qui e cambia tutto il sito,
+     senza toccare una sola pagina.
+
+     3xs = micro-etichette maiuscole (mai testo discorsivo)
+     2xs = note brevi
+     xs  = metadati
+     sm  = DESCRIZIONI e testo di interfaccia (il gradino piu' usato)
+     base= corpo del testo */
+  --text-3xs: 0.75rem;       /* 12px — era 10px */
+  --text-3xs--line-height: 1.5;
+  --text-3xs--letter-spacing: 0.05em;
+  --text-2xs: 0.8125rem;     /* 13px — era 11px */
+  --text-2xs--line-height: 1.55;
+  --text-xs: 0.8125rem;      /* 13px — nativo 12px */
+  --text-xs--line-height: 1.55;
+  --text-sm: 0.9375rem;      /* 15px — nativo 14px */
+  --text-sm--line-height: 1.6;
+  --text-base: 1.0625rem;    /* 17px — nativo 16px */
+  --text-base--line-height: 1.65;
+  --text-lg: 1.1875rem;      /* 19px — nativo 18px */
+  --text-lg--line-height: 1.6;
+  --text-xl: 1.375rem;       /* 22px — nativo 20px */
+  --text-xl--line-height: 1.45;
+
+  /* --- Superfici -----------------------------------------------------------
+     Sostituiscono bg-zinc-900/40, bg-zinc-950/40, bg-black/20 ecc.
+     surface-1 = pannello su sfondo   surface-2 = riquadro dentro un pannello
+     surface-3 = elemento incassato (input, riga di lista) */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  /* --- Linee ---------------------------------------------------------------
+     Sostituiscono i 166 border-white/5 e border-white/10 scritti a mano. */
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -185,6 +241,12 @@
   --chart-5: oklch(0.269 0 0);
   /* Raggio base leggermente più morbido: dà un look più premium agli elementi shadcn. */
   --radius: 0.8rem;
+  /* Superfici e linee — tema chiaro */
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.985 0 0);
+  --surface-3: oklch(0.97 0 0);
+  --hairline: oklch(0.145 0 0 / 0.08);
+  --hairline-strong: oklch(0.145 0 0 / 0.16);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -198,6 +260,14 @@
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
+  /* Superfici e linee — tema scuro.
+     Tre livelli di elevazione con stacco percettivo costante, al posto delle
+     opacita' scelte a caso (bg-zinc-900/40, /50, /60, bg-black/20...). */
+  --surface-1: oklch(0.205 0 0 / 0.55);
+  --surface-2: oklch(0.185 0 0 / 0.72);
+  --surface-3: oklch(0.165 0 0 / 0.85);
+  --hairline: oklch(1 0 0 / 0.07);
+  --hairline-strong: oklch(1 0 0 / 0.14);
   /* Card translucida: con backdrop-blur nel primitivo dà l'effetto "glass" premium
      coerente col resto del sito (vecchio .admin-card). */
   --card: oklch(0.225 0 0 / 0.72);

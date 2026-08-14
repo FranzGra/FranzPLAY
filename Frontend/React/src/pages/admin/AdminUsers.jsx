@@ -193,12 +193,12 @@ export default function AdminUsers() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {loading ? (
           [1, 2, 3].map((i) => (
-            <Card key={i} className="h-48 bg-zinc-900/50 rounded-3xl animate-pulse border-white/5" />
+            <Card key={i} className="h-48 bg-surface-1 rounded-2xl animate-pulse border-hairline" />
           ))
         ) : users.length === 0 ? (
-          <Card className="col-span-full flex flex-col items-center justify-center py-20 bg-transparent border-dashed border-zinc-800">
-            <User size={48} className="text-zinc-700 mb-4" />
-            <p className="text-zinc-500 font-bold">Nessun utente trovato.</p>
+          <Card className="col-span-full flex flex-col items-center justify-center py-20 bg-transparent border-dashed border-hairline-strong">
+            <User size={48} className="text-muted-foreground mb-4" />
+            <p className="text-muted-foreground font-bold">Nessun utente trovato.</p>
           </Card>
         ) : (
           users.map((u) => {
@@ -207,11 +207,11 @@ export default function AdminUsers() {
 
             return (
               <motion.div variants={itemVariants} key={u.id}>
-                <Card className="group relative overflow-hidden flex flex-col h-full gap-0 py-0 bg-zinc-900/40 hover:bg-zinc-900/80 border-white/5 hover:border-white/10 transition-colors">
+                <Card className="group relative overflow-hidden flex flex-col h-full gap-0 py-0 bg-surface-1 hover:bg-surface-2 border-hairline hover:border-hairline-strong transition-colors">
                   <CardContent className="p-5 flex-1 flex flex-col gap-5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center overflow-hidden transition-all duration-300 ${isAdmin ? "bg-primary text-white shadow-lg shadow-primary/25" : "bg-zinc-800 text-zinc-500"}`}>
+                        <div className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center overflow-hidden transition-all duration-300 ${isAdmin ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25" : "bg-surface-3 text-muted-foreground"}`}>
                           {u.Immagine_Profilo ? (
                             <img
                               src={u.Immagine_Profilo.startsWith("http") ? u.Immagine_Profilo : `${getUserAvatarUrl(u.Immagine_Profilo)}?t=${Date.now()}`}
@@ -226,28 +226,28 @@ export default function AdminUsers() {
                         </div>
                         <div className="min-w-0">
                           <h3 className="font-bold text-lg text-foreground truncate">{u.Nome_Utente}</h3>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">ID #{u.id}</p>
+                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mt-0.5">ID #{u.id}</p>
                         </div>
                       </div>
                       {isAdmin ? (
-                        <Badge variant="default" className="shrink-0 text-[10px] font-black tracking-widest bg-primary/20 text-primary hover:bg-primary/30 gap-1 border-primary/20">
+                        <Badge variant="default" className="shrink-0 text-xs font-black tracking-widest bg-primary/20 text-primary hover:bg-primary/30 gap-1 border-primary/20">
                           <Shield size={12} /> PRO
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="shrink-0 text-[10px] font-black tracking-widest text-zinc-500 bg-zinc-950/50 border-white/5">
+                        <Badge variant="outline" className="shrink-0 text-xs font-black tracking-widest text-muted-foreground bg-surface-3 border-hairline">
                           UTENTE
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-zinc-950/40 px-3.5 py-3 rounded-xl border border-white/5">
+                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-surface-3 px-3.5 py-3 rounded-xl border border-hairline">
                       <Calendar size={14} className="opacity-50 shrink-0" />
                       <span className="shrink-0">Ultimo Accesso:</span>
-                      <span className="text-zinc-300 truncate">{u.ultimo_Accesso || "Mai"}</span>
+                      <span className="text-foreground truncate">{u.ultimo_Accesso || "Mai"}</span>
                     </div>
                   </CardContent>
 
                   {!isMe ? (
-                    <CardFooter className="p-4 gap-2 border-t border-white/5 mt-auto bg-zinc-950/30">
+                    <CardFooter className="p-4 gap-2 border-t border-hairline mt-auto bg-surface-2">
                       <Button
                         variant={isAdmin ? "secondary" : "default"}
                         size="sm"
@@ -277,8 +277,8 @@ export default function AdminUsers() {
                       </Button>
                     </CardFooter>
                   ) : (
-                    <CardFooter className="p-4 border-t border-white/5 flex items-center justify-center mt-auto bg-zinc-950/30">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground italic">Il tuo Profilo</span>
+                    <CardFooter className="p-4 border-t border-hairline flex items-center justify-center mt-auto bg-surface-2">
+                      <span className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground italic">Il tuo Profilo</span>
                     </CardFooter>
                   )}
                 </Card>
@@ -289,7 +289,7 @@ export default function AdminUsers() {
       </div>
 
       <Dialog open={showAddUserModal} onOpenChange={setShowAddUserModal}>
-        <DialogContent className="sm:max-w-[425px] bg-zinc-950 border-white/10 shadow-2xl">
+        <DialogContent className="sm:max-w-[425px] bg-background border-hairline-strong shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-foreground">Nuovo Utente</DialogTitle>
           </DialogHeader>
@@ -302,7 +302,7 @@ export default function AdminUsers() {
                   value={newUser.username}
                   onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                   placeholder="Nome utente"
-                  className="bg-zinc-900/50 border-white/10 h-11 text-foreground"
+                  className="bg-surface-2 border-hairline-strong h-11 text-foreground"
                 />
               </div>
               <div className="space-y-2">
@@ -313,10 +313,10 @@ export default function AdminUsers() {
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                   placeholder="Password"
-                  className="bg-zinc-900/50 border-white/10 h-11 text-foreground"
+                  className="bg-surface-2 border-hairline-strong h-11 text-foreground"
                 />
               </div>
-              <div className="flex items-center justify-between p-4 bg-zinc-900/50 border border-white/5 rounded-xl">
+              <div className="flex items-center justify-between p-4 bg-surface-2 border border-hairline rounded-xl">
                 <Label htmlFor="isAdmin" className="font-bold text-sm cursor-pointer">Permessi Admin</Label>
                 <Switch
                   id="isAdmin"
@@ -334,7 +334,7 @@ export default function AdminUsers() {
       </Dialog>
 
       <Dialog open={!!resetPasswordUserId} onOpenChange={(open) => !open && !isResetting && setResetPasswordUserId(null)}>
-        <DialogContent className="sm:max-w-[425px] bg-zinc-950 border-white/10 shadow-2xl">
+        <DialogContent className="sm:max-w-[425px] bg-background border-hairline-strong shadow-2xl">
           <DialogHeader className="flex flex-row items-center gap-4">
             <div className="w-12 h-12 bg-blue-500/10 text-blue-500 rounded-2xl flex items-center justify-center shrink-0">
               <Key size={24} />
@@ -355,12 +355,12 @@ export default function AdminUsers() {
                   value={resetPasswordField}
                   onChange={(e) => setResetPasswordField(e.target.value)}
                   placeholder="Digita la nuova password..."
-                  className="bg-zinc-900/50 border-white/10 h-11 pr-10 text-foreground"
+                  className="bg-surface-2 border-hairline-strong h-11 pr-10 text-foreground"
                 />
                 <button
                   type="button"
                   onClick={() => setShowResetPassword(!showResetPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-foreground transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>

@@ -48,26 +48,14 @@ export default function Register() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/registrazione.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setSuccess(true);
-        setTimeout(() => {
-          navigate("/login");
-        }, 2000);
-      } else {
-        setError(data.message || "Errore durante la registrazione.");
-        setIsSubmitting(false);
-      }
+      await apiRequest("/registrazione.php", "POST", { username, password });
+      setSuccess(true);
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
     } catch (err) {
       console.error("Register Error:", err);
-      setError("Impossibile contattare il server.");
+      setError(err.message || "Errore durante la registrazione.");
       setIsSubmitting(false);
     }
   };

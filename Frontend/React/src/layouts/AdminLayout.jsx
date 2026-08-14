@@ -11,6 +11,8 @@ import {
   Github,
   Activity,
   Captions,
+  ImageDown,
+  Settings2,
   Menu,
   X,
 } from "lucide-react";
@@ -25,10 +27,10 @@ export default function AdminLayout() {
 
   if (loading) {
     return (
-      <div className="h-screen w-full bg-zinc-950 flex items-center justify-center text-white">
+      <div className="h-screen w-full bg-background flex items-center justify-center text-foreground">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-zinc-800 border-t-white rounded-full animate-spin"></div>
-          <p className="text-zinc-500 font-medium">
+          <div className="w-12 h-12 border-4 border-surface-3 border-t-foreground rounded-full animate-spin"></div>
+          <p className="text-muted-foreground font-medium">
             Inizializzazione Dashboard...
           </p>
         </div>
@@ -46,11 +48,15 @@ export default function AdminLayout() {
     { path: "/admin/users", icon: Users, label: "Utenti" },
     { path: "/admin/categories", icon: FolderOpen, label: "Categorie" },
     { path: "/admin/subtitles", icon: Captions, label: "Sottotitoli" },
+    { path: "/admin/covers", icon: ImageDown, label: "Copertine" },
     { path: "/admin/accessi", icon: Activity, label: "Accessi" },
+    // Impostazioni generali (logo, colore del sito, registrazioni): erano in
+    // fondo alla Dashboard, che è invece una pagina di sola lettura.
+    { path: "/admin/impostazioni", icon: Settings2, label: "Impostazioni" },
   ];
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans selection:bg-primary/30">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30">
       {/* BACKGROUND DECORATION */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full"></div>
@@ -76,7 +82,7 @@ export default function AdminLayout() {
       >
         {/* Chiudi Menu Mobile */}
         <button
-          className="absolute top-6 right-6 p-2 bg-zinc-800/50 rounded-lg text-zinc-400 hover:text-white md:hidden"
+          className="absolute top-6 right-6 p-2 bg-surface-3 rounded-lg text-muted-foreground hover:text-foreground md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <X size={20} />
@@ -87,17 +93,17 @@ export default function AdminLayout() {
             <ShieldAlert size={24} className="text-white" />
           </div>
           <div>
-            <span className="font-bold text-xl tracking-tight text-white block leading-tight">
+            <span className="font-bold text-xl tracking-tight text-foreground block leading-tight">
               Admin
             </span>
-            <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+            <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
               FranzPLAY Control
             </span>
           </div>
         </div>
 
         <nav className="flex-1 px-4 py-2 space-y-2 overflow-y-auto">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold px-4 mb-4">
+          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-bold px-4 mb-4">
             Principale
           </div>
           {navItems.map((item) => {
@@ -110,7 +116,7 @@ export default function AdminLayout() {
                 className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
                   active
                     ? "nav-item-active"
-                    : "text-zinc-400 nav-item-hover active:scale-95"
+                    : "text-muted-foreground nav-item-hover active:scale-95"
                 }`}
               >
                 <item.icon
@@ -122,13 +128,13 @@ export default function AdminLayout() {
             );
           })}
 
-          <div className="pt-8 text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold px-4 mb-4">
+          <div className="pt-8 text-xs uppercase tracking-[0.2em] text-muted-foreground font-bold px-4 mb-4">
             Sito & Source
           </div>
           <Link
             to="/"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-zinc-400 nav-item-hover active:scale-95 group"
+            className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-muted-foreground nav-item-hover active:scale-95 group"
           >
             <ArrowLeft
               size={20}
@@ -141,7 +147,7 @@ export default function AdminLayout() {
             href="https://github.com/FranzGra/FranzPLAY"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-zinc-400 nav-item-hover active:scale-95 group"
+            className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-muted-foreground nav-item-hover active:scale-95 group"
           >
             <Github
               size={20}
@@ -152,9 +158,9 @@ export default function AdminLayout() {
         </nav>
 
         <div className="p-6">
-          <div className="glass-card rounded-3xl p-4 mb-4 border-white/5 bg-zinc-900/40">
+          <div className="glass-card rounded-2xl p-4 mb-4 border-hairline bg-surface-1">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-zinc-800 bg-zinc-800 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-hairline-strong bg-surface-3 flex items-center justify-center">
                 {user.avatar ? (
                   <img
                     src={`${user.avatar}?t=${Date.now()}`}
@@ -162,16 +168,16 @@ export default function AdminLayout() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-xs font-bold text-zinc-500 uppercase">
+                  <span className="text-xs font-bold text-muted-foreground uppercase">
                     {user.username?.substring(0, 2)}
                   </span>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate text-white">
+                <p className="text-sm font-bold truncate text-foreground">
                   {user.username}
                 </p>
-                <p className="text-[10px] text-zinc-500 uppercase font-bold">
+                <p className="text-xs text-muted-foreground uppercase font-bold">
                   Amministratore
                 </p>
               </div>
@@ -179,7 +185,7 @@ export default function AdminLayout() {
           </div>
           <button
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-2xl transition-all duration-300 text-sm font-bold active:scale-95"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-2xl transition-all duration-300 text-sm font-bold active:scale-95"
           >
             <LogOut size={16} />
             Esci Sessione
@@ -193,7 +199,7 @@ export default function AdminLayout() {
         <header className="md:hidden glass-card border-x-0 border-t-0 rounded-none p-4 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <button
-              className="p-2 -ml-2 text-white bg-zinc-800/50 rounded-xl hover:bg-zinc-800 transition-colors"
+              className="p-2 -ml-2 text-foreground bg-surface-3 rounded-xl hover:bg-surface-3 transition-colors"
               onClick={() => setIsMobileMenuOpen(true)}
             >
               <Menu size={24} />
@@ -208,13 +214,13 @@ export default function AdminLayout() {
               href="https://github.com/FranzGra/FranzPLAY"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-400 hover:text-white transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <Github size={20} />
             </a>
             <Link
               to="/"
-              className="text-xs bg-zinc-800 px-4 py-2 rounded-full font-bold active:scale-95"
+              className="text-xs bg-surface-3 px-4 py-2 rounded-full font-bold active:scale-95"
             >
               Sito
             </Link>
