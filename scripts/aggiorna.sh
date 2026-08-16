@@ -62,6 +62,26 @@ if [ ! -f "$MIGRAZIONI" ]; then
     exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Configurazione di Docker CLI
+# ---------------------------------------------------------------------------
+# Docker scrive la propria configurazione (e lo stato di buildx) in
+# $HOME/.docker. Lanciando lo script con sudo, $HOME diventa /root, che su
+# ZimaOS e' in SOLA LETTURA: `docker compose build` falliva con
+#   mkdir /root/.docker: read-only file system
+# proprio all'ultimo passo, dopo backup e migrazioni.
+#
+# Se DOCKER_CONFIG e' gia' impostato lo rispettiamo; altrimenti proviamo a
+# creare la cartella di default e, se non si puo', ne usiamo una dentro
+# App_Data (ignorata da git e scrivibile da root).
+if [ -z "${DOCKER_CONFIG:-}" ] && ! mkdir -p "${HOME:-/root}/.docker" 2>/dev/null; then
+    DOCKER_CONFIG="$(pwd)/App_Data/.docker-config"
+    export DOCKER_CONFIG
+    mkdir -p "$DOCKER_CONFIG"
+    echo "ℹ️  \$HOME non scrivibile: uso DOCKER_CONFIG=$DOCKER_CONFIG"
+    echo ""
+fi
+
 # Leggiamo le credenziali dal .env senza esportare tutto l'ambiente:
 # un .env con caratteri speciali non deve rompere lo script.
 leggi_env() {
