@@ -135,7 +135,16 @@ else
 fi
 
 # Teniamo solo gli ultimi 10 backup: su SD/SSD piccoli non serve di piu'.
-ls -1t "${CARTELLA_BACKUP}"/backup_*.sql 2>/dev/null | tail -n +11 | xargs -r rm -f
+#
+# ⚠️ NIENTE xargs: su ZimaOS non e' installato. Con `set -e` la sua assenza
+# interrompeva l'aggiornamento SUBITO DOPO il backup e PRIMA delle migrazioni,
+# lasciando il sistema a meta' strada.
+#
+# La rotazione e' un'operazione accessoria: non deve mai poter fermare
+# l'aggiornamento. Per questo usa solo shell builtin e non propaga errori.
+ls -1t "${CARTELLA_BACKUP}"/backup_*.sql 2>/dev/null | tail -n +11 | while IFS= read -r vecchio; do
+    rm -f "$vecchio" || true
+done || true
 
 # ---------------------------------------------------------------------------
 # 4. Migrazioni idempotenti
