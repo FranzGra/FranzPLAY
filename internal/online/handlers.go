@@ -22,6 +22,8 @@ import (
 //	PUT /api/online            turn them on or off {youtube, tmdb, tpdb}
 //	PUT /api/online/tmdb-key   save TMDB's key {key}, after TMDB said it is valid
 //	PUT /api/online/tpdb-key   the same for ThePornDB
+//	GET /api/online/search     search a source by hand ?source=tmdb|tpdb&q=words
+//	GET /api/online/picture    a picture a search found ?source=…&at=…
 //
 // A key is never sent back: the answers only say if there is one.
 // newJobs is called when the change put work in the queue.
@@ -37,6 +39,8 @@ func (a api) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/online", a.only(a.handlePut))
 	mux.HandleFunc("PUT /api/online/tmdb-key", a.only(a.handleKey(keyTMDBKey)))
 	mux.HandleFunc("PUT /api/online/tpdb-key", a.only(a.handleKey(keyTPDBKey)))
+	mux.HandleFunc("GET /api/online/search", a.only(a.handleSearch))
+	mux.HandleFunc("GET /api/online/picture", a.only(a.handlePicture))
 }
 
 type api struct {

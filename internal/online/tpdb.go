@@ -27,7 +27,7 @@ const noHash = "0000000000000000"
 // lookup asks ThePornDB about the video with this fingerprint (an
 // OSHash). ok is false when ThePornDB does not surely know it.
 func (t tpdb) lookup(ctx context.Context, key, hash string) (_ found, ok bool, err error) {
-	data, err := t.search(ctx, key, hash)
+	data, err := t.search(ctx, key, url.Values{"hash": {hash}, "hash_type": {"OSHASH"}})
 	if err != nil {
 		return found{}, false, err
 	}
@@ -53,13 +53,26 @@ func (t tpdb) lookup(ctx context.Context, key, hash string) (_ found, ok bool, e
 
 // checkKey asks ThePornDB if a key is valid, before it is saved.
 func (t tpdb) checkKey(ctx context.Context, key string) error {
-	_, err := t.search(ctx, key, noHash)
+	_, err := t.search(ctx, key, url.Values{"hash": {noHash}, "hash_type": {"OSHASH"}})
 	return err
 }
 
-// search asks ThePornDB for the scenes with this fingerprint.
-func (t tpdb) search(ctx context.Context, key, hash string) ([]byte, error) {
-	q := url.Values{"hash": {hash}, "hash_type": {"OSHASH"}}
+// find asks ThePornDB for the scenes these words describe, for the
+// administrator to choose from.
+func (t tpdb) find(ctx context.Context, key, words string) ([]video.Scene, error) {
+	data, err := t.search(ctx, key, url.Values{"q": {words}, "per_page": {"12"}})
+	if err != nil {
+		return nil, err
+	}
+	scenes, err := video.ParseTPDBSearch(data)
+	if err != nil {
+		return nil, fmt.Errorf("tpdb search: %w", err)
+	}
+	return scenes, nil
+}
+
+// search asks ThePornDB for the scenes that match q.
+func (t tpdb) search(ctx context.Context, key string, q url.Values) ([]byte, error) {
 	header := http.Header{"Authorization": {"Bearer " + key}, "Accept": {"application/json"}}
 	data, status, err := get(ctx, t.client, t.api+"/scenes?"+q.Encode(), header, maxLongAnswer, "application/json")
 	if err != nil {

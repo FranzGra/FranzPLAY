@@ -100,7 +100,7 @@ func newFixture(t *testing.T, file string, youtubeOn bool) *fixture {
 	tmServer := httptest.NewServer(tm)
 	t.Cleanup(tmServer.Close)
 	f.tmdb.api = tmServer.URL + "/3"
-	f.tmdb.images = tmServer.URL + "/t/p/w1280"
+	f.tmdb.images = tmServer.URL + "/t/p"
 	tp := newFakeTPDB()
 	f.tpdb.client = tp.start(t)
 	return &fixture{db: db, id: id, dataDir: dataDir, library: library, yt: yt, tm: tm, tp: tp, f: f}

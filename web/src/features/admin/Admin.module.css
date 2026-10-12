@@ -692,6 +692,71 @@ label.action:focus-within {
   gap: 12px;
 }
 
+/* Searching a cover on the internet. */
+.searchBox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.found {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.foundItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.foundItem:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.foundItem:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.foundItem img,
+.noPicture {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-s);
+  object-fit: cover;
+  background: var(--color-surface);
+}
+
+.noPicture {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.foundTitle {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.foundMeta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
 /* The compact table of videos. It scrolls sideways on a phone. */
 .tableBox {
   overflow-x: auto;
