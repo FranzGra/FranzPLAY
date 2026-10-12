@@ -130,6 +130,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           audio={audio}
           findAudio={findAudio}
           length={video.duration}
+          autoPlay
           unsupportedHint={
             video.playable
               ? undefined

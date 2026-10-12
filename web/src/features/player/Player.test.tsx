@@ -33,6 +33,63 @@ function setup(props: Partial<Parameters<typeof Player>[0]> = {}) {
 
 afterEach(() => window.localStorage.clear());
 
+// refuse makes the browser refuse to start the video by itself: always,
+// or only with sound.
+function refuse(play: ReturnType<typeof fakeMedia>["play"], always: boolean) {
+  const allowed = play.getMockImplementation();
+  play.mockImplementation(function (this: HTMLMediaElement) {
+    if (always || !this.muted) {
+      return Promise.reject(new DOMException("needs a click first", "NotAllowedError"));
+    }
+    return allowed?.call(this) ?? Promise.resolve();
+  });
+}
+
+describe("player starting by itself", () => {
+  it("starts when ready, only once", () => {
+    const { video, play, pause } = setup({ autoPlay: true });
+    expect(play).not.toHaveBeenCalled();
+    fireEvent.loadedMetadata(video);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(video.muted).toBe(false);
+    pause.getMockImplementation()?.call(video);
+    fireEvent.loadedMetadata(video);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start without autoPlay", () => {
+    const { video, play } = setup();
+    fireEvent.loadedMetadata(video);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("starts without sound when the browser wants so, and offers the sound", async () => {
+    const { user, video, play } = setup({ autoPlay: true });
+    refuse(play, false);
+    fireEvent.loadedMetadata(video);
+    const unmute = await screen.findByRole("button", { name: "Attiva l'audio" });
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(video.muted).toBe(true);
+    expect(screen.getByRole("button", { name: "Riattiva l'audio (m)" })).toBeInTheDocument();
+
+    await user.click(unmute);
+    expect(video.muted).toBe(false);
+    expect(screen.queryByRole("button", { name: "Attiva l'audio" })).not.toBeInTheDocument();
+    // The silence was the browser's choice, not the person's: not remembered.
+    expect(window.localStorage.getItem("franzplay.muted")).toBe("false");
+  });
+
+  it("keeps the play button when the browser refuses even without sound", async () => {
+    const { video, play } = setup({ autoPlay: true });
+    refuse(play, true);
+    fireEvent.loadedMetadata(video);
+    await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(video.muted).toBe(false));
+    expect(screen.getByRole("button", { name: "Guarda" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Attiva l'audio" })).not.toBeInTheDocument();
+  });
+});
+
 describe("player", () => {
   it("plays the stream and pauses", async () => {
     const { user, video, play, pause } = setup();

@@ -51,6 +51,8 @@ type PlayerProps = {
   // length is the duration the server knows, in seconds: a sound track
   // made while it plays cannot tell its own.
   length?: number | null;
+  // autoPlay starts the video as soon as it is ready.
+  autoPlay?: boolean;
 };
 
 // reportEvery is how often, in seconds of video, onPosition hears the
@@ -131,6 +133,29 @@ function startPlaying(v: HTMLVideoElement) {
   });
 }
 
+// playByItself starts a video nobody pressed play on. Browsers allow that
+// with sound only after the person clicked something on the site (like
+// the video in a list); otherwise they allow it only without sound. So:
+// with sound if allowed, else without and onSilenced, else not at all
+// (the big play button stays).
+function playByItself(v: HTMLVideoElement, onSilenced: () => void) {
+  v.play().catch((error: unknown) => {
+    if (!(error instanceof DOMException && error.name === "NotAllowedError")) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        console.warn("play refused", error);
+      }
+      return;
+    }
+    if (v.muted) return;
+    v.muted = true;
+    v.play()
+      .then(onSilenced)
+      .catch(() => {
+        v.muted = false;
+      });
+  });
+}
+
 // Player is FranzPLAY's video player, made to feel like YouTube's: a big
 // timeline, big buttons, ±10 seconds with buttons, keys and double taps,
 // speed in the settings, full screen.
@@ -145,6 +170,7 @@ export function Player({
   audio = noAudio,
   findAudio,
   length = null,
+  autoPlay = false,
 }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -157,6 +183,11 @@ export function Player({
   const [failed, setFailed] = useState(false);
   const [volume, setVolume] = useState(() => loadSetting("volume", parseVolume, 1));
   const [muted, setMuted] = useState(() => loadSetting("muted", parseMuted, false));
+  // silenced: the browser let the video start by itself only without
+  // sound. Not the person's choice, so it is not remembered.
+  const [silenced, setSilenced] = useState(false);
+  // Whether starting by itself was already tried for this video.
+  const autoTried = useRef(false);
   const [speed, setSpeed] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -218,10 +249,10 @@ export function Player({
     const v = video.current;
     if (!v) return;
     v.volume = volume;
-    v.muted = muted;
+    v.muted = muted || silenced;
     saveSetting("volume", volume);
     saveSetting("muted", muted);
-  }, [volume, muted]);
+  }, [volume, muted, silenced]);
 
   useEffect(() => {
     if (video.current) video.current.playbackRate = speed;
@@ -230,6 +261,8 @@ export function Player({
   // A new video starts from scratch.
   // biome-ignore lint/correctness/useExhaustiveDependencies: src is the reason to reset
   useEffect(() => {
+    autoTried.current = false;
+    setSilenced(false);
     setStarted(false);
     setFailed(false);
     setTime(0);
@@ -440,10 +473,12 @@ export function Player({
           const next = clampVolume(v.volume + action.amount);
           setVolume(next);
           setMuted(next === 0);
+          setSilenced(false);
           showFlash(next === 0 ? "muted" : "volume");
           break;
         }
         case "toggle-mute":
+          setSilenced(false);
           setMuted(!v.muted);
           showFlash(v.muted ? "volume" : "muted");
           break;
@@ -592,6 +627,10 @@ export function Player({
             v.currentTime = startAt;
             setTime(startAt);
           }
+          if (autoPlay && !autoTried.current && !position.current.played) {
+            autoTried.current = true;
+            playByItself(v, () => setSilenced(true));
+          }
         }}
         onProgress={onProgress}
         onWaiting={() => setWaiting(true)}
@@ -654,6 +693,17 @@ export function Player({
       {!started && !failed && (
         <button type="button" className={styles.bigPlay} onClick={togglePlay} aria-label="Guarda">
           <Icon name="play" size={40} />
+        </button>
+      )}
+
+      {silenced && (
+        <button
+          type="button"
+          className={`glass ${styles.unmute}`}
+          onClick={() => run({ kind: "toggle-mute" })}
+        >
+          <Icon name="muted" size={20} />
+          Attiva l'audio
         </button>
       )}
 
@@ -727,9 +777,9 @@ export function Player({
               type="button"
               className={styles.button}
               onClick={() => run({ kind: "toggle-mute" })}
-              aria-label={muted ? "Riattiva l'audio (m)" : "Disattiva l'audio (m)"}
+              aria-label={muted || silenced ? "Riattiva l'audio (m)" : "Disattiva l'audio (m)"}
             >
-              <Icon name={muted || volume === 0 ? "muted" : "volume"} size={26} />
+              <Icon name={muted || silenced || volume === 0 ? "muted" : "volume"} size={26} />
             </button>
             <input
               type="range"
@@ -737,12 +787,13 @@ export function Player({
               min={0}
               max={1}
               step={0.05}
-              value={muted ? 0 : volume}
+              value={muted || silenced ? 0 : volume}
               aria-label="Volume"
               onChange={(event) => {
                 const next = clampVolume(Number(event.target.value));
                 setVolume(next);
                 setMuted(next === 0);
+                setSilenced(false);
               }}
             />
           </div>
