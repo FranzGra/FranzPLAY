@@ -13,6 +13,7 @@ export type Video = {
   addedAt: Date;
   playable: boolean; // every browser can play it as it is
   preview: Preview | null; // frames for the player's timeline; null = none yet
+  clip: string | null; // address of the seconds that play on the card; null = none yet
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
@@ -94,6 +95,9 @@ export function parseVideo(data: unknown): Video {
   if (v.cover !== null && (typeof v.cover !== "string" || !v.cover.startsWith("/api/covers/"))) {
     throw new Error("video cover: not a cover address");
   }
+  if (v.clip !== null && (typeof v.clip !== "string" || !v.clip.startsWith("/api/clips/"))) {
+    throw new Error("video clip: not a clip address");
+  }
   if (typeof v.playable !== "boolean") {
     throw new Error("video playable: not true or false");
   }
@@ -118,6 +122,7 @@ export function parseVideo(data: unknown): Video {
     addedAt,
     playable: v.playable,
     preview: parsePreview(v.preview),
+    clip: v.clip,
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",

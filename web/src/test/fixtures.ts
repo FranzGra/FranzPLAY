@@ -12,6 +12,7 @@ export function videoJSON(overrides: Record<string, unknown> = {}) {
     addedAt: "2026-10-10T08:00:00Z",
     playable: true,
     preview: null,
+    clip: null,
     author: "",
     publishedOn: null,
     ...overrides,

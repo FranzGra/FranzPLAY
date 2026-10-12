@@ -23,6 +23,7 @@ import (
 //	GET /api/categories                   categories with their number of videos
 //	GET /api/covers/{name}                a cover image
 //	GET /api/previews/{name}              the frames shown over the timeline
+//	GET /api/clips/{name}                 the seconds that play on a video's card
 func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
 	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir),
 		convertedDir: filepath.Join(dataDir, media.ConvertedDir), logger: logger}
@@ -35,6 +36,7 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 		mux.HandleFunc("GET /api/categories", h.categories)
 		mux.HandleFunc("GET /api/covers/{name}", h.image(filepath.Join(dataDir, media.CoversDir)))
 		mux.HandleFunc("GET /api/previews/{name}", h.image(filepath.Join(dataDir, media.PreviewsDir)))
+		mux.HandleFunc("GET /api/clips/{name}", h.made(filepath.Join(dataDir, media.ClipsDir), ".mp4", "video/mp4"))
 	}
 }
 
@@ -140,18 +142,23 @@ func (h handlers) stream(w http.ResponseWriter, r *http.Request) {
 }
 
 // image serves the JPEG images FranzPLAY made in dir: covers or previews.
-// Their names change with the content, so the browser may keep them for a
-// year without asking again.
 func (h handlers) image(dir string) http.HandlerFunc {
+	return h.made(dir, ".jpg", "image/jpeg")
+}
+
+// made serves the files FranzPLAY made in dir, all ending in ext: images,
+// or the clips that play on the cards. Their names change with the
+// content, so the browser may keep them for a year without asking again.
+func (h handlers) made(dir, ext, contentType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
-		if !validImageName(name) {
-			respond.Error(w, r, h.logger, http.StatusNotFound, "image not found")
+		if !validMadeName(name, ext) {
+			respond.Error(w, r, h.logger, http.StatusNotFound, "file not found")
 			return
 		}
 		file, err := os.Open(filepath.Join(dir, name))
 		if errors.Is(err, fs.ErrNotExist) {
-			respond.Error(w, r, h.logger, http.StatusNotFound, "image not found")
+			respond.Error(w, r, h.logger, http.StatusNotFound, "file not found")
 			return
 		}
 		if err != nil {
@@ -160,7 +167,7 @@ func (h handlers) image(dir string) http.HandlerFunc {
 		}
 		defer func() {
 			if err := file.Close(); err != nil {
-				h.logger.WarnContext(r.Context(), "close image file", "error", err)
+				h.logger.WarnContext(r.Context(), "close made file", "error", err)
 			}
 		}()
 		info, err := file.Stat()
@@ -168,7 +175,7 @@ func (h handlers) image(dir string) http.HandlerFunc {
 			respond.InternalError(w, r, h.logger, err)
 			return
 		}
-		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		http.ServeContent(w, r, "", info.ModTime(), file)
 	}

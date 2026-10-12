@@ -93,18 +93,18 @@ func parseID(s string) (int64, bool) {
 	return id, err == nil && id > 0
 }
 
-// validImageName reports whether name looks like a cover or a preview
-// FranzPLAY made ("12-0a1b2c3d.jpg"). Anything else, such as "../franzplay.db", is refused
-// before the disk is touched.
-func validImageName(name string) bool {
+// validMadeName reports whether name looks like a file FranzPLAY made, a
+// cover, a preview or a clip, ending in ext ("12-0a1b2c3d.jpg"). Anything
+// else, such as "../franzplay.db", is refused before the disk is touched.
+func validMadeName(name, ext string) bool {
 	id, rest, ok := strings.Cut(name, "-")
-	if !ok || !strings.HasSuffix(rest, ".jpg") {
+	if !ok || !strings.HasSuffix(rest, ext) {
 		return false
 	}
 	if _, ok := parseID(id); !ok {
 		return false
 	}
-	hex := strings.TrimSuffix(rest, ".jpg")
+	hex := strings.TrimSuffix(rest, ext)
 	if hex == "" || len(hex) > 8 {
 		return false
 	}

@@ -21,6 +21,7 @@ const (
 	Online  Kind = "online"  // ask the sources on the internet the administrator turned on
 	Cover   Kind = "cover"   // make the cover image
 	Preview Kind = "preview" // make the small frames shown over the timeline
+	Clip    Kind = "clip"    // make the few seconds that play on the video's card
 	Tracks  Kind = "tracks"  // list the languages inside the file, copy its subtitles
 	Convert Kind = "convert" // make a copy every browser plays, when the file itself does not
 )

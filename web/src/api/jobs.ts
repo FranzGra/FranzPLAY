@@ -3,7 +3,15 @@
 
 import { request } from "./client";
 
-export type JobKind = "probe" | "details" | "online" | "cover" | "preview" | "tracks" | "convert";
+export type JobKind =
+  | "probe"
+  | "details"
+  | "online"
+  | "cover"
+  | "preview"
+  | "clip"
+  | "tracks"
+  | "convert";
 
 export type Job = {
   id: number;
@@ -31,6 +39,7 @@ const jobKinds: readonly JobKind[] = [
   "online",
   "cover",
   "preview",
+  "clip",
   "tracks",
   "convert",
 ];
