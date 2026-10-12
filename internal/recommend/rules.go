@@ -59,13 +59,14 @@ const (
 // videos fill the list, so it is never empty while there are other videos.
 func Similar(of Video, all []Video, together map[int64]int, finished map[int64]bool, limit int) []Pick {
 	ofWords := titleWords(of.Title)
+	// Only what the order needs: small items sort fast, even 10,000.
 	type scored struct {
-		Video
 		pick     Pick
+		addedAt  int64
 		points   int
 		finished bool
 	}
-	var list []scored
+	list := make([]scored, 0, len(all))
 	for _, v := range all {
 		if v.ID == of.ID {
 			continue
@@ -75,7 +76,7 @@ func Similar(of Video, all []Video, together map[int64]int, finished map[int64]b
 		if v.Category != "" && v.Category == of.Category {
 			category = categoryPoints
 		}
-		words := min(common(ofWords, titleWords(v.Title)), maxWords) * wordPoints
+		words := sharedWords(ofWords, v.Title) * wordPoints
 
 		// The reason is the rule that gave most points.
 		reason := Newest
@@ -88,7 +89,7 @@ func Similar(of Video, all []Video, together map[int64]int, finished map[int64]b
 		default:
 			reason = SimilarTitle
 		}
-		list = append(list, scored{Video: v, pick: Pick{ID: v.ID, Reason: reason},
+		list = append(list, scored{pick: Pick{ID: v.ID, Reason: reason}, addedAt: v.AddedAt,
 			points: people + category + words, finished: finished[v.ID]})
 	}
 	slices.SortFunc(list, func(a, b scored) int {
@@ -98,7 +99,8 @@ func Similar(of Video, all []Video, together map[int64]int, finished map[int64]b
 			}
 			return -1
 		}
-		return cmp.Or(cmp.Compare(b.points, a.points), newerFirst(a.Video, b.Video))
+		return cmp.Or(cmp.Compare(b.points, a.points),
+			newerFirst(Video{ID: a.pick.ID, AddedAt: a.addedAt}, Video{ID: b.pick.ID, AddedAt: b.addedAt}))
 	})
 	out := make([]Pick, 0, min(limit, len(list)))
 	for _, s := range list[:min(limit, len(list))] {
@@ -191,13 +193,42 @@ func titleWords(title string) map[string]bool {
 	return words
 }
 
-// common counts the words two titles share.
-func common(a, b map[string]bool) int {
+// sharedWords counts the words of title that are in words, each once and
+// at most maxWords: the same as finding titleWords of title and the words
+// the two lists share, without making the second list. It runs for every
+// video each time a video page opens, so it copies no words.
+func sharedWords(words map[string]bool, title string) int {
+	if len(words) == 0 {
+		return 0
+	}
+	var found [maxWords]string
 	n := 0
-	for w := range b {
-		if a[w] {
+	lower := strings.ToLower(title)
+	start := -1 // where the word being read began; -1 = between words
+	// check counts the word that ends at end, if it is one of words.
+	check := func(end int) bool {
+		w := lower[start:end]
+		start = -1
+		if words[w] && !slices.Contains(found[:n], w) {
+			found[n] = w
 			n++
 		}
+		return n == maxWords
+	}
+	for i, r := range lower {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			if start < 0 {
+				start = i
+			}
+		case start >= 0:
+			if check(i) {
+				return n
+			}
+		}
+	}
+	if start >= 0 {
+		check(len(lower))
 	}
 	return n
 }
