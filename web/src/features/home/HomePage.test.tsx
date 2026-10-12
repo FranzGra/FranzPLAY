@@ -1,4 +1,5 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
+import { FakeEventSource, stubEventSource } from "../../test/eventSource";
 import { videoJSON, watchedJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 import { pageSize } from "../videos/useVideoList";
@@ -40,6 +41,21 @@ describe("home page", () => {
     expect(within(second).queryByText(/:/)).not.toBeInTheDocument();
     expect(within(second).getByText(/fa$|oggi|ieri/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Mostra altri video" })).not.toBeInTheDocument();
+  });
+
+  it("shows new videos by itself when the library changes", async () => {
+    stubEventSource();
+    let list = videos(1, 1);
+    renderApp("/", {
+      ...signedIn(),
+      "GET /api/videos": () => new Response(JSON.stringify({ videos: list, total: list.length })),
+    });
+    expect(await screen.findByRole("heading", { name: "Video 1" })).toBeInTheDocument();
+
+    list = [videoJSON({ id: 2, title: "Appena arrivato", cover: null }), ...list];
+    act(() => FakeEventSource.last?.emit("library"));
+    expect(await screen.findByRole("heading", { name: "Appena arrivato" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Video 1" })).toBeInTheDocument();
   });
 
   it("filters by category with the chips", async () => {

@@ -142,6 +142,11 @@ per esempio `library scan finished ... added=12`. Subito dopo legge durata e ris
 video nuovo e ne prepara la copertina, un lavoro alla volta (`job done kind=probe ...`,
 `job done kind=cover ...`). Le copertine finiscono in `data/covers`.
 
+**Senza ricaricare la pagina.** Se aggiungi un video nella cartella mentre FranzPLAY è aperto nel
+browser, entro il controllo successivo (al massimo un minuto) compare da solo nella Home, e poco
+dopo arriva anche la sua copertina. Il server avvisa il browser quando la libreria cambia, e la
+pagina chiede di nuovo l'elenco.
+
 **Copertina tua.** Se accanto a un video c'è un'immagine con lo stesso nome (per esempio
 `mare.jpg` accanto a `mare.mp4`, oppure `mare-poster.jpg`), FranzPLAY usa quella. Altrimenti prende
 un fotogramma a un decimo del video (al massimo al primo minuto), così evita gli inizi neri.
