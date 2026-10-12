@@ -69,7 +69,7 @@ func newSite(t *testing.T) *site {
 
 func (s *site) addVideo(t *testing.T, name string) int64 {
 	t.Helper()
-	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at)
+	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at)
 		VALUES (?, 1, ?, 1, 1, ?, '', 1)`, "fp-"+name, name, name)
 	if err != nil {
 		t.Fatal(err)

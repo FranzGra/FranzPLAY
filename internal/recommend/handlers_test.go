@@ -66,7 +66,7 @@ type userKey struct{}
 // addVideo adds a present video, added at the given moment.
 func (s *site) addVideo(t *testing.T, title, category string, addedAt int64) int64 {
 	t.Helper()
-	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at)
+	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at)
 		VALUES (?, 1, ?, 1, 1, ?, ?, ?)`, "fp-"+title, title+".mp4", title, category, addedAt)
 	if err != nil {
 		t.Fatal(err)

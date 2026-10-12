@@ -16,9 +16,10 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
-// The administrator's two changes to the catalog live here: hiding a video
-// and asking for its information, cover and previews again. Everything
-// else in this package only reads.
+// The administrator's changes to the catalog live here and in edit.go:
+// hiding a video, asking for its information, cover and previews again,
+// and changing its title and category. Everything else in this package
+// only reads.
 
 // errFileMissing means the video's file was not found at the last scan.
 var errFileMissing = errors.New("the video file is not in its folder")
@@ -31,6 +32,12 @@ type AdminVideo struct {
 	Path    string `json:"path"`   // inside the folder, with "/"
 	Hidden  bool   `json:"hidden"`
 	Missing bool   `json:"missing"` // not found at the last scan
+	// What FranzPLAY found by itself, shown when the administrator
+	// changes title or category, to put it back.
+	FoundTitle    string `json:"foundTitle"`
+	FoundCategory string `json:"foundCategory"`
+	TitleSet      bool   `json:"titleSet"`    // the title is the administrator's
+	CategorySet   bool   `json:"categorySet"` // the category is the administrator's
 }
 
 // adminFilter narrows the administrator's list.
@@ -47,6 +54,8 @@ const (
 //	GET  /api/admin/videos                 every video (?q=&show=hidden|missing&limit=&offset=)
 //	PUT  /api/admin/videos/{id}/hidden     hide or show again {hidden}
 //	POST /api/admin/videos/{id}/refresh    read it again and remake cover and previews
+//	PUT  /api/admin/videos/{id}/details    another title and category {title, category};
+//	                                       null puts back the found one
 //
 // changed tells the open pages the list of videos changed; queued tells
 // the job worker (and the pages) that there is new work.
@@ -69,6 +78,7 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/videos", a.only(a.handleList))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/hidden", a.only(a.handleHidden))
 	mux.HandleFunc("POST /api/admin/videos/{id}/refresh", a.only(a.handleRefresh))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/details", a.only(a.handleDetails))
 }
 
 // only lets only administrators through.
@@ -190,7 +200,9 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		return nil, 0, fmt.Errorf("count videos: %w", err)
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL
+		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL,
+		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
+		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL
 		FROM videos v JOIN libraries l ON l.id = v.library_id
 		WHERE `+where+`
 		ORDER BY v.added_at DESC, v.id DESC LIMIT ? OFFSET ?`, append(args, q.limit, q.offset)...)
@@ -201,7 +213,8 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 	out := []AdminVideo{}
 	for rows.Next() {
 		var av AdminVideo
-		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing}})
+		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing,
+			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet}})
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
 		}
