@@ -1,4 +1,4 @@
-import { formatAge, formatDuration, formatVideos } from "./format";
+import { formatAge, formatDay, formatDuration, formatVideos } from "./format";
 
 describe("formatDuration", () => {
   it.each([
@@ -39,5 +39,18 @@ describe("formatVideos", () => {
     [12345, "12.345 video"],
   ])("%d", (n, want) => {
     expect(formatVideos(n)).toBe(want);
+  });
+});
+
+describe("formatDay", () => {
+  const now = new Date(2026, 9, 12, 15, 0); // Monday 12 October 2026
+  it.each([
+    [new Date(2026, 9, 12, 0, 5), "Oggi"],
+    [new Date(2026, 9, 11, 23, 59), "Ieri"],
+    [new Date(2026, 9, 8, 10, 0), "Giovedì"],
+    [new Date(2026, 9, 5, 10, 0), "5 ottobre"],
+    [new Date(2025, 11, 24, 10, 0), "24 dicembre 2025"],
+  ])("names %s", (date, want) => {
+    expect(formatDay(date, now)).toBe(want);
   });
 });
