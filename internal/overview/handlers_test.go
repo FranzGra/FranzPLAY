@@ -26,7 +26,7 @@ func TestOverviewCountsEverything(t *testing.T) {
 	})
 	_, err = db.Exec(`
 		INSERT INTO libraries (id, path) VALUES (1, '/video');
-		INSERT INTO videos (id, fingerprint, library_id, path, size, mod_time, title, category, added_at,
+		INSERT INTO videos (id, fingerprint, library_id, path, size, mod_time, title, folder_category, added_at,
 		                    missing_since, hidden_at, video_codec, audio_codec, converted, cover) VALUES
 			(1, 'a', 1, 'Mare/gita.mp4', 1, 1, 'gita', 'Mare', 1, NULL, NULL, 'h264', 'aac', NULL, 'a.jpg'),
 			(2, 'b', 1, 'Mare/film.mkv', 1, 1, 'film', 'Mare', 1, NULL, NULL, 'hevc', 'ac3', NULL, NULL),

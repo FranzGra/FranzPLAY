@@ -5,13 +5,16 @@ import { formatVideos } from "../../lib/format";
 import styles from "./Playlists.module.css";
 
 // PlaylistCard is a list in a grid: its cover, name and how many videos.
-// With markPublic it also says when the list is on my channel.
+// With markPublic it also says when the list is on my channel or shared;
+// with showOwner, whose it is.
 export function PlaylistCard({
   list,
   markPublic = false,
+  showOwner = false,
 }: {
   list: Playlist;
   markPublic?: boolean;
+  showOwner?: boolean;
 }) {
   return (
     <Link to={`/playlist/${list.id}`} className={styles.card}>
@@ -30,6 +33,8 @@ export function PlaylistCard({
       <span className={styles.cardCount}>
         {formatVideos(list.videos)}
         {markPublic && list.public && " · sul tuo canale"}
+        {markPublic && !list.public && list.sharedWith.length > 0 && " · condivisa"}
+        {showOwner && ` · di ${list.owner.name}`}
       </span>
     </Link>
   );

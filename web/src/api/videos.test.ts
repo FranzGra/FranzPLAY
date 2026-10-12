@@ -23,6 +23,14 @@ describe("parseVideo", () => {
     expect(v.cover).toBeNull();
   });
 
+  it("accepts the people a private video is shared with", () => {
+    expect(parseVideo(sampleVideo).sharedWith).toEqual([]);
+    const anna = { id: 3, name: "Anna", avatar: 0 };
+    expect(parseVideo({ ...sampleVideo, private: true, sharedWith: [anna] }).sharedWith).toEqual([
+      anna,
+    ]);
+  });
+
   it("accepts the previews of the timeline", () => {
     const preview = {
       src: "/api/previews/7-0a.jpg",
@@ -56,6 +64,7 @@ describe("parseVideo", () => {
     ["private not true or false", { ...sampleVideo, private: 1 }],
     ["uploader without a name", { ...sampleVideo, uploader: { id: 3, name: "" } }],
     ["uploader without an id", { ...sampleVideo, uploader: { id: 0, name: "Giulia" } }],
+    ["bad person shared with", { ...sampleVideo, sharedWith: [{ id: 3, name: "" }] }],
     ["numeric description", { ...sampleVideo, description: 5 }],
     ["zero id", { ...sampleVideo, id: 0 }],
     ["numeric title", { ...sampleVideo, title: 3 }],

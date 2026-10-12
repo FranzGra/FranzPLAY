@@ -37,6 +37,7 @@ describe("navigation", () => {
       "Home",
       "Cronologia",
       "Mi piace",
+      "Condivisi con te",
       "Categorie",
       "Il mio canale",
       "Tutte le playlist",

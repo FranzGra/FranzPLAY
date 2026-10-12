@@ -74,7 +74,7 @@ func (s *site) addVideo(t *testing.T, name string, duration int64) int64 {
 	if duration > 0 {
 		d = duration
 	}
-	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at, duration)
+	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at, duration)
 		VALUES (?, 1, ?, 1, 1, ?, '', 1, ?)`, "fp-"+name, name, name, d)
 	if err != nil {
 		t.Fatal(err)

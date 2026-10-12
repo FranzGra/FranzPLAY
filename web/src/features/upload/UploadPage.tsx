@@ -13,6 +13,9 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatBytes } from "../../lib/format";
+import { type Choice, ready, sharing } from "../sharing/audience";
+import { WhoSees } from "../sharing/WhoSees";
+import { videoHints } from "./hints";
 import { MyVideos } from "./MyVideos";
 import { alreadyThere, sendFile, UploadGone } from "./sendFile";
 import styles from "./UploadPage.module.css";
@@ -193,7 +196,7 @@ function NewUpload({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [isPrivate, setPrivate] = useState(false);
+  const [who, setWho] = useState<Choice>({ audience: "everyone", people: [] });
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState("");
 
@@ -210,6 +213,10 @@ function NewUpload({
       setProblem("Questo file è vuoto.");
       return;
     }
+    if (!ready(who)) {
+      setProblem("Scegli almeno una persona che potrà vederlo.");
+      return;
+    }
     // The same file, already half way: it goes on from there.
     const half = waiting.find((u) => u.name === file.name && u.size === file.size);
     if (half) {
@@ -224,7 +231,7 @@ function NewUpload({
     }
     setStarting(true);
     setProblem("");
-    startUpload(file, title.trim(), isPrivate)
+    startUpload(file, title.trim(), sharing(who))
       .then((upload) => onReady(file, upload))
       .catch((error: unknown) => {
         console.error(error);
@@ -252,7 +259,7 @@ function NewUpload({
           <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
         </label>
       )}
-      {file && <WhoSees isPrivate={isPrivate} onChange={setPrivate} />}
+      {file && <WhoSees choice={who} onChange={setWho} hints={videoHints} />}
       {problem && (
         <p role="alert" className={styles.problem}>
           {problem}
@@ -262,36 +269,6 @@ function NewUpload({
         Carica
       </button>
     </form>
-  );
-}
-
-// WhoSees chooses who will see the new video: everybody, or only me.
-function WhoSees({
-  isPrivate,
-  onChange,
-}: {
-  isPrivate: boolean;
-  onChange: (isPrivate: boolean) => void;
-}) {
-  return (
-    <fieldset className={styles.who}>
-      <legend>Chi può vederlo</legend>
-      <div className={styles.choices}>
-        <label className={styles.choice}>
-          <input type="radio" name="who" checked={!isPrivate} onChange={() => onChange(false)} />
-          Tutti
-        </label>
-        <label className={styles.choice}>
-          <input type="radio" name="who" checked={isPrivate} onChange={() => onChange(true)} />
-          Solo io
-        </label>
-      </div>
-      <p className={styles.note}>
-        {isPrivate
-          ? "Non compare nelle liste di nessuno: lo apri da «I tuoi video». Puoi cambiare idea dopo."
-          : "Compare nella Home di tutti quelli che usano FranzPLAY."}
-      </p>
-    </fieldset>
   );
 }
 
@@ -430,6 +407,8 @@ function explain(error: unknown): string {
     case 403:
       return "Non puoi caricare video: lo decide l'amministratore.";
     case 400:
+      if (error.message.includes("people"))
+        return "Qualcuna delle persone scelte non c'è più: ricarica la pagina e scegli di nuovo.";
       if (error.message.includes("title")) return "Il titolo può avere al massimo 200 caratteri.";
       if (error.message.includes("name"))
         return "Il nome del file non va bene: rinominalo e riprova.";

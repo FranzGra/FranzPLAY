@@ -6,15 +6,17 @@ import {
   fetchPlaylist,
   type PlaylistPage as Page,
   playlistName,
-  publishPlaylist,
   putInPlaylist,
   renamePlaylist,
+  sharePlaylist,
 } from "../../api/playlists";
 import { useAccount } from "../../app/auth";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatVideos } from "../../lib/format";
+import { type Choice, choiceOf, namesList, playlistSharing, ready } from "../sharing/audience";
+import { type Hints, WhoSees } from "../sharing/WhoSees";
 import { VideoCard } from "../videos/VideoCard";
 import { NameForm } from "./NameForm";
 import styles from "./Playlists.module.css";
@@ -27,8 +29,8 @@ type State =
 
 // PlaylistPage shows a list with its videos, in order. On one of my
 // lists any video can be taken out, and an ordinary list can be renamed,
-// deleted or shown on my channel. Someone else's public list can only be
-// watched.
+// deleted, shown on my channel or shared with some people. Someone else's
+// list, public or shared with me, can only be watched.
 export function PlaylistPage() {
   const account = useAccount();
   const param = useParams().id ?? "";
@@ -36,7 +38,8 @@ export function PlaylistPage() {
   const navigate = useNavigate();
   const [state, setState] = useState<State>({ kind: "loading" });
   const [now] = useState(() => new Date());
-  const [mode, setMode] = useState<"view" | "rename" | "delete">("view");
+  const [mode, setMode] = useState<"view" | "rename" | "who" | "delete">("view");
+  const [who, setWho] = useState<Choice>({ audience: "me", people: [] });
   const [problem, setProblem] = useState("");
   usePageTitle(
     state.kind === "ready"
@@ -87,21 +90,28 @@ export function PlaylistPage() {
   const later = playlist.kind === "later";
   const mine = playlist.owner.id === account.id;
 
-  const publish = () => {
-    const shown = !playlist.public;
+  const share = () => {
+    if (!ready(who)) {
+      setProblem("Scegli almeno una persona che potrà vederla.");
+      return;
+    }
     setProblem("");
-    publishPlaylist(playlist.id, shown)
-      .then(() =>
-        setState((s) =>
-          s.kind === "ready" ? { ...s, playlist: { ...s.playlist, public: shown } } : s,
-        ),
-      )
+    const { public: shown, sharedWith } = playlistSharing(who);
+    sharePlaylist(playlist.id, { public: shown, sharedWith })
+      .then(() => {
+        // The page reads it again, for the names of the people chosen.
+        return fetchPlaylist(playlist.id);
+      })
+      .then((page) => {
+        setState({ kind: "ready", ...page });
+        setMode("view");
+      })
       .catch((error: unknown) => {
         console.error(error);
         setProblem(
-          shown
-            ? "Non sono riuscito a mettere la playlist sul canale. Riprova."
-            : "Non sono riuscito a togliere la playlist dal canale. Riprova.",
+          error instanceof ApiError && error.status === 400
+            ? "Qualcuna delle persone scelte non c'è più: ricarica la pagina e scegli di nuovo."
+            : "Non sono riuscito a cambiare chi vede la playlist. Riprova.",
         );
       });
   };
@@ -151,6 +161,11 @@ export function PlaylistPage() {
             <Icon name="chevronLeft" size={16} />
             Tutte le playlist
           </Link>
+        ) : !playlist.public ? (
+          <Link to="/condivisi">
+            <Icon name="chevronLeft" size={16} />
+            Condivisi con te
+          </Link>
         ) : (
           <Link to={`/canale/${playlist.owner.id}`}>
             <Icon name="chevronLeft" size={16} />
@@ -176,8 +191,7 @@ export function PlaylistPage() {
             <p className={styles.subtitle}>
               {formatVideos(playlist.videos)}
               {mine ? (
-                !later &&
-                (playlist.public ? " · sul tuo canale, la vedono tutti" : " · solo per te")
+                !later && ` · ${seenByText(playlist.public, playlist.sharedWith)}`
               ) : (
                 <>
                   {" · di "}
@@ -190,12 +204,15 @@ export function PlaylistPage() {
             <div className={styles.buttons}>
               <button
                 type="button"
-                className={`glass ${styles.action} ${playlist.public ? styles.on : ""}`}
-                aria-pressed={playlist.public}
-                onClick={publish}
+                className={`glass ${styles.action}`}
+                onClick={() => {
+                  setWho(choiceOf(!playlist.public, playlist.sharedWith));
+                  setProblem("");
+                  setMode("who");
+                }}
               >
                 <Icon name="channel" size={18} />
-                Sul mio canale
+                Chi la vede
               </button>
               <button
                 type="button"
@@ -214,6 +231,33 @@ export function PlaylistPage() {
                 Elimina
               </button>
             </div>
+          )}
+          {mode === "who" && (
+            <form
+              className={`glass ${styles.who}`}
+              aria-label="Chi la vede"
+              onSubmit={(event) => {
+                event.preventDefault();
+                share();
+              }}
+            >
+              <WhoSees choice={who} onChange={setWho} hints={playlistHints} />
+              <div className={styles.buttons}>
+                <button type="submit" className={styles.primary}>
+                  Salva
+                </button>
+                <button
+                  type="button"
+                  className={`glass ${styles.action}`}
+                  onClick={() => {
+                    setProblem("");
+                    setMode("view");
+                  }}
+                >
+                  Annulla
+                </button>
+              </div>
+            </form>
           )}
           {mode === "delete" && (
             <div className={styles.buttons}>
@@ -274,4 +318,19 @@ export function PlaylistPage() {
       )}
     </>
   );
+}
+
+// playlistHints say what each choice of who sees it means for a playlist.
+const playlistHints: Hints = {
+  everyone: "Sta sul tuo canale: la vede chiunque usi FranzPLAY.",
+  me: "Non la vede nessun altro.",
+  people:
+    "La vedono solo le persone che scegli, nella pagina «Condivisi con te». I video privati non ci finiscono mai.",
+};
+
+// seenByText says who sees one of my lists.
+function seenByText(isPublic: boolean, sharedWith: { name: string }[]): string {
+  if (isPublic) return "sul tuo canale, la vedono tutti";
+  if (sharedWith.length === 0) return "solo per te";
+  return `la vedono anche ${namesList(sharedWith.map((p) => p.name))}`;
 }

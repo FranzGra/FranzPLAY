@@ -3,7 +3,6 @@ package likes
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 // videos is what this feature needs from the catalog.
 type videos interface {
 	ByIDs(ctx context.Context, ids []int64) ([]catalog.Video, error)
+	CanOpen(ctx context.Context, videoID, viewer int64) (bool, error)
 }
 
 type handlers struct {
@@ -90,11 +90,12 @@ func (h handlers) answer(w http.ResponseWriter, r *http.Request, set *bool) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, errVideoNotFound.Error())
 		return
 	}
-	if err := h.store.present(r.Context(), videoID); errors.Is(err, errVideoNotFound) {
-		respond.Error(w, r, h.logger, http.StatusNotFound, err.Error())
-		return
-	} else if err != nil {
+	// Whoever may open the video may like it, a shared one included.
+	if open, err := h.videos.CanOpen(r.Context(), videoID, a.ID); err != nil {
 		respond.InternalError(w, r, h.logger, err)
+		return
+	} else if !open {
+		respond.Error(w, r, h.logger, http.StatusNotFound, errVideoNotFound.Error())
 		return
 	}
 	if set != nil {

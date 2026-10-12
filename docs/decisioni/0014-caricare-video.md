@@ -52,4 +52,4 @@ spenti per questi video: nessun altro li vedrebbe.
 
 ## Cosa resta per dopo
 
-- «Solo alcune persone»: fatto, vedi la decisione 0016.
+- «Solo alcune persone»: fatto, vedi la decisione 0017.

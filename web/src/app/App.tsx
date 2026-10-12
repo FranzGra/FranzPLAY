@@ -24,6 +24,7 @@ import { PlaylistPage } from "../features/playlists/PlaylistPage";
 import { PlaylistsPage } from "../features/playlists/PlaylistsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { SearchPage } from "../features/search/SearchPage";
+import { SharedPage } from "../features/sharing/SharedPage";
 import { UploadPage } from "../features/upload/UploadPage";
 import { VideoPage } from "../features/video/VideoPage";
 import { AuthProvider, useAuth } from "./auth";
@@ -81,6 +82,7 @@ function Pages() {
         <Route path="video/:id" element={<VideoPage />} />
         <Route path="cronologia" element={<HistoryPage />} />
         <Route path="mi-piace" element={<LikedPage />} />
+        <Route path="condivisi" element={<SharedPage />} />
         <Route path="categorie" element={<CategoriesPage />} />
         <Route path="categorie/:name" element={<CategoryPage />} />
         <Route path="admin" element={<AdminPage />}>

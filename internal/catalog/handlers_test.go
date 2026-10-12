@@ -63,7 +63,7 @@ func (s *site) addVideo(t *testing.T, rel, content, category string, addedAt int
 	if err := os.WriteFile(name, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at)
+	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at)
 		VALUES (?, 1, ?, ?, 1, ?, ?, ?)`, "fp-"+rel, rel, len(content), filepath.Base(rel), category, addedAt)
 	if err != nil {
 		t.Fatal(err)

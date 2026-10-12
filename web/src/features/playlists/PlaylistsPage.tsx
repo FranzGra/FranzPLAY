@@ -78,7 +78,12 @@ export function PlaylistsPage() {
               <li>
                 <PlaylistCard list={list} markPublic />
               </li>
-              {list.kind === "later" && <LikedCard />}
+              {list.kind === "later" && (
+                <>
+                  <LikedCard />
+                  <SharedCard />
+                </>
+              )}
             </Fragment>
           ))}
         </ul>
@@ -104,6 +109,22 @@ function LikedCard() {
         </span>
         <span className={styles.cardName}>Mi piace</span>
         <span className={styles.cardCount}>I video che ti piacciono</span>
+      </Link>
+    </li>
+  );
+}
+
+// SharedCard leads to what others shared only with some people, me among
+// them: on phones too, from here.
+function SharedCard() {
+  return (
+    <li>
+      <Link to="/condivisi" className={styles.card}>
+        <span className={styles.cover}>
+          <Icon name="share" size={32} />
+        </span>
+        <span className={styles.cardName}>Condivisi con te</span>
+        <span className={styles.cardCount}>Solo per te e pochi altri</span>
       </Link>
     </li>
   );

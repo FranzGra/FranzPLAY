@@ -226,7 +226,7 @@ func (s store) finish(ctx context.Context, f finished, now time.Time, place func
 	}
 	u := f.upload
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at, uploaded_by, private)
+		INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at, uploaded_by, private)
 		VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?)`,
 		f.fingerprint, library, f.path, u.Size, f.modTime, u.Title, now.Unix(), u.user, u.Private)
 	if err != nil {

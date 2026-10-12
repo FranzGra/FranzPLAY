@@ -29,7 +29,7 @@ func newAdminSite(t *testing.T) *adminSite {
 	s := &adminSite{site: newSite(t), who: users.Account{ID: 1, Name: "Admin", Role: users.Admin}}
 	mux := http.NewServeMux()
 	admin{
-		store: store{db: s.db}, changed: func() { s.changed++ }, queued: func() { s.queued++ },
+		store: store{db: s.db}, dataDir: s.dataDir, changed: func() { s.changed++ }, queued: func() { s.queued++ },
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		now:    func() time.Time { return time.Unix(1000, 0) },
 		account: func(context.Context) (users.Account, bool) {

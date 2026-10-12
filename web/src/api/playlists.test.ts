@@ -34,6 +34,7 @@ describe("parsePlaylists", () => {
       name: "",
       owner: { id: 1, name: "Francesco" },
       public: false,
+      sharedWith: [],
       videos: 2,
       cover: null,
       updatedAt: new Date("2026-10-12T09:00:00Z"),
@@ -56,6 +57,7 @@ describe("parsePlaylists", () => {
     ["foreign cover", [playlist({ cover: "https://example.com/x.jpg" })]],
     ["bad date", [playlist({ updatedAt: "ieri" })]],
     ["bad contains", [playlist({ contains: "sì" })]],
+    ["bad person shared with", [playlist({ sharedWith: [{ id: 3 }] })]],
   ])("refuses %s", (_, data) => {
     expect(() => parsePlaylists(data)).toThrow();
   });

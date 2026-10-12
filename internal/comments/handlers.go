@@ -14,8 +14,14 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
+// videos is what this feature needs from the catalog.
+type videos interface {
+	CanOpen(ctx context.Context, videoID, viewer int64) (bool, error)
+}
+
 type handlers struct {
 	store  store
+	videos videos
 	logger *slog.Logger
 	now    func() time.Time
 	// account returns the logged-in person: users.FromContext, replaced
@@ -29,8 +35,8 @@ type handlers struct {
 //	POST   /api/videos/{id}/comments  {body, parentId?}: write, or answer a comment
 //	DELETE /api/comments/{id}         delete (author or administrator), with its replies
 //	GET    /api/comments              every comment, newest first (administrators; ?limit=&offset=)
-func Routes(db *sql.DB, logger *slog.Logger) func(mux *http.ServeMux) {
-	return handlers{store: store{db: db}, logger: logger, now: time.Now, account: users.FromContext}.routes
+func Routes(db *sql.DB, lookup videos, logger *slog.Logger) func(mux *http.ServeMux) {
+	return handlers{store: store{db: db}, videos: lookup, logger: logger, now: time.Now, account: users.FromContext}.routes
 }
 
 func (h handlers) routes(mux *http.ServeMux) {
@@ -55,15 +61,16 @@ func (h handlers) who(w http.ResponseWriter, r *http.Request, notFound error) (v
 	return viewer{id: a.ID, admin: a.Role == users.Admin}, id, true
 }
 
-// video checks the video of the address; it answers itself when it is not there.
-func (h handlers) video(w http.ResponseWriter, r *http.Request, videoID int64) bool {
-	err := h.store.present(r.Context(), videoID)
-	if errors.Is(err, errVideoNotFound) {
-		respond.Error(w, r, h.logger, http.StatusNotFound, err.Error())
-		return false
-	}
+// video checks that the person may open the video of the address, a
+// shared one included; it answers itself when they may not.
+func (h handlers) video(w http.ResponseWriter, r *http.Request, v viewer, videoID int64) bool {
+	open, err := h.videos.CanOpen(r.Context(), videoID, v.id)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
+		return false
+	}
+	if !open {
+		respond.Error(w, r, h.logger, http.StatusNotFound, errVideoNotFound.Error())
 		return false
 	}
 	return true
@@ -71,7 +78,7 @@ func (h handlers) video(w http.ResponseWriter, r *http.Request, videoID int64) b
 
 func (h handlers) list(w http.ResponseWriter, r *http.Request) {
 	v, videoID, ok := h.who(w, r, errVideoNotFound)
-	if !ok || !h.video(w, r, videoID) {
+	if !ok || !h.video(w, r, v, videoID) {
 		return
 	}
 	rows, err := h.store.list(r.Context(), videoID)
@@ -89,7 +96,7 @@ type addRequest struct {
 
 func (h handlers) add(w http.ResponseWriter, r *http.Request) {
 	v, videoID, ok := h.who(w, r, errVideoNotFound)
-	if !ok || !h.video(w, r, videoID) {
+	if !ok || !h.video(w, r, v, videoID) {
 		return
 	}
 	var req addRequest

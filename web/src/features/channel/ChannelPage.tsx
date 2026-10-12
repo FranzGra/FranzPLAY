@@ -101,7 +101,7 @@ export function ChannelPage() {
         mine ? (
           <EmptyState title="Il tuo canale è ancora vuoto">
             Apri una delle tue <Link to="/playlist">playlist</Link> e premi{" "}
-            <strong>Sul mio canale</strong>: la vedranno tutti, qui.
+            <strong>Chi la vede</strong>, poi <strong>Tutti</strong>: la vedranno tutti, qui.
           </EmptyState>
         ) : (
           <EmptyState title="Nessuna playlist pubblica">

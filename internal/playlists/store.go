@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/sharing"
 )
 
 // row is a list as stored, with what the lists page shows about it.
@@ -74,10 +77,15 @@ func (s store) list(ctx context.Context, userID, videoID int64, now time.Time) (
 	return list, nil
 }
 
-// get returns a list the person may see: one of theirs, or a public one.
-// Someone else's private list is not found, so nobody learns it exists.
+// sharedWith is true for a list shared with the person, the one argument.
+const sharedWith = `EXISTS (SELECT 1 FROM playlist_shares s WHERE s.playlist_id = p.id AND s.user_id = ?)`
+
+// get returns a list the person may see: one of theirs, a public one, or
+// one shared with them. Someone else's private list is not found, so
+// nobody learns it exists.
 func (s store) get(ctx context.Context, userID, id int64) (row, error) {
-	r, err := scanRow(s.db.QueryRowContext(ctx, selectRow+` WHERE p.id = ? AND (p.user_id = ? OR p.public)`, 0, id, userID))
+	r, err := scanRow(s.db.QueryRowContext(ctx, selectRow+` WHERE p.id = ? AND (p.user_id = ? OR p.public OR `+
+		sharedWith+`)`, 0, id, userID, userID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return row{}, errNotFound
 	}
@@ -90,10 +98,21 @@ func (s store) get(ctx context.Context, userID, id int64) (row, error) {
 // publicOf returns the public lists of a person, the most recently
 // changed first.
 func (s store) publicOf(ctx context.Context, owner int64) (list []row, err error) {
-	rows, err := s.db.QueryContext(ctx, selectRow+` WHERE p.user_id = ? AND p.public
-		ORDER BY p.updated_at DESC, p.id DESC`, 0, owner)
+	return s.rows(ctx, `p.user_id = ? AND p.public`, owner)
+}
+
+// sharedWithMe returns the lists others shared with a person, the most
+// recently changed first.
+func (s store) sharedWithMe(ctx context.Context, userID int64) (list []row, err error) {
+	return s.rows(ctx, `NOT p.public AND `+sharedWith, userID)
+}
+
+// rows returns the lists matching where, the most recently changed first.
+func (s store) rows(ctx context.Context, where string, args ...any) (list []row, err error) {
+	rows, err := s.db.QueryContext(ctx, selectRow+` WHERE `+where+`
+		ORDER BY p.updated_at DESC, p.id DESC`, append([]any{0}, args...)...)
 	if err != nil {
-		return nil, fmt.Errorf("list public playlists of user %d: %w", owner, err)
+		return nil, fmt.Errorf("list playlists: %w", err)
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
@@ -104,9 +123,24 @@ func (s store) publicOf(ctx context.Context, owner int64) (list []row, err error
 		list = append(list, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list public playlists of user %d: %w", owner, err)
+		return nil, fmt.Errorf("list playlists: %w", err)
 	}
 	return list, nil
+}
+
+// people returns the people each of the lists ids is shared with, by name.
+func (s store) people(ctx context.Context, ids []int64) (map[int64][]sharing.Person, error) {
+	if len(ids) == 0 {
+		return map[int64][]sharing.Person{}, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	return sharing.People(ctx, s.db, `SELECT s.playlist_id, u.id, u.name, u.avatar
+		FROM playlist_shares s JOIN users u ON u.id = s.user_id
+		WHERE s.playlist_id IN (`+strings.Repeat(",?", len(ids))[1:]+`)
+		ORDER BY u.name COLLATE NOCASE, u.id`, args...)
 }
 
 // create makes a new list.
@@ -147,12 +181,49 @@ func (s store) rename(ctx context.Context, id int64, name string, now time.Time)
 	return nil
 }
 
-// publish puts an ordinary list on its owner's channel (true) or takes
-// it off. It does not count as a change to the list.
-func (s store) publish(ctx context.Context, id int64, public bool) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE playlists SET public = ? WHERE id = ? AND kind = 'playlist'`,
-		public, id); err != nil {
-		return fmt.Errorf("publish playlist %d: %w", id, err)
+// audience changes who sees an ordinary list: on the owner's channel for
+// everybody (public), and the people it is shared with otherwise, already
+// cleaned. What is nil stays. A public list is shared with nobody. It does
+// not count as a change to the list.
+func (s store) audience(ctx context.Context, id int64, public *bool, people *[]int64) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("change who sees playlist %d: %w", id, err)
+	}
+	defer func() {
+		if err == nil {
+			if err = tx.Commit(); err != nil {
+				err = fmt.Errorf("change who sees playlist %d: %w", id, err)
+			}
+			return
+		}
+		_ = tx.Rollback() // the error that matters is err
+	}()
+	var nowPublic bool
+	if err := tx.QueryRowContext(ctx, `UPDATE playlists SET public = coalesce(?, public)
+		WHERE id = ? AND kind = 'playlist' RETURNING public`, public, id).Scan(&nowPublic); err != nil {
+		return fmt.Errorf("change who sees playlist %d: %w", id, err)
+	}
+	if nowPublic && people != nil && len(*people) > 0 {
+		return sharing.ErrNotPrivate
+	}
+	if !nowPublic && people == nil {
+		return nil // the same people as before
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM playlist_shares WHERE playlist_id = ?`, id); err != nil {
+		return fmt.Errorf("change who sees playlist %d: %w", id, err)
+	}
+	if nowPublic {
+		return nil
+	}
+	if err := sharing.Known(ctx, tx, *people); err != nil {
+		return err
+	}
+	for _, person := range *people {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO playlist_shares (playlist_id, user_id) VALUES (?, ?)`,
+			id, person); err != nil {
+			return fmt.Errorf("change who sees playlist %d: %w", id, err)
+		}
 	}
 	return nil
 }

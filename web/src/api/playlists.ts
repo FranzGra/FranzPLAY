@@ -2,6 +2,7 @@
 // "Guarda più tardi" list.
 
 import { request } from "./client";
+import { parseSharePeople, type SharePerson } from "./people";
 import { parseVideo, type Video } from "./videos";
 
 export type Playlist = {
@@ -13,6 +14,9 @@ export type Playlist = {
   owner: { id: number; name: string };
   // public says the list shows on its owner's channel, for everyone.
   public: boolean;
+  // sharedWith are the people a list not on the channel is shared with;
+  // only its owner learns them, the others get [].
+  sharedWith: SharePerson[];
   videos: number;
   cover: string | null; // the first video's cover
   updatedAt: Date;
@@ -70,6 +74,8 @@ export function parsePlaylist(data: unknown): Playlist {
     name: d.name,
     owner: { id: o.id, name: o.name },
     public: d.public,
+    sharedWith:
+      d.sharedWith === undefined ? [] : parseSharePeople(d.sharedWith, "playlist sharedWith"),
     videos: d.videos,
     cover: d.cover,
     updatedAt,
@@ -128,9 +134,20 @@ export async function renamePlaylist(id: number, name: string): Promise<void> {
   changed();
 }
 
-// publishPlaylist puts one of my lists on my channel (true) or takes it off.
-export async function publishPlaylist(id: number, shown: boolean): Promise<void> {
-  await request(`/api/playlists/${id}`, { method: "PUT", body: { public: shown } });
+// fetchSharedPlaylists returns the lists others shared with me, the most
+// recently changed first.
+export async function fetchSharedPlaylists(signal?: AbortSignal): Promise<Playlist[]> {
+  return parsePlaylists(await request("/api/playlists/shared", { signal }));
+}
+
+// sharePlaylist changes who sees one of my lists: on my channel for
+// everybody (public), or only me and the people in sharedWith, by id.
+export async function sharePlaylist(
+  id: number,
+  who: { public: boolean; sharedWith: number[] },
+): Promise<void> {
+  const body = who.public ? { public: true } : { public: false, sharedWith: who.sharedWith };
+  await request(`/api/playlists/${id}`, { method: "PUT", body });
 }
 
 export async function deletePlaylist(id: number): Promise<void> {

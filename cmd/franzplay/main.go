@@ -170,6 +170,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	} else if n > 0 {
 		logger.Info("removed unused covers", "count", n)
 	}
+	if n, err := media.RemoveOrphanOwnCovers(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused uploaded covers", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused uploaded covers", "count", n)
+	}
 	if n, err := media.RemoveOrphanPreviews(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused previews", "error", err)
 	} else if n > 0 {
@@ -241,7 +246,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		accounts.Routes,
 		catalog.Routes(db, cfg.DataDir, logger),
 		catalog.AudioRoutes(db, cfg.DataDir, remux, logger),
-		catalog.AdminRoutes(db,
+		catalog.AdminRoutes(db, cfg.DataDir,
 			func() { hub.Publish(events.Library) },
 			func() { worker.Wake(); hub.Publish(events.Jobs) },
 			logger),
@@ -249,7 +254,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		recommend.Routes(db, catalog.NewLookup(db), logger),
 		likes.Routes(db, catalog.NewLookup(db), logger),
 		home.Routes(db, logger),
-		comments.Routes(db, logger),
+		comments.Routes(db, catalog.NewLookup(db), logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),
 		sharing.Routes(db, logger),

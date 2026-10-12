@@ -1,0 +1,31 @@
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.subheading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 24px 16px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}

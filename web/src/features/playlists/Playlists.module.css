@@ -65,16 +65,15 @@
   background: var(--glass-bg-strong);
 }
 
-/* A button that is switched on. */
-.on {
-  border-color: transparent;
-  background: var(--color-text);
-  color: var(--color-bg);
-}
-
-.on:hover {
-  background: var(--color-text);
-  opacity: 0.9;
+/* Who sees the list opens under its name, across the page. */
+.who {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+  padding: 16px;
+  border-radius: var(--radius-m);
 }
 
 .danger {

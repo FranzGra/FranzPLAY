@@ -3,6 +3,9 @@ import { Link } from "react-router";
 import { ApiError } from "../../api/client";
 import { changeMyVideo, deleteMyVideo, fetchMyVideos, type MyVideo } from "../../api/myVideos";
 import { formatBytes, formatDate } from "../../lib/format";
+import { type Choice, choiceOf, ready, seenBy, sharing } from "../sharing/audience";
+import { WhoSees } from "../sharing/WhoSees";
+import { videoHints } from "./hints";
 import styles from "./MyVideos.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; videos: MyVideo[] };
@@ -77,7 +80,8 @@ function VideoRow({
   onChanged: (video: MyVideo) => void;
   onDeleted: () => void;
 }) {
-  const [asking, setAsking] = useState<"nothing" | "title" | "delete">("nothing");
+  const [asking, setAsking] = useState<"nothing" | "title" | "who" | "delete">("nothing");
+  const [who, setWho] = useState<Choice>(() => choiceOf(video.private, video.sharedWith));
   const [title, setTitle] = useState(video.title);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
@@ -117,7 +121,7 @@ function VideoRow({
         </Link>
         <p className={styles.note}>
           {formatDate(video.addedAt)} · {formatBytes(video.size)}
-          {video.private ? " · solo tu lo vedi" : " · lo vedono tutti"}
+          {` · ${seenBy(video.private, video.sharedWith)}`}
           {video.hidden && " · nascosto dall'amministratore"}
         </p>
 
@@ -188,14 +192,12 @@ function VideoRow({
             <button
               type="button"
               className={`glass ${styles.action}`}
-              disabled={busy}
-              onClick={() =>
-                run(async () =>
-                  onChanged(await changeMyVideo(video.id, { private: !video.private })),
-                )
-              }
+              onClick={() => {
+                setWho(choiceOf(video.private, video.sharedWith));
+                setAsking("who");
+              }}
             >
-              {video.private ? "Fallo vedere a tutti" : "Tienilo solo per te"}
+              Chi lo vede
             </button>
             <button
               type="button"
@@ -212,6 +214,40 @@ function VideoRow({
           </p>
         )}
       </div>
+      {asking === "who" && (
+        <form
+          className={styles.who}
+          aria-label="Chi lo vede"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!ready(who)) {
+              setProblem("Scegli almeno una persona che potrà vederlo.");
+              return;
+            }
+            run(async () => {
+              onChanged(await changeMyVideo(video.id, sharing(who)));
+              setAsking("nothing");
+            });
+          }}
+        >
+          <WhoSees choice={who} onChange={setWho} hints={videoHints} />
+          <div className={styles.buttons}>
+            <button type="submit" className={styles.primary} disabled={busy}>
+              Salva
+            </button>
+            <button
+              type="button"
+              className={`glass ${styles.action}`}
+              onClick={() => {
+                setProblem("");
+                setAsking("nothing");
+              }}
+            >
+              Annulla
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -220,6 +256,8 @@ function explain(error: unknown): string {
   if (!(error instanceof ApiError)) return "Il server non risponde. Riprova tra poco.";
   switch (error.status) {
     case 400:
+      if (error.message.includes("people"))
+        return "Qualcuna delle persone scelte non c'è più: ricarica la pagina e scegli di nuovo.";
       return "Il titolo può avere al massimo 200 caratteri, su una riga.";
     case 404:
       return "Questo video non c'è più: ricarica la pagina.";

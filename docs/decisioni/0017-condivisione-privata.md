@@ -1,10 +1,10 @@
-# 0016 · Condividere solo con alcune persone
+# 0017 · Condividere solo con alcune persone
 
 12 ottobre 2026.
 
 ## Cosa si è deciso
 
-Un video caricato dal browser (e, nel passo dopo, una playlist) si può far vedere a tre gruppi:
+Un video caricato dal browser e una playlist si possono far vedere a tre gruppi:
 **Tutti**, **Solo io**, **Alcune persone**. Con «Alcune persone» chi carica sceglie i nomi da un
 elenco di chi usa FranzPLAY.
 
@@ -29,7 +29,14 @@ canali o nelle playlist, e il suo indirizzo risponde «non trovato».
 - **Gli aggiornamenti in tempo reale (SSE) non portano dati**, solo «qualcosa è cambiato»
   (decisione 0005): non possono far trapelare niente.
 
-## Cosa resta per dopo
+**Le playlist** funzionano allo stesso modo: «Tutti» vuol dire sul mio canale, «Solo io» è la
+playlist privata di sempre, «Alcune persone» usa la tabella `playlist_shares`. Una playlist
+condivisa mostra solo i video che tutti possono vedere: un video privato non entra mai in una
+playlist. «Guarda più tardi» non si condivide.
 
-- Playlist condivise con alcune persone.
-- Mi piace e commenti sui video condivisi.
+**Mi piace e commenti.** Chi può aprire un video privato (chi l'ha caricato e le persone scelte)
+può anche mettere mi piace e commentare: una famiglia che si condivide un video ne vuole parlare.
+Il controllo è uno solo, `catalog.Lookup.CanOpen`, lo stesso della pagina del video. Restano spenti
+per i video privati: salvare in una playlist, il tasto Condividi, i consigliati e «Continua a
+guardare», perché porterebbero altri verso una pagina che per loro non si apre. Questo cambia la
+regola scritta nella decisione 0014, dove mi piace e commenti erano spenti.

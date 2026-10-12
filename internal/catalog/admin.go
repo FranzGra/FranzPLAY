@@ -16,9 +16,11 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
-// The administrator's two changes to the catalog live here: hiding a video
-// and asking for its information, cover and previews again. Everything
-// else in this package only reads.
+// The administrator's changes to the catalog live here and in edit.go:
+// hiding a video, asking for its information, cover and previews again,
+// changing its title and category (edit.go) and choosing its cover
+// (cover.go). Everything else in this package
+// only reads.
 
 // errFileMissing means the video's file was not found at the last scan.
 var errFileMissing = errors.New("the video file is not in its folder")
@@ -31,6 +33,16 @@ type AdminVideo struct {
 	Path    string `json:"path"`   // inside the folder, with "/"
 	Hidden  bool   `json:"hidden"`
 	Missing bool   `json:"missing"` // not found at the last scan
+	// What FranzPLAY found by itself, shown when the administrator
+	// changes title or category, to put it back.
+	FoundTitle    string `json:"foundTitle"`
+	FoundCategory string `json:"foundCategory"`
+	TitleSet      bool   `json:"titleSet"`    // the title is the administrator's
+	CategorySet   bool   `json:"categorySet"` // the category is the administrator's
+	// The cover the administrator chose: "image" uploaded, a "moment" of
+	// the video (CoverSecond), or "" for the one FranzPLAY picks.
+	CoverChoice string `json:"coverChoice"`
+	CoverSecond *int64 `json:"coverSecond"`
 }
 
 // adminFilter narrows the administrator's list.
@@ -47,17 +59,23 @@ const (
 //	GET  /api/admin/videos                 every video (?q=&show=hidden|missing&limit=&offset=)
 //	PUT  /api/admin/videos/{id}/hidden     hide or show again {hidden}
 //	POST /api/admin/videos/{id}/refresh    read it again and remake cover and previews
+//	PUT  /api/admin/videos/{id}/details    another title and category {title, category};
+//	                                       null puts back the found one
+//	PUT  /api/admin/videos/{id}/cover      an image as cover (the body is the image)
+//	PUT  /api/admin/videos/{id}/cover-second  a moment of the video as cover {second}
+//	DELETE /api/admin/videos/{id}/cover    back to the cover FranzPLAY picks
 //
 // changed tells the open pages the list of videos changed; queued tells
 // the job worker (and the pages) that there is new work.
-func AdminRoutes(db *sql.DB, changed, queued func(), logger *slog.Logger) func(mux *http.ServeMux) {
-	a := admin{store: store{db: db}, changed: changed, queued: queued, logger: logger,
+func AdminRoutes(db *sql.DB, dataDir string, changed, queued func(), logger *slog.Logger) func(mux *http.ServeMux) {
+	a := admin{store: store{db: db}, dataDir: dataDir, changed: changed, queued: queued, logger: logger,
 		now: time.Now, account: users.FromContext}
 	return a.routes
 }
 
 type admin struct {
 	store   store
+	dataDir string // FranzPLAY's data folder, for the uploaded covers
 	changed func()
 	queued  func()
 	logger  *slog.Logger
@@ -69,6 +87,10 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/videos", a.only(a.handleList))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/hidden", a.only(a.handleHidden))
 	mux.HandleFunc("POST /api/admin/videos/{id}/refresh", a.only(a.handleRefresh))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/details", a.only(a.handleDetails))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/cover", a.only(a.handleOwnCover))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/cover-second", a.only(a.handleCoverSecond))
+	mux.HandleFunc("DELETE /api/admin/videos/{id}/cover", a.only(a.handleResetCover))
 }
 
 // only lets only administrators through.
@@ -190,7 +212,10 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		return nil, 0, fmt.Errorf("count videos: %w", err)
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL
+		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL,
+		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
+		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL,
+		       v.own_cover IS NOT NULL, v.cover_second
 		FROM videos v JOIN libraries l ON l.id = v.library_id
 		WHERE `+where+`
 		ORDER BY v.added_at DESC, v.id DESC LIMIT ? OFFSET ?`, append(args, q.limit, q.offset)...)
@@ -201,9 +226,19 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 	out := []AdminVideo{}
 	for rows.Next() {
 		var av AdminVideo
-		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing}})
+		var ownCover bool
+		var second sql.NullInt64
+		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing,
+			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second}})
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
+		}
+		switch {
+		case ownCover:
+			av.CoverChoice = "image"
+		case second.Valid:
+			av.CoverChoice = "moment"
+			av.CoverSecond = &second.Int64
 		}
 		out = append(out, av)
 	}

@@ -8,6 +8,7 @@ const video = {
   cover: null,
   hidden: false,
   private: false,
+  sharedWith: [{ id: 3, name: "Anna", avatar: 0 }],
 };
 
 describe("parseMyVideo", () => {
@@ -24,6 +25,8 @@ describe("parseMyVideo", () => {
     ["bad cover", { ...video, cover: 3 }],
     ["no hidden", { ...video, hidden: undefined }],
     ["no private", { ...video, private: "no" }],
+    ["no sharedWith", { ...video, sharedWith: undefined }],
+    ["bad person", { ...video, sharedWith: [{ id: 3 }] }],
   ])("rejects %s", (_label, data) => {
     expect(() => parseMyVideo(data)).toThrow();
   });

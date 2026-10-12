@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FranzPLAY</string>
+    <string name="change_server">Cambia server</string>
+    <string name="share_title">Condividi</string>
+
+    <string name="setup_title">Connetti a FranzPLAY</string>
+    <string name="setup_intro">Scrivi l\'indirizzo del tuo FranzPLAY, quello che usi nel browser.</string>
+    <string name="setup_hint">Es. 192.168.1.50:8090</string>
+    <string name="setup_connect">Connetti</string>
+    <string name="setup_checking">Controllo…</string>
+    <string name="setup_note">Se FranzPLAY è a casa, il telefono deve essere sulla stessa rete Wi-Fi.</string>
+    <string name="setup_empty">Scrivi l\'indirizzo del server.</string>
+    <string name="setup_scheme">L\'indirizzo deve iniziare con http:// oppure https://, o con il numero del server.</string>
+    <string name="setup_not_address">Questo non sembra un indirizzo. Prova con qualcosa come 192.168.1.50:8090.</string>
+    <string name="setup_not_found">FranzPLAY non risponde a %1$s. Controlla l\'indirizzo e che il server sia acceso.</string>
+
+    <string name="problem_title">FranzPLAY non risponde</string>
+    <string name="problem_text">Non si riesce a raggiungere %1$s (%2$s). Controlla che il server sia acceso e che il telefono sia sulla rete giusta.</string>
+    <string name="retry">Riprova</string>
+</resources>
