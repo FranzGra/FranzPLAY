@@ -21,9 +21,10 @@ solo quel file. Se qualcosa va storto, il vecchio è esattamente com'era.
 | Cronologia e «Continua a guardare» | Cronologia e «Continua a guardare» |
 | Registro degli accessi (ultimi 90 giorni) | Registro degli accessi |
 | Nome e colore del sito, se li avevi cambiati | Nome e colore del sito |
+| Foto del profilo (se copi anche la loro cartella) | Foto del profilo, ritagliate quadrate |
 
 Il nuovo FranzPLAY **non sa ancora tenere** alcune cose del vecchio: titoli e nomi di categorie
-cambiati a mano, copertine scelte a mano, foto del profilo, sottotitoli fatti da Whisper. Il
+cambiati a mano, copertine scelte a mano, sottotitoli fatti da Whisper. Il
 resoconto finale le conta, così sai cosa manca; arriveranno con i prossimi passi.
 
 Qualche dettaglio utile:
@@ -86,6 +87,12 @@ uguale.
 
 Porta il file sul computer del nuovo FranzPLAY (chiavetta, cartella condivisa…).
 
+**Le foto del profilo** non sono nel database ma in una cartella del vecchio:
+`App_Data/User_Images`, dentro la cartella del vecchio FranzPLAY. Se vuoi portarle, copia anche
+quella cartella sul computer del nuovo. Le foto JPEG e PNG arrivano ritagliate quadrate; quelle
+WEBP il nuovo non le sa leggere: il resoconto dice di chi sono, e quella persona la può
+scegliere di nuovo dal suo Profilo.
+
 ### 3. Prova, senza salvare niente
 
 Con le stesse impostazioni con cui avvii il nuovo FranzPLAY (soprattutto `FRANZPLAY_DATA_DIR`,
@@ -98,19 +105,28 @@ go run ./cmd/franzplay import-old -try vecchio-franzplay.sql
 Se hai il programma già pronto invece del codice, è lo stesso con `franzplay` al posto di
 `go run ./cmd/franzplay` (su Windows `.\franzplay.exe`).
 
+Se hai copiato la cartella delle foto, aggiungi `-photos` con il suo percorso, prima del nome del
+file:
+
+```sh
+go run ./cmd/franzplay import-old -try -photos User_Images vecchio-franzplay.sql
+```
+
 Con `-try` non viene salvato niente: compare solo il resoconto di cosa succederebbe. Comincia con
 `PROVA` e dice per esempio quanti video ha ritrovato e quali no, quante persone arrivano, quanti
 mi piace e commenti. Se mancano molti video, controlla di aver indicato la cartella giusta.
 
 ### 4. Importa davvero
 
-Lo stesso comando, senza `-try`:
+Lo stesso comando, senza `-try` (e con `-photos …` se porti le foto):
 
 ```sh
 go run ./cmd/franzplay import-old vecchio-franzplay.sql
 ```
 
-È **tutto o niente**: se qualcosa si rompe a metà, non resta nessun dato a metà. Il nuovo
+È **tutto o niente**: se qualcosa si rompe a metà, non resta nessun dato a metà. Le foto arrivano
+subito dopo, una per una: una foto che non si legge viene solo scritta nel resoconto. Chi ha già
+una foto nel nuovo tiene la sua. Il nuovo
 FranzPLAY può restare acceso intanto; dopo, ricarica la pagina nel browser.
 
 Si può **rilanciare** quante volte vuoi: quello che c'è già non viene aggiunto due volte. Per

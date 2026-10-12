@@ -26,6 +26,11 @@ type Options struct {
 	Try bool
 	// Now is the time of the import; zero means the clock.
 	Now time.Time
+	// PhotosDir is the old FranzPLAY's folder of profile photos
+	// (App_Data/User_Images); empty leaves the photos out.
+	PhotosDir string
+	// DataDir is the new FranzPLAY's data folder, where photos go.
+	DataDir string
 }
 
 // Import reads the old database from an SQL file and adds what it holds
@@ -49,13 +54,23 @@ func Import(ctx context.Context, db *sql.DB, file io.Reader, opt Options) (*Repo
 	if err != nil {
 		return nil, fmt.Errorf("import: %w", err)
 	}
-	im := importer{ctx: ctx, tx: tx, old: old, now: opt.Now, report: &Report{Try: opt.Try, Problems: old.problems}}
+	im := importer{ctx: ctx, db: db, tx: tx, old: old, now: opt.Now, photosDir: opt.PhotosDir,
+		report: &Report{Try: opt.Try, Problems: old.problems}}
 	err = im.run()
 	if err == nil && !opt.Try {
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("import: save: %w", err)
 		}
+		// Photos are files: they come once the people are saved.
+		if opt.PhotosDir != "" {
+			if err := im.photos(opt.PhotosDir, opt.DataDir); err != nil {
+				return nil, err
+			}
+		}
 		return im.report, nil
+	}
+	if err == nil && opt.PhotosDir != "" {
+		err = im.photos(opt.PhotosDir, opt.DataDir) // a try only reads them
 	}
 	if rbErr := tx.Rollback(); rbErr != nil {
 		return nil, errors.Join(err, fmt.Errorf("import: rollback: %w", rbErr))
@@ -68,10 +83,13 @@ func Import(ctx context.Context, db *sql.DB, file io.Reader, opt Options) (*Repo
 
 type importer struct {
 	ctx    context.Context
+	db     *sql.DB
 	tx     *sql.Tx
 	old    *oldData
 	now    time.Time
 	report *Report
+	// photosDir is where the old photos are; "" = they are left out.
+	photosDir string
 
 	userOf  map[int64]int64 // old user id → new user id
 	videoOf map[int64]int64 // old video id → new video id
@@ -290,9 +308,9 @@ func (im *importer) comments() error {
 			r.Empty++
 			continue
 		}
-		if utf8.RuneCountInString(body) > maxComment {
+		shortened := utf8.RuneCountInString(body) > maxComment
+		if shortened {
 			body = string([]rune(body)[:maxComment-1]) + "…"
-			r.Shortened++
 		}
 		at := im.when(c.at)
 		var n int
@@ -309,6 +327,9 @@ func (im *importer) comments() error {
 			return fmt.Errorf("import: comment: %w", err)
 		}
 		r.Added++
+		if shortened {
+			r.Shortened++
+		}
 	}
 	return nil
 }
@@ -497,9 +518,11 @@ func (im *importer) leftOut() error {
 			r.Categories++
 		}
 	}
-	for _, u := range im.old.users {
-		if u.photo != "" {
-			r.Photos++
+	if im.photosDir == "" {
+		for _, u := range im.old.users {
+			if u.photo != "" {
+				r.Photos++
+			}
 		}
 	}
 	r.Subtitles = im.old.subtitles

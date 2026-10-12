@@ -14,12 +14,12 @@ import (
 )
 
 // importOldCommand brings the data of the old FranzPLAY, once, on the day
-// of the switch: "franzplay import-old [-try] old-database.sql".
+// of the switch: "franzplay import-old [-try] [-photos folder] old-database.sql".
 const importOldCommand = "import-old"
 
 // errUsage means the command was written wrongly; the flag package has
 // already said how to write it.
-var errUsage = errors.New("usage: franzplay " + importOldCommand + " [-try] old-database.sql")
+var errUsage = errors.New("usage: franzplay " + importOldCommand + " [-try] [-photos folder] old-database.sql")
 
 // importOld runs the import into the database of the data folder set in
 // FRANZPLAY_DATA_DIR, and writes its report on out.
@@ -27,6 +27,7 @@ func importOld(ctx context.Context, args []string, getenv func(string) string, o
 	flags := flag.NewFlagSet(importOldCommand, flag.ContinueOnError)
 	flags.SetOutput(out)
 	try := flags.Bool("try", false, "show what would be imported, without saving anything")
+	photos := flags.String("photos", "", "the old FranzPLAY's folder of profile photos (App_Data/User_Images)")
 	if err := flags.Parse(args); err != nil {
 		return errUsage
 	}
@@ -59,7 +60,7 @@ func importOld(ctx context.Context, args []string, getenv func(string) string, o
 		}
 	}()
 
-	report, err := oldimport.Import(ctx, db, file, oldimport.Options{Try: *try})
+	report, err := oldimport.Import(ctx, db, file, oldimport.Options{Try: *try, PhotosDir: *photos, DataDir: cfg.DataDir})
 	if err != nil {
 		return fmt.Errorf("import: %w", err)
 	}

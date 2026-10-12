@@ -16,6 +16,7 @@ type Report struct {
 	Saved    Counts // "Salvati", now in "Guarda più tardi"
 	History  Counts
 	Logins   LoginCounts
+	Photos   PhotoCounts
 	Look     LookOutcome
 	LeftOut  LeftOut
 	// Problems are rows of the old database that could not be read.
@@ -51,13 +52,20 @@ type Counts struct {
 type CommentCounts struct {
 	Counts
 	Empty     int // only spaces: left out
-	Shortened int // longer than the new limit: cut, with "…" at the end
+	Shortened int // added, but longer than the new limit: cut, with "…" at the end
 }
 
 // LoginCounts are the rows of the access log.
 type LoginCounts struct {
 	Added, Existing int
 	Old             int // older than the 90 days the new FranzPLAY keeps
+}
+
+// PhotoCounts are the profile photos.
+type PhotoCounts struct {
+	Added    int      // brought over
+	Existing int      // the person already had a photo in the new FranzPLAY: kept
+	Failed   []string // "name (file): why"
 }
 
 // LookOutcome is what happened to the old site's name and color.
@@ -124,6 +132,11 @@ func (r *Report) Write(w io.Writer) error {
 	fmt.Fprintf(&b, "Registro degli accessi: %d aggiunti, %d c'erano già, %d più vecchi di 90 giorni lasciati fuori.\n",
 		r.Logins.Added, r.Logins.Existing, r.Logins.Old)
 
+	if r.Photos.Added > 0 || r.Photos.Existing > 0 || len(r.Photos.Failed) > 0 {
+		fmt.Fprintf(&b, "Foto del profilo: %d aggiunte, %d persone ne avevano già una.\n", r.Photos.Added, r.Photos.Existing)
+		list(&b, "  Foto non portate", r.Photos.Failed)
+	}
+
 	switch r.Look {
 	case LookAdded:
 		b.WriteString("Nome e colore del sito: presi dal vecchio.\n")
@@ -140,7 +153,7 @@ func (r *Report) Write(w io.Writer) error {
 		item(&b, lo.Titles, "titoli di video cambiati a mano")
 		item(&b, lo.Categories, "nomi di categorie cambiati a mano")
 		item(&b, lo.Covers, "copertine scelte a mano")
-		item(&b, lo.Photos, "foto del profilo")
+		item(&b, lo.Photos, "foto del profilo (per portarle serve -photos, vedi la guida)")
 		item(&b, lo.Subtitles, "sottotitoli fatti da Whisper (il nuovo li può rifare)")
 	}
 

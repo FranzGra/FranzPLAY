@@ -235,7 +235,7 @@ func TestImportTwiceAddsNothing(t *testing.T) {
 		}
 	}
 	if len(r.People.Added) != 0 || len(r.People.Existing) != 3 || r.Likes.Added != 0 || r.Likes.Existing != 3 ||
-		r.Comments.Added != 0 || r.Comments.Existing != 3 || r.Saved.Added != 0 || r.Logins.Added != 0 || r.Look != LookKept {
+		r.Comments.Added != 0 || r.Comments.Existing != 3 || r.Comments.Shortened != 0 || r.Saved.Added != 0 || r.Logins.Added != 0 || r.Look != LookKept {
 		t.Errorf("second import = %+v", r)
 	}
 }

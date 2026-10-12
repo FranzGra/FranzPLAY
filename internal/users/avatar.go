@@ -3,6 +3,7 @@ package users
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"image"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 )
@@ -211,4 +213,33 @@ func (s *Service) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+// ImportAvatar makes img the profile photo of a user who has none, for the
+// import from the old FranzPLAY. img must be square and from 64 to 1024
+// pixels a side, like a photo sent by the interface. It reports false,
+// changing nothing, when the user already has a photo.
+func ImportAvatar(ctx context.Context, db *sql.DB, dataDir string, id int64, img image.Image, now time.Time) (bool, error) {
+	b := img.Bounds()
+	if err := checkAvatar(image.Config{Width: b.Dx(), Height: b.Dy()}, "jpeg"); err != nil {
+		return false, err
+	}
+	var version int64
+	if err := db.QueryRowContext(ctx, `SELECT avatar FROM users WHERE id = ?`, id).Scan(&version); err != nil {
+		return false, fmt.Errorf("import photo of user %d: %w", id, err)
+	}
+	if version != 0 {
+		return false, nil
+	}
+	var out bytes.Buffer
+	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: avatarQuality}); err != nil {
+		return false, fmt.Errorf("encode photo: %w", err)
+	}
+	if err := writeAtomically(filepath.Join(dataDir, avatarDir), strconv.FormatInt(id, 10)+".jpg", out.Bytes()); err != nil {
+		return false, fmt.Errorf("save photo: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE users SET avatar = ? WHERE id = ?`, now.UnixMilli(), id); err != nil {
+		return false, fmt.Errorf("save photo: %w", err)
+	}
+	return true, nil
 }
