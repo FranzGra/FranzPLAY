@@ -1,0 +1,13 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+}
+
+.retry {
+  height: var(--touch);
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}

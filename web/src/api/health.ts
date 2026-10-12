@@ -1,5 +1,7 @@
 // The "is the server alive?" call: GET /api/health.
 
+import { request } from "./client";
+
 export type ServerInfo = {
   status: "ok";
   version: string;
@@ -22,9 +24,5 @@ export function parseServerInfo(data: unknown): ServerInfo {
 }
 
 export async function fetchServerInfo(signal?: AbortSignal): Promise<ServerInfo> {
-  const response = await fetch("/api/health", { signal });
-  if (!response.ok) {
-    throw new Error(`health: server answered ${response.status}`);
-  }
-  return parseServerInfo(await response.json());
+  return parseServerInfo(await request("/api/health", { signal }));
 }

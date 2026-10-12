@@ -1,22 +1,60 @@
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
+import type { Account } from "../api/auth";
 import { App } from "../app/App";
 
-// renderApp shows the whole interface at the given address, without a real browser.
-export function renderApp(path = "/") {
+export const testAccount: Account = { id: 1, name: "Francesco", role: "admin", canUpload: true };
+
+// A route of the fake server: what it answers to "METHOD /path".
+type Answer = { status?: number; body?: unknown } | ((request: Request) => Response);
+export type Routes = Record<string, Answer>;
+
+// fakeServer replaces fetch() with a small pretend server. Unknown
+// addresses answer 404, like the real one. Each request is recorded.
+export function fakeServer(routes: Routes) {
+  const requests: Request[] = [];
+  const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const request = new Request(new URL(String(input), "http://franzplay.test"), init);
+    requests.push(request);
+    const answer = routes[`${request.method} ${new URL(request.url).pathname}`];
+    if (!answer) {
+      return json({ error: "not found" }, 404);
+    }
+    if (typeof answer === "function") {
+      return answer(request);
+    }
+    return answer.status === 204
+      ? new Response(null, { status: 204 })
+      : json(answer.body, answer.status);
+  });
+  return { spy, requests };
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+// signedIn are the routes of a server where Francesco is logged in.
+export function signedIn(account: Account = testAccount): Routes {
+  return {
+    "GET /api/me": { body: account },
+    "GET /api/health": { body: { status: "ok", version: "test" } },
+  };
+}
+
+// renderApp shows the whole interface at the given address, without a
+// real browser, talking to a fake server (by default: logged in).
+export function renderApp(path = "/", routes: Routes = signedIn()) {
   const user = userEvent.setup();
+  const server = fakeServer(routes);
   const result = render(
     <MemoryRouter initialEntries={[path]}>
       <App />
     </MemoryRouter>,
   );
-  return { user, ...result };
-}
-
-// mockFetchJSON makes every fetch() answer with the given JSON body.
-export function mockFetchJSON(body: unknown, status = 200) {
-  return vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValue(new Response(JSON.stringify(body), { status }));
+  return { user, server, ...result };
 }
