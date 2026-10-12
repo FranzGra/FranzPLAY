@@ -22,18 +22,25 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.DataDir != DefaultDataDir {
 		t.Errorf("DataDir = %q, want %q", cfg.DataDir, DefaultDataDir)
 	}
+	if cfg.FFprobe != DefaultFFprobe {
+		t.Errorf("FFprobe = %q, want %q", cfg.FFprobe, DefaultFFprobe)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
 	cfg, err := Load(fakeEnv(map[string]string{
 		EnvAddr:    " 127.0.0.1:9000 ",
 		EnvDataDir: "/srv/franzplay//dati/",
+		EnvFFprobe: " /opt/ffmpeg/bin/ffprobe ",
 	}))
 	if err != nil {
 		t.Fatalf("Load() unexpected error: %v", err)
 	}
 	if cfg.Addr != "127.0.0.1:9000" {
 		t.Errorf("Addr = %q, want %q", cfg.Addr, "127.0.0.1:9000")
+	}
+	if cfg.FFprobe != "/opt/ffmpeg/bin/ffprobe" {
+		t.Errorf("FFprobe = %q", cfg.FFprobe)
 	}
 	if want := filepath.Clean("/srv/franzplay/dati"); cfg.DataDir != want {
 		t.Errorf("DataDir = %q, want %q", cfg.DataDir, want)

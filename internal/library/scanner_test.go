@@ -338,3 +338,66 @@ func TestScanOfAnUnchangedLibraryReadsNoVideo(t *testing.T) {
 		t.Errorf("scan of an unchanged library opened %d videos, want 0", opened)
 	}
 }
+
+func (ts *testScanner) probeJobs(t *testing.T) map[string]string {
+	t.Helper()
+	rows, err := ts.db.Query(`SELECT v.path, j.state FROM jobs j JOIN videos v ON v.id = j.video_id WHERE j.kind = 'probe'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	out := map[string]string{}
+	for rows.Next() {
+		var path, state string
+		if err := rows.Scan(&path, &state); err != nil {
+			t.Fatal(err)
+		}
+		out[path] = state
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestScanAsksToReadNewAndChangedVideos(t *testing.T) {
+	lib := t.TempDir()
+	writeFile(t, lib, "a.mp4", "a")
+	writeFile(t, lib, "b.mp4", "b")
+	ts := newTestScanner(t, lib)
+	woken := 0
+	ts.OnNewJobs(func() { woken++ })
+
+	ts.scan(t, Report{Added: 2})
+	if got := ts.probeJobs(t); len(got) != 2 || got["a.mp4"] != "pending" || got["b.mp4"] != "pending" {
+		t.Fatalf("probe jobs = %v, want one pending per new video", got)
+	}
+	if woken != 1 {
+		t.Errorf("worker woken %d times, want 1", woken)
+	}
+
+	// The jobs are done; then a.mp4 is replaced and b.mp4 renamed.
+	if _, err := ts.db.Exec(`UPDATE jobs SET state = 'done'`); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, lib, "a.mp4", "a, new version")
+	move(t, lib, "b.mp4", "c.mp4")
+	ts.scan(t, Report{Moved: 1, Updated: 1})
+
+	got := ts.probeJobs(t)
+	if got["a.mp4"] != "pending" {
+		t.Errorf("replaced video: probe job %q, want pending", got["a.mp4"])
+	}
+	if got["c.mp4"] != "done" {
+		t.Errorf("renamed video: probe job %q, want still done (same content)", got["c.mp4"])
+	}
+
+	ts.scan(t, Report{Unchanged: 2})
+	if woken != 2 {
+		t.Errorf("worker woken %d times, want 2 (not on an unchanged scan)", woken)
+	}
+}

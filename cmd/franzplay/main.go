@@ -9,13 +9,17 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/database"
+	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/library"
+	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
 )
@@ -67,16 +71,26 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	if len(cfg.Libraries) == 0 {
 		logger.Warn("no video folder set: FranzPLAY will show no videos", "setting", config.EnvLibraries)
 	}
-	scanCtx, stopScan := context.WithCancel(ctx)
-	scanDone := make(chan struct{})
-	go func() {
-		defer close(scanDone)
-		library.NewScanner(db, cfg.Libraries, logger).Run(scanCtx, scanInterval)
-	}()
-	// The scan must end before the database closes (deferred above, so it runs after this).
+	// Background work: the job queue and the library scan. Both must end
+	// before the database closes (deferred above, so it runs after this).
+	handlers := map[jobs.Kind]jobs.Handler{}
+	if ffprobe, err := exec.LookPath(cfg.FFprobe); err != nil {
+		logger.Warn("ffprobe not found: videos will have no duration until it is installed",
+			"setting", config.EnvFFprobe, "error", err)
+	} else {
+		handlers[jobs.Probe] = media.NewProber(db, ffprobe).Handle
+	}
+	worker := jobs.NewWorker(db, handlers, logger)
+	scanner := library.NewScanner(db, cfg.Libraries, logger)
+	scanner.OnNewJobs(worker.Wake)
+
+	bgCtx, stopBackground := context.WithCancel(ctx)
+	var background sync.WaitGroup
+	background.Go(func() { worker.Run(bgCtx) })
+	background.Go(func() { scanner.Run(bgCtx, scanInterval) })
 	defer func() {
-		stopScan()
-		<-scanDone
+		stopBackground()
+		background.Wait()
 	}()
 
 	srv := &http.Server{

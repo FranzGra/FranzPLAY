@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/jobs"
 )
 
 // store reads and writes the catalog tables. All the decisions are made
@@ -96,15 +98,35 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 			titleOf(f.loc.path), categoryOf(f.loc.path), u.id); err != nil {
 			return fmt.Errorf("update video %d: %w", u.id, err)
 		}
+		switch {
+		case u.kind == replaced:
+			// New content: what we knew about the old file is no longer true.
+			if err := jobs.Enqueue(ctx, tx, u.id, jobs.Probe, false, now); err != nil {
+				return err
+			}
+		case u.wasMissing:
+			// Same content back: read it only if that never succeeded.
+			if err := jobs.Enqueue(ctx, tx, u.id, jobs.Probe, true, now); err != nil {
+				return err
+			}
+		}
 	}
 
 	for _, f := range ch.added {
-		if _, err := tx.ExecContext(ctx, `
+		res, err := tx.ExecContext(ctx, `
 			INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			f.fingerprint, f.loc.library, f.loc.path, f.size, f.modTime,
-			titleOf(f.loc.path), categoryOf(f.loc.path), stamp); err != nil {
+			titleOf(f.loc.path), categoryOf(f.loc.path), stamp)
+		if err != nil {
 			return fmt.Errorf("add video %s: %w", f.loc.path, err)
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("add video %s: %w", f.loc.path, err)
+		}
+		if err := jobs.Enqueue(ctx, tx, id, jobs.Probe, false, now); err != nil {
+			return err
 		}
 	}
 	return nil

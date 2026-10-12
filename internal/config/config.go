@@ -18,12 +18,14 @@ const (
 	EnvAddr      = "FRANZPLAY_ADDR"
 	EnvDataDir   = "FRANZPLAY_DATA_DIR"
 	EnvLibraries = "FRANZPLAY_LIBRARIES"
+	EnvFFprobe   = "FRANZPLAY_FFPROBE"
 )
 
 // Default values, used when a variable is not set.
 const (
 	DefaultAddr    = ":8090"
 	DefaultDataDir = "data"
+	DefaultFFprobe = "ffprobe" // found through PATH
 )
 
 // ErrInvalidConfig is returned when a setting has a value FranzPLAY cannot use.
@@ -39,6 +41,8 @@ type Config struct {
 	// Libraries are the video folders, as absolute paths. FranzPLAY only
 	// reads them: it never creates, renames or deletes anything inside.
 	Libraries []string
+	// FFprobe is the ffprobe program: a name looked up in PATH, or a full path.
+	FFprobe string
 }
 
 // Load builds a Config from environment variables.
@@ -47,6 +51,7 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Addr:    valueOr(getenv(EnvAddr), DefaultAddr),
 		DataDir: valueOr(getenv(EnvDataDir), DefaultDataDir),
+		FFprobe: valueOr(getenv(EnvFFprobe), DefaultFFprobe),
 	}
 
 	if err := checkAddr(cfg.Addr); err != nil {

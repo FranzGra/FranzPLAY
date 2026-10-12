@@ -1,0 +1,40 @@
+{
+    "programs": [
+
+    ],
+    "streams": [
+        {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 320,
+            "height": 240,
+            "duration": "3.000000",
+            "disposition": {
+                "attached_pic": 0
+            },
+            "tags": {
+
+            },
+            "side_data_list": [
+                {
+                    "rotation": 90
+                }
+            ]
+        },
+        {
+            "codec_name": "aac",
+            "codec_type": "audio",
+            "duration": "3.000000",
+            "disposition": {
+                "attached_pic": 0
+            },
+            "tags": {
+
+            }
+        }
+    ],
+    "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "3.000000"
+    }
+}

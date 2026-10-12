@@ -18,7 +18,7 @@ The full vision (in Italian) is in [`docs/visione.md`](docs/visione.md).
 
 ## Try it
 
-You need [Go](https://go.dev/dl/) 1.26 or newer and [Node.js](https://nodejs.org/) 22.
+You need [Go](https://go.dev/dl/) 1.26 or newer and [Node.js](https://nodejs.org/) 22. [FFmpeg](https://ffmpeg.org/) is needed to read video details.
 
 ```sh
 make web     # build the web interface
@@ -33,6 +33,7 @@ Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-p
 | `FRANZPLAY_ADDR` | `:8090` | Address and port of the web server |
 | `FRANZPLAY_DATA_DIR` | `data` | FranzPLAY's own data folder |
 | `FRANZPLAY_LIBRARIES` | none | Video folders, read-only (separated by `;` on Windows, `:` elsewhere) |
+| `FRANZPLAY_FFPROBE` | `ffprobe` | ffprobe program (a name in PATH or a full path) |
 
 ## Contributing
 
