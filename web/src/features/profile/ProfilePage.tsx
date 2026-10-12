@@ -28,7 +28,7 @@ export function ProfilePage() {
   return (
     <div className={styles.root}>
       <div className={styles.identity}>
-        <span className={styles.avatar}>
+        <span className={`glass ${styles.avatar}`}>
           <Icon name="profile" size={28} />
         </span>
         <h1 className={styles.name}>Il tuo profilo</h1>
@@ -42,7 +42,7 @@ export function ProfilePage() {
         Il caricamento dei video arriverà in una prossima versione.
       </p>
 
-      <nav className={styles.rows} aria-label="Le tue pagine">
+      <nav className={`glass ${styles.rows}`} aria-label="Le tue pagine">
         {rows.map((row) => (
           <Link key={row.to} to={row.to} className={styles.row}>
             {row.label}

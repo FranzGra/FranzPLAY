@@ -12,7 +12,8 @@ Deve girare bene su un **Raspberry Pi 4 con 2 GB** di RAM.
 
 - Server: **un solo programma in Go**, con database **SQLite**.
 - Interfaccia: **React + TypeScript** in `web/`, inclusa dentro il programma. **Tema scuro**
-  come tema principale, stile minimale alla Apple.
+  come tema principale. Stile **bello, moderno e minimale**: superfici di vetro alla Apple
+  Liquid Glass, pulizia e componenti alla shadcn/ui. **Non** Material UI.
 - Tempo reale: **SSE** (il server avvisa il browser), niente WebSocket.
 - Video: **ffmpeg / ffprobe**, lanciati solo dal programma.
 
@@ -83,7 +84,9 @@ web/src/styles/       colori, misure e caratteri, tutti in un posto solo (variab
 - Sul telefono la barra in basso ha **solo tre tasti**: Home, Playlist, Profilo.
   "Carica un video" sta nella pagina Profilo. Non esistono iscrizioni ai canali.
 - Stili con **CSS Modules** (`Nome.module.css` accanto al componente) e i colori solo da
-  `styles/global.css`.
+  `styles/global.css`. Per un pannello di vetro si usa la classe `glass`.
+- Niente Tailwind né librerie di componenti: l'aspetto di shadcn/ui si ottiene con componenti
+  nostri, così le dipendenze restano poche (regola 10).
 - Test con Vitest e Testing Library, accanto al codice (`Nome.test.tsx`).
 - Formattazione e lint con **Biome**, tipi stretti con TypeScript.
 

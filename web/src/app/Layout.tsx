@@ -42,7 +42,7 @@ export function Layout() {
 
         <search className={styles.search}>
           <form onSubmit={onSearch}>
-            <label className={styles.searchBox}>
+            <label className={`glass ${styles.searchBox}`}>
               <Icon name="search" size={18} />
               <span className="visually-hidden">Cerca</span>
               <input
@@ -59,7 +59,7 @@ export function Layout() {
           <Icon name="search" />
         </Link>
 
-        <Link to="/profilo" className={styles.avatar} aria-label="Il tuo profilo">
+        <Link to="/profilo" className={`glass ${styles.avatar}`} aria-label="Il tuo profilo">
           <Icon name="profile" size={20} />
         </Link>
       </header>
@@ -82,7 +82,7 @@ export function Layout() {
         </main>
       </div>
 
-      <nav className={styles.tabbar} aria-label="Menu del telefono">
+      <nav className={`glass ${styles.tabbar}`} aria-label="Menu del telefono">
         {tabs.map((tab) => (
           <NavLink key={tab.to} to={tab.to} end className={styles.tab}>
             <Icon name={tab.icon} size={24} />

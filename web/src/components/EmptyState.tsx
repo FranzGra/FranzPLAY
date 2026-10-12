@@ -12,7 +12,7 @@ type EmptyStateProps = {
 export function EmptyState({ title, children, headingLevel = 2 }: EmptyStateProps) {
   const Heading = headingLevel === 1 ? "h1" : "h2";
   return (
-    <div className={styles.root}>
+    <div className={`glass ${styles.root}`}>
       <Heading className={styles.title}>{title}</Heading>
       <p className={styles.text}>{children}</p>
     </div>
