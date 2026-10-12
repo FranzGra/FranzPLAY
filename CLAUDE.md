@@ -130,6 +130,7 @@ Impostazioni:
 | `FRANZPLAY_DATA_DIR` | `data` | Cartella dati di FranzPLAY |
 | `FRANZPLAY_LIBRARIES` | nessuna | Cartelle dei video, in sola lettura (separate da `;` su Windows, `:` altrove) |
 | `FRANZPLAY_FFPROBE` | `ffprobe` | Programma ffprobe (nome nel PATH o percorso completo) |
+| `FRANZPLAY_FFMPEG` | `ffmpeg` | Programma ffmpeg (nome nel PATH o percorso completo) |
 
 ## Prima di aprire una pull request
 

@@ -35,3 +35,17 @@ Durata (in secondi), larghezza e altezza **come si vedono sullo schermo** (un vi
 telefono in verticale risulta verticale), formato del video e dell'audio, tipo di file. Serviranno
 per mostrare la durata sulle copertine e per decidere se il browser può riprodurre il video così
 com'è.
+
+## Le copertine
+
+- Dopo la lettura con ffprobe, ogni video riceve una copertina JPEG larga 640 pixel (mai
+  ingrandita), salvata in `data/covers/`.
+- Se accanto al video c'è un'immagine con lo stesso nome (`mare.jpg`, `mare.png`, `mare.webp`,
+  `mare-poster.jpg`, `mare-thumb.jpg`…) si usa quella: è il modo in cui yt-dlp salva le copertine.
+  FranzPLAY la legge e basta, la copia ridotta finisce nella cartella dati.
+- Altrimenti si prende un fotogramma a un decimo del video, al massimo al primo minuto, per
+  evitare gli inizi neri e i titoli.
+- Il nome del file della copertina cambia quando cambia il contenuto del video, così il browser
+  non mostra mai la copertina vecchia.
+- La copertina si scrive in un file temporaneo e si rinomina solo a lavoro finito (regola 6).
+- All'avvio FranzPLAY cancella le copertine che nessun video usa più (video dimenticati).

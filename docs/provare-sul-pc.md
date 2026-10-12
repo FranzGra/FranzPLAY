@@ -11,8 +11,8 @@ Servono quattro programmi:
 - **Go** (versione 1.26 o più nuova): il linguaggio di FranzPLAY. Compila e avvia il programma.
 - **Node.js** (versione 22): serve solo per preparare l'interfaccia web. Chi installerà
   FranzPLAY a casa non ne avrà bisogno: l'interfaccia sarà già dentro il programma.
-- **FFmpeg**: legge durata e risoluzione dei video (con `ffprobe`) e preparerà le copertine.
-  Senza, FranzPLAY parte lo stesso ma i video restano senza durata.
+- **FFmpeg**: legge durata e risoluzione dei video (con `ffprobe`) e prepara le copertine.
+  Senza, FranzPLAY parte lo stesso ma i video restano senza durata e senza copertina.
 
 ### Windows
 
@@ -129,8 +129,13 @@ FRANZPLAY_LIBRARIES="$HOME/Video:/media/disco/Famiglia" go run ./cmd/franzplay
 
 All'avvio e poi ogni minuto FranzPLAY controlla le cartelle e scrive nel terminale cosa ha trovato,
 per esempio `library scan finished ... added=12`. Subito dopo legge durata e risoluzione di ogni
-video nuovo, uno alla volta (`job done kind=probe ...`). I video non si vedono ancora
+video nuovo e ne prepara la copertina, un lavoro alla volta (`job done kind=probe ...`,
+`job done kind=cover ...`). Le copertine finiscono in `data/covers`. I video non si vedono ancora
 nell'interfaccia: arriveranno nei prossimi passi.
+
+**Copertina tua.** Se accanto a un video c'è un'immagine con lo stesso nome (per esempio
+`mare.jpg` accanto a `mare.mp4`, oppure `mare-poster.jpg`), FranzPLAY usa quella. Altrimenti prende
+un fotogramma a un decimo del video (al massimo al primo minuto), così evita gli inizi neri.
 
 ### Cambiare porta
 
