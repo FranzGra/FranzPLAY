@@ -106,3 +106,12 @@
   opacity: 0.6;
   cursor: wait;
 }
+
+/* A link that looks like the main button, for pages without a form. */
+.asLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-on-accent);
+  text-decoration: none;
+}

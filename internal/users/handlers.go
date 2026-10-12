@@ -25,6 +25,11 @@ const maxBody = 4 << 10
 //	PUT    /api/users/{id}    administrators only {role, canUpload}
 //	DELETE /api/users/{id}    administrators only
 //	PUT    /api/users/{id}/password  administrators only {password}
+//	GET    /api/invites       administrators only
+//	POST   /api/invites       administrators only {note, canUpload}: the invite and its code
+//	DELETE /api/invites/{id}  administrators only
+//	POST   /api/join/check    does an invite code still work? {code}
+//	POST   /api/join          create an account with an invite {code, name, password}
 func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/setup", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/setup", s.handleSetup)
@@ -37,6 +42,11 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/users/{id}", s.adminOnly(s.handleUpdate))
 	mux.HandleFunc("DELETE /api/users/{id}", s.adminOnly(s.handleDelete))
 	mux.HandleFunc("PUT /api/users/{id}/password", s.adminOnly(s.handleReset))
+	mux.HandleFunc("GET /api/invites", s.adminOnly(s.handleInvites))
+	mux.HandleFunc("POST /api/invites", s.adminOnly(s.handleCreateInvite))
+	mux.HandleFunc("DELETE /api/invites/{id}", s.adminOnly(s.handleDeleteInvite))
+	mux.HandleFunc("POST /api/join/check", s.handleCheckInvite)
+	mux.HandleFunc("POST /api/join", s.handleJoin)
 }
 
 // readJSON reads a small JSON body into v. Unknown fields are refused, so
@@ -51,7 +61,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 // anything else as an internal error.
 func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, errBadName), errors.Is(err, errWeakPassword):
+	case errors.Is(err, errBadName), errors.Is(err, errWeakPassword), errors.Is(err, errBadNote):
 		respond.Error(w, r, s.logger, http.StatusBadRequest, err.Error())
 	case errors.Is(err, errBadCredentials), errors.Is(err, errBadSetupCode):
 		respond.Error(w, r, s.logger, http.StatusUnauthorized, err.Error())
@@ -60,7 +70,9 @@ func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 		respond.Error(w, r, s.logger, http.StatusTooManyRequests, err.Error())
 	case errors.Is(err, errNameTaken), errors.Is(err, errAlreadySetUp), errors.Is(err, errLastAdmin):
 		respond.Error(w, r, s.logger, http.StatusConflict, err.Error())
-	case errors.Is(err, errUserNotFound):
+	case errors.Is(err, errInviteInvalid):
+		respond.Error(w, r, s.logger, http.StatusGone, err.Error())
+	case errors.Is(err, errUserNotFound), errors.Is(err, errInviteMissing):
 		respond.Error(w, r, s.logger, http.StatusNotFound, err.Error())
 	default:
 		respond.InternalError(w, r, s.logger, err)
@@ -307,4 +319,99 @@ func (s *Service) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logger.InfoContext(r.Context(), "user deleted", "id", id, "by", admin.Name)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) handleInvites(w http.ResponseWriter, r *http.Request) {
+	list, err := s.store.listInvites(r.Context(), s.now())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	respond.JSON(w, r, s.logger, http.StatusOK, list)
+}
+
+type inviteRequest struct {
+	Note      string `json:"note"`
+	CanUpload bool   `json:"canUpload"`
+}
+
+// newInvite is a new invite with the code of its link, shown only now.
+type newInvite struct {
+	Invite
+	Code string `json:"code"`
+}
+
+func (s *Service) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
+	var req inviteRequest
+	if err := readJSON(w, r, &req); err != nil {
+		s.badRequest(w, r)
+		return
+	}
+	admin, _ := FromContext(r.Context())
+	inv, code, err := s.createInvite(r.Context(), admin, req.Note, req.CanUpload)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.logger.InfoContext(r.Context(), "invite created", "id", inv.ID, "can_upload", inv.CanUpload, "by", admin.Name)
+	respond.JSON(w, r, s.logger, http.StatusCreated, newInvite{Invite: inv, Code: code})
+}
+
+func (s *Service) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respond.Error(w, r, s.logger, http.StatusNotFound, errInviteMissing.Error())
+		return
+	}
+	if err := s.store.deleteInvite(r.Context(), id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	admin, _ := FromContext(r.Context())
+	s.logger.InfoContext(r.Context(), "invite deleted", "id", id, "by", admin.Name)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type checkInviteRequest struct {
+	Code string `json:"code"`
+}
+
+func (s *Service) handleCheckInvite(w http.ResponseWriter, r *http.Request) {
+	var req checkInviteRequest
+	if err := readJSON(w, r, &req); err != nil {
+		s.badRequest(w, r)
+		return
+	}
+	if err := s.checkInvite(r.Context(), req.Code); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type joinRequest struct {
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
+	var req joinRequest
+	if err := readJSON(w, r, &req); err != nil {
+		s.badRequest(w, r)
+		return
+	}
+	a, err := s.join(r.Context(), req.Code, req.Name, req.Password)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	token, err := s.startSession(r.Context(), a)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.logger.InfoContext(r.Context(), "joined with an invite", "name", a.Name)
+	setCookie(w, r, token)
+	respond.JSON(w, r, s.logger, http.StatusCreated, a)
 }

@@ -15,10 +15,12 @@ const cookieName = "franzplay_session"
 
 // publicAPI are the API addresses that work without logging in.
 var publicAPI = map[string]bool{
-	"/api/health": true,
-	"/api/setup":  true,
-	"/api/login":  true,
-	"/api/me":     true, // answers 401 itself, so the interface knows to show the login
+	"/api/health":     true,
+	"/api/setup":      true,
+	"/api/login":      true,
+	"/api/join":       true, // with an invite code, instead of a login
+	"/api/join/check": true,
+	"/api/me":         true, // answers 401 itself, so the interface knows to show the login
 }
 
 type accountKey struct{}

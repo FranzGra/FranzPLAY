@@ -8,6 +8,7 @@ import styles from "./Admin.module.css";
 // sections are the pages of the administration, in the order shown.
 const sections = [
   { to: "persone", label: "Persone" },
+  { to: "inviti", label: "Inviti" },
   { to: "video", label: "Video" },
   { to: "commenti", label: "Commenti" },
   { to: "cartelle", label: "Cartelle" },

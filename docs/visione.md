@@ -131,7 +131,7 @@ Si costruisce **una tappa alla volta**. Ogni tappa finisce con qualcosa che si p
 - **Copie compatibili**: per i video che il browser non legge, il programma ne prepara una copia
   nella sua area, uno alla volta, quando la macchina è libera.
 - **Condividere con amici e familiari**: inviti per creare un account, e video o playlist
-  visibili solo a chi scegli tu.
+  visibili solo a chi scegli tu. ✅ Gli inviti sono fatti (12/10/2026, `docs/decisioni/0010-inviti.md`).
 - **Caricare video dal browser**: ogni utente abilitato carica i suoi video nel suo canale, da una
   pagina simile a quella di YouTube, e riceve like e commenti (sezione 5 bis).
 - **Importare i dati dalla versione vecchia** (utenti, like, cronologia, commenti).

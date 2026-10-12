@@ -1,11 +1,13 @@
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Route, Routes, useLocation } from "react-router";
 import { AdminPage } from "../features/admin/AdminPage";
 import { CommentsPage } from "../features/admin/CommentsPage";
 import { FoldersPage } from "../features/admin/FoldersPage";
+import { InvitesPage } from "../features/admin/InvitesPage";
 import { JobsPage } from "../features/admin/JobsPage";
 import { PeoplePage } from "../features/admin/PeoplePage";
 import { VideosPage } from "../features/admin/VideosPage";
 import { AuthPage } from "../features/auth/AuthPage";
+import { JoinPage } from "../features/auth/JoinPage";
 import { ComingSoonPage } from "../features/ComingSoonPage";
 import { CategoriesPage } from "../features/categories/CategoriesPage";
 import { CategoryPage } from "../features/categories/CategoryPage";
@@ -32,6 +34,11 @@ export function App() {
 
 function Gate() {
   const { state } = useAuth();
+  // An invite link opens its own page, logged in or not.
+  const invite = useLocation().pathname === "/invito";
+  if (invite && (state.kind === "signed-out" || state.kind === "signed-in")) {
+    return <JoinPage />;
+  }
   switch (state.kind) {
     case "loading":
       return <div aria-busy="true" />;
@@ -62,6 +69,7 @@ function Pages() {
         <Route path="admin" element={<AdminPage />}>
           <Route index element={<Navigate to="persone" replace />} />
           <Route path="persone" element={<PeoplePage />} />
+          <Route path="inviti" element={<InvitesPage />} />
           <Route path="video" element={<VideosPage />} />
           <Route path="commenti" element={<CommentsPage />} />
           <Route path="cartelle" element={<FoldersPage />} />
