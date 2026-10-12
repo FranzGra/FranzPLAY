@@ -171,6 +171,10 @@ telefono è nella pagina Profilo). Nella sezione **Persone** aggiungi familiari 
 una password, decidi chi può caricare video e chi è amministratore, dai una password nuova a chi
 l'ha dimenticata o togli una persona. Deve restare sempre almeno un amministratore.
 
+Nella sezione **Cartelle** vedi le cartelle dei video, quanti video ha ognuna e com'è andato
+l'ultimo controllo. Se una cartella non si legge, o è vuota ma prima aveva dei video (disco
+staccato?), te lo dice in rosso. Con **Controlla adesso** non aspetti il minuto.
+
 Nella sezione **Lavori** vedi cosa FranzPLAY sta facendo da solo (leggere i video, copertine,
 anteprime): quello in corso, quanti aspettano, quanti sono fatti e quali sono falliti, con il
 messaggio d'errore. Con **Riprova** (o **Riprova tutti**) li rimetti in coda. La pagina si aggiorna

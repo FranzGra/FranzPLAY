@@ -23,7 +23,7 @@ const (
 
 // Routes adds the event stream to mux, for logged-in people:
 //
-//	GET /api/events  text/event-stream: "event: library", "event: jobs"
+//	GET /api/events  text/event-stream: "event: library", "jobs", "scan"
 func (h *Hub) Routes(logger *slog.Logger) func(mux *http.ServeMux) {
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/events", func(w http.ResponseWriter, r *http.Request) {

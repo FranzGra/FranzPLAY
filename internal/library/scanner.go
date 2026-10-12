@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -41,6 +42,11 @@ type Scanner struct {
 	open      func(dir string) fs.FS
 	newJobs   func()
 	changed   func()
+	scanning  func(bool)
+	asked     chan struct{} // a scan asked for by the administrator
+
+	mu     sync.Mutex
+	status Status
 }
 
 // NewScanner returns a scanner for the given video folders.
@@ -53,6 +59,9 @@ func NewScanner(db *sql.DB, libraries []string, logger *slog.Logger) *Scanner {
 		open:      os.DirFS, // read-only view of the folder
 		newJobs:   func() {},
 		changed:   func() {},
+		scanning:  func(bool) {},
+		asked:     make(chan struct{}, 1),
+		status:    Status{Folders: map[string]FolderState{}},
 	}
 }
 
@@ -64,6 +73,32 @@ func (s *Scanner) OnNewJobs(f func()) { s.newJobs = f }
 // usually telling the open pages.
 func (s *Scanner) OnChange(f func()) { s.changed = f }
 
+// OnScanning sets what to call when a scan starts (true) and ends
+// (false), so the administrator's page can follow it.
+func (s *Scanner) OnScanning(f func(bool)) { s.scanning = f }
+
+// ScanNow asks Run for a scan as soon as possible, without waiting for
+// the interval. It never blocks: asking twice before the scan starts
+// gives one scan.
+func (s *Scanner) ScanNow() {
+	select {
+	case s.asked <- struct{}{}:
+	default:
+	}
+}
+
+// Status returns what the scanner is doing and how the last scan went.
+func (s *Scanner) Status() Status {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.status
+	st.Folders = make(map[string]FolderState, len(s.status.Folders))
+	for k, v := range s.status.Folders {
+		st.Folders[k] = v
+	}
+	return st
+}
+
 // Run scans once right away, then again at every interval, until ctx is
 // cancelled. A failed scan is logged and retried at the next interval.
 func (s *Scanner) Run(ctx context.Context, interval time.Duration) {
@@ -71,7 +106,17 @@ func (s *Scanner) Run(ctx context.Context, interval time.Duration) {
 	defer ticker.Stop()
 	for {
 		start := time.Now()
+		s.setScanning(true)
 		report, err := s.Scan(ctx)
+		took := time.Since(start)
+		s.mu.Lock()
+		s.status.Scanning = false
+		s.status.Last = &ScanResult{At: start, Took: took, Report: report}
+		if err != nil {
+			s.status.Last.Err = err.Error()
+		}
+		s.mu.Unlock()
+		s.scanning(false)
 		switch {
 		case ctx.Err() != nil:
 			return
@@ -88,8 +133,17 @@ func (s *Scanner) Run(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		case <-s.asked:
+			ticker.Reset(interval)
 		}
 	}
+}
+
+func (s *Scanner) setScanning(on bool) {
+	s.mu.Lock()
+	s.status.Scanning = on
+	s.mu.Unlock()
+	s.scanning(on)
 }
 
 // Scan compares the video folders with the catalog once and saves the result.
@@ -111,6 +165,12 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	}
 
 	// 1. List every library.
+	folderStates := make(map[string]FolderState, len(s.libraries))
+	defer func() {
+		s.mu.Lock()
+		s.status.Folders = folderStates
+		s.mu.Unlock()
+	}()
 	folders := make(map[int64]fs.FS, len(ids))
 	trusted := make(map[int64]bool, len(ids))
 	var files []found
@@ -124,10 +184,16 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 				"folder", dir, "error", l.err())
 		}
 		trusted[id] = libraryTrusted(l.complete(), len(l.files), presentPerLibrary[id])
+		var state FolderState
+		if !l.complete() {
+			state.Problem = l.problems[0].Error()
+		}
 		if l.complete() && !trusted[id] {
+			state.LooksUnplugged = true
 			s.logger.WarnContext(ctx, "video folder is empty but had videos: is the disk mounted? Nothing will be marked missing",
 				"folder", dir, "videos", presentPerLibrary[id])
 		}
+		folderStates[dir] = state
 		files = append(files, l.files...)
 	}
 

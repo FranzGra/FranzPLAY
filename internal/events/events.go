@@ -24,6 +24,9 @@ const (
 	// Jobs: the queue of heavy work moved (a job started, ended or
 	// failed). The administrator's page follows it.
 	Jobs Kind = "jobs"
+	// Scan: a check of the video folders started or ended. The
+	// administrator's page follows it.
+	Scan Kind = "scan"
 )
 
 // maxListeners is how many pages can listen at once. Each costs a
