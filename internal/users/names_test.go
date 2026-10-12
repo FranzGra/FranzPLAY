@@ -21,7 +21,7 @@ func TestCleanName(t *testing.T) {
 		{"abcdefghijklmnopqrstuvwxyzabcdef", "abcdefghijklmnopqrstuvwxyzabcdef", true},
 		{"abcdefghijklmnopqrstuvwxyzabcdefg", "", false},
 	} {
-		got, err := cleanName(tc.in)
+		got, err := CleanName(tc.in)
 		if (err == nil) != tc.ok || got != tc.want {
 			t.Errorf("cleanName(%q) = %q, %v; want %q, ok=%v", tc.in, got, err, tc.want, tc.ok)
 		}

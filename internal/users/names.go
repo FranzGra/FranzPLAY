@@ -28,9 +28,9 @@ func parseRole(s string) (Role, bool) {
 // errBadName means a user name cannot be used.
 var errBadName = errors.New("the name must be from 3 to 32 letters, numbers, spaces, dots, dashes or underscores")
 
-// cleanName checks a user name and removes spaces around it. Letters with
+// CleanName checks a user name and removes spaces around it. Letters with
 // accents are welcome ("Niccolò"); symbols that could confuse are not.
-func cleanName(name string) (string, error) {
+func CleanName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	n := utf8.RuneCountInString(name)
 	if n < 3 || n > 32 {

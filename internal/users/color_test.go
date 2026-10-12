@@ -24,7 +24,7 @@ func TestParseColor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			got, err := parseColor(tt.in)
+			got, err := ParseColor(tt.in)
 			if got != tt.want || !errors.Is(err, tt.err) {
 				t.Fatalf("parseColor(%q) = %q, %v; want %q, %v", tt.in, got, err, tt.want, tt.err)
 			}

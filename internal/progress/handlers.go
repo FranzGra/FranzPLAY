@@ -110,7 +110,7 @@ func (h handlers) save(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	m, err := mark(req.Position, duration)
+	m, err := Decide(req.Position, duration)
 	if err != nil {
 		respond.Error(w, r, h.logger, http.StatusBadRequest, err.Error())
 		return
