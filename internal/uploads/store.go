@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
+	"github.com/FranzGra/FranzPLAY/internal/sharing"
 )
 
 // upload is a video on its way from a browser, as the API shows it.
@@ -86,6 +87,15 @@ func (s store) start(ctx context.Context, user, quota int64, now time.Time,
 	id, err := res.LastInsertId()
 	if err != nil {
 		return upload{}, fmt.Errorf("start upload: %w", err)
+	}
+	if err := sharing.Known(ctx, tx, clean.SharedWith); err != nil {
+		return upload{}, err
+	}
+	for _, person := range clean.SharedWith {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO upload_shares (upload_id, user_id) VALUES (?, ?)`,
+			id, person); err != nil {
+			return upload{}, fmt.Errorf("start upload: %w", err)
+		}
 	}
 	return upload{ID: id, Name: clean.Name, Title: clean.Title, Size: clean.Size, Private: clean.Private, user: user}, nil
 }
@@ -230,6 +240,11 @@ func (s store) finish(ctx context.Context, f finished, now time.Time, place func
 	// for the browsers when one is needed.
 	if err := jobs.Enqueue(ctx, tx, id, jobs.Probe, false, now); err != nil {
 		return 0, err
+	}
+	// The people chosen for the upload now see the video.
+	if _, err := tx.ExecContext(ctx, `INSERT INTO video_shares (video_id, user_id)
+		SELECT ?, user_id FROM upload_shares WHERE upload_id = ?`, id, u.ID); err != nil {
+		return 0, fmt.Errorf("finish upload: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM uploads WHERE id = ?`, u.ID); err != nil {
 		return 0, fmt.Errorf("finish upload: %w", err)

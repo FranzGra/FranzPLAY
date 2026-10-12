@@ -2,9 +2,11 @@ package uploads
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/sharing"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
@@ -50,9 +52,23 @@ func TestCheck(t *testing.T) {
 		"over quota": {
 			uploader, newUpload{Name: "a.mp4", Size: 1}, Space{Quota: 100, Used: 200}, 0, newUpload{}, errNoSpace,
 		},
+		"shared with some people": {
+			uploader, newUpload{Name: "a.mp4", Size: 1, Private: true, SharedWith: []int64{9, 3, 9}}, room, 0,
+			newUpload{Name: "a.mp4", Title: "a", Size: 1, Private: true, SharedWith: []int64{3, 9}}, nil,
+		},
+		"shared with nobody": {
+			uploader, newUpload{Name: "a.mp4", Size: 1, Private: true, SharedWith: []int64{}}, room, 0,
+			newUpload{Name: "a.mp4", Title: "a", Size: 1, Private: true}, nil,
+		},
+		"shared but for everybody": {
+			uploader, newUpload{Name: "a.mp4", Size: 1, SharedWith: []int64{3}}, room, 0, newUpload{}, sharing.ErrNotPrivate,
+		},
+		"shared with myself": {
+			uploader, newUpload{Name: "a.mp4", Size: 1, Private: true, SharedWith: []int64{7}}, room, 0, newUpload{}, sharing.ErrBadPeople,
+		},
 	} {
 		got, err := check(tc.account, tc.req, tc.space, tc.waiting)
-		if !errors.Is(err, tc.err) || got != tc.want {
+		if !errors.Is(err, tc.err) || !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: check = %+v, %v; want %+v, %v", name, got, err, tc.want, tc.err)
 		}
 	}

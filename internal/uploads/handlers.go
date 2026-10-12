@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/FranzGra/FranzPLAY/internal/respond"
+	"github.com/FranzGra/FranzPLAY/internal/sharing"
 )
 
 // maxBody is the largest JSON body accepted by these routes.
@@ -153,6 +154,9 @@ func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 		{errDuplicate, http.StatusConflict},
 		{errBigPiece, http.StatusRequestEntityTooLarge},
 		{errNoLength, http.StatusLengthRequired},
+		{sharing.ErrBadPeople, http.StatusBadRequest},
+		{sharing.ErrUnknownPerson, http.StatusBadRequest},
+		{sharing.ErrNotPrivate, http.StatusBadRequest},
 	} {
 		if errors.Is(err, known.err) {
 			if err != known.err { //nolint:errorlint // on purpose: is it this error and nothing more?

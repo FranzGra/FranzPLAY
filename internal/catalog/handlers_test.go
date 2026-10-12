@@ -779,3 +779,84 @@ func TestVideosSayWhoUploadedThem(t *testing.T) {
 		t.Errorf("uploader after leaving = %+v", v.Uploader)
 	}
 }
+
+func TestSharedVideoOnlyForTheChosenPeople(t *testing.T) {
+	s := newSite(t)
+	for _, name := range []string{"Giulia", "Marco", "Anna"} {
+		if _, err := s.db.Exec(`INSERT INTO users (name, password_hash, role, created_at) VALUES (?, 'x', 'user', 1)`,
+			name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const giulia, marco, anna = 1, 2, 3
+	s.addVideo(t, "public.mp4", "pub", "Mare", 1, true)
+	shared := s.addVideo(t, "shared.mp4", "secret", "Mare", 2, true)
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = ?, private = 1 WHERE id = ?`, giulia, shared); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO video_shares (video_id, user_id) VALUES (?, ?)`, shared, marco); err != nil {
+		t.Fatal(err)
+	}
+	page := "/api/videos/" + strconv.FormatInt(shared, 10)
+
+	// Marco opens it and plays it; Anna does not know it is there.
+	rec := s.getAs(t, marco, page)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Marco opens the video shared with him: status %d", rec.Code)
+	}
+	if v := decode[Video](t, rec); !v.Private || v.SharedWith != nil {
+		t.Errorf("Marco sees %+v, want private and not who else sees it", v)
+	}
+	if rec := s.getAs(t, marco, page+"/stream"); rec.Code != http.StatusOK || rec.Body.String() != "secret" {
+		t.Errorf("Marco plays it: status %d, body %q", rec.Code, rec.Body)
+	}
+	for _, target := range []string{page, page + "/stream", page + "/subtitles"} {
+		if rec := s.getAs(t, anna, target); rec.Code != http.StatusNotFound {
+			t.Errorf("Anna asks %s: status %d, want 404", target, rec.Code)
+		}
+	}
+
+	// Giulia, who uploaded it, sees who it is shared with.
+	if v := decode[Video](t, s.getAs(t, giulia, page)); len(v.SharedWith) != 1 || v.SharedWith[0].Name != "Marco" {
+		t.Errorf("Giulia sees shared with %+v, want Marco", v.SharedWith)
+	}
+
+	// In no ordinary list, not even Marco's; in his list of shared videos.
+	for _, target := range []string{"/api/videos", "/api/videos?q=Mare", "/api/videos?uploader=1", "/api/videos?order=random&seed=3"} {
+		for _, v := range decode[listResponse](t, s.getAs(t, marco, target)).Videos {
+			if v.ID == shared {
+				t.Errorf("%s shows the shared video", target)
+			}
+		}
+	}
+	if cats := decode[[]Category](t, s.getAs(t, marco, "/api/categories")); len(cats) != 1 || cats[0].Videos != 1 {
+		t.Errorf("categories = %+v", cats)
+	}
+	if list := decode[listResponse](t, s.getAs(t, marco, "/api/videos?shared=1")); list.Total != 1 || list.Videos[0].ID != shared {
+		t.Errorf("shared with Marco = %+v, want the shared video", list)
+	}
+	for _, who := range []int64{giulia, anna} {
+		if list := decode[listResponse](t, s.getAs(t, who, "/api/videos?shared=1")); list.Total != 0 {
+			t.Errorf("shared with %d = %+v, want none", who, list)
+		}
+	}
+
+	// Hidden by an administrator: gone for Marco too.
+	if _, err := s.db.Exec(`UPDATE videos SET hidden_at = 1 WHERE id = ?`, shared); err != nil {
+		t.Fatal(err)
+	}
+	if rec := s.getAs(t, marco, page); rec.Code != http.StatusNotFound {
+		t.Errorf("hidden: Marco gets status %d, want 404", rec.Code)
+	}
+	if list := decode[listResponse](t, s.getAs(t, marco, "/api/videos?shared=1")); list.Total != 0 {
+		t.Errorf("hidden: shared with Marco = %+v, want none", list)
+	}
+
+	// Made public again by Giulia: the shares do not matter any more.
+	if _, err := s.db.Exec(`UPDATE videos SET hidden_at = NULL, private = 0 WHERE id = ?`, shared); err != nil {
+		t.Fatal(err)
+	}
+	if list := decode[listResponse](t, s.getAs(t, marco, "/api/videos?shared=1")); list.Total != 0 {
+		t.Errorf("public: shared with Marco = %+v, want none", list)
+	}
+}

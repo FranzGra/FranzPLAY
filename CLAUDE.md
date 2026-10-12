@@ -65,6 +65,7 @@ internal/catalog/   l'API dei video: elenco, un video, categorie, copertine, str
 internal/users/     utenti, accesso e sessioni; protegge tutta l'API
 internal/channels/  il canale di ogni persona: nome e playlist pubbliche
 internal/uploads/   video caricati dal browser, a pezzi, nella cartella dati
+internal/sharing/   condividere un video o una playlist solo con alcune persone
 internal/online/    fonti su internet (YouTube, TMDB, ThePornDB) per copertine e titoli, spente se l'admin non le accende
 internal/recommend/ i video consigliati: regole semplici a punti, ognuna col suo perché
 internal/translate/ traduce i sottotitoli con un server LibreTranslate, se l'admin ne indica uno
