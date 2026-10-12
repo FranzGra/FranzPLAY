@@ -1,0 +1,393 @@
+/* The player: a black 16:9 box with the controls floating on the picture. */
+.root {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-l);
+  background: #000;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.root:fullscreen {
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+.root[data-controls="hidden"] {
+  cursor: none;
+}
+
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.surface {
+  position: absolute;
+  inset: 0;
+  touch-action: manipulation;
+}
+
+/* The big round button before the video starts. */
+.bigPlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 84px;
+  height: 84px;
+  padding-left: 6px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.45);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: #fff;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: transform 150ms;
+}
+
+.bigPlay:hover {
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+/* What a key or a double tap just did, shown for a moment in the middle. */
+.flash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.5);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: flash 600ms ease-out forwards;
+}
+
+@keyframes flash {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+}
+
+.spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border: 4px solid rgb(255 255 255 / 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash {
+    animation-duration: 1ms;
+  }
+}
+
+.failure {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  background: rgb(0 0 0 / 0.75);
+  text-align: center;
+}
+
+.failureTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.failureText {
+  max-width: 460px;
+  margin: 0;
+  color: rgb(255 255 255 / 0.75);
+  font-size: 14px;
+}
+
+/* The bottom part: timeline and buttons, over a dark shade for contrast. */
+.controls {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 48px 16px 8px;
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.75));
+  transition: opacity 200ms;
+}
+
+.root[data-controls="hidden"] .controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.timeline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.timeline:focus-visible {
+  outline-offset: 0;
+}
+
+.track {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.25);
+  overflow: hidden;
+  transition: height 120ms;
+}
+
+/* Bigger under the pointer, so it is easy to hit. */
+.timeline[data-active] .track {
+  height: 8px;
+}
+
+.buffered,
+.hovered,
+.played {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.buffered {
+  background: rgb(255 255 255 / 0.35);
+}
+
+.hovered {
+  background: rgb(255 255 255 / 0.3);
+}
+
+.played {
+  background: var(--color-accent);
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 3px rgb(41 151 255 / 0.3);
+  transform: translateY(-50%) scale(0.75);
+  transition: transform 120ms;
+}
+
+.timeline[data-active] .thumb {
+  transform: translateY(-50%) scale(1);
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 26px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.8);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.button:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+}
+
+/* The volume bar opens next to the speaker on computers. */
+.volumeSlider {
+  width: 0;
+  opacity: 0;
+  accent-color: #fff;
+  transition:
+    width 150ms,
+    opacity 150ms;
+}
+
+.volume:hover .volumeSlider,
+.volumeSlider:focus-visible {
+  width: 80px;
+  margin: 0 8px 0 2px;
+  opacity: 1;
+}
+
+.time {
+  margin-left: 8px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.total {
+  color: rgb(255 255 255 / 0.7);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* The settings panel opens above the buttons, and never taller than the
+   player: it scrolls when the player is small. */
+.menu {
+  position: absolute;
+  right: 12px;
+  bottom: 72px;
+  z-index: 2;
+  width: 240px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 84px);
+  padding: 6px;
+  overflow-y: auto;
+  border-radius: var(--radius-m);
+  background: rgb(24 24 27 / 0.85);
+}
+
+.menuRow,
+.menuBack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuRow:hover,
+.menuBack:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.menuRow {
+  justify-content: space-between;
+}
+
+.menuBack {
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-s) var(--radius-s) 0 0;
+  font-weight: 600;
+}
+
+.menuValue {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgb(255 255 255 / 0.7);
+}
+
+.menuList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menuCheck {
+  display: flex;
+  width: 16px;
+}
+
+.menuLabel {
+  flex: 1;
+}
+
+@media (max-width: 599px) {
+  .root {
+    border-radius: 0;
+  }
+
+  .controls {
+    padding: 32px 8px 4px;
+  }
+
+  .menu {
+    bottom: 64px;
+    max-height: calc(100% - 72px);
+  }
+
+  .button {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* On phones the volume is the phone's own buttons. */
+  .volume {
+    display: none;
+  }
+}

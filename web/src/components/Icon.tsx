@@ -57,6 +57,85 @@ const paths = {
     </>
   ),
   play: <path d="M7 4v16l13-8z" fill="currentColor" />,
+  pause: (
+    <>
+      <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" />
+      <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
+    </>
+  ),
+  back10: (
+    <>
+      <path d="M4 12a8 8 0 1 0 2.4-5.7" />
+      <path d="M4 3v4h4" />
+      <text
+        x="12"
+        y="15.5"
+        fontSize="7.5"
+        textAnchor="middle"
+        fill="currentColor"
+        stroke="none"
+        fontWeight="700"
+      >
+        10
+      </text>
+    </>
+  ),
+  forward10: (
+    <>
+      <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+      <path d="M20 3v4h-4" />
+      <text
+        x="12"
+        y="15.5"
+        fontSize="7.5"
+        textAnchor="middle"
+        fill="currentColor"
+        stroke="none"
+        fontWeight="700"
+      >
+        10
+      </text>
+    </>
+  ),
+  volume: (
+    <>
+      <path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor" />
+      <path d="M16 9a4 4 0 0 1 0 6" />
+      <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+    </>
+  ),
+  muted: (
+    <>
+      <path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor" />
+      <path d="M17 9.5l5 5" />
+      <path d="M22 9.5l-5 5" />
+    </>
+  ),
+  fullscreen: (
+    <>
+      <path d="M4 9V4h5" />
+      <path d="M20 9V4h-5" />
+      <path d="M4 15v5h5" />
+      <path d="M20 15v5h-5" />
+    </>
+  ),
+  exitFullscreen: (
+    <>
+      <path d="M9 4v5H4" />
+      <path d="M15 4v5h5" />
+      <path d="M9 20v-5H4" />
+      <path d="M15 20v-5h5" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+    </>
+  ),
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  chevronLeft: <path d="M15 5l-7 7 7 7" />,
+  chevronRight: <path d="M9 5l7 7-7 7" />,
 } as const;
 
 export type IconName = keyof typeof paths;
