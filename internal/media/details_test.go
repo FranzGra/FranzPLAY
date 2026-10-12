@@ -65,14 +65,19 @@ func TestDetailsFromTheFileOfYtDlp(t *testing.T) {
 }
 
 func TestDetailsFileThatCannotBeRead(t *testing.T) {
-	for name, content := range map[string]string{
-		"not json": "<html>",
-		"too big":  `{"description": "` + strings.Repeat("x", video.MaxInfoJSONSize) + `"}`,
-	} {
-		t.Run(name, func(t *testing.T) {
+	tests := []struct {
+		name, file, content string
+	}{
+		{"not json", "a.info.json", "<html>"},
+		{"too big", "a.info.json", `{"description": "` + strings.Repeat("x", video.MaxInfoJSONSize) + `"}`},
+		{"not xml", "a.nfo", "<movie><title>"},
+		{"nfo too big", "a.nfo", "<movie><plot>" + strings.Repeat("x", video.MaxNFOSize) + "</plot></movie>"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			writeTestFile(t, root, "a.mp4", "video")
-			writeTestFile(t, root, "a.info.json", content)
+			writeTestFile(t, root, tt.file, tt.content)
 			db, id := catalog(t, root, "a.mp4")
 			err := NewDetailer(db).Handle(context.Background(), id)
 			if !errors.Is(err, jobs.ErrPermanent) {
@@ -86,5 +91,43 @@ func writeTestFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDetailsFromTheFileOfKodi(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "viaggio.mkv", "video")
+	writeTestFile(t, root, "viaggio.nfo",
+		`<movie><title>Il viaggio</title><plot>Fino al mare.</plot><director>Anna</director><premiered>2001-05-20</premiered></movie>`)
+	db, id := catalog(t, root, "viaggio.mkv")
+	before := listDir(t, root)
+
+	if err := NewDetailer(db).Handle(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	got := readShown(t, db, id)
+	if got.shownTitle != "Il viaggio" || got.description.String != "Fino al mare." ||
+		got.author.String != "Anna" || got.day.String != "2001-05-20" {
+		t.Errorf("details = %+v", got)
+	}
+	if after := listDir(t, root); !slices.Equal(after, before) {
+		t.Errorf("video folder = %v, want untouched %v", after, before)
+	}
+}
+
+func TestDetailsFromBothFiles(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "gita.mp4", "video")
+	writeTestFile(t, root, "gita.info.json", `{"title": "Dal file di yt-dlp", "upload_date": "20190315"}`)
+	writeTestFile(t, root, "gita.nfo", `<episodedetails><title>Dal file di Kodi</title><showtitle>Famiglia Rossi</showtitle></episodedetails>`)
+	db, id := catalog(t, root, "gita.mp4")
+
+	if err := NewDetailer(db).Handle(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	// yt-dlp's file comes first; Kodi's fills what it does not say.
+	got := readShown(t, db, id)
+	if got.shownTitle != "Dal file di yt-dlp" || got.author.String != "Famiglia Rossi" || got.day.String != "2019-03-15" {
+		t.Errorf("details = %+v", got)
 	}
 }

@@ -25,6 +25,21 @@ un file `.info.json` con il titolo vero, la descrizione, il canale e il giorno d
 - Un file che non si capisce (non è JSON, o è più grande di 16 MB) è un errore **permanente**,
   visibile in Amministrazione › Lavori: riprovare leggerebbe lo stesso file.
 
+## Aggiunta: i file `.nfo` (12 ottobre 2026)
+
+Lo stesso lavoro legge anche `<nome del video>.nfo`, il file di **Kodi** e **Jellyfin**.
+
+- Si leggono i file su **un solo video**: `<movie>` (film), `<episodedetails>` (episodio; i
+  programmi che salvano canali YouTube mettono qui il canale come «serie») e `<musicvideo>`.
+- Titolo da `<title>`; descrizione da `<plot>`, se manca da `<outline>`; autore dal primo che c'è
+  fra canale (`<showtitle>`), cantante (`<artist>`), regista (`<director>`) e studio (`<studio>`);
+  giorno da `<premiered>`, `<aired>` o `<releasedate>`. Stessa pulizia e stessi limiti di sopra.
+- Se ci sono **tutti e due** i file, vince il `.info.json` (è più preciso); il `.nfo` riempie solo
+  quello che manca.
+- Un `.nfo` con solo un indirizzo web (Kodi lo permette, per cercare da sé su internet) non dice
+  niente del video: nessuna informazione, nessun errore. Un `.nfo` rotto, o più grande di 1 MB, è
+  un errore permanente come sopra.
+
 ## Perché così
 
 **Solo lettura** (regola 1): il file si legge e basta. Funziona **senza internet**. Leggere un
@@ -35,7 +50,6 @@ piccolo file è istantaneo: il lavoro va subito dopo la lettura del video, prima
 
 ## Cosa resta per dopo
 
-- I file `.nfo` (quelli di Kodi e Jellyfin), con lo stesso lavoro.
 - Le fonti su internet (decisione E), solo se l'amministratore le accende.
 - Accorgersi da solo quando un `.info.json` viene aggiunto dopo il video. Per ora si preme
   «Rifai copertina» in Amministrazione › Video.
