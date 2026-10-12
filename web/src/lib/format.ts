@@ -69,3 +69,17 @@ export function formatVideos(n: number): string {
 export function formatDate(date: Date): string {
   return date.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 }
+
+// formatBytes says how big a file or a space is, as people say it:
+// "750 MB", "1,5 GB", "10 GB". Steps of 1024, as computers count.
+export function formatBytes(bytes: number): string {
+  const units = ["byte", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  const shown = value >= 10 || unit === 0 ? Math.round(value) : Math.round(value * 10) / 10;
+  return `${shown.toLocaleString("it-IT")} ${units[unit]}`;
+}

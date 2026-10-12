@@ -37,28 +37,34 @@ describe("request", () => {
 });
 
 describe("parseAccount", () => {
+  const giulia = {
+    id: 3,
+    name: "Giulia",
+    role: "user",
+    canUpload: false,
+    uploadQuota: 10737418240,
+    accentColor: "",
+    avatar: 0,
+  };
+
   it("accepts a valid user", () => {
-    const a = { id: 3, name: "Giulia", role: "user", canUpload: false, accentColor: "", avatar: 0 };
-    expect(parseAccount(a)).toEqual(a);
+    expect(parseAccount(giulia)).toEqual(giulia);
   });
 
   it.each([
     ["null", null],
-    ["no id", { name: "G", role: "user", canUpload: false }],
-    ["zero id", { id: 0, name: "G", role: "user", canUpload: false }],
-    ["empty name", { id: 1, name: "", role: "user", canUpload: false }],
-    ["unknown role", { id: 1, name: "G", role: "root", canUpload: false }],
-    [
-      "text canUpload",
-      { id: 1, name: "G", role: "user", canUpload: "yes", accentColor: "", avatar: 0 },
-    ],
-    ["no accentColor", { id: 1, name: "G", role: "user", canUpload: false, avatar: 0 }],
-    ["no avatar", { id: 1, name: "G", role: "user", canUpload: false, accentColor: "" }],
-    [
-      "negative avatar",
-      { id: 1, name: "G", role: "user", canUpload: false, accentColor: "", avatar: -1 },
-    ],
-    ["not a color", { id: 1, name: "G", role: "user", canUpload: false, accentColor: "red" }],
+    ["no id", { ...giulia, id: undefined }],
+    ["zero id", { ...giulia, id: 0 }],
+    ["empty name", { ...giulia, name: "" }],
+    ["unknown role", { ...giulia, role: "root" }],
+    ["text canUpload", { ...giulia, canUpload: "yes" }],
+    ["no uploadQuota", { ...giulia, uploadQuota: undefined }],
+    ["negative uploadQuota", { ...giulia, uploadQuota: -1 }],
+    ["fractional uploadQuota", { ...giulia, uploadQuota: 1.5 }],
+    ["no accentColor", { ...giulia, accentColor: undefined }],
+    ["no avatar", { ...giulia, avatar: undefined }],
+    ["negative avatar", { ...giulia, avatar: -1 }],
+    ["not a color", { ...giulia, accentColor: "red" }],
   ])("rejects %s", (_label, data) => {
     expect(() => parseAccount(data)).toThrow();
   });

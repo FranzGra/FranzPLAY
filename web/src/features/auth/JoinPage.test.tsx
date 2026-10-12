@@ -14,7 +14,15 @@ describe("join page", () => {
       "POST /api/join/check": { status: 204 },
       "POST /api/join": {
         status: 201,
-        body: { id: 5, name: "Maria", role: "user", canUpload: false, accentColor: "", avatar: 0 },
+        body: {
+          id: 5,
+          name: "Maria",
+          role: "user",
+          canUpload: false,
+          uploadQuota: 10737418240,
+          accentColor: "",
+          avatar: 0,
+        },
       },
     });
     expect(

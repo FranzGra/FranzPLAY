@@ -6,6 +6,7 @@ const giulia = {
   name: "Giulia",
   role: "user",
   canUpload: false,
+  uploadQuota: 10737418240,
   accentColor: "",
   avatar: 0,
 };
@@ -63,7 +64,15 @@ describe("people page", () => {
       people({
         "POST /api/users": {
           status: 201,
-          body: { id: 3, name: "Anna", role: "user", canUpload: true, accentColor: "", avatar: 0 },
+          body: {
+            id: 3,
+            name: "Anna",
+            role: "user",
+            canUpload: true,
+            uploadQuota: 10737418240,
+            accentColor: "",
+            avatar: 0,
+          },
         },
       }),
     );
@@ -109,9 +118,32 @@ describe("people page", () => {
     );
     const row = await rowOf("Giulia");
     await user.click(within(row).getByRole("checkbox", { name: "Può caricare video" }));
-    expect(await within(row).findByText(/carica video$/)).toBeInTheDocument();
+    expect(await within(row).findByText(/carica video, fino a 10 GB$/)).toBeInTheDocument();
     expect(within(row).getByRole("checkbox", { name: "Può caricare video" })).toBeChecked();
     expect(await server.requests.at(-1)?.json()).toEqual({ role: "user", canUpload: true });
+  });
+
+  it("chooses how much space a person has for videos", async () => {
+    const uploader = { ...giulia, canUpload: true };
+    const { user, server } = renderApp("/admin/persone", {
+      ...people(),
+      "GET /api/users": { body: [testAccount, uploader] },
+      "PUT /api/users/2": { body: { ...uploader, uploadQuota: 50 * 1024 ** 3 } },
+    });
+    const row = await rowOf("Giulia");
+    await user.selectOptions(within(row).getByRole("combobox", { name: "Spazio" }), "50 GB");
+    expect(await within(row).findByText(/fino a 50 GB$/)).toBeInTheDocument();
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      role: "user",
+      canUpload: true,
+      uploadQuota: 50 * 1024 ** 3,
+    });
+  });
+
+  it("asks the space only of who can upload", async () => {
+    renderApp("/admin/persone", people());
+    const row = await rowOf("Giulia");
+    expect(within(row).queryByRole("combobox", { name: "Spazio" })).not.toBeInTheDocument();
   });
 
   it("says the last administrator must stay", async () => {

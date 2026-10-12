@@ -14,6 +14,8 @@ type Account struct {
 	Name      string `json:"name"`
 	Role      Role   `json:"role"`
 	CanUpload bool   `json:"canUpload"`
+	// UploadQuota is how many bytes of uploaded videos the user may keep.
+	UploadQuota int64 `json:"uploadQuota"`
 	// AccentColor is the color the user chose for the interface; "" means
 	// FranzPLAY's own.
 	AccentColor Color `json:"accentColor"`
@@ -21,6 +23,14 @@ type Account struct {
 	// none: the interface shows the initial of the name instead.
 	Avatar int64 `json:"avatar"`
 }
+
+// Limits of the upload quota: a person starts with DefaultUploadQuota and
+// the administrator can choose from MinUploadQuota to MaxUploadQuota.
+const (
+	DefaultUploadQuota int64 = 10 << 30  // 10 GiB, also the database default
+	MinUploadQuota     int64 = 1 << 30   // 1 GiB
+	MaxUploadQuota     int64 = 100 << 40 // 100 TiB: more than any home disk
+)
 
 // Store errors.
 var (
@@ -72,8 +82,12 @@ func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now tim
 	if exists > 0 {
 		return Account{}, errNameTaken
 	}
-	res, err := tx.ExecContext(ctx, `INSERT INTO users (name, password_hash, role, can_upload, created_at) VALUES (?, ?, ?, ?, ?)`,
-		a.Name, hash, string(a.Role), a.CanUpload, now.Unix())
+	if a.UploadQuota == 0 {
+		a.UploadQuota = DefaultUploadQuota
+	}
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO users (name, password_hash, role, can_upload, upload_quota, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		a.Name, hash, string(a.Role), a.CanUpload, a.UploadQuota, now.Unix())
 	if err != nil {
 		return Account{}, fmt.Errorf("create user: %w", err)
 	}
@@ -88,8 +102,8 @@ func (s store) credentials(ctx context.Context, name string) (Account, string, e
 	var a Account
 	var hash, role string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, role, can_upload, coalesce(accent_color, ''), avatar, password_hash FROM users WHERE name = ?`, name).
-		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.AccentColor, &a.Avatar, &hash)
+		SELECT id, name, role, can_upload, upload_quota, coalesce(accent_color, ''), avatar, password_hash FROM users WHERE name = ?`, name).
+		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.UploadQuota, &a.AccentColor, &a.Avatar, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, "", errUserNotFound
 	}
@@ -118,7 +132,7 @@ func (s store) passwordHash(ctx context.Context, id int64) (string, error) {
 }
 
 func (s store) list(ctx context.Context) (_ []Account, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, coalesce(accent_color, ''), avatar FROM users ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, upload_quota, coalesce(accent_color, ''), avatar FROM users ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -127,7 +141,7 @@ func (s store) list(ctx context.Context) (_ []Account, err error) {
 	for rows.Next() {
 		var a Account
 		var role string
-		if err := rows.Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.AccentColor, &a.Avatar); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.UploadQuota, &a.AccentColor, &a.Avatar); err != nil {
 			return nil, fmt.Errorf("list users: %w", err)
 		}
 		r, ok := parseRole(role)
@@ -172,9 +186,10 @@ func (s store) deleteUser(ctx context.Context, id int64) (err error) {
 	return nil
 }
 
-// updateUser changes what a user may do. The last administrator cannot
-// become a normal user, for the same reason it cannot be removed.
-func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bool) (_ Account, err error) {
+// updateUser changes what a user may do. A nil quota keeps the one the
+// user has. The last administrator cannot become a normal user, for the
+// same reason it cannot be removed.
+func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bool, quota *int64) (_ Account, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Account{}, fmt.Errorf("update user: %w", err)
@@ -183,8 +198,8 @@ func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bo
 
 	a := Account{ID: id, Role: role, CanUpload: canUpload}
 	var old string
-	err = tx.QueryRowContext(ctx, `SELECT name, role, coalesce(accent_color, ''), avatar FROM users WHERE id = ?`, id).
-		Scan(&a.Name, &old, &a.AccentColor, &a.Avatar)
+	err = tx.QueryRowContext(ctx, `SELECT name, role, upload_quota, coalesce(accent_color, ''), avatar FROM users WHERE id = ?`, id).
+		Scan(&a.Name, &old, &a.UploadQuota, &a.AccentColor, &a.Avatar)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, errUserNotFound
 	}
@@ -200,8 +215,11 @@ func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bo
 			return Account{}, errLastAdmin
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE users SET role = ?, can_upload = ? WHERE id = ?`,
-		string(role), canUpload, id); err != nil {
+	if quota != nil {
+		a.UploadQuota = *quota
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET role = ?, can_upload = ?, upload_quota = ? WHERE id = ?`,
+		string(role), canUpload, a.UploadQuota, id); err != nil {
 		return Account{}, fmt.Errorf("update user: %w", err)
 	}
 	return a, nil

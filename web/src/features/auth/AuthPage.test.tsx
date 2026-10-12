@@ -139,6 +139,7 @@ describe("registering without an invite", () => {
       name: "Giulia",
       role: "user",
       canUpload: false,
+      uploadQuota: 10737418240,
       accentColor: "",
       avatar: 0,
     };
