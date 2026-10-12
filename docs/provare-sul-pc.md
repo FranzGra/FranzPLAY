@@ -285,6 +285,15 @@ canale di ognuno, un video alla volta (lo vedi in **Lavori** come «Informazioni
 Manda solo il codice del video. Se accanto al video c'è un'immagine o un file `.info.json`/`.nfo`,
 quelli contano di più.
 
+**Informazioni dei film da TMDB.** Se hai dei film con titolo e anno nel nome del file, come
+`Il sorpasso (1962).mkv` o `The.Matrix.1999.1080p.mkv`, FranzPLAY può chiedere a TMDB immagine,
+titolo, trama e regista. Serve una chiave gratuita: crea un account su
+[themoviedb.org](https://www.themoviedb.org/settings/api) e copia la «Chiave API». In
+**Amministrazione › Internet** incollala nel riquadro di TMDB e premi **Prova e salva**: FranzPLAY
+chiede a TMDB se è buona e solo allora la salva. Poi accendi **TMDB**. Manda solo titolo e anno
+letti dal nome del file, e usa un film solo se titolo e anno sono proprio quelli: così
+`Gita al mare 2019.mp4` resta il tuo video.
+
 **Invitare familiari e amici.** In **Amministrazione › Inviti** premi **Crea un invito**. Se vuoi,
 scrivi per chi è e se potrà caricare video, poi premi **Crea il link** e copialo: FranzPLAY lo mostra
 una volta sola. Mandalo con un messaggio. Chi lo apre sceglie nome e password ed entra subito. Ogni

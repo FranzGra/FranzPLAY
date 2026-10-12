@@ -28,6 +28,7 @@ type Fetcher struct {
 	db      *sql.DB
 	dataDir string
 	youtube youTube
+	tmdb    tmdb
 	now     func() time.Time
 }
 
@@ -38,6 +39,7 @@ func NewFetcher(db *sql.DB, dataDir string) *Fetcher {
 		db:      db,
 		dataDir: dataDir,
 		youtube: youTube{client: client, oEmbed: "https://www.youtube.com/oembed", images: "https://i.ytimg.com/vi"},
+		tmdb:    newTMDB(client),
 		now:     time.Now,
 	}
 }
@@ -45,15 +47,18 @@ func NewFetcher(db *sql.DB, dataDir string) *Fetcher {
 // errVideoGone means the video was forgotten before its job ran.
 var errVideoGone = errors.New("video no longer in the catalog")
 
-// Handle is the job handler for jobs.Online. With every source off it
-// does nothing, and keeps what was found before. With a source on, what
-// it finds replaces what was there; finding nothing clears it.
+// Handle is the job handler for jobs.Online. The name of the file says
+// which source knows the video: a YouTube code goes to YouTube, a film's
+// title and year to TMDB. With that source off nothing is asked, and
+// what was found before is kept. With it on, what it finds replaces what
+// was there; finding nothing clears it, and so does a name no source
+// knows.
 func (f *Fetcher) Handle(ctx context.Context, videoID int64) error {
-	sources, err := loadSources(ctx, f.db)
+	s, err := loadSettings(ctx, f.db)
 	if err != nil {
 		return err
 	}
-	if !sources.YouTube {
+	if !s.YouTube && !s.TMDB {
 		return nil
 	}
 	var rel, fingerprint string
@@ -69,7 +74,22 @@ func (f *Fetcher) Handle(ctx context.Context, videoID int64) error {
 
 	var what found
 	if id, ok := video.YouTubeID(rel); ok {
+		if !s.YouTube {
+			return nil
+		}
 		if what, _, err = f.youtube.lookup(ctx, id); err != nil {
+			return err
+		}
+	} else if film, ok := video.FilmInName(rel); ok {
+		if !s.TMDB || s.tmdbKey == "" {
+			return nil
+		}
+		what, _, err = f.tmdb.lookup(ctx, s.tmdbKey, film)
+		if errors.Is(err, errKeyRefused) {
+			// Trying again cannot help: saving a new key asks again.
+			return fmt.Errorf("video %d: %w: %w", videoID, err, jobs.ErrPermanent)
+		}
+		if err != nil {
 			return err
 		}
 	}

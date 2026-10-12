@@ -42,7 +42,7 @@ var coverNames = []string{"maxresdefault.jpg", "hqdefault.jpg"}
 // YouTube does not know it (removed, or private): nothing to show.
 func (y youTube) lookup(ctx context.Context, id string) (_ found, ok bool, err error) {
 	q := url.Values{"url": {"https://www.youtube.com/watch?v=" + id}, "format": {"json"}}
-	data, status, err := get(ctx, y.client, y.oEmbed+"?"+q.Encode(), maxAnswer, "application/json")
+	data, status, err := get(ctx, y.client, y.oEmbed+"?"+q.Encode(), nil, maxAnswer, "application/json")
 	if err != nil {
 		return found{}, false, fmt.Errorf("youtube %s: %w", id, err)
 	}
@@ -60,7 +60,7 @@ func (y youTube) lookup(ctx context.Context, id string) (_ found, ok bool, err e
 	}
 	f := found{details: details}
 	for _, name := range coverNames {
-		image, status, err := get(ctx, y.client, y.images+"/"+id+"/"+name, maxImage, "image/")
+		image, status, err := get(ctx, y.client, y.images+"/"+id+"/"+name, nil, maxImage, "image/")
 		if err != nil {
 			return found{}, false, fmt.Errorf("youtube %s cover: %w", id, err)
 		}
@@ -79,15 +79,23 @@ func (y youTube) lookup(ctx context.Context, id string) (_ found, ok bool, err e
 // like a web page instead of a picture.
 var errWrongContent = errors.New("unexpected content")
 
-// get downloads an address. The body is read only when the answer is 200
-// and of the expected type, and never beyond limit bytes.
-func get(ctx context.Context, client *http.Client, address string, limit int64, wantType string) (_ []byte, status int, err error) {
+// get downloads an address, with the headers given. The body is read only
+// when the answer is 200 and of the expected type, and never beyond limit
+// bytes. Errors never repeat the address: it can carry a key.
+func get(ctx context.Context, client *http.Client, address string, header http.Header,
+	limit int64, wantType string) (_ []byte, status int, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, errors.New("address not valid")
+	}
+	for name, values := range header {
+		req.Header[name] = values
 	}
 	req.Header.Set("User-Agent", "FranzPLAY (https://github.com/FranzGra/FranzPLAY)")
 	resp, err := client.Do(req)
+	if urlErr := (*url.Error)(nil); errors.As(err, &urlErr) {
+		return nil, 0, fmt.Errorf("%s %s: %w", urlErr.Op, req.URL.Host, urlErr.Err)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
