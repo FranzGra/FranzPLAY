@@ -1,0 +1,103 @@
+/* Design tokens: every color, size and radius used by the interface lives here. */
+:root {
+  color-scheme: dark;
+
+  /* Colors: a neutral zinc scale (like shadcn/ui) plus one blue accent. */
+  --color-bg: #09090b;
+  --color-surface: #18181b;
+  --color-surface-raised: #27272a;
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-text: #fafafa;
+  --color-text-muted: #a1a1aa;
+  --color-accent: #2997ff;
+  --color-accent-hover: #5cb0ff;
+  --color-on-accent: #ffffff;
+
+  /* Glass: translucent surfaces that blur what is behind them (like Apple's Liquid Glass). */
+  --glass-bg: rgb(24 24 27 / 0.55);
+  --glass-bg-strong: rgb(24 24 27 / 0.72);
+  --glass-border: 1px solid rgb(255 255 255 / 0.09);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
+  --glass-blur: blur(24px) saturate(180%);
+
+  --font-sans: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-s: 10px;
+  --radius-m: 16px;
+  --radius-l: 22px;
+  --radius-pill: 999px;
+
+  --header-height: 72px;
+  --tabbar-height: 64px;
+  --touch: 44px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background-color: var(--color-bg);
+  /* Two soft lights behind the glass, so translucent surfaces have something to show. */
+  background-image:
+    radial-gradient(60rem 40rem at 10% -10%, rgb(41 151 255 / 0.12), transparent 60%),
+    radial-gradient(50rem 40rem at 110% 110%, rgb(139 92 246 / 0.08), transparent 60%);
+  background-attachment: fixed;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* A glass panel: use it for cards, bars and menus that float above the page. */
+.glass {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--color-surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

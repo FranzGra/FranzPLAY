@@ -31,3 +31,11 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# FranzPLAY
+/bin/
+/data/
+node_modules/
+/web/dist/
+.DS_Store
+/internal/webui/dist/app/
