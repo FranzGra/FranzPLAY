@@ -23,6 +23,17 @@ export function formatAge(date: Date, now: Date): string {
   return plural(Math.floor(days / 365), "anno", "anni");
 }
 
+// formatSince is formatAge with the hours of today, for things written
+// a moment ago like comments: "adesso", "5 minuti fa", "3 ore fa", then
+// "ieri", "3 giorni fa"…
+export function formatSince(date: Date, now: Date): string {
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000);
+  if (minutes < 1) return "adesso";
+  if (minutes < 60) return plural(minutes, "minuto", "minuti");
+  if (minutes < 24 * 60) return plural(Math.floor(minutes / 60), "ora", "ore");
+  return formatAge(date, now);
+}
+
 // formatDay names a day for a list grouped by day, like the history:
 // "Oggi", "Ieri", "Lunedì" within a week, then "12 ottobre", and
 // "12 ottobre 2025" for another year.

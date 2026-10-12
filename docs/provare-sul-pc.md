@@ -180,6 +180,11 @@ spesso i titoli di coda, valgono come «finito» e il video esce dalla riga.
 divisi per giorno. Con la **X** togli un video (la prossima volta riparte dall'inizio); con
 **Cancella cronologia** la svuoti tutta. Ognuno vede solo la sua.
 
+**Mi piace e commenti.** Sotto ogni video c'è il pollice **Mi piace** con quante persone lo
+apprezzano, e più in basso i **commenti**: scrivi nel riquadro e premi **Commenta** (o Ctrl+Invio).
+Con **Rispondi** si risponde a un commento, e la risposta finisce sotto di lui. Ognuno può
+eliminare i propri commenti; l'amministratore può eliminare tutti, per tenere pulito.
+
 **Sottotitoli.** FranzPLAY usa i file `.srt` e `.vtt` che stanno accanto al video con lo stesso
 nome, per esempio `mare.srt`, oppure `mare.it.srt` e `mare.en.srt` se ci sono più lingue. Non li
 modifica: li legge e li converte al volo.
