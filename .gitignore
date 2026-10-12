@@ -38,3 +38,4 @@ go.work.sum
 node_modules/
 /web/dist/
 .DS_Store
+/internal/webui/dist/app/

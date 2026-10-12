@@ -1,0 +1,70 @@
+/* Design tokens: every color, size and radius used by the interface lives here. */
+:root {
+  color-scheme: dark;
+
+  --color-bg: #0b0b0c;
+  --color-surface: #1c1c1e;
+  --color-surface-raised: #2c2c2e;
+  --color-border: #1f1f22;
+  --color-text: #f5f5f7;
+  --color-text-muted: #a1a1a6;
+  --color-accent: #2997ff;
+  --color-accent-hover: #5cb0ff;
+  --color-on-accent: #ffffff;
+
+  --font-sans: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-pill: 999px;
+
+  --header-height: 72px;
+  --tabbar-height: 64px;
+  --touch: 44px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
