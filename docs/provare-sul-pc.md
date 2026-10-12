@@ -276,6 +276,11 @@ Lo stesso vale per i file **`.nfo`** di Kodi e Jellyfin (`viaggio.mkv` e `viaggi
 ne prende titolo, trama, autore e giorno. Se accanto a un video ci sono tutti e due i file, conta
 prima il `.info.json`, e il `.nfo` aggiunge solo quello che manca.
 
+**Invitare familiari e amici.** In **Amministrazione › Inviti** premi **Crea un invito**. Se vuoi,
+scrivi per chi è e se potrà caricare video, poi premi **Crea il link** e copialo: FranzPLAY lo mostra
+una volta sola. Mandalo con un messaggio. Chi lo apre sceglie nome e password ed entra subito. Ogni
+link vale per una persona e funziona per 7 giorni; nell'elenco vedi chi l'ha usato.
+
 **Video consigliati.** Accanto al player, in **Da guardare dopo**, FranzPLAY propone i video più
 simili a quello che stai guardando, e sotto ognuno dice perché: «Visto da chi ha visto questo»
 (qualcun altro ha guardato tutti e due), «Anche questo in Vacanze» (stessa categoria) o «Titolo

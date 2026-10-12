@@ -54,6 +54,11 @@ func (s store) createUser(ctx context.Context, a Account, hash string, now time.
 			return Account{}, errAlreadySetUp
 		}
 	}
+	return insertUser(ctx, tx, a, hash, now)
+}
+
+// insertUser adds a user inside a transaction, if the name is free.
+func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now time.Time) (Account, error) {
 	var exists int
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE name = ?`, a.Name).Scan(&exists); err != nil {
 		return Account{}, fmt.Errorf("create user: %w", err)
