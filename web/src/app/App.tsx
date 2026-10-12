@@ -5,6 +5,7 @@ import { CategoriesPage } from "../features/categories/CategoriesPage";
 import { CategoryPage } from "../features/categories/CategoryPage";
 import { HistoryPage } from "../features/history/HistoryPage";
 import { HomePage } from "../features/home/HomePage";
+import { PlaylistPage } from "../features/playlists/PlaylistPage";
 import { PlaylistsPage } from "../features/playlists/PlaylistsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { SearchPage } from "../features/search/SearchPage";
@@ -43,6 +44,7 @@ function Pages() {
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="playlist" element={<PlaylistsPage />} />
+        <Route path="playlist/:id" element={<PlaylistPage />} />
         <Route path="profilo" element={<ProfilePage />} />
         <Route path="cerca" element={<SearchPage />} />
         <Route path="video/:id" element={<VideoPage />} />

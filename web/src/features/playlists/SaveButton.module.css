@@ -1,0 +1,215 @@
+.root {
+  position: relative;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover,
+.button[aria-expanded="true"] {
+  background: var(--glass-bg-strong);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: min(320px, calc(100vw - 32px));
+  padding: 8px 0;
+  border-radius: var(--radius-m);
+  /* Solid: the comments below must not show through the choices. */
+  background: var(--color-surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 4px 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-text);
+}
+
+.placeholder {
+  height: 96px;
+  margin: 8px 16px;
+  border-radius: var(--radius-s);
+  background: var(--color-surface-raised);
+}
+
+.lists {
+  max-height: 280px;
+  margin: 4px 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--touch);
+  padding: 0 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+/* The real checkbox stays for keyboards and screen readers; a nicer box is drawn. */
+.option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-text-muted);
+  border-radius: 6px;
+  color: transparent;
+}
+
+.option input:checked + .check {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.option input:focus-visible + .check {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 0 16px;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.new:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.input:focus {
+  outline: none;
+  border-bottom-color: var(--color-text);
+}
+
+.create {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.create:disabled {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.problem {
+  width: 100%;
+  margin: 4px 16px;
+  font-size: 13px;
+  color: var(--color-danger);
+}
+
+.form .problem {
+  margin: 0;
+}
+
+/* On phones the panel rises from the bottom, above the tab bar. */
+@media (max-width: 599px) {
+  .panel {
+    position: fixed;
+    top: auto;
+    right: 16px;
+    bottom: calc(var(--tabbar-height) + 24px);
+    left: 16px;
+    width: auto;
+  }
+}

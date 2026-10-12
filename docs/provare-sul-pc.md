@@ -185,6 +185,11 @@ apprezzano, e più in basso i **commenti**: scrivi nel riquadro e premi **Commen
 Con **Rispondi** si risponde a un commento, e la risposta finisce sotto di lui. Ognuno può
 eliminare i propri commenti; l'amministratore può eliminare tutti, per tenere pulito.
 
+**Playlist.** Sotto ogni video il tasto **Salva** apre le tue playlist: spunta **Guarda più tardi**
+o una tua playlist, oppure creane una nuova al volo. Nella pagina **Playlist** le trovi tutte; dentro
+una playlist puoi togliere un video con la **X**, rinominarla o eliminarla (i video restano nella
+libreria). «Guarda più tardi» c'è sempre e non si elimina. Ognuno vede solo le sue.
+
 **Sottotitoli.** FranzPLAY usa i file `.srt` e `.vtt` che stanno accanto al video con lo stesso
 nome, per esempio `mare.srt`, oppure `mare.it.srt` e `mare.en.srt` se ci sono più lingue. Non li
 modifica: li legge e li converte al volo.

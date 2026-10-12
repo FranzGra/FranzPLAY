@@ -23,6 +23,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/likes"
 	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/playlists"
 	"github.com/FranzGra/FranzPLAY/internal/progress"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -120,6 +121,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		progress.Routes(db, catalog.NewLookup(db), logger),
 		likes.Routes(db, logger),
 		comments.Routes(db, logger),
+		playlists.Routes(db, catalog.NewLookup(db), logger),
 	)
 
 	srv := &http.Server{
