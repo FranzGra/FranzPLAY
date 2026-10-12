@@ -16,8 +16,9 @@ type Kind string
 
 // The kinds of job.
 const (
-	Probe Kind = "probe" // read duration, size and codecs with ffprobe
-	Cover Kind = "cover" // make the cover image
+	Probe   Kind = "probe"   // read duration, size and codecs with ffprobe
+	Cover   Kind = "cover"   // make the cover image
+	Preview Kind = "preview" // make the small frames shown over the timeline
 )
 
 // state is where a job is in its life. It is stored as text in the database.

@@ -87,16 +87,22 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		handlers[jobs.Probe] = media.NewProber(db, ffprobe).Handle
 	}
 	if ffmpeg, err := exec.LookPath(cfg.FFmpeg); err != nil {
-		logger.Warn("ffmpeg not found: videos will have no cover until it is installed",
+		logger.Warn("ffmpeg not found: videos will have no cover or previews until it is installed",
 			"setting", config.EnvFFmpeg, "error", err)
 	} else {
 		handlers[jobs.Cover] = media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle
+		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
 	}
-	// Before the worker starts, so it never sees a cover being made.
+	// Before the worker starts, so it never sees a cover or a preview being made.
 	if n, err := media.RemoveOrphanCovers(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused covers", "error", err)
 	} else if n > 0 {
 		logger.Info("removed unused covers", "count", n)
+	}
+	if n, err := media.RemoveOrphanPreviews(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused previews", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused previews", "count", n)
 	}
 	worker := jobs.NewWorker(db, handlers, logger)
 	scanner := library.NewScanner(db, cfg.Libraries, logger)

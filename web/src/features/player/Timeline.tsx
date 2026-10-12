@@ -1,6 +1,7 @@
 import { type PointerEvent, useRef, useState } from "react";
+import type { Preview } from "../../api/videos";
 import { formatDuration } from "../../lib/format";
-import { timeAt } from "./controls";
+import { previewFrame, timeAt } from "./controls";
 import styles from "./Player.module.css";
 
 type TimelineProps = {
@@ -8,12 +9,15 @@ type TimelineProps = {
   duration: number;
   buffered: number;
   onSeek: (time: number) => void;
+  // preview shows a small frame of the video above the time pointed at.
+  preview?: Preview | null;
 };
 
 // Timeline is the big bar under the video: it shows how far the video is
 // and how much is downloaded. Drag or click it to jump; it grows under the
-// pointer and shows the time it points at.
-export function Timeline({ time, duration, buffered, onSeek }: TimelineProps) {
+// pointer and shows the time it points at, with a small frame of the
+// video there when the previews are ready.
+export function Timeline({ time, duration, buffered, onSeek, preview }: TimelineProps) {
   const bar = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -67,11 +71,40 @@ export function Timeline({ time, duration, buffered, onSeek }: TimelineProps) {
         <div className={styles.played} style={{ width: percent(time) }} />
       </div>
       <div className={styles.thumb} style={{ left: percent(time) }} />
-      {hover !== null && known && (
+      {hover !== null && known && !preview && (
         <div className={styles.tooltip} style={{ left: percent(hover) }} aria-hidden="true">
           {formatDuration(hover)}
         </div>
       )}
+      {hover !== null && known && preview && (
+        <PreviewFrame preview={preview} time={hover} left={percent(hover)} />
+      )}
+    </div>
+  );
+}
+
+// PreviewFrame is the small frame of the video above the timeline, kept
+// inside the player at both ends.
+function PreviewFrame({ preview, time, left }: { preview: Preview; time: number; left: string }) {
+  const { x, y } = previewFrame(preview, time);
+  const half = preview.width / 2;
+  return (
+    <div
+      className={styles.frame}
+      style={{ left: `clamp(${half}px, ${left}, calc(100% - ${half}px))` }}
+      aria-hidden="true"
+      data-testid="preview"
+    >
+      <div
+        className={styles.frameImage}
+        style={{
+          width: preview.width,
+          height: preview.height,
+          backgroundImage: `url("${preview.src}")`,
+          backgroundPosition: `-${x}px -${y}px`,
+        }}
+      />
+      <span className={styles.frameTime}>{formatDuration(time)}</span>
     </div>
   );
 }

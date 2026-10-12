@@ -117,6 +117,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           subtitles={subtitles}
           startAt={startAt}
           onPosition={remember}
+          preview={video.preview}
           unsupportedHint={
             video.playable
               ? undefined

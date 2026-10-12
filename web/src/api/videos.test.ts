@@ -23,6 +23,18 @@ describe("parseVideo", () => {
     expect(v.cover).toBeNull();
   });
 
+  it("accepts the previews of the timeline", () => {
+    const preview = {
+      src: "/api/previews/7-0a.jpg",
+      gap: 2,
+      count: 45,
+      columns: 10,
+      width: 160,
+      height: 90,
+    };
+    expect(parseVideo({ ...sampleVideo, preview }).preview).toEqual(preview);
+  });
+
   it.each([
     ["no id", { ...sampleVideo, id: undefined }],
     ["zero id", { ...sampleVideo, id: 0 }],
@@ -31,6 +43,35 @@ describe("parseVideo", () => {
     ["cover elsewhere", { ...sampleVideo, cover: "https://evil.example/x.jpg" }],
     ["bad date", { ...sampleVideo, addedAt: "yesterday" }],
     ["missing playable", { ...sampleVideo, playable: undefined }],
+    ["missing preview", { ...sampleVideo, preview: undefined }],
+    [
+      "preview elsewhere",
+      {
+        ...sampleVideo,
+        preview: {
+          src: "https://evil.example/x.jpg",
+          gap: 2,
+          count: 1,
+          columns: 1,
+          width: 160,
+          height: 90,
+        },
+      },
+    ],
+    [
+      "preview with no frames",
+      {
+        ...sampleVideo,
+        preview: {
+          src: "/api/previews/7-0a.jpg",
+          gap: 2,
+          count: 0,
+          columns: 1,
+          width: 160,
+          height: 90,
+        },
+      },
+    ],
   ])("rejects %s", (_label, data) => {
     expect(() => parseVideo(data)).toThrow();
   });

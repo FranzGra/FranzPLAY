@@ -22,8 +22,9 @@ import (
 //	GET /api/videos/{id}/subtitles/{key}  one subtitle, as WebVTT
 //	GET /api/categories                   categories with their number of videos
 //	GET /api/covers/{name}                a cover image
+//	GET /api/previews/{name}              the frames shown over the timeline
 func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
-	h := handlers{store: store{db: db}, coversDir: filepath.Join(dataDir, media.CoversDir), logger: logger}
+	h := handlers{store: store{db: db}, logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos", h.list)
 		mux.HandleFunc("GET /api/videos/{id}", h.get)
@@ -31,14 +32,14 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 		mux.HandleFunc("GET /api/videos/{id}/subtitles", h.subtitles)
 		mux.HandleFunc("GET /api/videos/{id}/subtitles/{key}", h.subtitle)
 		mux.HandleFunc("GET /api/categories", h.categories)
-		mux.HandleFunc("GET /api/covers/{name}", h.cover)
+		mux.HandleFunc("GET /api/covers/{name}", h.image(filepath.Join(dataDir, media.CoversDir)))
+		mux.HandleFunc("GET /api/previews/{name}", h.image(filepath.Join(dataDir, media.PreviewsDir)))
 	}
 }
 
 type handlers struct {
-	store     store
-	coversDir string
-	logger    *slog.Logger
+	store  store
+	logger *slog.Logger
 }
 
 // listResponse is the body of GET /api/videos.
@@ -134,34 +135,37 @@ func (h handlers) stream(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", info.ModTime(), file)
 }
 
-// cover sends a cover image. Its name changes when the video changes, so
-// the browser may keep it for a year without asking again.
-func (h handlers) cover(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if !validCoverName(name) {
-		respond.Error(w, r, h.logger, http.StatusNotFound, "cover not found")
-		return
-	}
-	file, err := os.Open(filepath.Join(h.coversDir, name))
-	if errors.Is(err, fs.ErrNotExist) {
-		respond.Error(w, r, h.logger, http.StatusNotFound, "cover not found")
-		return
-	}
-	if err != nil {
-		respond.InternalError(w, r, h.logger, err)
-		return
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			h.logger.WarnContext(r.Context(), "close cover file", "error", err)
+// image serves the JPEG images FranzPLAY made in dir: covers or previews.
+// Their names change with the content, so the browser may keep them for a
+// year without asking again.
+func (h handlers) image(dir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if !validImageName(name) {
+			respond.Error(w, r, h.logger, http.StatusNotFound, "image not found")
+			return
 		}
-	}()
-	info, err := file.Stat()
-	if err != nil {
-		respond.InternalError(w, r, h.logger, err)
-		return
+		file, err := os.Open(filepath.Join(dir, name))
+		if errors.Is(err, fs.ErrNotExist) {
+			respond.Error(w, r, h.logger, http.StatusNotFound, "image not found")
+			return
+		}
+		if err != nil {
+			respond.InternalError(w, r, h.logger, err)
+			return
+		}
+		defer func() {
+			if err := file.Close(); err != nil {
+				h.logger.WarnContext(r.Context(), "close image file", "error", err)
+			}
+		}()
+		info, err := file.Stat()
+		if err != nil {
+			respond.InternalError(w, r, h.logger, err)
+			return
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		http.ServeContent(w, r, "", info.ModTime(), file)
 	}
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	http.ServeContent(w, r, "", info.ModTime(), file)
 }

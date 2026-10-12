@@ -3,6 +3,7 @@ import {
   clampTime,
   clampVolume,
   keyAction,
+  previewFrame,
   speedLabel,
   tapZone,
   timeAt,
@@ -99,5 +100,21 @@ describe("speedLabel", () => {
     [2, "2×"],
   ])("%d", (speed, want) => {
     expect(speedLabel(speed)).toBe(want);
+  });
+});
+
+describe("previewFrame", () => {
+  const preview = { gap: 2, count: 45, columns: 10, width: 160, height: 90 };
+  it.each([
+    [0, 0, 0],
+    [1.9, 0, 0],
+    [2, 160, 0],
+    [19.5, 1440, 0], // frame 9, end of the first row
+    [20, 0, 90], // frame 10, second row
+    [88, 640, 360], // frame 44, the last
+    [500, 640, 360], // past the end: still the last
+    [-3, 0, 0],
+  ])("at %s seconds the frame is at %i,%i", (time, x, y) => {
+    expect(previewFrame(preview, time)).toEqual({ x, y });
   });
 });

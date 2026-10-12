@@ -25,6 +25,19 @@ export function timeAt(x: number, left: number, width: number, duration: number)
   return fraction * duration;
 }
 
+// previewFrame finds, in the image of previews, the frame for a time: its
+// top-left corner in pixels. The last frame covers the end of the video.
+export function previewFrame(
+  preview: { gap: number; count: number; columns: number; width: number; height: number },
+  time: number,
+): { x: number; y: number } {
+  const index = Math.min(Math.max(Math.floor(time / preview.gap), 0), preview.count - 1);
+  return {
+    x: (index % preview.columns) * preview.width,
+    y: Math.floor(index / preview.columns) * preview.height,
+  };
+}
+
 // bufferedEnd is how far the browser has downloaded ahead of time: the
 // end of the downloaded range that contains time.
 export function bufferedEnd(ranges: { start: number; end: number }[], time: number): number {

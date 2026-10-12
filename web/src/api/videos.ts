@@ -12,6 +12,18 @@ export type Video = {
   cover: string | null; // address of the image; null = none yet
   addedAt: Date;
   playable: boolean; // every browser can play it as it is
+  preview: Preview | null; // frames for the player's timeline; null = none yet
+};
+
+// Preview is one image holding small frames of the video, count frames of
+// width×height, one every gap seconds, columns per row.
+export type Preview = {
+  src: string;
+  gap: number;
+  count: number;
+  columns: number;
+  width: number;
+  height: number;
 };
 
 export type VideoList = {
@@ -40,6 +52,26 @@ function count(value: unknown, what: string): number {
 
 function optionalCount(value: unknown, what: string): number | null {
   return value === null ? null : count(value, what);
+}
+
+function parsePreview(data: unknown): Preview | null {
+  if (data === null) return null;
+  const p = record(data, "video preview");
+  if (typeof p.src !== "string" || !p.src.startsWith("/api/previews/")) {
+    throw new Error("video preview src: not a preview address");
+  }
+  const preview = {
+    src: p.src,
+    gap: count(p.gap, "video preview gap"),
+    count: count(p.count, "video preview count"),
+    columns: count(p.columns, "video preview columns"),
+    width: count(p.width, "video preview width"),
+    height: count(p.height, "video preview height"),
+  };
+  if (Object.entries(preview).some(([key, value]) => key !== "src" && value === 0)) {
+    throw new Error("video preview: zero size");
+  }
+  return preview;
 }
 
 // parseVideo checks a video sent by the server, once, at the edge.
@@ -75,6 +107,7 @@ export function parseVideo(data: unknown): Video {
     cover: v.cover,
     addedAt,
     playable: v.playable,
+    preview: parsePreview(v.preview),
   };
 }
 

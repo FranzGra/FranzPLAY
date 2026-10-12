@@ -27,6 +27,19 @@ type Video struct {
 	Cover    *string   `json:"cover"`    // address of the image; null = none yet
 	AddedAt  time.Time `json:"addedAt"`  // when FranzPLAY found it
 	Playable bool      `json:"playable"` // every browser can play it as it is
+	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
+}
+
+// Preview is the image with small frames of a video, shown over the
+// player's timeline: Count frames of Width×Height, one every Gap seconds,
+// Columns per row.
+type Preview struct {
+	Src     string `json:"src"`
+	Gap     int64  `json:"gap"` // seconds
+	Count   int    `json:"count"`
+	Columns int    `json:"columns"`
+	Width   int    `json:"width"`
+	Height  int    `json:"height"`
 }
 
 // Category is a category with how many videos it has.
@@ -43,19 +56,19 @@ type store struct {
 
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
-	v.path, v.video_codec, v.audio_codec`
+	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count`
 
 // rowScanner is a *sql.Row or *sql.Rows.
 type rowScanner interface{ Scan(dest ...any) error }
 
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
-	var duration, width, height sql.NullInt64
-	var cover, videoCodec, audioCodec sql.NullString
+	var duration, width, height, previewGap, previewCount sql.NullInt64
+	var cover, videoCodec, audioCodec, preview sql.NullString
 	var addedAt int64
 	var relPath string
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
-		&relPath, &videoCodec, &audioCodec); err != nil {
+		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -68,6 +81,14 @@ func scanVideo(row rowScanner) (Video, error) {
 	if cover.Valid {
 		address := "/api/covers/" + cover.String
 		v.Cover = &address
+	}
+	if preview.Valid && previewGap.Valid && previewCount.Valid {
+		count := int(previewCount.Int64)
+		columns, _ := video.PreviewGrid(count)
+		v.Preview = &Preview{
+			Src: "/api/previews/" + preview.String, Gap: previewGap.Int64, Count: count, Columns: columns,
+			Width: video.PreviewWidth, Height: video.PreviewHeight,
+		}
 	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
 	v.Playable = video.DirectlyPlayable(path.Ext(relPath),

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
@@ -188,19 +189,20 @@ func TestWorkerPermanentFailure(t *testing.T) {
 	}
 }
 
-func TestWorkerRunsProbesBeforeCovers(t *testing.T) {
-	fx := newFixture(t, 2)
-	fx.enqueue(t, fx.videos[0], Cover)
-	fx.enqueue(t, fx.videos[1], Probe)
+func TestWorkerRunsProbesThenCoversThenPreviews(t *testing.T) {
+	fx := newFixture(t, 3)
+	fx.enqueue(t, fx.videos[0], Preview)
+	fx.enqueue(t, fx.videos[1], Cover)
+	fx.enqueue(t, fx.videos[2], Probe)
 	var order []Kind
 	record := func(k Kind) Handler {
 		return func(context.Context, int64) error { order = append(order, k); return nil }
 	}
-	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Cover: record(Cover)})
+	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Cover: record(Cover), Preview: record(Preview)})
 	for runNext(t, w) {
 	}
-	if len(order) != 2 || order[0] != Probe || order[1] != Cover {
-		t.Errorf("order = %v, want [probe cover]", order)
+	if want := []Kind{Probe, Cover, Preview}; !slices.Equal(order, want) {
+		t.Errorf("order = %v, want %v", order, want)
 	}
 }
 
