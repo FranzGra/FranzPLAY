@@ -42,7 +42,7 @@ func TestSubtitleLabel(t *testing.T) {
 }
 
 func TestLangCode(t *testing.T) {
-	for lang, want := range map[string]string{"": "", "it": "it", "pt_BR": "pt-BR", "it.forced": "it"} {
+	for lang, want := range map[string]string{"": "", "it": "it", "pt_BR": "pt-BR", "it.forced": "it", "ita": "it", "GER": "de", "xyz": "xyz"} {
 		if got := LangCode(lang); got != want {
 			t.Errorf("LangCode(%q) = %q, want %q", lang, got, want)
 		}

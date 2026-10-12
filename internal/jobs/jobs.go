@@ -19,6 +19,7 @@ const (
 	Probe   Kind = "probe"   // read duration, size and codecs with ffprobe
 	Cover   Kind = "cover"   // make the cover image
 	Preview Kind = "preview" // make the small frames shown over the timeline
+	Tracks  Kind = "tracks"  // list the languages inside the file, copy its subtitles
 )
 
 // state is where a job is in its life. It is stored as text in the database.

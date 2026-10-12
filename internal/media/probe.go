@@ -75,7 +75,8 @@ func (p *Prober) Handle(ctx context.Context, videoID int64) error {
 }
 
 // save stores what ffprobe found and asks for the cover and the
-// previews, which need the duration. Both happen together or not at all. Nothing is saved if the
+// previews, which need the duration, and for the subtitles inside the
+// file. All happen together or not at all. Nothing is saved if the
 // content changed while ffprobe read it: the scan has already asked for a
 // new reading.
 func (p *Prober) save(ctx context.Context, videoID int64, fingerprint string, info video.Info) (err error) {
@@ -100,7 +101,10 @@ func (p *Prober) save(ctx context.Context, videoID int64, fingerprint string, in
 	if err := jobs.Enqueue(ctx, tx, videoID, jobs.Cover, false, p.now()); err != nil {
 		return err
 	}
-	return jobs.Enqueue(ctx, tx, videoID, jobs.Preview, false, p.now())
+	if err := jobs.Enqueue(ctx, tx, videoID, jobs.Preview, false, p.now()); err != nil {
+		return err
+	}
+	return jobs.Enqueue(ctx, tx, videoID, jobs.Tracks, false, p.now())
 }
 
 // finish commits the transaction when err is nil, and rolls it back otherwise.

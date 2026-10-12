@@ -335,6 +335,53 @@ func TestSubtitles(t *testing.T) {
 	}
 }
 
+func TestSubtitlesInsideTheVideo(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "film.mkv", "film", "", 1, true)
+	if err := os.WriteFile(filepath.Join(s.library, "film.it.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\nCiao\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(s.dataDir, media.SubtitlesDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	copied := "WEBVTT\n\n00:01.000 --> 00:02.000\nHello\n"
+	if err := os.WriteFile(filepath.Join(dir, "1-abc-3.vtt"), []byte(copied), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO video_subtitles (video_id, stream, lang, title, forced, file) VALUES
+		(?, 3, 'eng', '', 0, '1-abc-3.vtt'), (?, 5, 'ita', '', 1, '1-abc-5.vtt')`, id, id); err != nil {
+		t.Fatal(err)
+	}
+
+	tracks := decode[[]subtitleTrack](t, s.get(t, "/api/videos/1/subtitles"))
+	want := []subtitleTrack{
+		{Key: "it.srt", Lang: "it", Label: "Italiano", Src: "/api/videos/1/subtitles/it.srt"},
+		{Key: "inside-3", Lang: "en", Label: "Inglese", Src: "/api/videos/1/subtitles/inside-3"},
+		{Key: "inside-5", Lang: "it", Label: "Italiano (forzati)", Src: "/api/videos/1/subtitles/inside-5"},
+	}
+	if !reflect.DeepEqual(tracks, want) {
+		t.Fatalf("tracks = %+v", tracks)
+	}
+	rec := s.get(t, "/api/videos/1/subtitles/inside-3")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "text/vtt; charset=utf-8" || rec.Body.String() != copied {
+		t.Errorf("inside-3: %d %q %q", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
+	}
+	// A copy gone from the disk, streams that are not there, odd keys.
+	for _, key := range []string{"inside-5", "inside-4", "inside-03", "inside--3", "inside-", "inside-x"} {
+		if rec := s.get(t, "/api/videos/1/subtitles/"+key); rec.Code != http.StatusNotFound {
+			t.Errorf("key %q: status %d, want 404", key, rec.Code)
+		}
+	}
+	// A hidden video keeps its subtitles to itself.
+	if _, err := s.db.Exec(`UPDATE videos SET hidden_at = 1 WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if rec := s.get(t, "/api/videos/1/subtitles/inside-3"); rec.Code != http.StatusNotFound {
+		t.Errorf("hidden video: status %d, want 404", rec.Code)
+	}
+}
+
 func TestSubtitlesOfAVideoWithout(t *testing.T) {
 	s := newSite(t)
 	s.addVideo(t, "mare.mp4", "sea", "", 1, true)

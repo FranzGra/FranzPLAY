@@ -62,4 +62,19 @@ com'è.
 - Prima si scrivono i fotogrammi uno per uno in una cartella temporanea, così si sa quanti sono
   davvero; poi si uniscono. Solo l'immagine finita esce dalla cartella temporanea (regola 6).
 - L'ordine dei lavori: prima le letture con ffprobe, poi le copertine (servono a ogni pagina),
-  poi le anteprime.
+  poi le anteprime, per ultimi i sottotitoli dentro il file.
+
+## I sottotitoli dentro il file
+
+- Molti `.mkv` (e alcuni `.mp4`) hanno i sottotitoli **dentro** il file. Il browser non li vede,
+  quindi un lavoro «lingue e sottotitoli» (`tracks`) li copia come file WebVTT nella cartella dati,
+  in `subtitles/`. Il video si legge e basta (regola 1).
+- Prima ffprobe dice quali sottotitoli ci sono; poi **un solo** ffmpeg li copia tutti insieme, così il
+  file si legge una volta sola. Per un film su un Raspberry Pi può volerci un po': i sottotitoli sono
+  sparsi lungo tutto il video e ffmpeg deve attraversarlo tutto. Per questo è l'ultimo lavoro della coda.
+- Si tengono solo i sottotitoli di testo (SRT, ASS, WebVTT, quelli degli `.mp4`). Quelli fatti di
+  immagini (DVD, Blu-ray) il browser non li sa mostrare: per ora si saltano.
+- Le copie si scrivono in una cartella temporanea e si spostano solo quando sono tutte pronte
+  (regola 6). Il nome cambia quando cambia il contenuto del video, e all'avvio si cancellano le copie
+  che nessun video usa più.
+- Nel player compaiono dopo i sottotitoli messi accanto al video, che qualcuno ha messo lì apposta.

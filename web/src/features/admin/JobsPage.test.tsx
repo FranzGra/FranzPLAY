@@ -28,6 +28,7 @@ function overview(overrides: Record<string, unknown> = {}) {
       { kind: "probe", available: true },
       { kind: "cover", available: true },
       { kind: "preview", available: true },
+      { kind: "tracks", available: true },
     ],
     ...overrides,
   };
@@ -73,6 +74,7 @@ describe("jobs page", () => {
             { kind: "probe", available: true },
             { kind: "cover", available: false },
             { kind: "preview", available: false },
+            { kind: "tracks", available: false },
           ],
         }),
       },

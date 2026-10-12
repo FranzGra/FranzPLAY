@@ -18,13 +18,13 @@ import (
 //	GET /api/videos                       list, newest first (?category=&q=&limit=&offset=)
 //	GET /api/videos/{id}                  one video
 //	GET /api/videos/{id}/stream           the video file, with jumps forward and back
-//	GET /api/videos/{id}/subtitles        the subtitles next to the video file
+//	GET /api/videos/{id}/subtitles        the subtitles next to the video file and inside it
 //	GET /api/videos/{id}/subtitles/{key}  one subtitle, as WebVTT
 //	GET /api/categories                   categories with their number of videos
 //	GET /api/covers/{name}                a cover image
 //	GET /api/previews/{name}              the frames shown over the timeline
 func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
-	h := handlers{store: store{db: db}, logger: logger}
+	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir), logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos", h.list)
 		mux.HandleFunc("GET /api/videos/{id}", h.get)
@@ -38,8 +38,9 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 }
 
 type handlers struct {
-	store  store
-	logger *slog.Logger
+	store        store
+	subtitlesDir string // the copies of the subtitles inside the videos
+	logger       *slog.Logger
 }
 
 // listResponse is the body of GET /api/videos.
