@@ -114,15 +114,23 @@ describe("parseVideo", () => {
 
 describe("parseCategories", () => {
   it("accepts a list", () => {
-    expect(parseCategories([{ name: "Vacanze", videos: 3 }])).toEqual([
-      { name: "Vacanze", videos: 3 },
-    ]);
+    const vacanze = {
+      name: "Vacanze",
+      videos: 3,
+      color: "#e11d48",
+      image: "/api/category-images/1-0123456789abcdef.jpg",
+    };
+    expect(
+      parseCategories([vacanze, { name: "Corsi", videos: 1, color: "", image: null }]),
+    ).toEqual([vacanze, { name: "Corsi", videos: 1, color: "", image: null }]);
   });
 
   it.each([
     ["an object", { name: "Vacanze" }],
     ["an empty name", [{ name: "", videos: 1 }]],
-    ["a bad count", [{ name: "Vacanze", videos: "3" }]],
+    ["a bad count", [{ name: "Vacanze", videos: "3", color: "", image: null }]],
+    ["a bad color", [{ name: "Vacanze", videos: 3, color: "red", image: null }]],
+    ["a foreign image", [{ name: "Vacanze", videos: 3, color: "", image: "https://x/y.jpg" }]],
   ])("rejects %s", (_label, data) => {
     expect(() => parseCategories(data)).toThrow();
   });

@@ -69,7 +69,8 @@ func (a api) build(ctx context.Context) (Overview, error) {
 	}
 	err = a.db.QueryRowContext(ctx, `
 		SELECT
-			(SELECT count(DISTINCT category) FROM videos WHERE visible AND category != ''),
+			(SELECT count(DISTINCT coalesce(c.label, v.category)) FROM videos v
+			 LEFT JOIN categories c ON c.name = v.category WHERE v.visible AND v.category != ''),
 			(SELECT count(*) FROM users),
 			(SELECT count(*) FROM users WHERE role = 'admin'),
 			(SELECT count(*) FROM comments),

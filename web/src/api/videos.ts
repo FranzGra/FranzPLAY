@@ -60,6 +60,8 @@ export type VideoList = {
 export type Category = {
   name: string;
   videos: number;
+  color: string; // chosen by the administrator, like "#2997ff"; "" = none
+  image: string | null; // address of its image; null = none
 };
 
 function record(data: unknown, what: string): Record<string, unknown> {
@@ -195,7 +197,21 @@ export function parseCategories(data: unknown): Category[] {
     if (typeof c.name !== "string" || c.name === "") {
       throw new Error("category name: empty");
     }
-    return { name: c.name, videos: count(c.videos, "category videos") };
+    if (typeof c.color !== "string" || (c.color !== "" && !/^#[0-9a-f]{6}$/.test(c.color))) {
+      throw new Error("category color: not a color");
+    }
+    if (
+      c.image !== null &&
+      (typeof c.image !== "string" || !c.image.startsWith("/api/category-images/"))
+    ) {
+      throw new Error("category image: not an image address");
+    }
+    return {
+      name: c.name,
+      videos: count(c.videos, "category videos"),
+      color: c.color,
+      image: c.image,
+    };
   });
 }
 

@@ -322,8 +322,8 @@ func TestCategories(t *testing.T) {
 	s.addVideo(t, "d.mp4", "d", "", 1, false)
 
 	got := decode[[]Category](t, s.get(t, "/api/categories"))
-	want := []Category{{"Corsi", 2}, {"viaggi", 1}}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+	want := []Category{{Name: "Corsi", Videos: 2}, {Name: "viaggi", Videos: 1}}
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("categories = %+v, want %+v", got, want)
 	}
 }

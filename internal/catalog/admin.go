@@ -19,7 +19,8 @@ import (
 // The administrator's changes to the catalog live here and in edit.go:
 // hiding a video, asking for its information, cover and previews again,
 // changing its title and category (edit.go), and choosing its cover
-// (cover.go) and its clip (clip.go). Everything else in this package
+// (cover.go) and its clip (clip.go); and the look of the categories
+// (categories.go). Everything else in this package
 // only reads.
 
 // errFileMissing means the video's file was not found at the last scan.
@@ -76,6 +77,10 @@ const (
 //	PUT  /api/admin/videos/{id}/clip       a video as the card's clip (the body is the video)
 //	POST /api/admin/videos/{id}/clip/remake  back to the clip FranzPLAY makes, made again
 //	DELETE /api/admin/videos/{id}/clip     no clip on the card
+//	GET  /api/admin/categories             every category, as the videos have it
+//	PUT  /api/admin/categories/{name}      the name people see and the color {label, color}
+//	PUT  /api/admin/categories/{name}/image   its image (the body is a JPEG)
+//	DELETE /api/admin/categories/{name}/image no image
 //
 // changed tells the open pages the list of videos changed; queued tells
 // the job worker (and the pages) that there is new work.
@@ -106,6 +111,10 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/admin/videos/{id}/clip", a.only(a.handleOwnClip))
 	mux.HandleFunc("POST /api/admin/videos/{id}/clip/remake", a.only(a.handleRemakeClip))
 	mux.HandleFunc("DELETE /api/admin/videos/{id}/clip", a.only(a.handleNoClip))
+	mux.HandleFunc("GET /api/admin/categories", a.only(a.handleAdminCategories))
+	mux.HandleFunc("PUT /api/admin/categories/{name}", a.only(a.handleCategory))
+	mux.HandleFunc("PUT /api/admin/categories/{name}/image", a.only(a.handleCategoryImage))
+	mux.HandleFunc("DELETE /api/admin/categories/{name}/image", a.only(a.handleRemoveCategoryImage))
 }
 
 // only lets only administrators through.
@@ -219,7 +228,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		where = `v.missing_since IS NOT NULL`
 	}
 	for _, w := range q.words {
-		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR v.category LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
+		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
 		p := likePattern(w)
 		args = append(args, p, p, p)
 	}

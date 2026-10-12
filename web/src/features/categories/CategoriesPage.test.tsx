@@ -8,8 +8,8 @@ describe("categories", () => {
       ...signedIn(),
       "GET /api/categories": {
         body: [
-          { name: "Gite & mare", videos: 3 },
-          { name: "Scuola", videos: 1 },
+          { name: "Gite & mare", videos: 3, color: "", image: null },
+          { name: "Scuola", videos: 1, color: "", image: null },
         ],
       },
     });
@@ -17,6 +17,28 @@ describe("categories", () => {
     expect(link).toHaveAttribute("href", "/categorie/Gite%20%26%20mare");
     expect(within(link).getByText("3 video")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Scuola/ })).toBeInTheDocument();
+  });
+
+  it("shows the color and image the administrator chose", async () => {
+    renderApp("/categorie", {
+      ...signedIn(),
+      "GET /api/categories": {
+        body: [
+          {
+            name: "Vacanze",
+            videos: 3,
+            color: "#e11d48",
+            image: "/api/category-images/1-0123456789abcdef.jpg",
+          },
+        ],
+      },
+    });
+    const link = await screen.findByRole("link", { name: /Vacanze/ });
+    expect(link.style.getPropertyValue("--tile-color")).toBe("#e11d48");
+    expect(link.querySelector("img")).toHaveAttribute(
+      "src",
+      "/api/category-images/1-0123456789abcdef.jpg",
+    );
   });
 
   it("explains where categories come from when there are none", async () => {

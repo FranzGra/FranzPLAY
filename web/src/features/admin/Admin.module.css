@@ -739,3 +739,14 @@ label.action:focus-within {
 .tableBad {
   color: var(--color-danger);
 }
+
+/* The swatch for "no color": a crossed circle. */
+.noColor {
+  background: linear-gradient(
+    135deg,
+    transparent calc(50% - 1px),
+    var(--color-danger) calc(50% - 1px),
+    var(--color-danger) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
