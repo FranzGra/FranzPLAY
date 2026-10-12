@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/config"
+	"github.com/FranzGra/FranzPLAY/internal/database"
 )
 
 // freeAddr asks the system for a free local port.
@@ -61,6 +62,9 @@ func TestRunStartsAndStopsCleanly(t *testing.T) {
 	}
 	if info, err := os.Stat(dataDir); err != nil || !info.IsDir() {
 		t.Errorf("data folder %q was not created: %v", dataDir, err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, database.FileName)); err != nil {
+		t.Errorf("database was not created in the data folder: %v", err)
 	}
 
 	cancel()
