@@ -25,13 +25,16 @@ import { VideoPage } from "../features/video/VideoPage";
 import { AuthProvider, useAuth } from "./auth";
 import { Layout } from "./Layout";
 import { StartupProblem } from "./StartupProblem";
+import { SiteProvider } from "./site";
 
 // App shows the login until someone is logged in, then FranzPLAY.
 export function App() {
   return (
-    <AuthProvider>
-      <Gate />
-    </AuthProvider>
+    <SiteProvider>
+      <AuthProvider>
+        <Gate />
+      </AuthProvider>
+    </SiteProvider>
   );
 }
 

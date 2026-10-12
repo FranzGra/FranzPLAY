@@ -55,6 +55,7 @@ export const emptyLibrary: Routes = {
   "GET /api/continue": { body: [] },
   "GET /api/home": { body: { closed: [] } },
   "GET /api/health": { body: { status: "ok", version: "test" } },
+  "GET /api/site": { body: { nameFirst: "Franz", nameSecond: "PLAY", color: "#2997ff" } },
 };
 
 // signedIn are the routes of a server where Francesco is logged in.

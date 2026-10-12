@@ -112,6 +112,17 @@ func TestRunStartsAndStopsCleanly(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("GET /api/videos without login = %d, want 401", resp.StatusCode)
 	}
+	// The name and color of the site are for the login page too.
+	resp, err = http.Get("http://" + addr + "/api/site")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET /api/site without login = %d, want 200", resp.StatusCode)
+	}
 
 	cancel()
 	select {

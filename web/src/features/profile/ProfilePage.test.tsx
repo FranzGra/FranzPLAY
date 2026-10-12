@@ -201,9 +201,10 @@ describe("profile page", () => {
       expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#123456"),
     );
 
+    // Back to the site's own color, the one the administrator chose.
     await user.click(within(colors).getByRole("button", { name: "FranzPLAY" }));
     await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe(""),
+      expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#2997ff"),
     );
   });
 
