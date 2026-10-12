@@ -29,6 +29,7 @@ function overview(overrides: Record<string, unknown> = {}) {
       { kind: "cover", available: true },
       { kind: "preview", available: true },
       { kind: "tracks", available: true },
+      { kind: "convert", available: true },
     ],
     ...overrides,
   };
@@ -37,7 +38,7 @@ function overview(overrides: Record<string, unknown> = {}) {
 describe("parseJobsOverview", () => {
   it("refuses an unknown kind of job", () => {
     expect(() =>
-      parseJobsOverview(overview({ failed: [failedJob({ kind: "convert" })] })),
+      parseJobsOverview(overview({ failed: [failedJob({ kind: "transcode" })] })),
     ).toThrow();
   });
 });
@@ -75,6 +76,7 @@ describe("jobs page", () => {
             { kind: "cover", available: false },
             { kind: "preview", available: false },
             { kind: "tracks", available: false },
+            { kind: "convert", available: false },
           ],
         }),
       },

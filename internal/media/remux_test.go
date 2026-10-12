@@ -11,28 +11,27 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
 func TestRemuxArgs(t *testing.T) {
 	tests := []struct {
 		name  string
-		audio video.EmbeddedAudio
+		track int
+		codec string
 		start float64
 		want  []string // must appear, in this order
 		not   []string
 	}{
-		{"browser sound is copied", video.EmbeddedAudio{Stream: 2, Codec: "aac"}, 0,
-			[]string{"-i", "file:/v/film.mkv", "-map", "0:V:0", "-map", "0:2", "-c:v", "copy", "-c:a", "copy"},
+		{"browser sound is copied", 1, "aac", 0,
+			[]string{"-i", "file:/v/film.mkv", "-map", "0:V:0", "-map", "0:a:1", "-c:v", "copy", "-c:a", "copy"},
 			[]string{"-ss", "-ac"}},
-		{"film sound is converted", video.EmbeddedAudio{Stream: 1, Codec: "ac3"}, 12.5,
-			[]string{"-ss", "12.5", "-i", "file:/v/film.mkv", "-map", "0:1", "-c:a", "aac", "-ac", "2"},
+		{"film sound is converted", 0, "ac3", 12.5,
+			[]string{"-ss", "12.5", "-i", "file:/v/film.mkv", "-map", "0:a:0", "-c:a", "aac", "-ac", "2"},
 			nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := remuxArgs("/v/film.mkv", tt.audio, tt.start)
+			args := remuxArgs("/v/film.mkv", tt.track, tt.codec, tt.start)
 			if !containsInOrder(args, tt.want) {
 				t.Errorf("args %q do not contain %q in order", args, tt.want)
 			}
@@ -63,7 +62,7 @@ func containsInOrder(args, want []string) bool {
 func TestRemuxerSaysWhenBusy(t *testing.T) {
 	m := NewRemuxer("ffmpeg", 1)
 	m.slots <- struct{}{} // someone is already watching
-	err := m.Stream(context.Background(), &bytes.Buffer{}, "/v/film.mkv", video.EmbeddedAudio{Stream: 1}, 0)
+	err := m.Stream(context.Background(), &bytes.Buffer{}, "/v/film.mkv", 0, "aac", 0)
 	if !errors.Is(err, ErrBusy) {
 		t.Errorf("Stream = %v, want ErrBusy", err)
 	}
@@ -144,9 +143,9 @@ func TestRemuxWithRealFFmpeg(t *testing.T) {
 		t.Fatalf("start of 7.5 = %v, %v; want the key frame at 5", start, err)
 	}
 
-	for _, audio := range []video.EmbeddedAudio{{Stream: 1, Codec: "ac3"}, {Stream: 2, Codec: "opus"}} {
+	for track, codec := range []string{"ac3", "opus"} {
 		var out bytes.Buffer
-		if err := m.Stream(context.Background(), &out, name, audio, 7.5); err != nil {
+		if err := m.Stream(context.Background(), &out, name, track, codec, 7.5); err != nil {
 			t.Fatal(err)
 		}
 		mp4 := filepath.Join(dir, "out.mp4")
@@ -159,11 +158,11 @@ func TestRemuxWithRealFFmpeg(t *testing.T) {
 			t.Fatal(err)
 		}
 		wantSound := "aac"
-		if audio.Codec == "opus" {
+		if codec == "opus" {
 			wantSound = "opus"
 		}
 		if got := strings.Fields(string(probe)); !slices.Equal(got, []string{"h264,video", wantSound + ",audio"}) {
-			t.Errorf("sound %d: streams %q, want the picture and %s", audio.Stream, got, wantSound)
+			t.Errorf("sound %d: streams %q, want the picture and %s", track, got, wantSound)
 		}
 	}
 }

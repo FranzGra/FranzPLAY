@@ -240,6 +240,39 @@ func TestStreamSupportsJumping(t *testing.T) {
 	}
 }
 
+func TestStreamSendsTheCopyForTheBrowsers(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "film.mkv", "matroska", "", 1, true)
+	if _, err := s.db.Exec(`UPDATE videos SET video_codec = 'hevc' WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if v := decode[Video](t, s.get(t, "/api/videos/1")); v.Playable {
+		t.Error("HEVC in Matroska said playable before its copy is ready")
+	}
+	if rec := s.get(t, "/api/videos/1/stream"); rec.Body.String() != "matroska" {
+		t.Errorf("before the copy: %q, want the file itself", rec.Body)
+	}
+
+	// The copy is ready.
+	dir := filepath.Join(s.dataDir, "converted")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "1-abc.mp4"), []byte("mp4 copy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE videos SET converted = '1-abc.mp4' WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if v := decode[Video](t, s.get(t, "/api/videos/1")); !v.Playable {
+		t.Error("video with a copy said not playable")
+	}
+	rec := s.get(t, "/api/videos/1/stream")
+	if rec.Body.String() != "mp4 copy" || rec.Header().Get("Content-Type") != "video/mp4" {
+		t.Errorf("with the copy: %q %q", rec.Body, rec.Header().Get("Content-Type"))
+	}
+}
+
 func TestStreamOfMissingVideos(t *testing.T) {
 	s := newSite(t)
 	s.addVideo(t, "a.mp4", "a", "", 1, false)

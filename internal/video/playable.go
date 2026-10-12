@@ -5,7 +5,7 @@ import "strings"
 // Browsers can play some kinds of video file directly, without FranzPLAY
 // converting them. These lists hold what Chrome, Firefox and Safari all
 // play. Anything else may still play in some browsers, but not everywhere:
-// converting those files is planned for later (stage 3).
+// for those FranzPLAY makes a copy (see PlanConversion).
 var (
 	playableExtensions  = map[string]bool{".mp4": true, ".m4v": true, ".mov": true, ".webm": true}
 	playableVideoCodecs = map[string]bool{"h264": true, "vp8": true, "vp9": true, "av1": true}

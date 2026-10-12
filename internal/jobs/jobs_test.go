@@ -189,8 +189,9 @@ func TestWorkerPermanentFailure(t *testing.T) {
 	}
 }
 
-func TestWorkerRunsProbesThenCoversThenPreviewsThenTracks(t *testing.T) {
-	fx := newFixture(t, 4)
+func TestWorkerRunsProbesThenCoversThenPreviewsThenTracksThenConversions(t *testing.T) {
+	fx := newFixture(t, 5)
+	fx.enqueue(t, fx.videos[4], Convert)
 	fx.enqueue(t, fx.videos[3], Tracks)
 	fx.enqueue(t, fx.videos[0], Preview)
 	fx.enqueue(t, fx.videos[1], Cover)
@@ -199,11 +200,75 @@ func TestWorkerRunsProbesThenCoversThenPreviewsThenTracks(t *testing.T) {
 	record := func(k Kind) Handler {
 		return func(context.Context, int64) error { order = append(order, k); return nil }
 	}
-	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Cover: record(Cover), Preview: record(Preview), Tracks: record(Tracks)})
+	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Cover: record(Cover), Preview: record(Preview),
+		Tracks: record(Tracks), Convert: record(Convert)})
 	for runNext(t, w) {
 	}
-	if want := []Kind{Probe, Cover, Preview, Tracks}; !slices.Equal(order, want) {
+	if want := []Kind{Probe, Cover, Preview, Tracks, Convert}; !slices.Equal(order, want) {
 		t.Errorf("order = %v, want %v", order, want)
+	}
+}
+
+func TestConversionGivesWayToOtherWork(t *testing.T) {
+	fx := newFixture(t, 2)
+	film, fresh := fx.videos[0], fx.videos[1]
+	fx.enqueue(t, film, Convert)
+	var order []string
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{
+		Convert: func(ctx context.Context, _ int64) error {
+			order = append(order, "convert")
+			if len(order) > 1 {
+				return nil // the second time it ends
+			}
+			// A new video arrives while the film is being converted.
+			fx.enqueue(t, fresh, Probe)
+			w.Wake()
+			<-ctx.Done() // ffmpeg would be killed here
+			return ctx.Err()
+		},
+		Probe: func(context.Context, int64) error { order = append(order, "probe"); return nil },
+	}
+
+	runNext(t, w)
+	if j := fx.job(t, film, Convert); j.state != pending || j.attempts != 0 || j.lastError != "" {
+		t.Fatalf("conversion that gave way = %+v, want pending with no failed attempt", j)
+	}
+	for runNext(t, w) {
+	}
+	if want := []string{"convert", "probe", "convert"}; !slices.Equal(order, want) {
+		t.Errorf("order = %v, want %v", order, want)
+	}
+	if j := fx.job(t, film, Convert); j.state != done {
+		t.Errorf("conversion = %+v, want done", j)
+	}
+}
+
+func TestConversionDoesNotGiveWayToItsOwnKind(t *testing.T) {
+	fx := newFixture(t, 2)
+	fx.enqueue(t, fx.videos[0], Convert)
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{Convert: func(ctx context.Context, id int64) error {
+		if id == fx.videos[0] {
+			fx.enqueue(t, fx.videos[1], Convert)
+			w.Wake()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+		return nil
+	}}
+	runNext(t, w)
+	if j := fx.job(t, fx.videos[0], Convert); j.state != done {
+		t.Errorf("first conversion = %+v, want done: another conversion is no reason to stop", j)
+	}
+}
+
+func TestTimeouts(t *testing.T) {
+	if Convert.timeout() < 12*time.Hour || Cover.timeout() > time.Hour {
+		t.Errorf("timeouts: convert %v, cover %v", Convert.timeout(), Cover.timeout())
 	}
 }
 

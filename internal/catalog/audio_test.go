@@ -6,12 +6,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
-	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
 // fakeRemuxer pretends to be ffmpeg: key frames every 5 seconds, and a
@@ -19,7 +19,8 @@ import (
 type fakeRemuxer struct {
 	err      error
 	file     string
-	audio    video.EmbeddedAudio
+	track    int
+	codec    string
 	at       float64
 	streamed bool
 }
@@ -29,8 +30,8 @@ func (f *fakeRemuxer) StartOf(_ context.Context, file string, at float64) (float
 	return float64(int(at) / 5 * 5), nil
 }
 
-func (f *fakeRemuxer) Stream(_ context.Context, w io.Writer, file string, audio video.EmbeddedAudio, at float64) error {
-	f.file, f.audio, f.at, f.streamed = file, audio, at, true
+func (f *fakeRemuxer) Stream(_ context.Context, w io.Writer, file string, track int, codec string, at float64) error {
+	f.file, f.track, f.codec, f.at, f.streamed = file, track, codec, at, true
 	if f.err != nil {
 		return f.err
 	}
@@ -45,7 +46,7 @@ func withAudio(t *testing.T, remux Remuxer) *site {
 	s := newSite(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ui := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ui") })
-	s.handler = server.New("test", logger, ui, Routes(s.db, s.dataDir, logger), AudioRoutes(s.db, remux, logger))
+	s.handler = server.New("test", logger, ui, Routes(s.db, s.dataDir, logger), AudioRoutes(s.db, s.dataDir, remux, logger))
 	id := s.addVideo(t, "film.mkv", "film", "", 1, true)
 	if _, err := s.db.Exec(`INSERT INTO video_audio (video_id, stream, lang, title, codec, channels, is_default) VALUES
 		(?, 1, 'ita', '', 'ac3', 6, 1), (?, 2, 'eng', 'Commento', 'aac', 2, 0)`, id, id); err != nil {
@@ -93,8 +94,24 @@ func TestPlayWithAnotherSoundTrack(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "video/mp4" || rec.Body.String() != "mp4 bytes" {
 		t.Fatalf("stream: %d %q %q", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
 	}
-	if fake.audio.Stream != 2 || fake.audio.Codec != "aac" || fake.at != 13.5 || fake.file == "" {
-		t.Errorf("ffmpeg asked for %+v from %v of %q", fake.audio, fake.at, fake.file)
+	if fake.track != 1 || fake.codec != "aac" || fake.at != 13.5 || fake.file == "" {
+		t.Errorf("ffmpeg asked for sound %d (%s) from %v of %q", fake.track, fake.codec, fake.at, fake.file)
+	}
+}
+
+func TestPlayTheCopyWithAnotherSoundTrack(t *testing.T) {
+	fake := &fakeRemuxer{}
+	s := withAudio(t, fake)
+	if _, err := s.db.Exec(`UPDATE videos SET converted = '1-abc.mp4' WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	rec := s.get(t, "/api/videos/1/audio/1/stream?at=3")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stream: %d", rec.Code)
+	}
+	// The copy holds the Italian AC3 sound as AAC.
+	if want := filepath.Join(s.dataDir, "converted", "1-abc.mp4"); fake.file != want || fake.track != 0 || fake.codec != "aac" {
+		t.Errorf("ffmpeg asked for sound %d (%s) of %q, want 0 (aac) of %q", fake.track, fake.codec, fake.file, want)
 	}
 }
 

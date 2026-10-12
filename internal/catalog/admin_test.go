@@ -177,8 +177,8 @@ func TestRefresh(t *testing.T) {
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(kinds, []string{"cover", "preview", "probe", "tracks"}) {
-		t.Errorf("pending jobs = %v, want cover, preview, probe and tracks", kinds)
+	if !reflect.DeepEqual(kinds, []string{"convert", "cover", "preview", "probe", "tracks"}) {
+		t.Errorf("pending jobs = %v, want convert, cover, preview, probe and tracks", kinds)
 	}
 
 	s.do(t, "POST", "/api/admin/videos/"+strconv.FormatInt(gone, 10)+"/refresh", "", http.StatusConflict)

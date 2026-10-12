@@ -22,6 +22,7 @@ export const kindNames: Record<JobKind, string> = {
   cover: "Copertina",
   preview: "Anteprime",
   tracks: "Lingue e sottotitoli",
+  convert: "Copia per i browser",
 };
 
 // missingTool says which program a kind of job needs.
@@ -30,6 +31,7 @@ const missingTool: Record<JobKind, string> = {
   cover: "ffmpeg",
   preview: "ffmpeg",
   tracks: "ffmpeg", // and ffprobe, which "probe" already names
+  convert: "ffmpeg",
 };
 
 // JobsPage shows the heavy work FranzPLAY does by itself: what runs now,

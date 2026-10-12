@@ -217,7 +217,7 @@ func TestProberAsksForTheCoverThePreviewsAndTheSubtitles(t *testing.T) {
 	if err := p.Handle(context.Background(), id); err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"cover", "preview", "tracks"} {
+	for _, kind := range []string{"cover", "preview", "tracks", "convert"} {
 		var state string
 		if err := db.QueryRow(`SELECT state FROM jobs WHERE video_id = ? AND kind = ?`, id, kind).Scan(&state); err != nil {
 			t.Fatalf("no %s job: %v", kind, err)

@@ -267,7 +267,7 @@ func (s store) refresh(ctx context.Context, id int64, now time.Time) (err error)
 		}
 		err = tx.Commit()
 	}()
-	for _, k := range []jobs.Kind{jobs.Probe, jobs.Cover, jobs.Preview, jobs.Tracks} {
+	for _, k := range []jobs.Kind{jobs.Probe, jobs.Cover, jobs.Preview, jobs.Tracks, jobs.Convert} {
 		if err := jobs.Enqueue(ctx, tx, id, k, false, now); err != nil {
 			return err
 		}

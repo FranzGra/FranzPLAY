@@ -112,12 +112,14 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	} else {
 		handlers[jobs.Cover] = tell(media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle)
 		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
+		// A ready copy makes a video playable: the pages hear about it.
+		handlers[jobs.Convert] = tell(media.NewConverter(db, ffmpeg, cfg.DataDir).Handle)
 		if ffprobe, err := exec.LookPath(cfg.FFprobe); err == nil {
 			handlers[jobs.Tracks] = media.NewTracker(db, ffprobe, ffmpeg, cfg.DataDir).Handle
 			remux = media.NewRemuxer(ffmpeg, remuxPlayers)
 		}
 	}
-	// Before the worker starts, so it never sees a cover or a preview being made.
+	// Before the worker starts, so it never sees a file being made.
 	if n, err := media.RemoveOrphanCovers(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused covers", "error", err)
 	} else if n > 0 {
@@ -132,6 +134,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		logger.Error("remove unused subtitles", "error", err)
 	} else if n > 0 {
 		logger.Info("removed unused subtitles", "count", n)
+	}
+	if n, err := media.RemoveOrphanConverted(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused copies", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused copies", "count", n)
 	}
 	worker := jobs.NewWorker(db, handlers, logger)
 	worker.OnChange(func() { hub.Publish(events.Jobs) })
@@ -160,7 +167,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	site := server.New(version, logger, webui.Handler(webui.Files(), logger),
 		accounts.Routes,
 		catalog.Routes(db, cfg.DataDir, logger),
-		catalog.AudioRoutes(db, remux, logger),
+		catalog.AudioRoutes(db, cfg.DataDir, remux, logger),
 		catalog.AdminRoutes(db,
 			func() { hub.Publish(events.Library) },
 			func() { worker.Wake(); hub.Publish(events.Jobs) },

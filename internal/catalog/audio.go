@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"path/filepath"
 	"strconv"
 
 	"github.com/FranzGra/FranzPLAY/internal/media"
@@ -20,7 +21,7 @@ import (
 // replaced only in tests.
 type Remuxer interface {
 	StartOf(ctx context.Context, file string, at float64) (float64, error)
-	Stream(ctx context.Context, w io.Writer, file string, audio video.EmbeddedAudio, at float64) error
+	Stream(ctx context.Context, w io.Writer, file string, track int, codec string, at float64) error
 }
 
 // maxSeconds is the latest time accepted in an address: two days.
@@ -41,9 +42,19 @@ type audioStart struct {
 }
 
 type audioHandlers struct {
-	store  store
-	remux  Remuxer // nil when ffmpeg is not installed
-	logger *slog.Logger
+	store        store
+	convertedDir string  // the copies of the videos not every browser plays
+	remux        Remuxer // nil when ffmpeg is not installed
+	logger       *slog.Logger
+}
+
+// sound is the sound track to play and where it is: in the file, or in
+// the copy made for the browsers, which holds every sound track of the
+// file, in the same order.
+type sound struct {
+	file  string
+	track int    // its place among the sound tracks: 0 = the first
+	codec string // its format in file
 }
 
 // AudioRoutes adds the API to choose the sound track of a video:
@@ -53,8 +64,9 @@ type audioHandlers struct {
 //	GET /api/videos/{id}/audio/{stream}/stream    the video with that sound (?at=)
 //
 // Without remux (no ffmpeg), there is never a choice.
-func AudioRoutes(db *sql.DB, remux Remuxer, logger *slog.Logger) func(mux *http.ServeMux) {
-	h := audioHandlers{store: store{db: db}, remux: remux, logger: logger}
+func AudioRoutes(db *sql.DB, dataDir string, remux Remuxer, logger *slog.Logger) func(mux *http.ServeMux) {
+	h := audioHandlers{store: store{db: db}, convertedDir: filepath.Join(dataDir, media.ConvertedDir),
+		remux: remux, logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos/{id}/audio", h.list)
 		mux.HandleFunc("GET /api/videos/{id}/audio/{stream}", h.start)
@@ -94,38 +106,43 @@ func (h audioHandlers) list(w http.ResponseWriter, r *http.Request) {
 
 // track finds the video and the sound track of the address; it answers
 // itself when one is not there.
-func (h audioHandlers) track(w http.ResponseWriter, r *http.Request) (string, video.EmbeddedAudio, bool) {
+func (h audioHandlers) track(w http.ResponseWriter, r *http.Request) (sound, int, bool) {
 	if h.remux == nil {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "choosing the sound needs ffmpeg")
-		return "", video.EmbeddedAudio{}, false
+		return sound{}, 0, false
 	}
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
-		return "", video.EmbeddedAudio{}, false
+		return sound{}, 0, false
 	}
 	stream, err := strconv.Atoi(r.PathValue("stream"))
 	if err != nil || stream < 0 {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "sound track not found")
-		return "", video.EmbeddedAudio{}, false
+		return sound{}, 0, false
 	}
-	file, err := h.store.file(r.Context(), id)
+	file, isCopy, err := h.store.played(r.Context(), id, h.convertedDir)
 	if err != nil {
 		h.fail(w, r, err)
-		return "", video.EmbeddedAudio{}, false
+		return sound{}, 0, false
 	}
 	all, err := h.store.audio(r.Context(), id)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
-		return "", video.EmbeddedAudio{}, false
+		return sound{}, 0, false
 	}
-	for _, a := range all {
-		if a.Stream == stream {
-			return file, a, true
+	for i, a := range all {
+		if a.Stream != stream {
+			continue
 		}
+		codec := a.Codec
+		if isCopy {
+			codec = video.MP4AudioCodec(codec)
+		}
+		return sound{file: file, track: i, codec: codec}, stream, true
 	}
 	respond.Error(w, r, h.logger, http.StatusNotFound, "sound track not found")
-	return "", video.EmbeddedAudio{}, false
+	return sound{}, 0, false
 }
 
 // seconds reads a time in seconds from the query; it answers itself
@@ -144,7 +161,7 @@ func (h audioHandlers) seconds(w http.ResponseWriter, r *http.Request, name stri
 }
 
 func (h audioHandlers) start(w http.ResponseWriter, r *http.Request) {
-	file, audio, ok := h.track(w, r)
+	snd, stream, ok := h.track(w, r)
 	if !ok {
 		return
 	}
@@ -152,18 +169,18 @@ func (h audioHandlers) start(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	start, err := h.remux.StartOf(r.Context(), file, at)
+	start, err := h.remux.StartOf(r.Context(), snd.file, at)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
 	src := fmt.Sprintf("/api/videos/%s/audio/%d/stream?at=%s",
-		r.PathValue("id"), audio.Stream, strconv.FormatFloat(at, 'f', -1, 64))
+		r.PathValue("id"), stream, strconv.FormatFloat(at, 'f', -1, 64))
 	respond.JSON(w, r, h.logger, http.StatusOK, audioStart{Start: start, Src: src})
 }
 
 func (h audioHandlers) stream(w http.ResponseWriter, r *http.Request) {
-	file, audio, ok := h.track(w, r)
+	snd, _, ok := h.track(w, r)
 	if !ok {
 		return
 	}
@@ -177,7 +194,7 @@ func (h audioHandlers) stream(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp4")
 		w.Header().Set("Cache-Control", "no-store")
 	}}
-	err := h.remux.Stream(r.Context(), out, file, audio, at)
+	err := h.remux.Stream(r.Context(), out, snd.file, snd.track, snd.codec, at)
 	switch {
 	case err == nil:
 	case errors.Is(err, media.ErrBusy):

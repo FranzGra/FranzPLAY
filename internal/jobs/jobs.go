@@ -20,7 +20,33 @@ const (
 	Cover   Kind = "cover"   // make the cover image
 	Preview Kind = "preview" // make the small frames shown over the timeline
 	Tracks  Kind = "tracks"  // list the languages inside the file, copy its subtitles
+	Convert Kind = "convert" // make a copy every browser plays, when the file itself does not
 )
+
+// defaultTimeout stops a job that takes far too long, like ffmpeg stuck
+// on a broken file. The longest usual job (a cover of a long film) takes
+// seconds.
+const defaultTimeout = 10 * time.Minute
+
+// convertTimeout is the time allowed to a conversion: encoding a long
+// film again takes hours on a Raspberry Pi.
+const convertTimeout = 24 * time.Hour
+
+// timeout is how long a job of this kind may run.
+func (k Kind) timeout() time.Duration {
+	if k == Convert {
+		return convertTimeout
+	}
+	return defaultTimeout
+}
+
+// givesWay reports whether a job of this kind stops when other work
+// arrives, to start again later from the beginning. Conversions do: they
+// run only when the machine has nothing else to do, so a new video gets
+// its cover in seconds, not after a film has been encoded.
+func (k Kind) givesWay() bool {
+	return k == Convert
+}
 
 // state is where a job is in its life. It is stored as text in the database.
 type state string

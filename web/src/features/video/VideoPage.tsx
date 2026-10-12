@@ -130,7 +130,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           unsupportedHint={
             video.playable
               ? undefined
-              : "Il formato di questo video non è adatto ai browser. FranzPLAY imparerà presto a convertirlo da solo."
+              : "Il formato di questo video non è adatto a tutti i browser. FranzPLAY ne sta preparando una copia che si vede ovunque: riprova più tardi."
           }
         />
         <h1 className={styles.title}>{video.title}</h1>
