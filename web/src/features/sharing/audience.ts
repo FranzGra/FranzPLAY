@@ -26,6 +26,13 @@ export function ready(choice: Choice): boolean {
   return choice.audience !== "people" || choice.people.length > 0;
 }
 
+// playlistSharing is the choice as the server takes it for a playlist,
+// where everybody means on my channel.
+export function playlistSharing(choice: Choice): { public: boolean; sharedWith: number[] } {
+  const { private: hidden, sharedWith } = sharing(choice);
+  return { public: !hidden, sharedWith };
+}
+
 // seenBy says in a few words who sees it, for the lists: "lo vedono
 // tutti", "solo tu lo vedi", "lo vedono anche Anna e Marco".
 export function seenBy(isPrivate: boolean, sharedWith: { name: string }[]): string {
