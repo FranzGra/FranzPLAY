@@ -32,6 +32,7 @@ Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-p
 |---|---|---|
 | `FRANZPLAY_ADDR` | `:8090` | Address and port of the web server |
 | `FRANZPLAY_DATA_DIR` | `data` | FranzPLAY's own data folder |
+| `FRANZPLAY_LIBRARIES` | none | Video folders, read-only (separated by `;` on Windows, `:` elsewhere) |
 
 ## Contributing
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/database"
+	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
 )
@@ -24,6 +25,10 @@ var version = "dev"
 
 // shutdownTimeout is how long open requests get to finish when FranzPLAY stops.
 const shutdownTimeout = 10 * time.Second
+
+// scanInterval is how often the video folders are checked for changes.
+// A check of an unchanged folder only reads names, sizes and dates, so it is cheap.
+const scanInterval = time.Minute
 
 func main() {
 	// Stop cleanly on Ctrl+C or when the system asks the program to stop.
@@ -59,6 +64,21 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		}
 	}()
 
+	if len(cfg.Libraries) == 0 {
+		logger.Warn("no video folder set: FranzPLAY will show no videos", "setting", config.EnvLibraries)
+	}
+	scanCtx, stopScan := context.WithCancel(ctx)
+	scanDone := make(chan struct{})
+	go func() {
+		defer close(scanDone)
+		library.NewScanner(db, cfg.Libraries, logger).Run(scanCtx, scanInterval)
+	}()
+	// The scan must end before the database closes (deferred above, so it runs after this).
+	defer func() {
+		stopScan()
+		<-scanDone
+	}()
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.New(version, logger, webui.Handler(webui.Files(), logger)),
@@ -69,7 +89,8 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 
 	serveErr := make(chan error, 1)
 	go func() {
-		logger.Info("FranzPLAY started", "version", version, "addr", cfg.Addr, "data_dir", cfg.DataDir)
+		logger.Info("FranzPLAY started", "version", version, "addr", cfg.Addr, "data_dir", cfg.DataDir,
+			"libraries", cfg.Libraries)
 		serveErr <- srv.ListenAndServe()
 	}()
 

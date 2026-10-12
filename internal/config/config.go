@@ -15,8 +15,9 @@ import (
 
 // Environment variable names.
 const (
-	EnvAddr    = "FRANZPLAY_ADDR"
-	EnvDataDir = "FRANZPLAY_DATA_DIR"
+	EnvAddr      = "FRANZPLAY_ADDR"
+	EnvDataDir   = "FRANZPLAY_DATA_DIR"
+	EnvLibraries = "FRANZPLAY_LIBRARIES"
 )
 
 // Default values, used when a variable is not set.
@@ -35,6 +36,9 @@ type Config struct {
 	// DataDir is FranzPLAY's own folder: database, covers, previews, backups.
 	// Nothing outside this folder is ever written.
 	DataDir string
+	// Libraries are the video folders, as absolute paths. FranzPLAY only
+	// reads them: it never creates, renames or deletes anything inside.
+	Libraries []string
 }
 
 // Load builds a Config from environment variables.
@@ -50,7 +54,58 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	cfg.DataDir = filepath.Clean(cfg.DataDir)
 
+	libraries, err := parseLibraries(getenv(EnvLibraries), cfg.DataDir)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w: %s: %w", ErrInvalidConfig, EnvLibraries, err)
+	}
+	cfg.Libraries = libraries
+
 	return cfg, nil
+}
+
+// parseLibraries reads the list of video folders. Folders are separated like
+// in PATH: ";" on Windows, ":" elsewhere. Each folder becomes an absolute path.
+//
+// Two layouts are refused, because they would break the rule that video
+// folders are read-only or would show the same video twice:
+//   - a library inside another library;
+//   - the data folder inside a library, or a library inside the data folder.
+func parseLibraries(value, dataDir string) ([]string, error) {
+	absData, err := filepath.Abs(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("data folder %q: %w", dataDir, err)
+	}
+	var libraries []string
+	for _, entry := range filepath.SplitList(value) {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		dir, err := filepath.Abs(entry)
+		if err != nil {
+			return nil, fmt.Errorf("folder %q: %w", entry, err)
+		}
+		if within(dir, absData) || within(absData, dir) {
+			return nil, fmt.Errorf("folder %q and the data folder %q must be separate, one cannot contain the other", dir, absData)
+		}
+		for _, other := range libraries {
+			if within(dir, other) || within(other, dir) {
+				return nil, fmt.Errorf("folders %q and %q overlap", other, dir)
+			}
+		}
+		libraries = append(libraries, dir)
+	}
+	return libraries, nil
+}
+
+// within reports whether path is dir itself or somewhere inside it.
+// Both must be absolute and clean.
+func within(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // valueOr returns value without surrounding spaces, or fallback if it is empty.
