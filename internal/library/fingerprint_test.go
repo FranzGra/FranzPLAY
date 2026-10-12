@@ -88,14 +88,14 @@ func TestFingerprintFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := os.DirFS(filepath.Dir(name))
-	got, err := fingerprint(dir, "video.mp4")
+	got, err := Fingerprint(dir, "video.mp4")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := fp(t, b); got != want {
-		t.Errorf("fingerprint(file) = %s, want %s", got, want)
+		t.Errorf("Fingerprint(file) = %s, want %s", got, want)
 	}
-	if _, err := fingerprint(dir, "nope.mp4"); err == nil {
+	if _, err := Fingerprint(dir, "nope.mp4"); err == nil {
 		t.Error("fingerprint of a missing file: no error")
 	}
 }
