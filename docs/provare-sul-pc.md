@@ -5,39 +5,44 @@ Serve circa un quarto d'ora la prima volta, poi bastano pochi secondi.
 
 ## 1. Installa gli strumenti (una volta sola)
 
-Servono tre programmi:
+Servono quattro programmi:
 
 - **Git**: scarica il progetto da GitHub e tiene traccia delle modifiche.
 - **Go** (versione 1.26 o più nuova): il linguaggio di FranzPLAY. Compila e avvia il programma.
 - **Node.js** (versione 22): serve solo per preparare l'interfaccia web. Chi installerà
   FranzPLAY a casa non ne avrà bisogno: l'interfaccia sarà già dentro il programma.
+- **FFmpeg**: legge durata e risoluzione dei video (con `ffprobe`) e preparerà le copertine.
+  Senza, FranzPLAY parte lo stesso ma i video restano senza durata.
 
 ### Windows
 
 1. Scarica e installa **Git** da <https://git-scm.com/download/win> (vanno bene tutte le opzioni proposte).
 2. Scarica e installa **Go** da <https://go.dev/dl/> (il file `.msi` per Windows).
 3. Scarica e installa **Node.js 22 LTS** da <https://nodejs.org/> (il file `.msi`).
-4. Apri **PowerShell** (cercalo nel menu Start) e controlla che funzionino:
+4. Installa **FFmpeg** da PowerShell con `winget install Gyan.FFmpeg`.
+5. Apri **PowerShell** (cercalo nel menu Start) e controlla che funzionino:
 
    ```powershell
    git --version
    go version
    node --version
+   ffprobe -version
    ```
 
-   Se vedi tre numeri di versione, è tutto a posto. Se dice "comando non trovato", chiudi e
+   Se vedi quattro numeri di versione, è tutto a posto. Se dice "comando non trovato", chiudi e
    riapri PowerShell.
 
 ### Mac
 
-Installa Go da <https://go.dev/dl/> (il file `.pkg`) e Node.js 22 da <https://nodejs.org/>. Git c'è già: la prima volta che scrivi `git`
+Installa Go da <https://go.dev/dl/> (il file `.pkg`) e Node.js 22 da <https://nodejs.org/>.
+FFmpeg si installa con [Homebrew](https://brew.sh/): `brew install ffmpeg`. Git c'è già: la prima volta che scrivi `git`
 nel Terminale, il Mac ti propone di installare gli strumenti necessari.
 
 ### Linux
 
 Installa Git con il gestore dei pacchetti (`sudo apt install git` su Debian/Ubuntu/Raspberry Pi OS)
 e Go seguendo <https://go.dev/doc/install> (le versioni nei gestori di pacchetti sono spesso vecchie).
-Per Node.js 22 segui <https://nodejs.org/en/download>.
+Per Node.js 22 segui <https://nodejs.org/en/download>. FFmpeg: `sudo apt install ffmpeg`.
 
 ## 2. Scarica il progetto
 
@@ -123,8 +128,9 @@ FRANZPLAY_LIBRARIES="$HOME/Video:/media/disco/Famiglia" go run ./cmd/franzplay
 ```
 
 All'avvio e poi ogni minuto FranzPLAY controlla le cartelle e scrive nel terminale cosa ha trovato,
-per esempio `library scan finished ... added=12`. I video non si vedono ancora nell'interfaccia:
-arriveranno nei prossimi passi.
+per esempio `library scan finished ... added=12`. Subito dopo legge durata e risoluzione di ogni
+video nuovo, uno alla volta (`job done kind=probe ...`). I video non si vedono ancora
+nell'interfaccia: arriveranno nei prossimi passi.
 
 ### Cambiare porta
 

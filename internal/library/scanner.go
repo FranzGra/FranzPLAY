@@ -34,6 +34,7 @@ type Scanner struct {
 	logger    *slog.Logger
 	now       func() time.Time
 	open      func(dir string) fs.FS
+	newJobs   func()
 }
 
 // NewScanner returns a scanner for the given video folders.
@@ -44,8 +45,13 @@ func NewScanner(db *sql.DB, libraries []string, logger *slog.Logger) *Scanner {
 		logger:    logger,
 		now:       time.Now,
 		open:      os.DirFS, // read-only view of the folder
+		newJobs:   func() {},
 	}
 }
+
+// OnNewJobs sets what to call when a scan adds work to the job queue,
+// usually waking the job worker.
+func (s *Scanner) OnNewJobs(f func()) { s.newJobs = f }
 
 // Run scans once right away, then again at every interval, until ctx is
 // cancelled. A failed scan is logged and retried at the next interval.
@@ -140,6 +146,9 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	now := s.now()
 	if err := s.store.apply(ctx, ch, now); err != nil {
 		return report, err
+	}
+	if len(ch.added) > 0 || len(ch.updates) > 0 {
+		s.newJobs()
 	}
 	forgotten, err := s.store.forget(ctx, now.Add(-ForgetAfter))
 	if err != nil {
