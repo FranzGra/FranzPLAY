@@ -32,6 +32,7 @@ export type Account = {
   name: string;
   role: Role;
   canUpload: boolean;
+  uploadQuota: number; // bytes of uploaded videos the person may keep
   accentColor: string; // "#rrggbb", or "" for FranzPLAY's own
   avatar: number; // version of the profile photo, 0 = none (the initial shows)
 };
@@ -41,7 +42,10 @@ export function parseAccount(data: unknown): Account {
   if (typeof data !== "object" || data === null) {
     throw new Error("account: response is not an object");
   }
-  const { id, name, role, canUpload, accentColor, avatar } = data as Record<string, unknown>;
+  const { id, name, role, canUpload, uploadQuota, accentColor, avatar } = data as Record<
+    string,
+    unknown
+  >;
   if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
     throw new Error("account: bad id");
   }
@@ -54,13 +58,16 @@ export function parseAccount(data: unknown): Account {
   if (typeof canUpload !== "boolean") {
     throw new Error("account: bad canUpload");
   }
+  if (typeof uploadQuota !== "number" || !Number.isSafeInteger(uploadQuota) || uploadQuota < 0) {
+    throw new Error("account: bad uploadQuota");
+  }
   if (typeof accentColor !== "string" || (accentColor !== "" && !isAccentColor(accentColor))) {
     throw new Error("account: bad accentColor");
   }
   if (typeof avatar !== "number" || !Number.isInteger(avatar) || avatar < 0) {
     throw new Error("account: bad avatar");
   }
-  return { id, name, role, canUpload, accentColor, avatar };
+  return { id, name, role, canUpload, uploadQuota, accentColor, avatar };
 }
 
 // fetchMe returns the logged-in user, or null when nobody is logged in.

@@ -154,6 +154,19 @@
   cursor: default;
 }
 
+.select {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-s);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.select:disabled {
+  cursor: default;
+}
+
 .field {
   display: flex;
   flex: 1 1 200px;

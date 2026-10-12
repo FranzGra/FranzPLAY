@@ -5,11 +5,20 @@ import { createUser, deleteUser, fetchUsers, resetPassword, updateUser } from ".
 import { useAccount } from "../../app/auth";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
+import { formatBytes } from "../../lib/format";
 import styles from "./Admin.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; people: Account[] };
 
 const byName = (a: Account, b: Account) => a.name.localeCompare(b.name, "it");
+
+const gigabyte = 1024 ** 3;
+
+// The spaces the administrator picks from, in GB, plus the one the person
+// has now when it is not among them.
+const quotaChoices = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000].map((gb) => gb * gigabyte);
+const choicesFor = (current: number) =>
+  quotaChoices.includes(current) ? quotaChoices : [...quotaChoices, current].sort((a, b) => a - b);
 
 // PeoplePage lets the administrator add people, decide what each may do,
 // give a new password to who forgot theirs, and remove people.
@@ -192,8 +201,8 @@ function PersonRow({
       .finally(() => setBusy(false));
   };
 
-  const change = (role: Account["role"], canUpload: boolean) =>
-    run(async () => onChanged(await updateUser(person.id, { role, canUpload })));
+  const change = (role: Account["role"], canUpload: boolean, uploadQuota?: number) =>
+    run(async () => onChanged(await updateUser(person.id, { role, canUpload, uploadQuota })));
 
   return (
     <div className={`glass ${styles.person}`}>
@@ -208,7 +217,7 @@ function PersonRow({
           </p>
           <p className={styles.role}>
             {person.role === "admin" ? "Amministratore" : "Utente"}
-            {person.canUpload && " · carica video"}
+            {person.canUpload && ` · carica video, fino a ${formatBytes(person.uploadQuota)}`}
           </p>
         </div>
       </div>
@@ -223,6 +232,23 @@ function PersonRow({
           />
           Può caricare video
         </label>
+        {person.canUpload && (
+          <label className={styles.check}>
+            Spazio
+            <select
+              className={`glass ${styles.select}`}
+              value={person.uploadQuota}
+              disabled={busy}
+              onChange={(e) => change(person.role, true, Number(e.target.value))}
+            >
+              {choicesFor(person.uploadQuota).map((bytes) => (
+                <option key={bytes} value={bytes}>
+                  {formatBytes(bytes)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className={styles.check}>
           <input
             type="checkbox"

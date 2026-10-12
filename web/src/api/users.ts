@@ -20,10 +20,11 @@ export async function createUser(person: NewPerson): Promise<Account> {
   return parseAccount(await request("/api/users", { method: "POST", body: person }));
 }
 
-// updateUser changes what a person may do.
+// updateUser changes what a person may do. Without uploadQuota (bytes),
+// the person keeps the space they have.
 export async function updateUser(
   id: number,
-  change: { role: Role; canUpload: boolean },
+  change: { role: Role; canUpload: boolean; uploadQuota?: number },
 ): Promise<Account> {
   return parseAccount(await request(`/api/users/${id}`, { method: "PUT", body: change }));
 }

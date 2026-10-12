@@ -441,6 +441,51 @@ func TestAdministratorChangesWhatUsersMayDo(t *testing.T) {
 	}
 }
 
+func TestAdministratorChoosesTheUploadQuota(t *testing.T) {
+	s := newSite(t)
+	admin := s.setUp()
+	rec := admin.do("POST", "/api/users", map[string]any{"name": "Giulia", "password": "giulia-password", "role": "user"})
+	expect(t, rec, http.StatusCreated)
+	var giulia Account
+	if err := json.Unmarshal(rec.Body.Bytes(), &giulia); err != nil {
+		t.Fatal(err)
+	}
+	if giulia.UploadQuota != DefaultUploadQuota {
+		t.Errorf("a new person has a quota of %d bytes, want %d", giulia.UploadQuota, DefaultUploadQuota)
+	}
+	user := s.browser()
+	expect(t, user.do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusOK)
+	path := "/api/users/" + itoa(giulia.ID)
+
+	const fifty = int64(50 << 30)
+	expect(t, admin.do("PUT", path, map[string]any{"role": "user", "canUpload": true, "uploadQuota": fifty}),
+		http.StatusOK)
+	if got := whoAmI(t, user); got.UploadQuota != fifty {
+		t.Errorf("after the change Giulia may upload %d bytes, want %d", got.UploadQuota, fifty)
+	}
+	// Leaving the quota out keeps it.
+	expect(t, admin.do("PUT", path, map[string]any{"role": "user", "canUpload": false}), http.StatusOK)
+	if got := whoAmI(t, user); got.UploadQuota != fifty || got.CanUpload {
+		t.Errorf("after turning upload off Giulia is %+v, want the same quota and no upload", got)
+	}
+
+	for name, quota := range map[string]int64{
+		"zero":      0,
+		"negative":  -1,
+		"too small": MinUploadQuota - 1,
+		"too big":   MaxUploadQuota + 1,
+	} {
+		rec := admin.do("PUT", path, map[string]any{"role": "user", "canUpload": true, "uploadQuota": quota})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s quota: status %d, want %d", name, rec.Code, http.StatusBadRequest)
+		}
+	}
+	if got := whoAmI(t, user); got.UploadQuota != fifty {
+		t.Errorf("refused changes moved the quota to %d", got.UploadQuota)
+	}
+}
+
 func TestAdministratorResetsAPassword(t *testing.T) {
 	s := newSite(t)
 	admin := s.setUp()

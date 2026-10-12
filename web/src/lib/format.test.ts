@@ -1,5 +1,6 @@
 import {
   formatAge,
+  formatBytes,
   formatDate,
   formatDay,
   formatDuration,
@@ -81,5 +82,19 @@ describe("formatSince", () => {
 describe("formatDate", () => {
   it("writes the day in full", () => {
     expect(formatDate(new Date(2019, 2, 15))).toBe("15 marzo 2019");
+  });
+});
+
+describe("formatBytes", () => {
+  it.each([
+    [0, "0 byte"],
+    [500, "500 byte"],
+    [1536, "1,5 KB"],
+    [750 * 1024 * 1024, "750 MB"],
+    [1.5 * 1024 ** 3, "1,5 GB"],
+    [10 * 1024 ** 3, "10 GB"],
+    [2 * 1024 ** 4, "2 TB"],
+  ])("%d bytes are %s", (bytes, text) => {
+    expect(formatBytes(bytes)).toBe(text);
   });
 });

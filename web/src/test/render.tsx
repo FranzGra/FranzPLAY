@@ -9,6 +9,7 @@ export const testAccount: Account = {
   name: "Francesco",
   role: "admin",
   canUpload: true,
+  uploadQuota: 10737418240,
   accentColor: "",
   avatar: 0,
 };
