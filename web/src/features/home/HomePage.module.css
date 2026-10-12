@@ -35,3 +35,10 @@
   background: var(--color-text);
   color: var(--color-bg);
 }
+
+/* Like the titles of the rows above it. */
+.gridTitle {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}

@@ -24,7 +24,7 @@ describe("home page", () => {
         },
       },
     });
-    const list = await screen.findByRole("list", { name: "Ultimi video" });
+    const list = await screen.findByRole("list", { name: "Tutti i video" });
     const cards = within(list).getAllByRole("link");
     expect(cards).toHaveLength(2);
 
@@ -50,12 +50,15 @@ describe("home page", () => {
       ...signedIn(),
       "GET /api/videos": () => new Response(JSON.stringify({ videos: list, total: list.length })),
     });
-    expect(await screen.findByRole("heading", { name: "Video 1" })).toBeInTheDocument();
+    const grid = await screen.findByRole("list", { name: "Tutti i video" });
+    expect(await within(grid).findByRole("heading", { name: "Video 1" })).toBeInTheDocument();
 
     list = [videoJSON({ id: 2, title: "Appena arrivato", cover: null }), ...list];
     act(() => FakeEventSource.last?.emit("library"));
-    expect(await screen.findByRole("heading", { name: "Appena arrivato" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Video 1" })).toBeInTheDocument();
+    expect(
+      await within(grid).findByRole("heading", { name: "Appena arrivato" }),
+    ).toBeInTheDocument();
+    expect(within(grid).getByRole("heading", { name: "Video 1" })).toBeInTheDocument();
   });
 
   it("filters by category with the chips", async () => {
@@ -90,7 +93,34 @@ describe("home page", () => {
     expect(server.requests.at(-1)?.url).toContain("category=Scuola");
 
     await user.click(within(chips).getByRole("button", { name: "Tutti" }));
-    expect(await screen.findByRole("heading", { name: "Video 1" })).toBeInTheDocument();
+    const grid = await screen.findByRole("list", { name: "Tutti i video" });
+    expect(await within(grid).findByRole("heading", { name: "Video 1" })).toBeInTheDocument();
+  });
+
+  it("mixes all the videos, and shows the newest in their own row", async () => {
+    const { server } = renderApp("/", {
+      ...signedIn(),
+      "GET /api/videos": (request) => {
+        const mixed = new URL(request.url).searchParams.get("order") === "random";
+        const body = mixed
+          ? { videos: [videoJSON({ id: 5, title: "A caso" })], total: 1 }
+          : { videos: [videoJSON({ id: 6, title: "Nuovissimo" })], total: 1 };
+        return new Response(JSON.stringify(body));
+      },
+    });
+    const grid = await screen.findByRole("list", { name: "Tutti i video" });
+    expect(await within(grid).findByRole("heading", { name: "A caso" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Tutti i video" })).toBeInTheDocument();
+    const latest = await screen.findByRole("region", { name: "Ultimi arrivati" });
+    expect(within(latest).getByRole("heading", { name: "Nuovissimo" })).toBeInTheDocument();
+
+    // The same order for the pages of one visit.
+    const seeds = server.requests
+      .map((r) => new URL(r.url).searchParams)
+      .filter((p) => p.get("order") === "random")
+      .map((p) => Number(p.get("seed")));
+    expect(seeds.length).toBeGreaterThan(0);
+    expect(seeds.every((seed) => seed === seeds[0] && seed >= 1 && seed <= 2 ** 31)).toBe(true);
   });
 
   it("loads more videos on request", async () => {
@@ -104,7 +134,7 @@ describe("home page", () => {
         );
       },
     });
-    const list = await screen.findByRole("list", { name: "Ultimi video" });
+    const list = await screen.findByRole("list", { name: "Tutti i video" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(pageSize);
 
     await user.click(screen.getByRole("button", { name: "Mostra altri video" }));
@@ -177,7 +207,7 @@ describe("home page", () => {
       ...signedIn(),
       "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
     });
-    await screen.findByRole("list", { name: "Ultimi video" });
+    await screen.findByRole("list", { name: "Tutti i video" });
     expect(screen.queryByRole("heading", { name: "Continua a guardare" })).not.toBeInTheDocument();
   });
 
@@ -201,7 +231,7 @@ describe("home page", () => {
       "GET /api/recommended": { body: [] },
       "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
     });
-    await screen.findByRole("list", { name: "Ultimi video" });
+    await screen.findByRole("list", { name: "Tutti i video" });
     expect(screen.queryByRole("heading", { name: "Potrebbe piacerti" })).not.toBeInTheDocument();
   });
 });

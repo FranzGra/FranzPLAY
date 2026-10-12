@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,9 @@ func TestParseListQuery(t *testing.T) {
 		{"limit=200", listQuery{limit: 200}},
 		{"q=%20mare%20%20Rimini%20", listQuery{words: []string{"mare", "Rimini"}, limit: defaultLimit}},
 		{"q=%20%20", listQuery{limit: defaultLimit}},
+		{"order=newest", listQuery{limit: defaultLimit}},
+		{"order=random&seed=42", listQuery{limit: defaultLimit, shuffle: 42}},
+		{"order=random&seed=9007199254740991", listQuery{limit: defaultLimit, shuffle: maxSeed}},
 	}
 	for _, tt := range tests {
 		values, err := url.ParseQuery(tt.query)
@@ -38,7 +42,9 @@ func TestParseListQuery(t *testing.T) {
 
 func TestParseListQueryRejects(t *testing.T) {
 	for _, query := range []string{"limit=0", "limit=201", "limit=abc", "offset=-1", "offset=x",
-		"q=" + strings.Repeat("a", maxSearchLen+1)} {
+		"q=" + strings.Repeat("a", maxSearchLen+1),
+		"order=random", "order=random&seed=0", "order=random&seed=-1", "order=random&seed=x",
+		"order=random&seed=9007199254740992", "order=oldest", "seed=42", "order=newest&seed=42"} {
 		values, err := url.ParseQuery(query)
 		if err != nil {
 			t.Fatal(err)
@@ -127,5 +133,28 @@ func TestLikePattern(t *testing.T) {
 		if got := likePattern(word); got != want {
 			t.Errorf("likePattern(%q) = %q, want %q", word, got, want)
 		}
+	}
+}
+
+func TestShuffled(t *testing.T) {
+	ids := make([]int64, 50)
+	for i := range ids {
+		ids[i] = int64(i + 1)
+	}
+	a := shuffled(ids, 7)
+	if !slices.Equal(shuffled(ids, 7), a) {
+		t.Error("the same seed gave two orders")
+	}
+	if slices.Equal(a, ids) || slices.Equal(shuffled(ids, 8), a) {
+		t.Error("the order is not mixed, or does not depend on the seed")
+	}
+	if !slices.Equal(slices.Sorted(slices.Values(a)), ids) {
+		t.Errorf("mixed %v, want every id once", a)
+	}
+	if ids[0] != 1 || ids[49] != 50 {
+		t.Error("shuffled changed the list it was given")
+	}
+	if got := shuffled(nil, 7); len(got) != 0 {
+		t.Errorf("nothing to mix: %v", got)
 	}
 }

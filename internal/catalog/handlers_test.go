@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -146,6 +148,61 @@ func TestListVideosByCategoryAndPage(t *testing.T) {
 
 	if rec := s.get(t, "/api/videos?limit=1000"); rec.Code != http.StatusBadRequest {
 		t.Errorf("limit=1000: status %d, want 400", rec.Code)
+	}
+}
+
+func TestListVideosMixed(t *testing.T) {
+	s := newSite(t)
+	for i := range 30 {
+		cat := "Viaggi"
+		if i%3 == 0 {
+			cat = "Corsi"
+		}
+		s.addVideo(t, fmt.Sprintf("%s/%02d.mp4", cat, i), fmt.Sprint(i), cat, int64(i), false)
+	}
+	page := func(target string) listResponse {
+		t.Helper()
+		rec := s.get(t, target)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", target, rec.Code, rec.Body)
+		}
+		return decode[listResponse](t, rec)
+	}
+
+	// Three pages of one visit: every video once, not newest first.
+	var seen []int64
+	for offset := 0; offset < 30; offset += 12 {
+		got := page(fmt.Sprintf("/api/videos?order=random&seed=5&limit=12&offset=%d", offset))
+		if got.Total != 30 {
+			t.Errorf("total = %d, want 30", got.Total)
+		}
+		for _, v := range got.Videos {
+			seen = append(seen, v.ID)
+		}
+	}
+	if len(seen) != 30 || len(slices.Compact(slices.Sorted(slices.Values(seen)))) != 30 {
+		t.Errorf("pages gave %v, want the 30 videos once each", seen)
+	}
+	newest := page("/api/videos?limit=30")
+	if newest.Videos[0].ID == seen[0] && newest.Videos[1].ID == seen[1] && newest.Videos[2].ID == seen[2] {
+		t.Errorf("mixed order starts like the newest: %v", seen[:3])
+	}
+	if again := page("/api/videos?order=random&seed=5&limit=12"); again.Videos[0].ID != seen[0] {
+		t.Error("the same seed gave another order")
+	}
+
+	// The category still filters, and a page past the end is empty.
+	got := page("/api/videos?order=random&seed=5&category=Corsi&limit=200")
+	if got.Total != 10 || len(got.Videos) != 10 {
+		t.Errorf("Corsi mixed: total %d, %d videos, want 10", got.Total, len(got.Videos))
+	}
+	for _, v := range got.Videos {
+		if v.Category != "Corsi" {
+			t.Errorf("video %q of %q in Corsi", v.Title, v.Category)
+		}
+	}
+	if past := page("/api/videos?order=random&seed=5&offset=100"); past.Total != 30 || len(past.Videos) != 0 {
+		t.Errorf("past the end: %+v", past)
 	}
 }
 
