@@ -243,3 +243,21 @@ func (s *Service) changePassword(ctx context.Context, a Account, token, current,
 	}
 	return s.store.setPassword(ctx, a.ID, hash, hashToken(token))
 }
+
+// resetPassword sets a new password chosen by an administrator, for a user
+// who forgot theirs. Every session of that user is closed, except the
+// administrator's own when they reset their own password.
+func (s *Service) resetPassword(ctx context.Context, admin Account, token string, id int64, password string) error {
+	if err := checkNewPassword(password); err != nil {
+		return err
+	}
+	hash, err := s.hash(ctx, password)
+	if err != nil {
+		return err
+	}
+	keep := []byte{}
+	if id == admin.ID {
+		keep = hashToken(token)
+	}
+	return s.store.setPassword(ctx, id, hash, keep)
+}

@@ -1,4 +1,6 @@
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
+import { AdminPage } from "../features/admin/AdminPage";
+import { PeoplePage } from "../features/admin/PeoplePage";
 import { AuthPage } from "../features/auth/AuthPage";
 import { ComingSoonPage } from "../features/ComingSoonPage";
 import { CategoriesPage } from "../features/categories/CategoriesPage";
@@ -51,6 +53,10 @@ function Pages() {
         <Route path="cronologia" element={<HistoryPage />} />
         <Route path="categorie" element={<CategoriesPage />} />
         <Route path="categorie/:name" element={<CategoryPage />} />
+        <Route path="admin" element={<AdminPage />}>
+          <Route index element={<Navigate to="persone" replace />} />
+          <Route path="persone" element={<PeoplePage />} />
+        </Route>
         <Route
           path="*"
           element={

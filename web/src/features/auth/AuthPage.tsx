@@ -1,5 +1,5 @@
 import { type FormEvent, useId, useState } from "react";
-import { login, setup } from "../../api/auth";
+import { login, nameProblem, passwordProblem, setup } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../app/auth";
 import { Icon } from "../../components/Icon";
@@ -7,13 +7,6 @@ import { usePageTitle } from "../../components/PageTitle";
 import styles from "./AuthPage.module.css";
 
 type Mode = "login" | "setup";
-
-// The same limits the server checks: checked here too, so mistakes show
-// at once and in Italian.
-const nameMin = 3;
-const nameMax = 32;
-const passwordMin = 8;
-const passwordMax = 128;
 
 // AuthPage is what people see before logging in: the login form, or, on a
 // brand new FranzPLAY, the form that creates the administrator.
@@ -154,13 +147,9 @@ function Field({
 
 // checkSetup finds mistakes before asking the server.
 export function checkSetup(name: string, password: string, confirm: string): string {
-  const n = [...name.trim()].length;
-  if (n < nameMin || n > nameMax) {
-    return `Il nome deve avere da ${nameMin} a ${nameMax} caratteri.`;
-  }
-  const p = [...password].length;
-  if (p < passwordMin || p > passwordMax) {
-    return `La password deve avere da ${passwordMin} a ${passwordMax} caratteri.`;
+  const problem = nameProblem(name) || passwordProblem(password);
+  if (problem) {
+    return problem;
   }
   if (password !== confirm) {
     return "Le due password non sono uguali.";

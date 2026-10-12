@@ -4,6 +4,28 @@ import { ApiError, request } from "./client";
 
 export type Role = "admin" | "user";
 
+// The limits the server checks for names and passwords. The interface
+// checks them too, so mistakes show at once and in Italian.
+export const nameMin = 3;
+export const nameMax = 32;
+export const passwordMin = 8;
+export const passwordMax = 128;
+
+// nameProblem and passwordProblem explain what is wrong, or return "".
+export function nameProblem(name: string): string {
+  const n = [...name.trim()].length;
+  return n < nameMin || n > nameMax
+    ? `Il nome deve avere da ${nameMin} a ${nameMax} caratteri.`
+    : "";
+}
+
+export function passwordProblem(password: string): string {
+  const n = [...password].length;
+  return n < passwordMin || n > passwordMax
+    ? `La password deve avere da ${passwordMin} a ${passwordMax} caratteri.`
+    : "";
+}
+
 export type Account = {
   id: number;
   name: string;
