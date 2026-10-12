@@ -4,7 +4,7 @@ import { emptyLibrary, renderApp, signedIn, testAccount } from "../../test/rende
 const signedOut = {
   ...emptyLibrary,
   "GET /api/me": { status: 401, body: { error: "login required" } },
-  "GET /api/setup": { body: { needed: false } },
+  "GET /api/setup": { body: { needed: false, openRegistration: false } },
 };
 
 describe("join page", () => {

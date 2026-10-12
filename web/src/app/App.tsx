@@ -6,6 +6,7 @@ import { InvitesPage } from "../features/admin/InvitesPage";
 import { JobsPage } from "../features/admin/JobsPage";
 import { OnlinePage } from "../features/admin/OnlinePage";
 import { PeoplePage } from "../features/admin/PeoplePage";
+import { SitePage } from "../features/admin/SitePage";
 import { VideosPage } from "../features/admin/VideosPage";
 import { AuthPage } from "../features/auth/AuthPage";
 import { JoinPage } from "../features/auth/JoinPage";
@@ -46,7 +47,12 @@ function Gate() {
     case "error":
       return <StartupProblem />;
     case "signed-out":
-      return <AuthPage mode={state.setupNeeded ? "setup" : "login"} />;
+      return (
+        <AuthPage
+          mode={state.setupNeeded ? "setup" : "login"}
+          openRegistration={state.openRegistration}
+        />
+      );
     case "signed-in":
       return <Pages />;
   }
@@ -76,6 +82,7 @@ function Pages() {
           <Route path="cartelle" element={<FoldersPage />} />
           <Route path="internet" element={<OnlinePage />} />
           <Route path="lavori" element={<JobsPage />} />
+          <Route path="sito" element={<SitePage />} />
         </Route>
         <Route
           path="*"
