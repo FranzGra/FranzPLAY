@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router";
 import { AdminPage } from "../features/admin/AdminPage";
+import { CommentsPage } from "../features/admin/CommentsPage";
 import { FoldersPage } from "../features/admin/FoldersPage";
 import { JobsPage } from "../features/admin/JobsPage";
 import { PeoplePage } from "../features/admin/PeoplePage";
@@ -60,6 +61,7 @@ function Pages() {
           <Route index element={<Navigate to="persone" replace />} />
           <Route path="persone" element={<PeoplePage />} />
           <Route path="video" element={<VideosPage />} />
+          <Route path="commenti" element={<CommentsPage />} />
           <Route path="cartelle" element={<FoldersPage />} />
           <Route path="lavori" element={<JobsPage />} />
         </Route>
