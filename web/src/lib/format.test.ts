@@ -1,4 +1,4 @@
-import { formatAge, formatDay, formatDuration, formatVideos } from "./format";
+import { formatAge, formatDay, formatDuration, formatSince, formatVideos } from "./format";
 
 describe("formatDuration", () => {
   it.each([
@@ -52,5 +52,21 @@ describe("formatDay", () => {
     [new Date(2025, 11, 24, 10, 0), "24 dicembre 2025"],
   ])("names %s", (date, want) => {
     expect(formatDay(date, now)).toBe(want);
+  });
+});
+
+describe("formatSince", () => {
+  const now = new Date(2026, 9, 12, 9, 0);
+  it.each([
+    [new Date(2026, 9, 12, 8, 59, 30), "adesso"],
+    [new Date(2026, 9, 12, 9, 1), "adesso"], // a clock a bit ahead
+    [new Date(2026, 9, 12, 8, 59), "1 minuto fa"],
+    [new Date(2026, 9, 12, 8, 15), "45 minuti fa"],
+    [new Date(2026, 9, 12, 8, 0), "1 ora fa"],
+    [new Date(2026, 9, 11, 12, 0), "21 ore fa"],
+    [new Date(2026, 9, 11, 8, 0), "ieri"],
+    [new Date(2026, 9, 9), "3 giorni fa"],
+  ])("%s is %s", (date, want) => {
+    expect(formatSince(date, now)).toBe(want);
   });
 });

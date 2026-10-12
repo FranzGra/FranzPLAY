@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/catalog"
+	"github.com/FranzGra/FranzPLAY/internal/comments"
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
@@ -118,6 +119,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		catalog.Routes(db, cfg.DataDir, logger),
 		progress.Routes(db, catalog.NewLookup(db), logger),
 		likes.Routes(db, logger),
+		comments.Routes(db, logger),
 	)
 
 	srv := &http.Server{
