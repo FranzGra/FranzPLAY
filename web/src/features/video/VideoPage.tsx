@@ -19,6 +19,7 @@ import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
 import { SaveButton } from "../playlists/SaveButton";
 import { useSuggestions } from "../recommend/useSuggestions";
+import { ShareButton } from "../share/ShareButton";
 import { VideoCard } from "../videos/VideoCard";
 import { Description } from "./Description";
 import styles from "./VideoPage.module.css";
@@ -150,6 +151,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
         <div className={styles.actions}>
           <LikeButton videoId={video.id} />
           <SaveButton videoId={video.id} />
+          <ShareButton title={video.title} path={`/video/${video.id}`} />
         </div>
         {video.description && (
           <div className={styles.below}>

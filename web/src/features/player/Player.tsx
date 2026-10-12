@@ -96,6 +96,11 @@ export function pickTrack(tracks: SubtitleTrack[], choice: SubtitleChoice): stri
   return (same ?? tracks[0])?.key ?? null;
 }
 
+const parseTimeLeft = (data: unknown) => {
+  if (typeof data !== "boolean") throw new Error("bad time left");
+  return data;
+};
+
 const parseLang = (data: unknown) => {
   if (typeof data !== "string") throw new Error("bad language");
   return data;
@@ -189,6 +194,14 @@ export function Player({
   // Whether starting by itself was already tried for this video.
   const autoTried = useRef(false);
   const [speed, setSpeed] = useState(1);
+  // repeat starts the video again when it ends. Only for this video.
+  const [repeat, setRepeat] = useState(false);
+  const repeatRef = useRef(repeat);
+  useEffect(() => {
+    repeatRef.current = repeat;
+  }, [repeat]);
+  // timeLeft shows how much is left instead of the time passed.
+  const [timeLeft, setTimeLeft] = useState(() => loadSetting("timeLeft", parseTimeLeft, false));
   const [fullscreen, setFullscreen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState(true); // the person moved recently
@@ -595,7 +608,18 @@ export function Player({
           setPlaying(false);
           tell();
         }}
-        onEnded={() => {
+        onEnded={(event) => {
+          if (repeatRef.current) {
+            // From the start again; the time left is not "watched to the end".
+            const s = soundRef.current;
+            if (s) {
+              void switchAudio(s.stream, 0, true);
+            } else {
+              event.currentTarget.currentTime = 0;
+              startPlaying(event.currentTarget);
+            }
+            return;
+          }
           setPlaying(false);
           tell();
         }}
@@ -735,6 +759,8 @@ export function Player({
           onTrack={chooseTrack}
           subtitleStyle={subtitleStyle}
           onSubtitleStyle={chooseStyle}
+          repeat={repeat}
+          onRepeat={setRepeat}
           onClose={() => setMenuOpen(false)}
         />
       )}
@@ -797,12 +823,24 @@ export function Player({
               }}
             />
           </div>
-          <span className={styles.time}>
-            {formatDuration(time)}
+          <button
+            type="button"
+            className={styles.time}
+            onClick={() => {
+              setTimeLeft(!timeLeft);
+              saveSetting("timeLeft", !timeLeft);
+            }}
+            disabled={!Number.isFinite(duration)}
+            aria-label={timeLeft ? "Mostra il tempo passato" : "Mostra quanto manca"}
+            title={timeLeft ? "Mostra il tempo passato" : "Mostra quanto manca"}
+          >
+            {timeLeft && Number.isFinite(duration)
+              ? `-${formatDuration(duration - time)}`
+              : formatDuration(time)}
             {Number.isFinite(duration) && (
               <span className={styles.total}> / {formatDuration(duration)}</span>
             )}
-          </span>
+          </button>
           <span className={styles.spacer} />
           <button
             type="button"
