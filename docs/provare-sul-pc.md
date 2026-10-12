@@ -132,16 +132,35 @@ per esempio `library scan finished ... added=12`. Subito dopo legge durata e ris
 video nuovo e ne prepara la copertina, un lavoro alla volta (`job done kind=probe ...`,
 `job done kind=cover ...`). Le copertine finiscono in `data/covers`.
 
-I video non si vedono ancora nell'interfaccia, ma puoi già curiosare con il browser:
-
-- <http://localhost:8090/api/videos>: l'elenco dei video, con durata e copertina;
-- <http://localhost:8090/api/categories>: le categorie;
-- <http://localhost:8090/api/videos/1/stream>: il primo video, che il browser riproduce
-  (se è un `.mp4` o un `.webm`), con la possibilità di andare avanti e indietro.
-
 **Copertina tua.** Se accanto a un video c'è un'immagine con lo stesso nome (per esempio
 `mare.jpg` accanto a `mare.mp4`, oppure `mare-poster.jpg`), FranzPLAY usa quella. Altrimenti prende
 un fotogramma a un decimo del video (al massimo al primo minuto), così evita gli inizi neri.
+
+### Il primo accesso
+
+Al primo avvio FranzPLAY non ha ancora utenti. Nel terminale compare una riga come questa:
+
+```
+level=WARN msg="FranzPLAY has no administrator yet: ..." setup_code=RFY6-9YPX-QF7X
+```
+
+Quel **codice di installazione** serve a creare l'amministratore, cioè te: solo chi vede il
+terminale può farlo. Da quel momento tutto FranzPLAY chiede nome e password.
+
+La pagina per entrare arriva con l'interfaccia vera, nel prossimo passo. Per ora gli indirizzi
+`/api/...` nel browser rispondono `login required`. Se vuoi curiosare lo stesso, da PowerShell
+(a FranzPLAY acceso, in una seconda finestra):
+
+```powershell
+$codice = "RFY6-9YPX-QF7X"   # il tuo codice, preso dal terminale
+$dati = @{ code = $codice; name = "Francesco"; password = "scegli-una-password" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8090/api/setup -ContentType application/json -Body $dati -SessionVariable s
+Invoke-RestMethod -Uri http://localhost:8090/api/videos -WebSession $s
+```
+
+Il primo `Invoke-RestMethod` crea l'amministratore ed entra; il secondo mostra l'elenco dei video, con durata e
+copertina. Le volte successive, al posto di `/api/setup` si usa `/api/login` con solo nome e
+password. Altri indirizzi utili: `/api/categories` (le categorie) e `/api/me` (chi sei).
 
 ### Cambiare porta
 

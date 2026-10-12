@@ -22,6 +22,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
+	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
 )
 
@@ -106,10 +107,16 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		background.Wait()
 	}()
 
+	accounts, err := users.NewService(ctx, db, logger)
+	if err != nil {
+		return err
+	}
+	site := server.New(version, logger, webui.Handler(webui.Files(), logger),
+		accounts.Routes, catalog.Routes(db, cfg.DataDir, logger))
+
 	srv := &http.Server{
-		Addr: cfg.Addr,
-		Handler: server.New(version, logger, webui.Handler(webui.Files(), logger),
-			catalog.Routes(db, cfg.DataDir, logger)),
+		Addr:              cfg.Addr,
+		Handler:           accounts.Protect(site),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		// No WriteTimeout: streaming a long video must not be cut off.
