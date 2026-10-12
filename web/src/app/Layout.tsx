@@ -4,11 +4,11 @@ import { Icon } from "../components/Icon";
 import styles from "./Layout.module.css";
 
 const sideLinks = [
-  { to: "/", label: "Home" },
-  { to: "/cronologia", label: "Cronologia" },
-  { to: "/categorie", label: "Categorie" },
-  { to: "/profilo", label: "Il mio canale" },
-];
+  { to: "/", label: "Home", icon: "home" },
+  { to: "/cronologia", label: "Cronologia", icon: "history" },
+  { to: "/categorie", label: "Categorie", icon: "categories" },
+  { to: "/profilo", label: "Il mio canale", icon: "channel" },
+] as const;
 
 const tabs = [
   { to: "/", label: "Home", icon: "home" },
@@ -68,17 +68,21 @@ export function Layout() {
         <nav className={styles.sidebar} aria-label="Menu principale">
           {sideLinks.map((link) => (
             <NavLink key={link.to} to={link.to} end className={styles.sideLink}>
+              <Icon name={link.icon} size={20} />
               {link.label}
             </NavLink>
           ))}
           <div className={styles.sideHeading}>Le tue playlist</div>
           <NavLink to="/playlist" end className={styles.sideLink}>
+            <Icon name="playlist" size={20} />
             Tutte le playlist
           </NavLink>
         </nav>
 
         <main className={styles.main}>
-          <Outlet />
+          <div className={styles.page}>
+            <Outlet />
+          </div>
         </main>
       </div>
 

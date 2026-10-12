@@ -21,6 +21,28 @@ const paths = {
       <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
     </>
   ),
+  history: (
+    <>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  categories: (
+    <>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  channel: (
+    <>
+      <rect x="3" y="5" width="18" height="13" rx="2.5" />
+      <path d="M8 21h8" />
+      <path d="M10.5 9v5l4-2.5z" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="7" />

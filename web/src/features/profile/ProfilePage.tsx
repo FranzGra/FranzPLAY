@@ -4,11 +4,7 @@ import { usePageTitle } from "../../components/PageTitle";
 import styles from "./ProfilePage.module.css";
 import { type ServerInfoState, useServerInfo } from "./useServerInfo";
 
-const rows = [
-  { to: "/cronologia", label: "Cronologia" },
-  { to: "/categorie", label: "Categorie" },
-  { to: "/playlist", label: "Le mie playlist" },
-];
+const rows = [{ to: "/cronologia", label: "Cronologia" }];
 
 function versionText(state: ServerInfoState): string {
   switch (state.kind) {

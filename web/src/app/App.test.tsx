@@ -30,6 +30,22 @@ describe("navigation", () => {
     expect(within(tabbar).getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current");
   });
 
+  it("shows an icon next to every page in the side menu", () => {
+    renderApp("/");
+    const menu = screen.getByRole("navigation", { name: "Menu principale" });
+    const links = within(menu).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
+      "Home",
+      "Cronologia",
+      "Categorie",
+      "Il mio canale",
+      "Tutte le playlist",
+    ]);
+    for (const link of links) {
+      expect(link.querySelector("svg")).not.toBeNull();
+    }
+  });
+
   it("has no channel subscriptions in the side menu", () => {
     renderApp("/");
     const menu = screen.getByRole("navigation", { name: "Menu principale" });

@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { mockFetchJSON, renderApp } from "../../test/render";
 
 describe("profile page", () => {
@@ -6,6 +6,15 @@ describe("profile page", () => {
     mockFetchJSON({ status: "ok", version: "test" });
     renderApp("/profilo");
     expect(screen.getByRole("button", { name: /Carica un video/ })).toBeDisabled();
+  });
+
+  it("links only to pages the menus do not already show", () => {
+    mockFetchJSON({ status: "ok", version: "test" });
+    renderApp("/profilo");
+    const pages = screen.getByRole("navigation", { name: "Le tue pagine" });
+    expect(within(pages).getByRole("link", { name: /Cronologia/ })).toBeInTheDocument();
+    expect(within(pages).queryByRole("link", { name: /Categorie/ })).not.toBeInTheDocument();
+    expect(within(pages).queryByRole("link", { name: /playlist/i })).not.toBeInTheDocument();
   });
 
   it("shows the server version", async () => {

@@ -129,6 +129,7 @@
 .sideLink {
   display: flex;
   align-items: center;
+  gap: 12px;
   min-height: 40px;
   padding: 0 12px;
   border: 1px solid transparent;
@@ -163,6 +164,12 @@
   flex: 1;
   min-width: 0;
   padding: 28px 40px 64px;
+}
+
+/* Keeps every page in a centered column, so it does not stick to the side menu */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* Bottom bar, only on phones: a floating glass capsule */
