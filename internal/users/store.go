@@ -260,6 +260,16 @@ func (s store) setPassword(ctx context.Context, id int64, hash string, keep []by
 	return nil
 }
 
+// replaceHash swaps a password hash for an equivalent one (same password,
+// better method). It changes nothing if the password changed meanwhile,
+// and it keeps every session: the person is the same.
+func (s store) replaceHash(ctx context.Context, id int64, old, hash string) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ? AND password_hash = ?`, hash, id, old); err != nil {
+		return fmt.Errorf("replace password hash: %w", err)
+	}
+	return nil
+}
+
 // finish commits the transaction when err is nil, and rolls it back otherwise.
 func finish(tx *sql.Tx, err error) error {
 	if err != nil {

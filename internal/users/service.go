@@ -216,6 +216,9 @@ func (s *Service) login(ctx context.Context, address, name, password string) (Ac
 		return Account{}, "", errBadCredentials
 	}
 	s.limiter.succeeded(name)
+	if needsRehash(stored) {
+		s.rehash(ctx, a, password, stored)
+	}
 
 	token, hash, err := newToken()
 	if err != nil {
@@ -228,6 +231,21 @@ func (s *Service) login(ctx context.Context, address, name, password string) (Ac
 		return Account{}, "", err
 	}
 	return a, token, nil
+}
+
+// rehash replaces a password hash of the old FranzPLAY with a new one,
+// now that the password is known. A failure only means trying again at
+// the next login, so it is logged and the login goes on.
+func (s *Service) rehash(ctx context.Context, a Account, password, stored string) {
+	hash, err := s.hash(ctx, password)
+	if err == nil {
+		err = s.store.replaceHash(ctx, a.ID, stored, hash)
+	}
+	if err != nil {
+		s.logger.ErrorContext(ctx, "update old password hash", "name", a.Name, "error", err)
+		return
+	}
+	s.logger.InfoContext(ctx, "old password hash updated", "name", a.Name)
 }
 
 // startSession opens a session for a user who just got created.
