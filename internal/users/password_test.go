@@ -2,16 +2,31 @@ package users
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
+
+// TestMain makes password hashes light, so the many logins in these tests
+// take milliseconds instead of seconds (much more under the race detector).
+func TestMain(m *testing.M) {
+	hashCost = argonCost{time: 1, memory: 64, threads: 1}
+	os.Exit(m.Run())
+}
+
+func TestRealHashCostIsTheOWASPMinimum(t *testing.T) {
+	// Argon2id, OWASP Password Storage Cheat Sheet: m=19 MiB, t=2, p=1.
+	if want := (argonCost{time: 2, memory: 19 * 1024, threads: 1}); productionCost != want {
+		t.Fatalf("production cost = %+v, want %+v", productionCost, want)
+	}
+}
 
 func TestHashAndVerify(t *testing.T) {
 	hash, err := hashPassword("correct horse")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(hash, "correct horse") || !strings.HasPrefix(hash, "argon2id$v=19$m=19456,t=2,p=1$") {
+	if strings.Contains(hash, "correct horse") || !strings.HasPrefix(hash, "argon2id$v=19$m=64,t=1,p=1$") {
 		t.Fatalf("unexpected hash %q", hash)
 	}
 	for _, tc := range []struct {

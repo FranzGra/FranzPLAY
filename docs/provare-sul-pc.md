@@ -138,7 +138,7 @@ un fotogramma a un decimo del video (al massimo al primo minuto), così evita gl
 
 ### Il primo accesso
 
-Al primo avvio FranzPLAY non ha ancora utenti. Nel terminale compare una riga gialla come questa:
+Al primo avvio FranzPLAY non ha ancora utenti. Nel terminale compare una riga come questa:
 
 ```
 level=WARN msg="FranzPLAY has no administrator yet: ..." setup_code=RFY6-9YPX-QF7X

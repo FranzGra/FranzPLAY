@@ -18,15 +18,24 @@ import (
 // Passwords are never stored. FranzPLAY stores a hash made with Argon2id:
 // a slow, memory-hungry calculation that is easy to check for one password
 // but very expensive for someone trying millions of guesses on a stolen
-// database. The settings are the minimum OWASP recommends, which takes
-// about a quarter of a second on a Raspberry Pi 4.
+// database.
 const (
-	argonTime    = 2
-	argonMemory  = 19 * 1024 // KiB
-	argonThreads = 1
-	argonKeyLen  = 32
-	saltLen      = 16
+	argonKeyLen = 32
+	saltLen     = 16
 )
+
+// hashCost is how heavy a new password hash is: the minimum OWASP
+// recommends, about a quarter of a second on a Raspberry Pi 4. It is a
+// variable only so that tests can make it light and run fast.
+var hashCost = productionCost
+
+var productionCost = argonCost{time: 2, memory: 19 * 1024, threads: 1}
+
+type argonCost struct {
+	time    uint32
+	memory  uint32 // KiB
+	threads uint8
+}
 
 // Password length limits, in characters. The upper limit stops someone
 // from making the server hash a huge text.
@@ -55,8 +64,9 @@ func hashPassword(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("hash password: %w", err)
 	}
-	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
-	return fmt.Sprintf("argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, argonMemory, argonTime, argonThreads,
+	c := hashCost
+	key := argon2.IDKey([]byte(password), salt, c.time, c.memory, c.threads, argonKeyLen)
+	return fmt.Sprintf("argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, c.memory, c.time, c.threads,
 		base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(key)), nil
 }
 
