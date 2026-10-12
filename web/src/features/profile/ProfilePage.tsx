@@ -4,6 +4,7 @@ import { useAccount, useAuth } from "../../app/auth";
 import { Avatar } from "../../components/Avatar";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
+import { NameForm } from "./NameForm";
 import { PasswordForm } from "./PasswordForm";
 import styles from "./ProfilePage.module.css";
 import { type ServerInfoState, useServerInfo } from "./useServerInfo";
@@ -29,10 +30,11 @@ export function ProfilePage() {
   usePageTitle("Profilo");
   const server = useServerInfo();
   const account = useAccount();
-  const { signOut } = useAuth();
+  const { signedIn, signOut } = useAuth();
   const [signOutFailed, setSignOutFailed] = useState(false);
-  const [changing, setChanging] = useState(false);
-  const [changed, setChanged] = useState(false);
+  // At most one form is open, and the last change made is told below it.
+  const [editing, setEditing] = useState<"name" | "password" | null>(null);
+  const [done, setDone] = useState("");
 
   function onSignOut() {
     setSignOutFailed(false);
@@ -71,29 +73,53 @@ export function ProfilePage() {
         ))}
       </nav>
 
-      {changing ? (
+      {editing === "name" && (
+        <NameForm
+          current={account.name}
+          onDone={(renamed) => {
+            signedIn(renamed);
+            setEditing(null);
+            setDone("Nome cambiato. Da ora entri con il nome nuovo.");
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+      {editing === "password" && (
         <PasswordForm
           onDone={() => {
-            setChanging(false);
-            setChanged(true);
+            setEditing(null);
+            setDone("Password cambiata. Sugli altri dispositivi dovrai entrare di nuovo.");
           }}
-          onCancel={() => setChanging(false)}
+          onCancel={() => setEditing(null)}
         />
-      ) : (
-        <button
-          type="button"
-          className={`glass ${styles.signOut}`}
-          onClick={() => {
-            setChanged(false);
-            setChanging(true);
-          }}
-        >
-          Cambia password
-        </button>
       )}
-      {changed && (
+      {editing === null && (
+        <div className={styles.formButtons}>
+          <button
+            type="button"
+            className={`glass ${styles.signOut}`}
+            onClick={() => {
+              setDone("");
+              setEditing("name");
+            }}
+          >
+            Cambia nome
+          </button>
+          <button
+            type="button"
+            className={`glass ${styles.signOut}`}
+            onClick={() => {
+              setDone("");
+              setEditing("password");
+            }}
+          >
+            Cambia password
+          </button>
+        </div>
+      )}
+      {done && (
         <p className={styles.hint} role="status">
-          Password cambiata. Sugli altri dispositivi dovrai entrare di nuovo.
+          {done}
         </p>
       )}
 

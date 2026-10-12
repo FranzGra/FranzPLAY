@@ -20,6 +20,7 @@ const maxBody = 4 << 10
 //	POST   /api/logout
 //	GET    /api/me            the logged-in user (401 if nobody)
 //	POST   /api/me/password   {current, new}
+//	PUT    /api/me/name       {name}: the user with the new name
 //	GET    /api/users         administrators only
 //	POST   /api/users         administrators only {name, password, role, canUpload}
 //	PUT    /api/users/{id}    administrators only {role, canUpload}
@@ -37,6 +38,7 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/me", s.handleMe)
 	mux.HandleFunc("POST /api/me/password", s.handlePassword)
+	mux.HandleFunc("PUT /api/me/name", s.handleRename)
 	mux.HandleFunc("GET /api/users", s.adminOnly(s.handleList))
 	mux.HandleFunc("POST /api/users", s.adminOnly(s.handleCreate))
 	mux.HandleFunc("PUT /api/users/{id}", s.adminOnly(s.handleUpdate))

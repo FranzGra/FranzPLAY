@@ -88,6 +88,42 @@ describe("profile page", () => {
     expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
   });
 
+  it("changes my name, everywhere at once", async () => {
+    const { user, server } = renderApp("/profilo", {
+      ...signedIn(),
+      "PUT /api/me/name": { body: { ...testAccount, name: "Franz" } },
+    });
+    await user.click(await screen.findByRole("button", { name: "Cambia nome" }));
+    const form = screen.getByRole("form", { name: "Cambia nome" });
+    expect(within(form).getByText(/anche il nome con cui entri/)).toBeInTheDocument();
+    const field = within(form).getByLabelText("Nuovo nome");
+    await user.clear(field);
+    await user.type(field, "Fr");
+    await user.click(within(form).getByRole("button", { name: "Salva il nome" }));
+    expect(within(form).getByRole("alert")).toHaveTextContent("da 3 a 32 caratteri");
+
+    await user.type(field, "anz");
+    await user.click(within(form).getByRole("button", { name: "Salva il nome" }));
+    expect(await screen.findByRole("heading", { name: "Franz" })).toBeInTheDocument();
+    expect(screen.getByText(/Nome cambiato/)).toHaveAttribute("role", "status");
+    expect(await server.requests.at(-1)?.json()).toEqual({ name: "Franz" });
+  });
+
+  it("explains when the name is already used", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { user } = renderApp("/profilo", {
+      ...signedIn(),
+      "PUT /api/me/name": { status: 409, body: { error: "this name is already used" } },
+    });
+    await user.click(await screen.findByRole("button", { name: "Cambia nome" }));
+    const field = screen.getByLabelText("Nuovo nome");
+    await user.clear(field);
+    await user.type(field, "Giulia");
+    await user.click(screen.getByRole("button", { name: "Salva il nome" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("lo usa già un'altra persona");
+    expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+  });
+
   it("shows the server version", async () => {
     renderApp("/profilo", {
       ...signedIn(),

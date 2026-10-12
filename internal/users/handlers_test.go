@@ -484,3 +484,48 @@ func whoAmI(t *testing.T, b *browser) Account {
 	}
 	return a
 }
+
+func TestRenameMyself(t *testing.T) {
+	s := newSite(t)
+	admin := s.setUp()
+	expect(t, admin.do("POST", "/api/users", map[string]any{
+		"name": "Giulia", "password": "giulia-password", "role": "user",
+	}), http.StatusCreated)
+	b := s.browser()
+	expect(t, b.do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusOK)
+
+	tests := []struct {
+		name   string
+		body   any
+		status int
+	}{
+		{"too short", map[string]string{"name": "Gi"}, http.StatusBadRequest},
+		{"strange symbols", map[string]string{"name": "Giulia<3"}, http.StatusBadRequest},
+		{"another user's name", map[string]string{"name": "admin"}, http.StatusConflict},
+		{"unknown field", map[string]string{"nome": "Giulietta"}, http.StatusBadRequest},
+		{"only the capitals change", map[string]string{"name": "GIULIA"}, http.StatusOK},
+		{"a new name, spaces around removed", map[string]string{"name": "  Giulia Rossi "}, http.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expect(t, b.do("PUT", "/api/me/name", tt.body), tt.status)
+		})
+	}
+
+	rec := b.do("GET", "/api/me", nil)
+	expect(t, rec, http.StatusOK)
+	var a Account
+	if err := json.Unmarshal(rec.Body.Bytes(), &a); err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "Giulia Rossi" || a.Role != User {
+		t.Fatalf("after renaming: %+v", a)
+	}
+	// The new name is the one to log in with; the old one no longer works.
+	expect(t, s.browser().do("POST", "/api/login", map[string]string{"name": "Giulia Rossi", "password": "giulia-password"}),
+		http.StatusOK)
+	expect(t, s.browser().do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusUnauthorized)
+	expect(t, s.browser().do("PUT", "/api/me/name", map[string]string{"name": "Nobody"}), http.StatusUnauthorized)
+}
