@@ -10,9 +10,12 @@ export type VideoListState =
   | { kind: "error" }
   | { kind: "ready"; videos: Video[]; total: number; more: "idle" | "loading" | "error" };
 
-// useVideoList loads the newest videos (of one category, or all) a page
-// at a time. loadMore adds the next page.
-export function useVideoList(category = "") {
+// Filter chooses which videos: of one category, matching a search, or all.
+export type Filter = { category?: string; q?: string };
+
+// useVideoList loads the newest videos matching filter a page at a time.
+// loadMore adds the next page.
+export function useVideoList({ category = "", q = "" }: Filter = {}) {
   const [state, setState] = useState<VideoListState>({ kind: "loading" });
   const controller = useRef<AbortController | null>(null);
 
@@ -20,7 +23,7 @@ export function useVideoList(category = "") {
     const c = new AbortController();
     controller.current = c;
     setState({ kind: "loading" });
-    fetchVideos({ category, limit: pageSize }, c.signal)
+    fetchVideos({ category, q, limit: pageSize }, c.signal)
       .then(({ videos, total }) => setState({ kind: "ready", videos, total, more: "idle" }))
       .catch((error: unknown) => {
         if (!c.signal.aborted) {
@@ -29,7 +32,7 @@ export function useVideoList(category = "") {
         }
       });
     return () => c.abort();
-  }, [category]);
+  }, [category, q]);
 
   const loadMore = useCallback(() => {
     if (state.kind !== "ready" || state.more === "loading") {
@@ -38,7 +41,7 @@ export function useVideoList(category = "") {
     const signal = controller.current?.signal;
     const offset = state.videos.length;
     setState({ ...state, more: "loading" });
-    fetchVideos({ category, limit: pageSize, offset }, signal)
+    fetchVideos({ category, q, limit: pageSize, offset }, signal)
       .then(({ videos, total }) =>
         setState((current) =>
           current.kind === "ready"
@@ -54,7 +57,7 @@ export function useVideoList(category = "") {
           );
         }
       });
-  }, [category, state]);
+  }, [category, q, state]);
 
   return { state, loadMore };
 }

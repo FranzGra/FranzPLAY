@@ -83,6 +83,12 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		where += ` AND v.category = ?`
 		args = append(args, q.category)
 	}
+	// LIKE ignores case for the letters A to Z; that is enough for a home search.
+	for _, w := range q.words {
+		where += ` AND (v.title LIKE ? ESCAPE '\' OR v.category LIKE ? ESCAPE '\')`
+		p := likePattern(w)
+		args = append(args, p, p)
+	}
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM videos v WHERE `+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count videos: %w", err)
 	}

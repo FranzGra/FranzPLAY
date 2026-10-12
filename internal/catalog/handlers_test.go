@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/FranzGra/FranzPLAY/internal/database"
@@ -143,6 +144,40 @@ func TestListVideosByCategoryAndPage(t *testing.T) {
 
 	if rec := s.get(t, "/api/videos?limit=1000"); rec.Code != http.StatusBadRequest {
 		t.Errorf("limit=1000: status %d, want 400", rec.Code)
+	}
+}
+
+func TestSearchVideos(t *testing.T) {
+	s := newSite(t)
+	s.addVideo(t, "Vacanze/Mare a Rimini.mp4", "1", "Vacanze", 1, false)
+	s.addVideo(t, "Vacanze/Montagna.mp4", "2", "Vacanze", 2, false)
+	s.addVideo(t, "Scuola/Recita al mare.mp4", "3", "Scuola", 3, false)
+	s.addVideo(t, "Sconto 50% al mare.mp4", "4", "", 4, false)
+	s.addVideo(t, "Sconto 500 euro.mp4", "5", "", 5, false)
+
+	titles := func(query string) []string {
+		t.Helper()
+		got := decode[listResponse](t, s.get(t, "/api/videos?"+query))
+		out := []string{}
+		for _, v := range got.Videos {
+			out = append(out, v.Title)
+		}
+		if got.Total != len(out) {
+			t.Errorf("%s: total %d for %d videos", query, got.Total, len(out))
+		}
+		return out
+	}
+	for query, want := range map[string][]string{
+		"q=MARE":                 {"Sconto 50% al mare.mp4", "Recita al mare.mp4", "Mare a Rimini.mp4"},
+		"q=mare+rimini":          {"Mare a Rimini.mp4"},
+		"q=vacanze":              {"Montagna.mp4", "Mare a Rimini.mp4"}, // the category counts too
+		"q=mare&category=Scuola": {"Recita al mare.mp4"},
+		"q=50%25":                {"Sconto 50% al mare.mp4"}, // % is a letter, not "anything"
+		"q=nessuno":              {},
+	} {
+		if got := titles(query); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: got %q, want %q", query, got, want)
+		}
 	}
 }
 

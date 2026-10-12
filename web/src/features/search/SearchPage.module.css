@@ -1,0 +1,34 @@
+/* On computers the top bar has the search box: this one is for phones. */
+.search {
+  display: none;
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--touch);
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+}
+
+.box input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  outline: none;
+}
+
+.box:focus-within {
+  border-color: rgb(41 151 255 / 0.6);
+}
+
+@media (max-width: 899px) {
+  .search {
+    display: block;
+    margin-bottom: 20px;
+  }
+}

@@ -8,7 +8,7 @@ import styles from "./CategoriesPage.module.css";
 export function CategoryPage() {
   const name = useParams().name ?? "";
   usePageTitle(name);
-  const { state, loadMore } = useVideoList(name);
+  const { state, loadMore } = useVideoList({ category: name });
 
   return (
     <>

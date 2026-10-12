@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Page sizes for the video list.
@@ -19,17 +20,29 @@ const (
 // errBadQuery means the address had parameters FranzPLAY cannot use.
 var errBadQuery = errors.New("bad query")
 
+// Search limits: longer searches are refused, extra words ignored.
+const (
+	maxSearchLen   = 100 // characters
+	maxSearchWords = 8
+)
+
 // listQuery is what the interface asks of the video list, already checked.
 type listQuery struct {
-	category string // "" = all
+	category string   // "" = all
+	words    []string // search: every word must be in the title or the category
 	limit    int
 	offset   int
 }
 
 // parseListQuery checks the parameters of GET /api/videos once, here.
-// Accepted: category, limit (1 to 200), offset (0 or more).
+// Accepted: category, q (search), limit (1 to 200), offset (0 or more).
 func parseListQuery(values url.Values) (listQuery, error) {
 	q := listQuery{category: strings.TrimSpace(values.Get("category")), limit: defaultLimit}
+	search := values.Get("q")
+	if utf8.RuneCountInString(search) > maxSearchLen {
+		return listQuery{}, fmt.Errorf("%w: the search must be at most %d characters", errBadQuery, maxSearchLen)
+	}
+	q.words = searchWords(search)
 	if s := values.Get("limit"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 1 || n > maxLimit {
@@ -45,6 +58,33 @@ func parseListQuery(values url.Values) (listQuery, error) {
 		q.offset = n
 	}
 	return q, nil
+}
+
+// searchWords splits a search into its words, without repeats and at most
+// maxSearchWords: "mare  Rimini mare" becomes ["mare", "Rimini"].
+func searchWords(search string) []string {
+	var words []string
+	seen := map[string]bool{}
+	for _, w := range strings.Fields(search) {
+		key := strings.ToLower(w)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		words = append(words, w)
+		if len(words) == maxSearchWords {
+			break
+		}
+	}
+	return words
+}
+
+// likePattern turns a word into a LIKE pattern that finds it anywhere.
+// The characters LIKE treats as wildcards (% and _) are escaped with \,
+// so a search for "50%" finds "50%" and not everything starting with 50.
+func likePattern(word string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(word) + "%"
 }
 
 // parseID checks a video id taken from the address.
