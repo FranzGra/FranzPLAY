@@ -23,7 +23,7 @@
 }
 
 .box:focus-within {
-  border-color: rgb(41 151 255 / 0.6);
+  border-color: rgb(var(--color-accent-rgb) / 0.6);
 }
 
 @media (max-width: 899px) {

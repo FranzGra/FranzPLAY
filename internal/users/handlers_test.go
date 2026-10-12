@@ -579,3 +579,44 @@ func TestDeleteMyAccountCannotBeGuessed(t *testing.T) {
 	}
 	t.Fatal("20 wrong passwords and no pause")
 }
+
+func TestMyAccentColor(t *testing.T) {
+	s := newSite(t)
+	b := s.setUp()
+	me := func() Account {
+		t.Helper()
+		rec := b.do("GET", "/api/me", nil)
+		expect(t, rec, http.StatusOK)
+		var a Account
+		if err := json.Unmarshal(rec.Body.Bytes(), &a); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	if c := me().AccentColor; c != "" {
+		t.Fatalf("a new user has color %q, want FranzPLAY's own", c)
+	}
+
+	rec := b.do("PUT", "/api/me/color", map[string]string{"color": "#DC2626"})
+	expect(t, rec, http.StatusOK)
+	if !strings.Contains(rec.Body.String(), `"accentColor":"#dc2626"`) {
+		t.Fatalf("answer %s", rec.Body)
+	}
+	if c := me().AccentColor; c != "#dc2626" {
+		t.Fatalf("color %q after choosing red", c)
+	}
+	// It comes with the login too, so the interface starts in the right color.
+	rec = s.browser().do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"})
+	if !strings.Contains(rec.Body.String(), `"accentColor":"#dc2626"`) {
+		t.Fatalf("login answer %s", rec.Body)
+	}
+
+	expect(t, b.do("PUT", "/api/me/color", map[string]string{"color": "url(evil)"}), http.StatusBadRequest)
+	if c := me().AccentColor; c != "#dc2626" {
+		t.Fatalf("a refused color changed it to %q", c)
+	}
+	expect(t, b.do("PUT", "/api/me/color", map[string]string{"color": ""}), http.StatusOK)
+	if c := me().AccentColor; c != "" {
+		t.Fatalf("color %q after going back to FranzPLAY's own", c)
+	}
+}

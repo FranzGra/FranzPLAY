@@ -2,17 +2,20 @@
 :root {
   color-scheme: dark;
 
-  /* Colors: a neutral zinc scale (like shadcn/ui) plus one blue accent. */
+  /* Colors: a neutral zinc scale (like shadcn/ui) plus one blue accent.
+     Each person can choose another accent in the profile (app/accent.ts). */
   --color-bg: #09090b;
   --color-surface: #18181b;
   --color-surface-raised: #27272a;
   --color-border: rgb(255 255 255 / 0.08);
   --color-text: #fafafa;
   --color-text-muted: #a1a1aa;
-  --color-accent: #2997ff;
+  --color-accent-own: #2997ff; /* FranzPLAY's own accent, even when someone chose another */
+  --color-accent: var(--color-accent-own);
   --color-accent-hover: #5cb0ff;
   --color-accent-light: #4aa8ff;
-  --color-accent-glow: rgb(41 151 255 / 0.25);
+  --color-accent-rgb: 41 151 255; /* the accent as numbers, for see-through shades */
+  --color-accent-glow: rgb(var(--color-accent-rgb) / 0.25);
   --color-on-accent: #ffffff;
   --color-danger: #fca5a5;
   --color-danger-bg: rgb(239 68 68 / 0.14);
@@ -53,7 +56,7 @@ body {
   background-color: var(--color-bg);
   /* Two soft lights behind the glass, so translucent surfaces have something to show. */
   background-image:
-    radial-gradient(60rem 40rem at 10% -10%, rgb(41 151 255 / 0.12), transparent 60%),
+    radial-gradient(60rem 40rem at 10% -10%, rgb(var(--color-accent-rgb) / 0.12), transparent 60%),
     radial-gradient(50rem 40rem at 110% 110%, rgb(139 92 246 / 0.08), transparent 60%);
   background-attachment: fixed;
   color: var(--color-text);
