@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The same colors as web/src/styles/global.css. -->
+<resources>
+    <color name="bg">#FF09090B</color>
+    <color name="surface">#FF18181B</color>
+    <color name="text">#FFFAFAFA</color>
+    <color name="text_muted">#FFA1A1AA</color>
+    <color name="accent">#FF2997FF</color>
+    <color name="danger">#FFFCA5A5</color>
+</resources>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <!-- Kept clear of the phone's bars (Insets.padForSystemBars). -->
+    <FrameLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <WebView
+            android:id="@+id/web"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/bg" />
+
+        <LinearLayout
+            android:id="@+id/problem"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/problem_title"
+                android:textColor="@color/text"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/problem_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="28dp"
+                android:gravity="center"
+                android:textColor="@color/text_muted"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/retry"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="@drawable/button"
+                android:stateListAnimator="@null"
+                android:text="@string/retry"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFFFF"
+                android:textSize="17sp" />
+
+            <Button
+                android:id="@+id/change_server"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/button_quiet"
+                android:stateListAnimator="@null"
+                android:text="@string/change_server"
+                android:textAllCaps="false"
+                android:textColor="@color/text"
+                android:textSize="17sp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- A video in full screen covers everything, the phone's bars too. -->
+    <FrameLayout
+        android:id="@+id/full_screen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF000000"
+        android:visibility="gone" />
+</FrameLayout>
