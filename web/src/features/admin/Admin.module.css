@@ -607,3 +607,22 @@ fieldset.field {
   gap: 12px 20px;
   margin: 0 0 20px;
 }
+
+/* A problem that must be fixed soon. */
+.critical {
+  border-color: rgb(239 68 68 / 0.45);
+}
+
+.plain {
+  margin: 0;
+}
+
+.disk {
+  flex: 1 1 auto;
+}
+
+.meter {
+  width: 100%;
+  height: 10px;
+  margin-top: 10px;
+}

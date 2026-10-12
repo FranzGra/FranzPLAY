@@ -6,6 +6,7 @@ import { FoldersPage } from "../features/admin/FoldersPage";
 import { InvitesPage } from "../features/admin/InvitesPage";
 import { JobsPage } from "../features/admin/JobsPage";
 import { OnlinePage } from "../features/admin/OnlinePage";
+import { OverviewPage } from "../features/admin/OverviewPage";
 import { PeoplePage } from "../features/admin/PeoplePage";
 import { SitePage } from "../features/admin/SitePage";
 import { SubtitlesPage } from "../features/admin/SubtitlesPage";
@@ -81,7 +82,8 @@ function Pages() {
         <Route path="categorie" element={<CategoriesPage />} />
         <Route path="categorie/:name" element={<CategoryPage />} />
         <Route path="admin" element={<AdminPage />}>
-          <Route index element={<Navigate to="persone" replace />} />
+          <Route index element={<Navigate to="riepilogo" replace />} />
+          <Route path="riepilogo" element={<OverviewPage />} />
           <Route path="persone" element={<PeoplePage />} />
           <Route path="inviti" element={<InvitesPage />} />
           <Route path="accessi" element={<AccessPage />} />
