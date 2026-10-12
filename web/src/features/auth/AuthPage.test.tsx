@@ -1,8 +1,9 @@
 import { screen } from "@testing-library/react";
-import { type Routes, renderApp, testAccount } from "../../test/render";
+import { emptyLibrary, type Routes, renderApp, testAccount } from "../../test/render";
 import { checkSetup } from "./AuthPage";
 
 const signedOut: Routes = {
+  ...emptyLibrary,
   "GET /api/me": { status: 401, body: { error: "login required" } },
   "GET /api/setup": { body: { needed: false } },
 };
@@ -137,6 +138,7 @@ describe("server down", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     let up = false;
     const { user } = renderApp("/", {
+      ...emptyLibrary,
       "GET /api/me": () =>
         up
           ? new Response(JSON.stringify(testAccount))
