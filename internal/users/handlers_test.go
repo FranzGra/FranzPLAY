@@ -529,3 +529,53 @@ func TestRenameMyself(t *testing.T) {
 		http.StatusUnauthorized)
 	expect(t, s.browser().do("PUT", "/api/me/name", map[string]string{"name": "Nobody"}), http.StatusUnauthorized)
 }
+
+func TestDeleteMyAccount(t *testing.T) {
+	s := newSite(t)
+	admin := s.setUp()
+	expect(t, admin.do("POST", "/api/users", map[string]any{
+		"name": "Giulia", "password": "giulia-password", "role": "user",
+	}), http.StatusCreated)
+	b := s.browser()
+	expect(t, b.do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusOK)
+	phone := s.browser()
+	expect(t, phone.do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusOK)
+
+	// Without the right password nothing happens, and she stays logged in.
+	expect(t, b.do("DELETE", "/api/me", map[string]string{"password": "wrong-password"}), http.StatusForbidden)
+	expect(t, b.do("DELETE", "/api/me", nil), http.StatusBadRequest)
+	expect(t, b.do("GET", "/api/me", nil), http.StatusOK)
+
+	expect(t, b.do("DELETE", "/api/me", map[string]string{"password": "giulia-password"}), http.StatusNoContent)
+	if b.cookie != "" {
+		t.Fatal("the cookie of the deleted account is still there")
+	}
+	expect(t, phone.do("GET", "/api/me", nil), http.StatusUnauthorized) // every device is out
+	expect(t, s.browser().do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusUnauthorized)
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM users WHERE name = 'Giulia'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("Giulia still in the database: %d, %v", n, err)
+	}
+	expect(t, s.browser().do("DELETE", "/api/me", map[string]string{"password": "x"}), http.StatusUnauthorized)
+}
+
+func TestLastAdministratorCannotDeleteThemselves(t *testing.T) {
+	s := newSite(t)
+	admin := s.setUp()
+	expect(t, admin.do("DELETE", "/api/me", map[string]string{"password": "admin-password"}), http.StatusConflict)
+	expect(t, admin.do("GET", "/api/me", nil), http.StatusOK)
+}
+
+func TestDeleteMyAccountCannotBeGuessed(t *testing.T) {
+	s := newSite(t)
+	b := s.setUp()
+	for range 20 {
+		if rec := b.do("DELETE", "/api/me", map[string]string{"password": "wrong-password"}); rec.Code == http.StatusTooManyRequests {
+			return
+		}
+	}
+	t.Fatal("20 wrong passwords and no pause")
+}

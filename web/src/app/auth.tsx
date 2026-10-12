@@ -13,6 +13,7 @@ type AuthContextValue = {
   state: AuthState;
   signedIn: (account: Account) => void;
   signOut: () => Promise<void>;
+  sessionClosed: () => void; // the server already closed the session
   retry: () => void;
 };
 
@@ -67,13 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     setState({ ...signedOut, openRegistration: setup.openRegistration });
   }, []);
+  const sessionClosed = useCallback(() => setState(signedOut), []);
   const retry = useCallback(() => {
     setState({ kind: "loading" });
     setAttempt((n) => n + 1);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ state, signedIn, signOut, retry }}>
+    <AuthContext.Provider value={{ state, signedIn, signOut, sessionClosed, retry }}>
       {children}
     </AuthContext.Provider>
   );
