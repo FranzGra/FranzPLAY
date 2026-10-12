@@ -9,6 +9,7 @@ import styles from "./Admin.module.css";
 const sections = [
   { to: "persone", label: "Persone" },
   { to: "inviti", label: "Inviti" },
+  { to: "accessi", label: "Accessi" },
   { to: "video", label: "Video" },
   { to: "sottotitoli", label: "Sottotitoli" },
   { to: "commenti", label: "Commenti" },
