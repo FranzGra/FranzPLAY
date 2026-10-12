@@ -12,6 +12,12 @@ linters:
     - revive
     - unconvert
     - unparam
+  settings:
+    misspell:
+      # Italian names of the old FranzPLAY's database columns, read by the import.
+      ignore-rules:
+        - preferenze
+        - progresso
 
 formatters:
   enable:
