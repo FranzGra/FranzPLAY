@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Passwords are never stored. FranzPLAY stores a hash made with Argon2id:
@@ -73,8 +74,13 @@ func hashPassword(password string) (string, error) {
 // errBadHash means a stored hash is damaged.
 var errBadHash = errors.New("stored password hash is not readable")
 
-// verifyPassword reports whether password matches the stored hash.
+// verifyPassword reports whether password matches the stored hash. Besides
+// FranzPLAY's own hashes it reads the bcrypt hashes of the old FranzPLAY
+// ("$2y$10$…"), so people brought over by the import keep their password.
 func verifyPassword(password, stored string) (bool, error) {
+	if isBcrypt(stored) {
+		return verifyBcrypt(password, stored)
+	}
 	p, err := parseHash(stored)
 	if err != nil {
 		return false, err
@@ -132,4 +138,44 @@ func parseHash(stored string) (hashParams, error) {
 	p.memory, p.time, p.threads = uint32(memory), uint32(time), uint8(threads)
 	p.salt, p.key = salt, key
 	return p, nil
+}
+
+// Bcrypt costs accepted from the old FranzPLAY. PHP uses 10; a higher
+// cost doubles the work at each step, so a damaged hash with cost 31
+// could keep the server busy for hours.
+const (
+	minBcryptCost = 4
+	maxBcryptCost = 14
+)
+
+// isBcrypt reports whether a stored hash comes from the old FranzPLAY.
+func isBcrypt(stored string) bool {
+	for _, mark := range []string{"$2a$", "$2b$", "$2y$"} {
+		if strings.HasPrefix(stored, mark) {
+			return true
+		}
+	}
+	return false
+}
+
+// needsRehash reports whether a stored hash should be replaced by a new
+// Argon2id one, the next time the password is known (at login).
+func needsRehash(stored string) bool {
+	return isBcrypt(stored)
+}
+
+func verifyBcrypt(password, stored string) (bool, error) {
+	cost, err := bcrypt.Cost([]byte(stored))
+	if err != nil || cost < minBcryptCost || cost > maxBcryptCost {
+		return false, errBadHash
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(stored), []byte(password))
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword), errors.Is(err, bcrypt.ErrPasswordTooLong):
+		return false, nil
+	default:
+		return false, errBadHash
+	}
 }

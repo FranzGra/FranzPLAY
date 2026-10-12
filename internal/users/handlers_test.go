@@ -667,3 +667,26 @@ func TestMyAccentColor(t *testing.T) {
 		t.Fatalf("color %q after going back to FranzPLAY's own", c)
 	}
 }
+
+func TestLoginWithAPasswordFromTheOldFranzPLAY(t *testing.T) {
+	s := newSite(t)
+	s.setUp()
+	old := oldHash(t, "pass1")
+	if _, err := s.db.Exec(`INSERT INTO users (name, password_hash, role, created_at) VALUES ('Nonna', ?, 'user', 0)`, old); err != nil {
+		t.Fatal(err)
+	}
+	b := s.browser()
+	expect(t, b.do("POST", "/api/login", map[string]string{"name": "Nonna", "password": "wrong"}), http.StatusUnauthorized)
+	expect(t, b.do("POST", "/api/login", map[string]string{"name": "Nonna", "password": "pass1"}), http.StatusOK)
+
+	// The old hash was replaced by a new one, and the same password still works.
+	var stored string
+	if err := s.db.QueryRow(`SELECT password_hash FROM users WHERE name = 'Nonna'`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(stored, "argon2id$") {
+		t.Fatalf("hash after login = %q, want an Argon2id one", stored)
+	}
+	expect(t, b.do("GET", "/api/secret", nil), http.StatusOK) // the session survives the change
+	expect(t, s.browser().do("POST", "/api/login", map[string]string{"name": "Nonna", "password": "pass1"}), http.StatusOK)
+}

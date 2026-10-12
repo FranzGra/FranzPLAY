@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // TestMain makes password hashes light, so the many logins in these tests
@@ -97,6 +99,61 @@ func TestCheckNewPassword(t *testing.T) {
 		err := checkNewPassword(tc.password)
 		if (err == nil) != tc.ok {
 			t.Errorf("checkNewPassword(%q) = %v, want ok=%v", tc.password, err, tc.ok)
+		}
+	}
+}
+
+// oldHash makes a hash like the old FranzPLAY's: PHP's password_hash writes
+// bcrypt with the "$2y$" mark. A low cost keeps the test fast.
+func oldHash(t *testing.T, password string) string {
+	t.Helper()
+	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "$2y$" + strings.TrimPrefix(string(h), "$2a$")
+}
+
+func TestVerifyOldFranzPLAYHashes(t *testing.T) {
+	stored := oldHash(t, "pass1") // the old version allowed short passwords
+	if !needsRehash(stored) {
+		t.Error("an old hash does not ask to be replaced")
+	}
+	for _, tc := range []struct {
+		password string
+		want     bool
+	}{
+		{"pass1", true},
+		{"Pass1", false},
+		{"", false},
+		{strings.Repeat("x", 100), false}, // longer than bcrypt reads
+	} {
+		got, err := verifyPassword(tc.password, stored)
+		if err != nil || got != tc.want {
+			t.Errorf("verifyPassword(%q) = %v, %v; want %v", tc.password, got, err, tc.want)
+		}
+	}
+
+	argon, err := hashPassword("pass1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if needsRehash(argon) {
+		t.Error("a new hash asks to be replaced")
+	}
+}
+
+func TestVerifyRefusesDamagedOrHeavyOldHashes(t *testing.T) {
+	good := oldHash(t, "password")
+	for name, stored := range map[string]string{
+		"cut":        good[:20],
+		"cost 31":    "$2y$31$" + good[7:],
+		"cost 3":     "$2y$03$" + good[7:],
+		"no cost":    "$2y$",
+		"other mark": "$2z$" + good[4:],
+	} {
+		if _, err := verifyPassword("password", stored); !errors.Is(err, errBadHash) {
+			t.Errorf("%s: err = %v, want errBadHash", name, err)
 		}
 	}
 }
