@@ -248,8 +248,8 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	err := w.db.QueryRowContext(ctx, `
 		SELECT id, video_id, kind, attempts FROM jobs
 		WHERE state = 'pending' AND run_after <= ? AND kind IN (`+placeholders+`)
-		ORDER BY CASE kind WHEN 'probe' THEN 0 WHEN 'details' THEN 1 WHEN 'cover' THEN 2
-			WHEN 'preview' THEN 3 WHEN 'convert' THEN 5 ELSE 4 END, id
+		ORDER BY CASE kind WHEN 'probe' THEN 0 WHEN 'details' THEN 1 WHEN 'online' THEN 2
+			WHEN 'cover' THEN 3 WHEN 'preview' THEN 4 WHEN 'convert' THEN 6 ELSE 5 END, id
 		LIMIT 1`, args...).Scan(&j.id, &j.videoID, &kind, &j.attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return job{}, false, nil

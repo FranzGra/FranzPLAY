@@ -61,7 +61,7 @@ type store struct {
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
-	v.author, v.published_on`
+	v.shown_author, v.shown_published_on`
 
 // rowScanner is a *sql.Row or *sql.Rows.
 type rowScanner interface{ Scan(dest ...any) error }
@@ -158,7 +158,7 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 func (s store) get(ctx context.Context, id int64) (Video, error) {
 	var description sql.NullString
 	v, err := scanVideo(moreColumns{s.db.QueryRowContext(ctx,
-		`SELECT `+videoColumns+`, v.description FROM videos v WHERE v.id = ? AND v.visible`, id),
+		`SELECT `+videoColumns+`, v.shown_description FROM videos v WHERE v.id = ? AND v.visible`, id),
 		[]any{&description}})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, errNotFound

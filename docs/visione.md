@@ -267,6 +267,9 @@ programma. ❓ Quali fonti e in che ordine lo decidiamo quando arriviamo alla ta
 descrizione, autore, giorno), e i file `.nfo` di Kodi e Jellyfin. Decisione in
 `docs/decisioni/0009-informazioni-dai-file.md`.
 
+✅ **Deciso (12/10/2026)**: le fonti su internet sono YouTube, TMDB (film) e ThePornDB, tutte spente
+finché l'amministratore non le accende. ✅ **Fatto**: YouTube (`docs/decisioni/0011-fonti-su-internet.md`).
+
 ---
 
 ## 8. Com'è fatto, in grande
@@ -424,7 +427,7 @@ Questo è anche un percorso di studio. Per questo:
 | ✅ B | Interfaccia | **Deciso**: rifatta da zero in React + TypeScript, stile minimale alla Apple, simile alla vecchia ma migliore. |
 | ✅ C | Lingua | **Deciso**: inglese nel codice, italiano nei documenti. |
 | ✅ D | Licenza | **Deciso**: doppia licenza. **AGPL-3.0** per tutti (codice pubblico; chi lo modifica o lo offre online deve pubblicare le modifiche) più una **licenza commerciale** che può concedere solo Francesco. Chi contribuisce firma un accordo (CLA) che lascia a Francesco i diritti per poter dare la licenza commerciale. Il nome FranzPLAY si potrà proteggere come marchio. |
-| E | Fonti esterne per copertine e informazioni | Da decidere alla tappa 3. Proposta in sezione 7. |
+| ✅ E | Fonti esterne per copertine e informazioni | **Deciso**: YouTube, TMDB e ThePornDB, spente finché l'admin non le accende. Sezione 7. |
 | ✅ F | "Non mi piace" accanto al like | **Deciso**: solo il like. Tra familiari e amici il "non mi piace" serve poco e può offendere. |
 | ✅ H | Chi carica video | **Deciso**: solo gli utenti abilitati dall'admin, con uno spazio massimo. Sezione 5 bis. |
 | ✅ G | Dove tenere i dati | **Deciso**: una cartella dati unica accanto ai video (non dentro), con backup notturno ed esportazione JSON. Niente file scritti nelle cartelle video. Sezione 6 bis. |

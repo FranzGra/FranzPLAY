@@ -25,6 +25,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/likes"
 	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/online"
 	"github.com/FranzGra/FranzPLAY/internal/playlists"
 	"github.com/FranzGra/FranzPLAY/internal/progress"
 	"github.com/FranzGra/FranzPLAY/internal/recommend"
@@ -100,7 +101,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		}
 	}
 	// Reading the details files next to the videos needs no other program.
-	handlers := map[jobs.Kind]jobs.Handler{jobs.Details: tell(media.NewDetailer(db).Handle)}
+	handlers := map[jobs.Kind]jobs.Handler{
+		jobs.Details: tell(media.NewDetailer(db).Handle),
+		// Asks the internet only when the administrator turned a source on.
+		jobs.Online: tell(online.NewFetcher(db, cfg.DataDir).Handle),
+	}
 	var remux catalog.Remuxer // stays nil without ffmpeg and ffprobe
 	if ffprobe, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe not found: videos will have no duration until it is installed",
@@ -136,6 +141,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		logger.Error("remove unused subtitles", "error", err)
 	} else if n > 0 {
 		logger.Info("removed unused subtitles", "count", n)
+	}
+	if n, err := online.RemoveOrphans(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused pictures from the internet", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused pictures from the internet", "count", n)
 	}
 	if n, err := media.RemoveOrphanConverted(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused copies", "error", err)
@@ -182,6 +192,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),
 		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),
+		online.Routes(db, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		hub.Routes(logger),
 	)
 

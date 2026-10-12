@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/FranzGra/FranzPLAY/internal/online"
 )
 
 // CoversDir is the folder, inside the data folder, that holds the covers.
@@ -66,9 +68,9 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 		return err
 	}
 	var duration sql.NullInt64
-	var oldCover sql.NullString
-	if err := c.db.QueryRowContext(ctx, `SELECT duration, cover FROM videos WHERE id = ?`, videoID).
-		Scan(&duration, &oldCover); err != nil {
+	var oldCover, onlineImage sql.NullString
+	if err := c.db.QueryRowContext(ctx, `SELECT duration, cover, online_cover FROM videos WHERE id = ?`, videoID).
+		Scan(&duration, &oldCover, &onlineImage); err != nil {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
 
@@ -93,7 +95,11 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 		}
 	}()
 
-	args := c.coverArgs(file, duration.Int64, tmpName)
+	downloaded := ""
+	if onlineImage.Valid {
+		downloaded = filepath.Join(c.dataDir, online.Dir, filepath.Base(onlineImage.String))
+	}
+	args := c.coverArgs(file, duration.Int64, downloaded, tmpName)
 	if _, err := c.run(ctx, c.ffmpeg, args...); err != nil {
 		return fmt.Errorf("cover of video %d: %w", videoID, err)
 	}
@@ -131,12 +137,16 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 }
 
 // coverArgs builds the ffmpeg command: from an image next to the video if
-// there is one, otherwise from a frame of the video. Both end as a JPEG
-// coverWidth wide (or smaller, never enlarged).
-func (c *Coverer) coverArgs(video string, duration int64, out string) []string {
+// there is one, else from the picture found on the internet (downloaded,
+// "" if none), otherwise from a frame of the video. All end as a JPEG
+// coverWidth wide (or smaller, never enlarged). Going through ffmpeg also
+// means a downloaded file that is not really a picture never becomes a cover.
+func (c *Coverer) coverArgs(video string, duration int64, downloaded, out string) []string {
 	args := []string{"-v", "error", "-y"}
 	if image, ok := findSidecar(video); ok {
 		args = append(args, "-i", "file:"+image)
+	} else if downloaded != "" {
+		args = append(args, "-i", "file:"+downloaded)
 	} else {
 		// -ss before -i jumps straight to the moment instead of decoding up to it.
 		args = append(args, "-ss", strconv.FormatInt(coverSecond(duration), 10), "-i", "file:"+video)

@@ -18,6 +18,7 @@ type Kind string
 const (
 	Probe   Kind = "probe"   // read duration, size and codecs with ffprobe
 	Details Kind = "details" // read the file next to the video that says what it is
+	Online  Kind = "online"  // ask the sources on the internet the administrator turned on
 	Cover   Kind = "cover"   // make the cover image
 	Preview Kind = "preview" // make the small frames shown over the timeline
 	Tracks  Kind = "tracks"  // list the languages inside the file, copy its subtitles

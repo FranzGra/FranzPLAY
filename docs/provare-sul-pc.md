@@ -276,6 +276,13 @@ Lo stesso vale per i file **`.nfo`** di Kodi e Jellyfin (`viaggio.mkv` e `viaggi
 ne prende titolo, trama, autore e giorno. Se accanto a un video ci sono tutti e due i file, conta
 prima il `.info.json`, e il `.nfo` aggiunge solo quello che manca.
 
+**Copertine e titoli da YouTube.** Se i tuoi video li hai scaricati da YouTube con yt-dlp, il nome
+del file finisce con il codice del video, per esempio `Gita in montagna [dQw4w9WgXcQ].mp4`. In
+**Amministrazione › Internet** accendi **YouTube**: FranzPLAY chiede a YouTube copertina, titolo e
+canale di ognuno, un video alla volta (lo vedi in **Lavori** come «Informazioni da internet»).
+Manda solo il codice del video. Se accanto al video c'è un'immagine o un file `.info.json`/`.nfo`,
+quelli contano di più.
+
 **Invitare familiari e amici.** In **Amministrazione › Inviti** premi **Crea un invito**. Se vuoi,
 scrivi per chi è e se potrà caricare video, poi premi **Crea il link** e copialo: FranzPLAY lo mostra
 una volta sola. Mandalo con un messaggio. Chi lo apre sceglie nome e password ed entra subito. Ogni

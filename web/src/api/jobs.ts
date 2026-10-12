@@ -3,7 +3,7 @@
 
 import { request } from "./client";
 
-export type JobKind = "probe" | "details" | "cover" | "preview" | "tracks" | "convert";
+export type JobKind = "probe" | "details" | "online" | "cover" | "preview" | "tracks" | "convert";
 
 export type Job = {
   id: number;
@@ -25,7 +25,15 @@ export type JobsOverview = {
   kinds: { kind: JobKind; available: boolean }[];
 };
 
-const jobKinds: readonly JobKind[] = ["probe", "details", "cover", "preview", "tracks", "convert"];
+const jobKinds: readonly JobKind[] = [
+  "probe",
+  "details",
+  "online",
+  "cover",
+  "preview",
+  "tracks",
+  "convert",
+];
 
 function isKind(k: unknown): k is JobKind {
   return jobKinds.includes(k as JobKind);
