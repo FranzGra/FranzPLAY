@@ -7,11 +7,36 @@ import (
 	"net/http"
 )
 
-// New returns the handler with every route of the FranzPLAY API.
-func New(version string, logger *slog.Logger) http.Handler {
+// New returns the handler for the whole site: the API under /api/,
+// and the web interface (ui) for every other address.
+func New(version string, logger *slog.Logger, ui http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", handleHealth(version, logger))
+	mux.HandleFunc("/api/health", handleMethodNotAllowed(logger, "GET, HEAD"))
+	// Unknown API addresses must answer 404, not the web interface.
+	mux.HandleFunc("/api/", handleAPINotFound(logger))
+	mux.Handle("/", ui)
 	return mux
+}
+
+// errorResponse is the body of every API error.
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+// handleMethodNotAllowed answers a known API address called with the wrong method.
+func handleMethodNotAllowed(logger *slog.Logger, allow string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", allow)
+		writeJSON(w, r, logger, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+	}
+}
+
+// handleAPINotFound answers addresses under /api/ that do not exist.
+func handleAPINotFound(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, r, logger, http.StatusNotFound, errorResponse{Error: "not found"})
+	}
 }
 
 // healthResponse is the body of GET /api/health.

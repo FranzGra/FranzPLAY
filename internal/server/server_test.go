@@ -9,8 +9,13 @@ import (
 	"testing"
 )
 
+// fakeUI stands in for the web interface and answers "ui".
+var fakeUI = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	_, _ = io.WriteString(w, "ui")
+})
+
 func newTestHandler() http.Handler {
-	return New("test-version", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New("test-version", slog.New(slog.NewTextHandler(io.Discard, nil)), fakeUI)
 }
 
 func TestHealth(t *testing.T) {
@@ -39,13 +44,37 @@ func TestHealthRejectsOtherMethods(t *testing.T) {
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
+	if allow := rec.Header().Get("Allow"); allow != "GET, HEAD" {
+		t.Errorf("Allow = %q, want %q", allow, "GET, HEAD")
+	}
 }
 
-func TestUnknownRouteIsNotFound(t *testing.T) {
-	rec := httptest.NewRecorder()
-	newTestHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/nothing-here", nil))
+func TestUnknownAPIRouteIsNotFound(t *testing.T) {
+	for _, target := range []string{"/api/nothing-here", "/api/", "/api/health/extra"} {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			newTestHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+			}
+			var body errorResponse
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil || body.Error == "" {
+				t.Errorf("body is not a JSON error: %v", err)
+			}
+		})
+	}
+}
+
+func TestOtherAddressesGoToTheInterface(t *testing.T) {
+	for _, target := range []string{"/", "/playlist", "/video/42", "/apix"} {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			newTestHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+
+			if rec.Body.String() != "ui" {
+				t.Errorf("GET %s body = %q, want the interface", target, rec.Body.String())
+			}
+		})
 	}
 }

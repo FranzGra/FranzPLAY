@@ -15,6 +15,7 @@ import (
 
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/server"
+	"github.com/FranzGra/FranzPLAY/internal/webui"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -49,7 +50,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) erro
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(version, logger),
+		Handler:           server.New(version, logger, webui.Handler(webui.Files(), logger)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		// No WriteTimeout: streaming a long video must not be cut off.
