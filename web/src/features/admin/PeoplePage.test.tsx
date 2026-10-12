@@ -37,8 +37,8 @@ describe("people page", () => {
     expect(await rowOf("Giulia")).toHaveTextContent("Non è ancora entrato con nome e password");
   });
 
-  it("opens from the administration address", async () => {
-    renderApp("/admin", people());
+  it("shows who I am and what I cannot do to myself", async () => {
+    renderApp("/admin/persone", people());
     expect(await screen.findByRole("heading", { name: "Amministrazione" })).toBeInTheDocument();
     const me = await rowOf("Francesco");
     const sections = screen.getByRole("navigation", { name: "Sezioni dell'amministrazione" });
