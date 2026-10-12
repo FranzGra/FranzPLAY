@@ -92,3 +92,8 @@ export async function setup(code: string, name: string, password: string): Promi
 export async function logout(): Promise<void> {
   await request("/api/logout", { method: "POST" });
 }
+
+// changePassword sets a new password; the other devices are logged out.
+export async function changePassword(current: string, next: string): Promise<void> {
+  await request("/api/me/password", { method: "POST", body: { current, new: next } });
+}

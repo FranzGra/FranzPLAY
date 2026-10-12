@@ -162,7 +162,14 @@ func (s *Service) handlePassword(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r)
 		return
 	}
-	if err := s.changePassword(r.Context(), a, token, req.Current, req.New); err != nil {
+	err := s.changePassword(r.Context(), a, token, req.Current, req.New)
+	if errors.Is(err, errBadCredentials) {
+		// Not 401: that would tell the interface the login is gone, and
+		// the person is still logged in.
+		respond.Error(w, r, s.logger, http.StatusForbidden, "the current password is not right")
+		return
+	}
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}

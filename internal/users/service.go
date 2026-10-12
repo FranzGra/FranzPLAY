@@ -222,9 +222,15 @@ func (s *Service) startSession(ctx context.Context, a Account) (string, error) {
 }
 
 // changePassword checks the current password and sets a new one.
+// Wrong current passwords count like wrong logins, so a stolen session
+// cannot be used to guess the password.
 func (s *Service) changePassword(ctx context.Context, a Account, token, current, next string) error {
 	if err := checkNewPassword(next); err != nil {
 		return err
+	}
+	now := s.now()
+	if !s.limiter.allowed(a.Name, now) {
+		return errTooManyTries
 	}
 	stored, err := s.store.passwordHash(ctx, a.ID)
 	if err != nil {
@@ -235,8 +241,11 @@ func (s *Service) changePassword(ctx context.Context, a Account, token, current,
 		return err
 	}
 	if !ok {
+		s.limiter.failed(a.Name, now)
+		s.logger.WarnContext(ctx, "password change refused: wrong current password", "name", a.Name)
 		return errBadCredentials
 	}
+	s.limiter.succeeded(a.Name)
 	hash, err := s.hash(ctx, next)
 	if err != nil {
 		return err
