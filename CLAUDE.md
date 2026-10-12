@@ -55,7 +55,7 @@ cmd/franzplay/      avvio del programma: collega i pezzi, nient'altro
 internal/config/    impostazioni lette dalle variabili d'ambiente
 internal/server/    le rotte HTTP dell'API
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
-docs/               visione e decisioni
+docs/               visione, decisioni e guida per provare sul PC
 ```
 
 - **Cartelle per funzionalità** (`catalog/`, `comments/`, `playlists/`…), non per tipo di file.
