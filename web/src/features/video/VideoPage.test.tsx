@@ -77,6 +77,39 @@ describe("video page", () => {
     }
   });
 
+  it("tells the uploader who else sees a shared video", async () => {
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": {
+        body: videoJSON({
+          private: true,
+          uploader: { id: 1, name: "Francesco" },
+          sharedWith: [
+            { id: 3, name: "Anna", avatar: 0 },
+            { id: 4, name: "Marco", avatar: 0 },
+          ],
+        }),
+      },
+    });
+    expect(
+      await screen.findByText(/Questo video lo vedete solo tu, Anna e Marco\./),
+    ).toBeInTheDocument();
+  });
+
+  it("tells who received a shared video that few see it", async () => {
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": {
+        body: videoJSON({ private: true, uploader: { id: 5, name: "Giulia" } }),
+      },
+    });
+    expect(
+      await screen.findByText(/Giulia ha condiviso questo video solo con alcune persone/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Carica un video" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mi piace/ })).not.toBeInTheDocument();
+  });
+
   it("says who uploaded the video, with a link to their channel", async () => {
     renderApp("/video/7", {
       ...signedIn(),

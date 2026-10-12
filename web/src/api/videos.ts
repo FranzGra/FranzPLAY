@@ -1,6 +1,7 @@
 // The videos: list, one video, categories.
 
 import { request } from "./client";
+import { parseSharePeople, type SharePerson } from "./people";
 
 export type Video = {
   id: number;
@@ -16,8 +17,11 @@ export type Video = {
   clip: string | null; // address of the seconds that play on the card; null = none yet
   format: string; // the kind of file, from its name: "MP4", "MKV"; "" = none
   likes: number; // how many people like it
-  private: boolean; // only the person who uploaded it sees it
+  private: boolean; // only the person who uploaded it sees it, and the people they chose
   uploader: Person | null; // who uploaded it from the browser; null = from a video folder
+  // sharedWith are the people a private video is shared with: only for one
+  // video, and only for the person who uploaded it; [] otherwise.
+  sharedWith: SharePerson[];
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
@@ -152,6 +156,8 @@ export function parseVideo(data: unknown): Video {
     likes: count(v.likes, "video likes"),
     private: v.private,
     uploader: parsePerson(v.uploader),
+    sharedWith:
+      v.sharedWith === undefined ? [] : parseSharePeople(v.sharedWith, "video sharedWith"),
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",
@@ -196,6 +202,7 @@ export function parseCategories(data: unknown): Category[] {
 export type ListOptions = {
   category?: string;
   uploader?: number; // only the videos this person uploaded
+  shared?: boolean; // only the private videos shared with me
   q?: string; // search words
   // seed mixes the videos instead of showing the newest first; the same
   // seed gives the same order, so pages follow on without repeats.
@@ -208,6 +215,7 @@ export async function fetchVideos(options: ListOptions, signal?: AbortSignal): P
   const params = new URLSearchParams();
   if (options.category) params.set("category", options.category);
   if (options.uploader) params.set("uploader", String(options.uploader));
+  if (options.shared) params.set("shared", "1");
   if (options.q) params.set("q", options.q);
   if (options.seed) {
     params.set("order", "random");

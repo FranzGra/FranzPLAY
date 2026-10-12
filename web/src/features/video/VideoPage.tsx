@@ -11,6 +11,7 @@ import {
   streamURL,
   type Video,
 } from "../../api/videos";
+import { useAccount } from "../../app/auth";
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatAge, formatDate } from "../../lib/format";
@@ -20,6 +21,7 @@ import { Player } from "../player/Player";
 import { SaveButton } from "../playlists/SaveButton";
 import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
+import { namesList } from "../sharing/audience";
 import { VideoCard } from "../videos/VideoCard";
 import { Description } from "./Description";
 import { subtitleLabel } from "./subtitleLabel";
@@ -160,10 +162,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
         {video.private ? (
           // Nobody else sees it: likes, playlists, sharing and comments
           // would only lead others to a page that does not open.
-          <p className={`glass ${styles.private}`}>
-            Solo tu vedi questo video. Per farlo vedere a tutti, cambialo da «I tuoi video» nella
-            pagina <Link to="/carica">Carica un video</Link>.
-          </p>
+          <PrivateNote video={video} />
         ) : (
           <div className={styles.actions}>
             <LikeButton videoId={video.id} />
@@ -188,6 +187,30 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
         </aside>
       )}
     </div>
+  );
+}
+
+// PrivateNote says who sees a private video: to its uploader, who else and
+// where to change it; to someone it was shared with, that few see it.
+function PrivateNote({ video }: { video: Video }) {
+  const me = useAccount();
+  if (video.uploader !== null && video.uploader.id !== me.id) {
+    return (
+      <p className={`glass ${styles.private}`}>
+        {video.uploader.name} ha condiviso questo video solo con alcune persone, tra cui te. Gli
+        altri non lo vedono.
+      </p>
+    );
+  }
+  const others = video.sharedWith.map((p) => p.name);
+  return (
+    <p className={`glass ${styles.private}`}>
+      {others.length === 0
+        ? "Solo tu vedi questo video."
+        : `Questo video lo vedete solo ${namesList(["tu", ...others])}.`}{" "}
+      Per cambiare chi lo vede, vai a «I tuoi video» nella pagina{" "}
+      <Link to="/carica">Carica un video</Link>.
+    </p>
   );
 }
 

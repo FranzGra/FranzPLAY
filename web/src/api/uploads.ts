@@ -74,16 +74,17 @@ export async function fetchMyUploads(signal?: AbortSignal): Promise<MyUploads> {
 }
 
 // startUpload tells the server a file is coming. Without a title, the
-// server takes the file name. A private video only I will see.
+// server takes the file name. A private video only I will see, and the
+// people in sharedWith, by id.
 export async function startUpload(
   file: { name: string; size: number },
   title: string,
-  isPrivate: boolean,
+  who: { private: boolean; sharedWith: number[] },
 ) {
   return parseUpload(
     await request("/api/uploads", {
       method: "POST",
-      body: { name: file.name, title, size: file.size, private: isPrivate },
+      body: { name: file.name, title, size: file.size, ...who },
     }),
   );
 }
