@@ -8,10 +8,12 @@ import {
   setVideoHidden,
 } from "../../api/adminVideos";
 import { onServerEvent } from "../../api/events";
+import { fetchCategories } from "../../api/videos";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
 import styles from "./Admin.module.css";
+import { DetailsForm } from "./DetailsForm";
 
 export const adminPageSize = 50;
 
@@ -34,7 +36,19 @@ export function VideosPage() {
   const [q, setQ] = useState("");
   const [show, setShow] = useState<AdminShow>("");
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [categories, setCategories] = useState<string[]>([]);
   const shown = useRef(adminPageSize);
+
+  // The categories in use, offered while typing a new one.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchCategories(controller.signal)
+      .then((list) => setCategories(list.map((c) => c.name)))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
+    return () => controller.abort();
+  }, []);
 
   const load = useCallback(
     (limit: number, signal?: AbortSignal) => {
@@ -126,6 +140,11 @@ export function VideosPage() {
       {state.kind === "ready" && state.videos.length > 0 && (
         <>
           <p className={styles.count}>{state.total.toLocaleString("it-IT")} video</p>
+          <datalist id="admin-categories">
+            {categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
           <ul className={styles.list} aria-label="Video">
             {state.videos.map((video) => (
               <li key={video.id}>
@@ -159,6 +178,7 @@ function VideoRow({
   onChanged: (video: AdminVideo) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [problem, setProblem] = useState("");
   const [done, setDone] = useState("");
 
@@ -203,9 +223,13 @@ function VideoRow({
             )}
           </p>
           {video.uploader ? (
-            <p className={styles.role}>Caricato da {video.uploader.name}</p>
+            <p className={styles.role}>
+              {video.category && `${video.category} · `}
+              Caricato da {video.uploader.name}
+            </p>
           ) : (
             <p className={`${styles.role} ${styles.path}`} title={`${video.folder}/${video.path}`}>
+              {video.category && `${video.category} · `}
               {video.path}
             </p>
           )}
@@ -238,6 +262,17 @@ function VideoRow({
         <button
           type="button"
           className={`glass ${styles.action}`}
+          aria-expanded={editing}
+          onClick={() => {
+            setDone("");
+            setEditing(!editing);
+          }}
+        >
+          Modifica
+        </button>
+        <button
+          type="button"
+          className={`glass ${styles.action}`}
           disabled={busy || video.missing}
           onClick={() =>
             run(() => refreshVideo(video.id), "In coda: copertina e anteprime arrivano tra poco.")
@@ -249,6 +284,17 @@ function VideoRow({
           {video.hidden ? "Mostra" : "Nascondi"}
         </button>
       </div>
+      {editing && (
+        <DetailsForm
+          video={video}
+          onSaved={(changed) => {
+            onChanged(changed);
+            setEditing(false);
+            setDone("Salvato. Tutti vedono titolo e categoria nuovi.");
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
     </div>
   );
 }

@@ -66,7 +66,7 @@ func newSite(t *testing.T) *site {
 
 func (s *site) addVideo(t *testing.T, name string) int64 {
 	t.Helper()
-	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at, cover)
+	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at, cover)
 		VALUES (?, 1, ?, 1, 1, ?, '', 1, ?)`, "fp-"+name, name, name, name+".jpg")
 	if err != nil {
 		t.Fatal(err)
@@ -342,7 +342,7 @@ func TestLimits(t *testing.T) {
 	s.create(t, marco, "Marco ne ha ancora")
 
 	for i := range maxVideos {
-		if _, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at)
+		if _, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at)
 			VALUES (?, 1, ?, 1, 1, 'v', '', 1)`, "f"+strconv.Itoa(i), "p"+strconv.Itoa(i)); err != nil {
 			t.Fatal(err)
 		}

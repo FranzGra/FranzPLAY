@@ -10,6 +10,10 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
     path: "Vacanze/Mare 2024.mp4",
     hidden: false,
     missing: false,
+    foundTitle: "Mare 2024",
+    foundCategory: "Vacanze",
+    titleSet: false,
+    categorySet: false,
     ...overrides,
   };
 }
@@ -24,6 +28,75 @@ function rowOf(name: string) {
 }
 
 describe("videos page", () => {
+  it("changes the title and category of a video", async () => {
+    const { user, server } = renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
+      "GET /api/categories": { body: [{ name: "Viaggi", videos: 3 }] },
+      "PUT /api/admin/videos/7/details": { status: 204 },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    await user.click(within(rowOf("Mare 2024")).getByRole("button", { name: "Modifica" }));
+    // The categories in use are offered while typing.
+    await vi.waitFor(() =>
+      expect(document.querySelector('#admin-categories option[value="Viaggi"]')).not.toBeNull(),
+    );
+    const form = screen.getByRole("form", { name: "Modifica Mare 2024" });
+    const title = within(form).getByRole("textbox", { name: /Titolo/ });
+    await user.clear(title);
+    await user.type(title, "Al mare con la nonna");
+    expect(within(form).getByText(/Trovato da FranzPLAY: «Mare 2024»/)).toBeInTheDocument();
+    const category = within(form).getByRole("combobox", { name: /Categoria/ });
+    await user.clear(category);
+    await user.type(category, "Viaggi");
+    await user.click(within(form).getByRole("button", { name: "Salva" }));
+
+    expect(await within(rowOf("Al mare con la nonna")).findByRole("status")).toHaveTextContent(
+      "Salvato.",
+    );
+    expect(rowOf("Al mare con la nonna")).toHaveTextContent("Viaggi · Vacanze/Mare 2024.mp4");
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      title: "Al mare con la nonna",
+      category: "Viaggi",
+    });
+  });
+
+  it("puts back the title and category FranzPLAY found", async () => {
+    const changed = adminVideo({
+      title: "Al mare",
+      category: "",
+      titleSet: true,
+      categorySet: true,
+    });
+    const { user, server } = renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": { body: { videos: [changed], total: 1 } },
+      "PUT /api/admin/videos/7/details": { status: 204 },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    await user.click(within(rowOf("Al mare")).getByRole("button", { name: "Modifica" }));
+    const form = screen.getByRole("form", { name: "Modifica Al mare" });
+    await user.click(within(form).getByRole("button", { name: "Rimetti questo" }));
+    await user.click(within(form).getByRole("button", { name: "Rimetti questa" }));
+    await user.click(within(form).getByRole("button", { name: "Salva" }));
+    expect(await within(rowOf("Mare 2024")).findByRole("status")).toBeInTheDocument();
+    expect(await server.requests.at(-1)?.json()).toEqual({ title: null, category: null });
+  });
+
+  it("refuses an empty title", async () => {
+    const { user, server } = renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    await user.click(within(rowOf("Mare 2024")).getByRole("button", { name: "Modifica" }));
+    const form = screen.getByRole("form", { name: "Modifica Mare 2024" });
+    await user.clear(within(form).getByRole("textbox", { name: /Titolo/ }));
+    await user.click(within(form).getByRole("button", { name: "Salva" }));
+    expect(within(form).getByRole("alert")).toHaveTextContent("Il titolo deve avere");
+    expect(server.requests.some((r) => r.url.includes("/details"))).toBe(false);
+  });
+
   it("lists every video with its file and state", async () => {
     renderApp("/admin/video", {
       ...signedIn(),
@@ -71,7 +144,7 @@ describe("videos page", () => {
       },
     });
     const row = await screen.findByRole("listitem");
-    expect(within(row).getByText("Caricato da Giulia")).toBeInTheDocument();
+    expect(within(row).getByText(/Caricato da Giulia/)).toBeInTheDocument();
     expect(within(row).getByText("Solo per chi l'ha caricato")).toBeInTheDocument();
     // The administrator cannot open it: no link to a page that would not open.
     expect(within(row).queryByRole("link", { name: "Al mare" })).not.toBeInTheDocument();

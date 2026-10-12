@@ -94,7 +94,7 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 			SET fingerprint = ?, library_id = ?, path = ?, size = ?, mod_time = ?,
 			    -- An uploaded video keeps the title its person gave it.
 			    title = CASE WHEN uploaded_by IS NULL THEN ? ELSE title END,
-			    category = CASE WHEN uploaded_by IS NULL THEN ? ELSE category END,
+			    folder_category = CASE WHEN uploaded_by IS NULL THEN ? ELSE folder_category END,
 			    missing_since = NULL
 			WHERE id = ?`,
 			f.fingerprint, f.loc.library, f.loc.path, f.size, f.modTime,
@@ -123,7 +123,7 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 
 	for _, f := range ch.added {
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at)
+			INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			f.fingerprint, f.loc.library, f.loc.path, f.size, f.modTime,
 			titleOf(f.loc.path), categoryOf(f.loc.path), stamp)

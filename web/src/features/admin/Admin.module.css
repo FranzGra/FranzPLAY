@@ -626,3 +626,17 @@ fieldset.field {
   height: 10px;
   margin-top: 10px;
 }
+
+/* A button that reads like a link, inside a sentence. */
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}

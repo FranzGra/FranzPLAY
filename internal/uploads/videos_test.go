@@ -254,7 +254,7 @@ func TestDeleteNeverTouchesTheVideoFolders(t *testing.T) {
 	if _, err := s.db.Exec(`INSERT INTO libraries (id, path) VALUES (50, ?)`, library); err != nil {
 		t.Fatal(err)
 	}
-	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at, uploaded_by)
+	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at, uploaded_by)
 		VALUES ('fp', 50, 'film.mp4', 4, 1, 'film', '', 1, 1)`)
 	if err != nil {
 		t.Fatal(err)

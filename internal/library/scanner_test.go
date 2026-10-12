@@ -143,7 +143,7 @@ func TestScanKeepsTheTitleOfAnUploadedVideo(t *testing.T) {
 	if _, err := ts.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at) VALUES (7, 'Giulia', 'x', 'user', 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.db.Exec(`UPDATE videos SET uploaded_by = 7, title = 'Al mare', category = ''`); err != nil {
+	if _, err := ts.db.Exec(`UPDATE videos SET uploaded_by = 7, title = 'Al mare', folder_category = ''`); err != nil {
 		t.Fatal(err)
 	}
 

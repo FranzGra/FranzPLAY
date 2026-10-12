@@ -9,6 +9,10 @@ export type AdminVideo = Video & {
   path: string; // inside the folder
   hidden: boolean;
   missing: boolean; // not found at the last check
+  foundTitle: string; // the title FranzPLAY found by itself
+  foundCategory: string; // the category of its folder; "" if none
+  titleSet: boolean; // the title was chosen by the administrator
+  categorySet: boolean; // the category was chosen by the administrator
 };
 
 export type AdminShow = "" | "hidden" | "missing";
@@ -24,7 +28,23 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   if (typeof d.hidden !== "boolean" || typeof d.missing !== "boolean") {
     throw new Error("admin video: bad hidden or missing");
   }
-  return { ...video, folder: d.folder, path: d.path, hidden: d.hidden, missing: d.missing };
+  if (typeof d.foundTitle !== "string" || typeof d.foundCategory !== "string") {
+    throw new Error("admin video: bad found title or category");
+  }
+  if (typeof d.titleSet !== "boolean" || typeof d.categorySet !== "boolean") {
+    throw new Error("admin video: bad titleSet or categorySet");
+  }
+  return {
+    ...video,
+    folder: d.folder,
+    path: d.path,
+    hidden: d.hidden,
+    missing: d.missing,
+    foundTitle: d.foundTitle,
+    foundCategory: d.foundCategory,
+    titleSet: d.titleSet,
+    categorySet: d.categorySet,
+  };
 }
 
 export async function fetchAdminVideos(
@@ -53,4 +73,17 @@ export async function setVideoHidden(id: number, hidden: boolean): Promise<void>
 // and previews.
 export async function refreshVideo(id: number): Promise<void> {
   await request(`/api/admin/videos/${id}/refresh`, { method: "POST" });
+}
+
+// The limits the server checks, so mistakes show at once and in Italian.
+export const maxTitle = 200;
+export const maxCategory = 100;
+
+// setVideoDetails gives a video another title and category, for everybody.
+// null puts back the one FranzPLAY found; category "" means none.
+export async function setVideoDetails(
+  id: number,
+  details: { title: string | null; category: string | null },
+): Promise<void> {
+  await request(`/api/admin/videos/${id}/details`, { method: "PUT", body: details });
 }
