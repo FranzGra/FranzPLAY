@@ -2,10 +2,24 @@
   margin: 0 0 32px;
 }
 
-.title {
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin: 0 0 12px;
+}
+
+.title {
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
+}
+
+.more {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* One row that scrolls sideways, like on YouTube. */

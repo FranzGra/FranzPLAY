@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/catalog"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
@@ -48,10 +49,16 @@ func newSite(t *testing.T) *site {
 		}
 	}
 	s := &site{db: db, mux: http.NewServeMux()}
+	// Each like a second after the one before.
+	clock := int64(1_000_000)
 	handlers{
 		store:  store{db: db},
+		videos: catalog.NewLookup(db),
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		now:    func() time.Time { return time.Unix(1_000_000, 0) },
+		now: func() time.Time {
+			clock++
+			return time.Unix(clock, 0)
+		},
 		account: func(ctx context.Context) (users.Account, bool) {
 			id, ok := ctx.Value(userKey{}).(int64)
 			return users.Account{ID: id}, ok
@@ -175,5 +182,79 @@ func TestLikesGoWithTheVideoAndThePerson(t *testing.T) {
 	}
 	if got := s.like(t, marco, http.MethodGet, b); got != (Like{Liked: true, Count: 1}) {
 		t.Errorf("left: %+v, want only Marco's", got)
+	}
+}
+
+// liked asks for the videos user likes; query is the part after "?".
+func (s *site) liked(t *testing.T, user int64, query string) (*httptest.ResponseRecorder, videoList) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/likes?"+query, nil)
+	if user != 0 {
+		req = req.WithContext(context.WithValue(req.Context(), userKey{}, user))
+	}
+	rec := httptest.NewRecorder()
+	s.mux.ServeHTTP(rec, req)
+	var list videoList
+	if rec.Code == http.StatusOK {
+		if err := json.NewDecoder(rec.Body).Decode(&list); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return rec, list
+}
+
+func titles(list videoList) []string {
+	out := []string{}
+	for _, v := range list.Videos {
+		out = append(out, v.Title)
+	}
+	return out
+}
+
+func TestLikedList(t *testing.T) {
+	s := newSite(t)
+	a := s.addVideo(t, "a.mp4")
+	b := s.addVideo(t, "b.mp4")
+	c := s.addVideo(t, "c.mp4")
+	gone := s.addVideo(t, "via.mp4")
+
+	if rec, list := s.liked(t, giulia, ""); rec.Code != http.StatusOK || list.Total != 0 || list.Videos == nil {
+		t.Fatalf("nothing liked yet: %d %+v, want an empty list", rec.Code, list)
+	}
+
+	s.like(t, giulia, http.MethodPut, b)
+	s.like(t, giulia, http.MethodPut, a)
+	s.like(t, giulia, http.MethodPut, gone)
+	s.like(t, marco, http.MethodPut, c)
+	if _, err := s.db.Exec(`UPDATE videos SET missing_since = 1 WHERE id = ?`, gone); err != nil {
+		t.Fatal(err)
+	}
+
+	// The last liked first; a missing video and Marco's likes do not count.
+	_, list := s.liked(t, giulia, "")
+	if got := titles(list); list.Total != 2 || len(got) != 2 || got[0] != "a.mp4" || got[1] != "b.mp4" {
+		t.Errorf("Giulia's likes: %v (total %d), want [a.mp4 b.mp4] (2)", got, list.Total)
+	}
+	_, list = s.liked(t, giulia, "limit=1&offset=1")
+	if got := titles(list); list.Total != 2 || len(got) != 1 || got[0] != "b.mp4" {
+		t.Errorf("second page: %v (total %d), want [b.mp4] (2)", got, list.Total)
+	}
+
+	tests := []struct {
+		name  string
+		user  int64
+		query string
+		want  int
+	}{
+		{"nobody logged in", 0, "", http.StatusUnauthorized},
+		{"limit zero", giulia, "limit=0", http.StatusBadRequest},
+		{"limit too big", giulia, "limit=201", http.StatusBadRequest},
+		{"negative offset", giulia, "offset=-1", http.StatusBadRequest},
+		{"limit not a number", giulia, "limit=tanti", http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		if rec, _ := s.liked(t, tt.user, tt.query); rec.Code != tt.want {
+			t.Errorf("%s: %d %s, want %d", tt.name, rec.Code, rec.Body, tt.want)
+		}
 	}
 }

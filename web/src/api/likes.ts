@@ -1,6 +1,8 @@
-// Likes: whether I like a video, and how many people like it.
+// Likes: whether I like a video, how many people like it, and the videos
+// I like.
 
 import { request } from "./client";
+import { parseVideoList, type VideoList } from "./videos";
 
 export type Like = {
   liked: boolean;
@@ -24,4 +26,14 @@ export async function fetchLike(id: number, signal?: AbortSignal): Promise<Like>
 // setLike says whether I like a video, and returns the like as it is now.
 export async function setLike(id: number, liked: boolean): Promise<Like> {
   return parseLike(await request(`/api/videos/${id}/like`, { method: liked ? "PUT" : "DELETE" }));
+}
+
+// fetchLiked returns a page of the videos I like, the last liked first.
+export async function fetchLiked(
+  page: { limit: number; offset?: number },
+  signal?: AbortSignal,
+): Promise<VideoList> {
+  const params = new URLSearchParams({ limit: String(page.limit) });
+  if (page.offset) params.set("offset", String(page.offset));
+  return parseVideoList(await request(`/api/likes?${params}`, { signal }));
 }

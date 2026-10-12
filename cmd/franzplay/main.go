@@ -193,7 +193,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 			logger),
 		progress.Routes(db, catalog.NewLookup(db), logger),
 		recommend.Routes(db, catalog.NewLookup(db), logger),
-		likes.Routes(db, logger),
+		likes.Routes(db, catalog.NewLookup(db), logger),
 		comments.Routes(db, logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),

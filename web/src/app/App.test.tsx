@@ -36,6 +36,7 @@ describe("navigation", () => {
     expect(links.map((link) => link.textContent)).toEqual([
       "Home",
       "Cronologia",
+      "Mi piace",
       "Categorie",
       "Il mio canale",
       "Tutte le playlist",

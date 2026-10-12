@@ -11,6 +11,7 @@ function sideLinks(me: number) {
   return [
     { to: "/", label: "Home", icon: "home" },
     { to: "/cronologia", label: "Cronologia", icon: "history" },
+    { to: "/mi-piace", label: "Mi piace", icon: "like" },
     { to: "/categorie", label: "Categorie", icon: "categories" },
     { to: `/canale/${me}`, label: "Il mio canale", icon: "channel" },
   ] as const;
