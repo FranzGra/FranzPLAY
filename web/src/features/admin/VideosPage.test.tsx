@@ -52,6 +52,31 @@ describe("videos page", () => {
     expect(screen.getByText("3 video")).toBeInTheDocument();
   });
 
+  it("says who uploaded a video and when only they see it", async () => {
+    renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": {
+        body: {
+          videos: [
+            adminVideo({
+              title: "Al mare",
+              folder: "/data/uploads",
+              path: "5/3.mp4",
+              private: true,
+              uploader: { id: 5, name: "Giulia" },
+            }),
+          ],
+          total: 1,
+        },
+      },
+    });
+    const row = await screen.findByRole("listitem");
+    expect(within(row).getByText("Caricato da Giulia")).toBeInTheDocument();
+    expect(within(row).getByText("Solo per chi l'ha caricato")).toBeInTheDocument();
+    // The administrator cannot open it: no link to a page that would not open.
+    expect(within(row).queryByRole("link", { name: "Al mare" })).not.toBeInTheDocument();
+  });
+
   it("searches and filters", async () => {
     const { user, server } = renderApp("/admin/video", {
       ...signedIn(),

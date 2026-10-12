@@ -30,6 +30,11 @@
   font-weight: 600;
 }
 
+/* After the videos, the playlists need some air. */
+* + .section {
+  margin-top: 32px;
+}
+
 @media (max-width: 640px) {
   .avatar {
     --avatar-size: 64px;

@@ -42,8 +42,14 @@ alla volta dopo si riscrive sopra.
 **Lo spostamento finale è «tutto o niente»** (regola 6): il video entra nel catalogo e il file si
 sposta nella stessa transazione. Se il database non salva, il file torna in `incoming/`.
 
+**«Solo io».** Chi carica sceglie se il video lo vedono tutti o solo lui, e può cambiare idea dopo.
+Un video «solo io» non compare in nessuna lista, ricerca o playlist, nemmeno in quelle di chi l'ha
+caricato: si apre solo dalla sua pagina, e solo da chi l'ha caricato. Nel database basta una
+colonna, `private`, che entra nella colonna `visible`: così tutte le liste lo nascondono senza
+cambiare una riga. Solo le rotte di un video singolo (pagina, streaming, sottotitoli, audio)
+fanno un'eccezione per chi l'ha caricato. Mi piace, commenti e «continua a guardare» restano
+spenti per questi video: nessun altro li vedrebbe.
+
 ## Cosa resta per dopo
 
-- La pagina «Carica un video» nel Profilo.
-- Visibilità di ogni video (per tutti o solo per me), cambiare titolo o cancellare i propri video.
 - «Solo alcune persone»: insieme alla condivisione privata di video e playlist.

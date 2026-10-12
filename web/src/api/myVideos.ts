@@ -1,4 +1,5 @@
-// The videos I uploaded: their list, a new title, taking one away.
+// The videos I uploaded: their list, a new title, who sees them, taking
+// one away.
 
 import { request } from "./client";
 
@@ -13,6 +14,7 @@ export type MyVideo = {
   addedAt: Date;
   cover: string | null; // address of the image; null = none yet
   hidden: boolean; // hidden by an administrator
+  private: boolean; // only I see it
 };
 
 export function parseMyVideo(data: unknown): MyVideo {
@@ -26,7 +28,16 @@ export function parseMyVideo(data: unknown): MyVideo {
   if (Number.isNaN(addedAt.getTime())) throw new Error("my video addedAt");
   if (d.cover !== null && typeof d.cover !== "string") throw new Error("my video cover");
   if (typeof d.hidden !== "boolean") throw new Error("my video hidden");
-  return { id: d.id, title: d.title, size: d.size, addedAt, cover: d.cover, hidden: d.hidden };
+  if (typeof d.private !== "boolean") throw new Error("my video private");
+  return {
+    id: d.id,
+    title: d.title,
+    size: d.size,
+    addedAt,
+    cover: d.cover,
+    hidden: d.hidden,
+    private: d.private,
+  };
 }
 
 export async function fetchMyVideos(signal?: AbortSignal): Promise<MyVideo[]> {
@@ -35,10 +46,13 @@ export async function fetchMyVideos(signal?: AbortSignal): Promise<MyVideo[]> {
   return data.map(parseMyVideo);
 }
 
-export async function renameMyVideo(id: number, title: string): Promise<MyVideo> {
-  return parseMyVideo(
-    await request(`/api/uploads/videos/${id}`, { method: "PUT", body: { title } }),
-  );
+// changeMyVideo gives one of my videos a new title, or changes who sees
+// it; what change leaves out stays as it is.
+export async function changeMyVideo(
+  id: number,
+  change: { title?: string; private?: boolean },
+): Promise<MyVideo> {
+  return parseMyVideo(await request(`/api/uploads/videos/${id}`, { method: "PUT", body: change }));
 }
 
 // deleteMyVideo takes one of my videos away from FranzPLAY, file included.

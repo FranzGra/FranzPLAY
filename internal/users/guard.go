@@ -33,6 +33,12 @@ func FromContext(ctx context.Context) (Account, bool) {
 	return a, ok
 }
 
+// NewContext returns ctx with a as its logged-in user, as Protect does.
+// Tests use it to ask as someone.
+func NewContext(ctx context.Context, a Account) context.Context {
+	return context.WithValue(ctx, accountKey{}, a)
+}
+
 // Protect lets requests to the API through only for logged-in users. The
 // web interface's own files stay public: it shows the login page itself.
 //
@@ -51,7 +57,7 @@ func (s *Service) Protect(next http.Handler) http.Handler {
 		a, token, err := s.account(r)
 		switch {
 		case err == nil:
-			ctx := context.WithValue(r.Context(), accountKey{}, a)
+			ctx := NewContext(r.Context(), a)
 			ctx = context.WithValue(ctx, tokenKey{}, token)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		case publicAPI[r.URL.Path]:

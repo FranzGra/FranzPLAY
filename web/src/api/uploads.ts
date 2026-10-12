@@ -15,6 +15,7 @@ export type Upload = {
   title: string;
   size: number; // bytes
   received: number; // bytes that arrived
+  private: boolean; // only I will see the video
   video?: number; // the new video, once the last piece arrived
 };
 
@@ -35,12 +36,14 @@ export function parseUpload(data: unknown): Upload {
   if (typeof d.title !== "string" || d.title === "") throw new Error("upload title");
   if (!isBytes(d.size) || d.size === 0) throw new Error("upload size");
   if (!isBytes(d.received) || d.received > d.size) throw new Error("upload received");
+  if (typeof d.private !== "boolean") throw new Error("upload private");
   const upload: Upload = {
     id: d.id,
     name: d.name,
     title: d.title,
     size: d.size,
     received: d.received,
+    private: d.private,
   };
   if (d.video !== undefined) {
     if (typeof d.video !== "number" || !Number.isInteger(d.video) || d.video <= 0) {
@@ -71,12 +74,16 @@ export async function fetchMyUploads(signal?: AbortSignal): Promise<MyUploads> {
 }
 
 // startUpload tells the server a file is coming. Without a title, the
-// server takes the file name.
-export async function startUpload(file: { name: string; size: number }, title: string) {
+// server takes the file name. A private video only I will see.
+export async function startUpload(
+  file: { name: string; size: number },
+  title: string,
+  isPrivate: boolean,
+) {
   return parseUpload(
     await request("/api/uploads", {
       method: "POST",
-      body: { name: file.name, title, size: file.size },
+      body: { name: file.name, title, size: file.size, private: isPrivate },
     }),
   );
 }

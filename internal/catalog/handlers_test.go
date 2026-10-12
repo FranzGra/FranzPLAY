@@ -20,6 +20,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
+	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
 // site is the whole HTTP handler on a catalog prepared by the test.
@@ -683,5 +684,98 @@ func TestClips(t *testing.T) {
 		if rec := s.get(t, target); rec.Code != http.StatusNotFound {
 			t.Errorf("%s: status %d, want 404", target, rec.Code)
 		}
+	}
+}
+
+// getAs asks for target as the person with the id who.
+func (s *site) getAs(t *testing.T, who int64, target string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req = req.WithContext(users.NewContext(req.Context(), users.Account{ID: who}))
+	rec := httptest.NewRecorder()
+	s.handler.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestPrivateVideoOnlyForItsUploader(t *testing.T) {
+	s := newSite(t)
+	for _, name := range []string{"Giulia", "Marco"} {
+		if _, err := s.db.Exec(`INSERT INTO users (name, password_hash, role, created_at) VALUES (?, 'x', 'user', 1)`,
+			name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const giulia, marco = 1, 2
+	s.addVideo(t, "public.mp4", "pub", "Mare", 1, true)
+	private := s.addVideo(t, "private.mp4", "secret", "Mare", 2, true)
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = ?, private = 1 WHERE id = ?`, giulia, private); err != nil {
+		t.Fatal(err)
+	}
+	page := "/api/videos/" + strconv.FormatInt(private, 10)
+
+	// In no list, not even Giulia's: only its own page.
+	if list := decode[listResponse](t, s.getAs(t, giulia, "/api/videos")); list.Total != 1 {
+		t.Errorf("list has %d videos, want only the public one", list.Total)
+	}
+	if cats := decode[[]Category](t, s.getAs(t, giulia, "/api/categories")); len(cats) != 1 || cats[0].Videos != 1 {
+		t.Errorf("categories = %+v", cats)
+	}
+
+	rec := s.getAs(t, giulia, page)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Giulia opens her private video: status %d", rec.Code)
+	}
+	if v := decode[Video](t, rec); !v.Private {
+		t.Errorf("video = %+v, want private", v)
+	}
+	if rec := s.getAs(t, giulia, page+"/stream"); rec.Code != http.StatusOK || rec.Body.String() != "secret" {
+		t.Errorf("Giulia plays it: status %d, body %q", rec.Code, rec.Body)
+	}
+	for _, target := range []string{page, page + "/stream", page + "/subtitles"} {
+		if rec := s.getAs(t, marco, target); rec.Code != http.StatusNotFound {
+			t.Errorf("Marco asks %s: status %d, want 404", target, rec.Code)
+		}
+		if rec := s.get(t, target); rec.Code != http.StatusNotFound {
+			t.Errorf("nobody asks %s: status %d, want 404", target, rec.Code)
+		}
+	}
+
+	// Hidden by an administrator: not even Giulia opens it.
+	if _, err := s.db.Exec(`UPDATE videos SET hidden_at = 1 WHERE id = ?`, private); err != nil {
+		t.Fatal(err)
+	}
+	if rec := s.getAs(t, giulia, page); rec.Code != http.StatusNotFound {
+		t.Errorf("hidden: Giulia gets status %d, want 404", rec.Code)
+	}
+}
+
+func TestVideosSayWhoUploadedThem(t *testing.T) {
+	s := newSite(t)
+	if _, err := s.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at) VALUES (3, 'Giulia', 'x', 'user', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	s.addVideo(t, "folder.mp4", "a", "", 1, false)
+	mine := s.addVideo(t, "uploaded.mp4", "b", "", 2, false)
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = 3 WHERE id = ?`, mine); err != nil {
+		t.Fatal(err)
+	}
+
+	list := decode[listResponse](t, s.get(t, "/api/videos"))
+	if len(list.Videos) != 2 || list.Videos[1].Uploader != nil {
+		t.Fatalf("videos = %+v, want the one from the folder without uploader", list.Videos)
+	}
+	if u := list.Videos[0].Uploader; u == nil || *u != (Person{ID: 3, Name: "Giulia"}) {
+		t.Errorf("uploader = %+v, want Giulia", u)
+	}
+	if only := decode[listResponse](t, s.get(t, "/api/videos?uploader=3")); only.Total != 1 || only.Videos[0].ID != mine {
+		t.Errorf("Giulia's videos = %+v", only)
+	}
+
+	// When Giulia goes away, her video stays, without a name.
+	if _, err := s.db.Exec(`DELETE FROM users WHERE id = 3`); err != nil {
+		t.Fatal(err)
+	}
+	if v := decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(mine, 10))); v.Uploader != nil {
+		t.Errorf("uploader after leaving = %+v", v.Uploader)
 	}
 }

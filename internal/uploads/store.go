@@ -17,6 +17,7 @@ type upload struct {
 	Title    string `json:"title"`
 	Size     int64  `json:"size"`
 	Received int64  `json:"received"`
+	Private  bool   `json:"private"` // only the uploader will see the video
 	// Video is the new video, once the last piece has arrived.
 	Video int64 `json:"video,omitempty"`
 
@@ -77,8 +78,8 @@ func (s store) start(ctx context.Context, user, quota int64, now time.Time,
 		return upload{}, err
 	}
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO uploads (user_id, name, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		user, clean.Name, clean.Title, clean.Size, now.Unix(), now.Unix())
+		INSERT INTO uploads (user_id, name, title, size, private, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		user, clean.Name, clean.Title, clean.Size, clean.Private, now.Unix(), now.Unix())
 	if err != nil {
 		return upload{}, fmt.Errorf("start upload: %w", err)
 	}
@@ -86,14 +87,14 @@ func (s store) start(ctx context.Context, user, quota int64, now time.Time,
 	if err != nil {
 		return upload{}, fmt.Errorf("start upload: %w", err)
 	}
-	return upload{ID: id, Name: clean.Name, Title: clean.Title, Size: clean.Size, user: user}, nil
+	return upload{ID: id, Name: clean.Name, Title: clean.Title, Size: clean.Size, Private: clean.Private, user: user}, nil
 }
 
 // get returns an upload of a person. Someone else's is not found.
 func (s store) get(ctx context.Context, user, id int64) (upload, error) {
 	u := upload{ID: id, user: user}
-	err := s.db.QueryRowContext(ctx, `SELECT name, title, size, received FROM uploads WHERE id = ? AND user_id = ?`,
-		id, user).Scan(&u.Name, &u.Title, &u.Size, &u.Received)
+	err := s.db.QueryRowContext(ctx, `SELECT name, title, size, received, private FROM uploads WHERE id = ? AND user_id = ?`,
+		id, user).Scan(&u.Name, &u.Title, &u.Size, &u.Received, &u.Private)
 	if errors.Is(err, sql.ErrNoRows) {
 		return upload{}, errNotFound
 	}
@@ -106,7 +107,7 @@ func (s store) get(ctx context.Context, user, id int64) (upload, error) {
 // mine returns the unfinished uploads of a person, the oldest first.
 func (s store) mine(ctx context.Context, user int64) (_ []upload, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, title, size, received FROM uploads WHERE user_id = ? ORDER BY id`, user)
+		SELECT id, name, title, size, received, private FROM uploads WHERE user_id = ? ORDER BY id`, user)
 	if err != nil {
 		return nil, fmt.Errorf("list uploads: %w", err)
 	}
@@ -114,7 +115,7 @@ func (s store) mine(ctx context.Context, user int64) (_ []upload, err error) {
 	out := []upload{}
 	for rows.Next() {
 		u := upload{user: user}
-		if err := rows.Scan(&u.ID, &u.Name, &u.Title, &u.Size, &u.Received); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Title, &u.Size, &u.Received, &u.Private); err != nil {
 			return nil, fmt.Errorf("list uploads: %w", err)
 		}
 		out = append(out, u)
@@ -215,9 +216,9 @@ func (s store) finish(ctx context.Context, f finished, now time.Time, place func
 	}
 	u := f.upload
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at, uploaded_by)
-		VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)`,
-		f.fingerprint, library, f.path, u.Size, f.modTime, u.Title, now.Unix(), u.user)
+		INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at, uploaded_by, private)
+		VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?)`,
+		f.fingerprint, library, f.path, u.Size, f.modTime, u.Title, now.Unix(), u.user, u.Private)
 	if err != nil {
 		return 0, fmt.Errorf("finish upload: %w", err)
 	}

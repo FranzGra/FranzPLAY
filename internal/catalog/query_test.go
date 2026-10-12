@@ -18,6 +18,7 @@ func TestParseListQuery(t *testing.T) {
 		{"category=Viaggi&limit=10&offset=20", listQuery{category: "Viaggi", limit: 10, offset: 20}},
 		{"category=%20Corsi%20", listQuery{category: "Corsi", limit: defaultLimit}},
 		{"limit=200", listQuery{limit: 200}},
+		{"uploader=3", listQuery{uploader: 3, limit: defaultLimit}},
 		{"q=%20mare%20%20Rimini%20", listQuery{words: []string{"mare", "Rimini"}, limit: defaultLimit}},
 		{"q=%20%20", listQuery{limit: defaultLimit}},
 		{"order=newest", listQuery{limit: defaultLimit}},
@@ -41,7 +42,7 @@ func TestParseListQuery(t *testing.T) {
 }
 
 func TestParseListQueryRejects(t *testing.T) {
-	for _, query := range []string{"limit=0", "limit=201", "limit=abc", "offset=-1", "offset=x",
+	for _, query := range []string{"limit=0", "limit=201", "limit=abc", "offset=-1", "offset=x", "uploader=0", "uploader=-2", "uploader=Giulia",
 		"q=" + strings.Repeat("a", maxSearchLen+1),
 		"order=random", "order=random&seed=0", "order=random&seed=-1", "order=random&seed=x",
 		"order=random&seed=9007199254740992", "order=oldest", "seed=42", "order=newest&seed=42"} {

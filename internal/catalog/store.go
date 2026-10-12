@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
-// errNotFound means there is no visible video with that id.
+// errNotFound means there is no video with that id the person may open.
 var errNotFound = errors.New("video not found")
 
 // Video is one video as the interface sees it.
@@ -31,10 +32,18 @@ type Video struct {
 	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
 	Format   string    `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
 	Likes    int64     `json:"likes"`    // how many people like it
+	Private  bool      `json:"private"`  // only the person who uploaded it sees it
+	Uploader *Person   `json:"uploader"` // who uploaded it from the browser; null = from a video folder
 	// From a details file next to the video, like yt-dlp's .info.json:
 	Author      string  `json:"author"`                // who published it; "" = not known
 	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
 	Description *string `json:"description,omitempty"` // only for one video; null = none
+}
+
+// Person is someone on FranzPLAY, as a video names them.
+type Person struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // Preview is the image with small frames of a video, shown over the
@@ -61,10 +70,26 @@ type store struct {
 	db *sql.DB
 }
 
+// watchable says which videos a person may open: the visible ones, and
+// their own private uploads, while those are on the disk and not hidden.
+// Its one argument is the person, from viewer. Lists keep to visible: a
+// private video shows up in no list, not even its uploader's.
+const watchable = `(v.visible OR (v.private AND v.uploaded_by = ? AND v.missing_since IS NULL AND v.hidden_at IS NULL))`
+
+// viewer returns who is asking; 0, nobody, outside a logged-in request.
+func viewer(ctx context.Context) int64 {
+	a, ok := users.FromContext(ctx)
+	if !ok {
+		return 0
+	}
+	return a.ID
+}
+
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
-	v.shown_author, v.shown_published_on, v.clip,
+	v.shown_author, v.shown_published_on, v.clip, v.private,
+	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
 
 // rowScanner is a *sql.Row or *sql.Rows.
@@ -85,9 +110,11 @@ func scanVideo(row rowScanner) (Video, error) {
 	var cover, videoCodec, audioCodec, preview, converted, author, published, clip sql.NullString
 	var addedAt int64
 	var relPath string
+	var uploaderID sql.NullInt64
+	var uploaderName sql.NullString
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
-		&author, &published, &clip, &v.Likes); err != nil {
+		&author, &published, &clip, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -113,6 +140,9 @@ func scanVideo(row rowScanner) (Video, error) {
 		address := "/api/clips/" + clip.String
 		v.Clip = &address
 	}
+	if uploaderID.Valid && uploaderName.Valid {
+		v.Uploader = &Person{ID: uploaderID.Int64, Name: uploaderName.String}
+	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
 	v.Format = fileFormat(relPath)
 	v.Author = author.String
@@ -132,6 +162,10 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 	if q.category != "" {
 		where += ` AND v.category = ?`
 		args = append(args, q.category)
+	}
+	if q.uploader != 0 {
+		where += ` AND v.uploaded_by = ?`
+		args = append(args, q.uploader)
 	}
 	// LIKE ignores case for the letters A to Z; that is enough for a home search.
 	for _, w := range q.words {
@@ -196,11 +230,11 @@ func (s store) listShuffled(ctx context.Context, where string, args []any, q lis
 	return videos, len(ids), nil
 }
 
-// get returns one visible video, with its description.
+// get returns one video the person may open, with its description.
 func (s store) get(ctx context.Context, id int64) (Video, error) {
 	var description sql.NullString
 	v, err := scanVideo(moreColumns{s.db.QueryRowContext(ctx,
-		`SELECT `+videoColumns+`, v.shown_description FROM videos v WHERE v.id = ? AND v.visible`, id),
+		`SELECT `+videoColumns+`, v.shown_description FROM videos v WHERE v.id = ? AND `+watchable, id, viewer(ctx)),
 		[]any{&description}})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, errNotFound
@@ -271,12 +305,12 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	return out, rows.Err()
 }
 
-// file returns the full path of a visible video's file.
+// file returns the full path of the file of a video the person may open.
 func (s store) file(ctx context.Context, id int64) (string, error) {
 	var root, rel string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT l.path, v.path FROM videos v JOIN libraries l ON l.id = v.library_id
-		WHERE v.id = ? AND v.visible`, id).Scan(&root, &rel)
+		WHERE v.id = ? AND `+watchable, id, viewer(ctx)).Scan(&root, &rel)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}
@@ -293,7 +327,7 @@ func (s store) played(ctx context.Context, id int64, convertedDir string) (name 
 	var converted sql.NullString
 	err = s.db.QueryRowContext(ctx, `
 		SELECT l.path, v.path, v.converted FROM videos v JOIN libraries l ON l.id = v.library_id
-		WHERE v.id = ? AND v.visible`, id).Scan(&root, &rel, &converted)
+		WHERE v.id = ? AND `+watchable, id, viewer(ctx)).Scan(&root, &rel, &converted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, errNotFound
 	}
@@ -334,11 +368,12 @@ func (s store) embedded(ctx context.Context, id int64) (subs []embeddedSubtitle,
 	return subs, nil
 }
 
-// embeddedFile returns the copy of one subtitle inside a visible video.
+// embeddedFile returns the copy of one subtitle inside a video the person
+// may open.
 func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, error) {
 	var name string
 	err := s.db.QueryRowContext(ctx, `SELECT s.file FROM video_subtitles s JOIN videos v ON v.id = s.video_id
-		WHERE s.video_id = ? AND s.stream = ? AND v.visible`, id, stream).Scan(&name)
+		WHERE s.video_id = ? AND s.stream = ? AND `+watchable, id, stream, viewer(ctx)).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}
@@ -376,11 +411,13 @@ func (s store) auto(ctx context.Context, id int64) (subs []autoSubtitle, err err
 	return subs, nil
 }
 
-// autoFile returns the file of one automatic subtitle of a visible video.
+// autoFile returns the file of one automatic subtitle of a video the
+// person may open.
 func (s store) autoFile(ctx context.Context, id int64, lang string) (string, error) {
 	var name string
 	err := s.db.QueryRowContext(ctx, `SELECT a.file FROM auto_subtitles a JOIN videos v ON v.id = a.video_id
-		WHERE a.video_id = ? AND a.lang = ? AND a.fingerprint = v.fingerprint AND v.visible`, id, lang).Scan(&name)
+		WHERE a.video_id = ? AND a.lang = ? AND a.fingerprint = v.fingerprint AND `+watchable,
+		id, lang, viewer(ctx)).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}

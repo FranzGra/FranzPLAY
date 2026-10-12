@@ -16,11 +16,26 @@ export type Video = {
   clip: string | null; // address of the seconds that play on the card; null = none yet
   format: string; // the kind of file, from its name: "MP4", "MKV"; "" = none
   likes: number; // how many people like it
+  private: boolean; // only the person who uploaded it sees it
+  uploader: Person | null; // who uploaded it from the browser; null = from a video folder
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
   description: string; // only when asking for one video; "" = none
 };
+
+// Person is someone on FranzPLAY, as a video names them.
+export type Person = { id: number; name: string };
+
+function parsePerson(value: unknown): Person | null {
+  if (value === null || value === undefined) return null;
+  const p = record(value, "video uploader");
+  const id = count(p.id, "video uploader id");
+  if (id === 0) throw new Error("video uploader id: zero");
+  if (typeof p.name !== "string" || p.name === "")
+    throw new Error("video uploader name: not a name");
+  return { id, name: p.name };
+}
 
 // Preview is one image holding small frames of the video, count frames of
 // width×height, one every gap seconds, columns per row.
@@ -108,6 +123,9 @@ export function parseVideo(data: unknown): Video {
   if (typeof v.format !== "string" || !/^[A-Z0-9]{0,10}$/.test(v.format)) {
     throw new Error("video format: not a kind of file");
   }
+  if (typeof v.private !== "boolean") {
+    throw new Error("video private: not true or false");
+  }
   if (typeof v.author !== "string") {
     throw new Error("video author: not text");
   }
@@ -132,6 +150,8 @@ export function parseVideo(data: unknown): Video {
     clip: v.clip,
     format: v.format,
     likes: count(v.likes, "video likes"),
+    private: v.private,
+    uploader: parsePerson(v.uploader),
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",
@@ -175,6 +195,7 @@ export function parseCategories(data: unknown): Category[] {
 
 export type ListOptions = {
   category?: string;
+  uploader?: number; // only the videos this person uploaded
   q?: string; // search words
   // seed mixes the videos instead of showing the newest first; the same
   // seed gives the same order, so pages follow on without repeats.
@@ -186,6 +207,7 @@ export type ListOptions = {
 export async function fetchVideos(options: ListOptions, signal?: AbortSignal): Promise<VideoList> {
   const params = new URLSearchParams();
   if (options.category) params.set("category", options.category);
+  if (options.uploader) params.set("uploader", String(options.uploader));
   if (options.q) params.set("q", options.q);
   if (options.seed) {
     params.set("order", "random");

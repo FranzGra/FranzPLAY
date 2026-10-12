@@ -1,6 +1,6 @@
 import { parseMyUploads, parseUpload } from "./uploads";
 
-const upload = { id: 4, name: "mare.mp4", title: "Al mare", size: 10, received: 3 };
+const upload = { id: 4, name: "mare.mp4", title: "Al mare", size: 10, received: 3, private: false };
 
 describe("parseUpload", () => {
   it("accepts an upload, with its video when finished", () => {
@@ -21,6 +21,7 @@ describe("parseUpload", () => {
     ["more than the size", { ...upload, received: 11 }],
     ["negative", { ...upload, received: -1 }],
     ["bad video", { ...upload, video: 0 }],
+    ["no private", { ...upload, private: undefined }],
   ])("rejects %s", (_label, data) => {
     expect(() => parseUpload(data)).toThrow();
   });

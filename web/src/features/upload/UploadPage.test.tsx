@@ -37,11 +37,19 @@ describe("upload page", () => {
       uploads({
         "POST /api/uploads": {
           status: 201,
-          body: { id: 4, name: "mare.mp4", title: "Al mare", size: 5, received: 0 },
+          body: { id: 4, name: "mare.mp4", title: "Al mare", size: 5, received: 0, private: true },
         },
         "PUT /api/uploads/4": async (request: Request) => {
           received += (await request.text()).length;
-          return json({ id: 4, name: "mare.mp4", title: "Al mare", size: 5, received, video: 12 });
+          return json({
+            id: 4,
+            name: "mare.mp4",
+            title: "Al mare",
+            size: 5,
+            received,
+            private: true,
+            video: 12,
+          });
         },
       }),
     );
@@ -50,6 +58,9 @@ describe("upload page", () => {
     expect(title).toHaveValue("mare");
     await user.clear(title);
     await user.type(title, "Al mare");
+    expect(screen.getByRole("radio", { name: "Tutti" })).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: "Solo io" }));
+    expect(screen.getByText(/Non compare nelle liste di nessuno/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Carica" }));
 
     expect(await screen.findByRole("link", { name: "Guarda il video" })).toHaveAttribute(
@@ -57,7 +68,12 @@ describe("upload page", () => {
       "/video/12",
     );
     const start = server.requests.find((r) => r.method === "POST");
-    expect(await start?.json()).toEqual({ name: "mare.mp4", title: "Al mare", size: 5 });
+    expect(await start?.json()).toEqual({
+      name: "mare.mp4",
+      title: "Al mare",
+      size: 5,
+      private: true,
+    });
     expect(received).toBe(5);
   });
 
@@ -74,7 +90,14 @@ describe("upload page", () => {
   });
 
   it("goes on with an upload left half way", async () => {
-    const half = { id: 4, name: "mare.mp4", title: "Al mare", size: 6, received: 3 };
+    const half = {
+      id: 4,
+      name: "mare.mp4",
+      title: "Al mare",
+      size: 6,
+      received: 3,
+      private: false,
+    };
     const offsets: string[] = [];
     const { user } = renderApp(
       "/carica",
@@ -101,7 +124,14 @@ describe("upload page", () => {
   });
 
   it("cancels an upload left half way", async () => {
-    const half = { id: 4, name: "mare.mp4", title: "Al mare", size: 6, received: 3 };
+    const half = {
+      id: 4,
+      name: "mare.mp4",
+      title: "Al mare",
+      size: 6,
+      received: 3,
+      private: false,
+    };
     const { user, server } = renderApp(
       "/carica",
       uploads({ "DELETE /api/uploads/4": { status: 204 } }, [half]),
@@ -118,7 +148,7 @@ describe("upload page", () => {
       uploads({
         "POST /api/uploads": {
           status: 201,
-          body: { id: 4, name: "mare.mp4", title: "mare", size: 5, received: 0 },
+          body: { id: 4, name: "mare.mp4", title: "mare", size: 5, received: 0, private: false },
         },
         "PUT /api/uploads/4": {
           status: 409,
@@ -149,6 +179,7 @@ describe("upload page", () => {
     addedAt: "2026-10-12T20:00:00Z",
     cover: "/api/covers/12.jpg",
     hidden: false,
+    private: false,
   };
 
   it("lists my videos and renames one", async () => {
@@ -166,7 +197,7 @@ describe("upload page", () => {
       "href",
       "/video/12",
     );
-    expect(within(mine).getByText(/12 ottobre 2026 · 3 MB$/)).toBeInTheDocument();
+    expect(within(mine).getByText(/12 ottobre 2026 · 3 MB · lo vedono tutti$/)).toBeInTheDocument();
     expect(within(mine).getByText(/nascosto dall'amministratore/)).toBeInTheDocument();
 
     await user.click(
@@ -178,6 +209,22 @@ describe("upload page", () => {
     await user.click(within(mine).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByRole("link", { name: "Al mare d'estate" })).toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({ title: "Al mare d'estate" });
+  });
+
+  it("keeps one of my videos only for me", async () => {
+    const { user, server } = renderApp(
+      "/carica",
+      uploads({
+        "GET /api/uploads/videos": { body: [mare] },
+        "PUT /api/uploads/videos/12": { body: { ...mare, private: true } },
+      }),
+    );
+    const mine = await screen.findByRole("region", { name: "I tuoi video" });
+    expect(await within(mine).findByText(/lo vedono tutti/)).toBeInTheDocument();
+    await user.click(within(mine).getByRole("button", { name: "Tienilo solo per te" }));
+    expect(await within(mine).findByText(/solo tu lo vedi/)).toBeInTheDocument();
+    expect(within(mine).getByRole("button", { name: "Fallo vedere a tutti" })).toBeInTheDocument();
+    expect(await server.requests.at(-1)?.json()).toEqual({ private: true });
   });
 
   it("deletes one of my videos after asking", async () => {
