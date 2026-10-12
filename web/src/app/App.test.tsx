@@ -39,6 +39,7 @@ describe("navigation", () => {
       "Categorie",
       "Il mio canale",
       "Tutte le playlist",
+      "Amministrazione", // the test account is the administrator
     ]);
     for (const link of links) {
       expect(link.querySelector("svg")).not.toBeNull();

@@ -160,17 +160,57 @@ func (s store) deleteUser(ctx context.Context, id int64) (err error) {
 	return nil
 }
 
+// updateUser changes what a user may do. The last administrator cannot
+// become a normal user, for the same reason it cannot be removed.
+func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bool) (_ Account, err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Account{}, fmt.Errorf("update user: %w", err)
+	}
+	defer func() { err = finish(tx, err) }()
+
+	a := Account{ID: id, Role: role, CanUpload: canUpload}
+	var old string
+	err = tx.QueryRowContext(ctx, `SELECT name, role FROM users WHERE id = ?`, id).Scan(&a.Name, &old)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Account{}, errUserNotFound
+	}
+	if err != nil {
+		return Account{}, fmt.Errorf("update user: %w", err)
+	}
+	if Role(old) == Admin && role != Admin {
+		var admins int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE role = 'admin'`).Scan(&admins); err != nil {
+			return Account{}, fmt.Errorf("update user: %w", err)
+		}
+		if admins <= 1 {
+			return Account{}, errLastAdmin
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET role = ?, can_upload = ? WHERE id = ?`,
+		string(role), canUpload, id); err != nil {
+		return Account{}, fmt.Errorf("update user: %w", err)
+	}
+	return a, nil
+}
+
 // setPassword changes a password and closes every session of the user
 // except keep (the browser that made the change), so a stolen session
-// stops working.
+// stops working. An empty keep closes them all.
 func (s store) setPassword(ctx context.Context, id int64, hash string, keep []byte) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("set password: %w", err)
 	}
 	defer func() { err = finish(tx, err) }()
-	if _, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, hash, id); err != nil {
+	res, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, hash, id)
+	if err != nil {
 		return fmt.Errorf("set password: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("set password: %w", err)
+	} else if n == 0 {
+		return errUserNotFound
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`, id, keep); err != nil {
 		return fmt.Errorf("set password: %w", err)

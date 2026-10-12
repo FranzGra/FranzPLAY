@@ -375,3 +375,95 @@ func TestBadRequestBodies(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestAdministratorChangesWhatUsersMayDo(t *testing.T) {
+	s := newSite(t)
+	admin := s.setUp()
+	me := whoAmI(t, admin)
+	rec := admin.do("POST", "/api/users", map[string]any{"name": "Giulia", "password": "giulia-password", "role": "user"})
+	expect(t, rec, http.StatusCreated)
+	var giulia Account
+	if err := json.Unmarshal(rec.Body.Bytes(), &giulia); err != nil {
+		t.Fatal(err)
+	}
+	user := s.browser()
+	expect(t, user.do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusOK)
+
+	rec = admin.do("PUT", "/api/users/"+itoa(giulia.ID), map[string]any{"role": "user", "canUpload": true})
+	expect(t, rec, http.StatusOK)
+	if got := whoAmI(t, user); !got.CanUpload || got.Role != User {
+		t.Errorf("after the change Giulia is %+v, want a user who can upload", got)
+	}
+
+	// The change counts at once, without logging in again.
+	expect(t, admin.do("PUT", "/api/users/"+itoa(giulia.ID), map[string]any{"role": "admin", "canUpload": true}),
+		http.StatusOK)
+	expect(t, user.do("GET", "/api/users", nil), http.StatusOK)
+
+	expect(t, user.do("PUT", "/api/users/"+itoa(me.ID), map[string]any{"role": "user"}), http.StatusOK)
+	// Now Giulia is the only administrator: she cannot stop being one.
+	expect(t, user.do("PUT", "/api/users/"+itoa(giulia.ID), map[string]any{"role": "user"}), http.StatusConflict)
+	expect(t, admin.do("PUT", "/api/users/"+itoa(giulia.ID), map[string]any{"role": "user"}), http.StatusForbidden)
+
+	for name, tc := range map[string]struct {
+		path string
+		body any
+		want int
+	}{
+		"bad role":      {"/api/users/" + itoa(giulia.ID), map[string]any{"role": "root"}, http.StatusBadRequest},
+		"unknown field": {"/api/users/" + itoa(giulia.ID), map[string]any{"role": "admin", "name": "X"}, http.StatusBadRequest},
+		"no such user":  {"/api/users/999", map[string]any{"role": "user"}, http.StatusNotFound},
+		"bad id":        {"/api/users/abc", map[string]any{"role": "user"}, http.StatusNotFound},
+	} {
+		if rec := user.do("PUT", tc.path, tc.body); rec.Code != tc.want {
+			t.Errorf("%s: status %d, want %d", name, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestAdministratorResetsAPassword(t *testing.T) {
+	s := newSite(t)
+	admin := s.setUp()
+	me := whoAmI(t, admin)
+	rec := admin.do("POST", "/api/users", map[string]any{"name": "Giulia", "password": "giulia-password", "role": "user"})
+	expect(t, rec, http.StatusCreated)
+	var giulia Account
+	if err := json.Unmarshal(rec.Body.Bytes(), &giulia); err != nil {
+		t.Fatal(err)
+	}
+	user := s.browser()
+	expect(t, user.do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusOK)
+
+	path := "/api/users/" + itoa(giulia.ID) + "/password"
+	expect(t, admin.do("PUT", path, map[string]string{"password": "short"}), http.StatusBadRequest)
+	expect(t, user.do("PUT", path, map[string]string{"password": "mine-now-password"}), http.StatusForbidden)
+	expect(t, admin.do("PUT", "/api/users/999/password", map[string]string{"password": "nobody-password"}),
+		http.StatusNotFound)
+	expect(t, admin.do("PUT", path, map[string]string{"password": "fresh-password"}), http.StatusNoContent)
+
+	// Giulia's open sessions end; the new password works, the old one not.
+	expect(t, user.do("GET", "/api/me", nil), http.StatusUnauthorized)
+	expect(t, s.browser().do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "giulia-password"}),
+		http.StatusUnauthorized)
+	expect(t, s.browser().do("POST", "/api/login", map[string]string{"name": "Giulia", "password": "fresh-password"}),
+		http.StatusOK)
+
+	// An administrator resetting their own password stays logged in here.
+	expect(t, admin.do("PUT", "/api/users/"+itoa(me.ID)+"/password", map[string]string{"password": "admin-new-password"}),
+		http.StatusNoContent)
+	expect(t, admin.do("GET", "/api/me", nil), http.StatusOK)
+}
+
+// whoAmI returns the user logged in on b.
+func whoAmI(t *testing.T, b *browser) Account {
+	t.Helper()
+	rec := b.do("GET", "/api/me", nil)
+	expect(t, rec, http.StatusOK)
+	var a Account
+	if err := json.Unmarshal(rec.Body.Bytes(), &a); err != nil {
+		t.Fatal(err)
+	}
+	return a
+}

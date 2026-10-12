@@ -22,7 +22,9 @@ const maxBody = 4 << 10
 //	POST   /api/me/password   {current, new}
 //	GET    /api/users         administrators only
 //	POST   /api/users         administrators only {name, password, role, canUpload}
+//	PUT    /api/users/{id}    administrators only {role, canUpload}
 //	DELETE /api/users/{id}    administrators only
+//	PUT    /api/users/{id}/password  administrators only {password}
 func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/setup", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/setup", s.handleSetup)
@@ -32,7 +34,9 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/me/password", s.handlePassword)
 	mux.HandleFunc("GET /api/users", s.adminOnly(s.handleList))
 	mux.HandleFunc("POST /api/users", s.adminOnly(s.handleCreate))
+	mux.HandleFunc("PUT /api/users/{id}", s.adminOnly(s.handleUpdate))
 	mux.HandleFunc("DELETE /api/users/{id}", s.adminOnly(s.handleDelete))
+	mux.HandleFunc("PUT /api/users/{id}/password", s.adminOnly(s.handleReset))
 }
 
 // readJSON reads a small JSON body into v. Unknown fields are refused, so
@@ -218,10 +222,75 @@ func (s *Service) handleCreate(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, r, s.logger, http.StatusCreated, a)
 }
 
-func (s *Service) handleDelete(w http.ResponseWriter, r *http.Request) {
+// userID reads the {id} of the address. When it is not a valid id it
+// answers 404 itself and returns false.
+func (s *Service) userID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
 		respond.Error(w, r, s.logger, http.StatusNotFound, errUserNotFound.Error())
+		return 0, false
+	}
+	return id, true
+}
+
+type updateRequest struct {
+	Role      string `json:"role"`
+	CanUpload bool   `json:"canUpload"`
+}
+
+func (s *Service) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.userID(w, r)
+	if !ok {
+		return
+	}
+	var req updateRequest
+	if err := readJSON(w, r, &req); err != nil {
+		s.badRequest(w, r)
+		return
+	}
+	role, ok := parseRole(req.Role)
+	if !ok {
+		respond.Error(w, r, s.logger, http.StatusBadRequest, `the role must be "admin" or "user"`)
+		return
+	}
+	a, err := s.store.updateUser(r.Context(), id, role, req.CanUpload)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	admin, _ := FromContext(r.Context())
+	s.logger.InfoContext(r.Context(), "user changed", "name", a.Name, "role", a.Role,
+		"can_upload", a.CanUpload, "by", admin.Name)
+	respond.JSON(w, r, s.logger, http.StatusOK, a)
+}
+
+type resetRequest struct {
+	Password string `json:"password"`
+}
+
+func (s *Service) handleReset(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.userID(w, r)
+	if !ok {
+		return
+	}
+	var req resetRequest
+	if err := readJSON(w, r, &req); err != nil {
+		s.badRequest(w, r)
+		return
+	}
+	admin, _ := FromContext(r.Context())
+	token, _ := r.Context().Value(tokenKey{}).(string)
+	if err := s.resetPassword(r.Context(), admin, token, id, req.Password); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.logger.InfoContext(r.Context(), "password reset", "id", id, "by", admin.Name)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) handleDelete(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.userID(w, r)
+	if !ok {
 		return
 	}
 	admin, _ := FromContext(r.Context())

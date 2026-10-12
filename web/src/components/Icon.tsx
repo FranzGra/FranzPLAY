@@ -177,6 +177,12 @@ const paths = {
       <path d="M13 7l4 4" />
     </>
   ),
+  shield: (
+    <>
+      <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </>
+  ),
   chevronLeft: <path d="M15 5l-7 7 7 7" />,
   chevronRight: <path d="M9 5l7 7-7 7" />,
 } as const;

@@ -166,6 +166,11 @@ Apri <http://localhost:8090>: compare la pagina **Benvenuto in FranzPLAY**. Scri
 il tuo nome e una password (almeno 8 caratteri) e premi **Crea e entra**. Le volte successive
 basta nome e password. Per uscire: pagina **Profilo**, tasto **Esci**.
 
+**Aggiungere persone.** Solo tu, come amministratore, vedi la voce **Amministrazione** nel menu (sul
+telefono è nella pagina Profilo). Nella sezione **Persone** aggiungi familiari e amici con un nome e
+una password, decidi chi può caricare video e chi è amministratore, dai una password nuova a chi
+l'ha dimenticata o togli una persona. Deve restare sempre almeno un amministratore.
+
 Nella **Home** compaiono i video più recenti, con le categorie in alto per filtrarli. Clicca su un
 video per guardarlo con il player di FranzPLAY:
 

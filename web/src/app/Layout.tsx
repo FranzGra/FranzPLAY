@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Icon } from "../components/Icon";
+import { useAccount } from "./auth";
 import styles from "./Layout.module.css";
 
 const sideLinks = [
@@ -20,6 +21,7 @@ const tabs = [
 // bottom bar with three tabs on phones.
 export function Layout() {
   const navigate = useNavigate();
+  const account = useAccount();
   const [query, setQuery] = useState("");
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
@@ -77,6 +79,15 @@ export function Layout() {
             <Icon name="playlist" size={20} />
             Tutte le playlist
           </NavLink>
+          {account.role === "admin" && (
+            <>
+              <div className={styles.sideHeading}>Gestione</div>
+              <NavLink to="/admin" className={styles.sideLink}>
+                <Icon name="shield" size={20} />
+                Amministrazione
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <main className={styles.main}>

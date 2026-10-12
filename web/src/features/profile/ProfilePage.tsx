@@ -7,6 +7,7 @@ import styles from "./ProfilePage.module.css";
 import { type ServerInfoState, useServerInfo } from "./useServerInfo";
 
 const rows = [{ to: "/cronologia", label: "Cronologia" }];
+const adminRows = [{ to: "/admin", label: "Amministrazione" }];
 
 function versionText(state: ServerInfoState): string {
   switch (state.kind) {
@@ -55,7 +56,7 @@ export function ProfilePage() {
       </p>
 
       <nav className={`glass ${styles.rows}`} aria-label="Le tue pagine">
-        {rows.map((row) => (
+        {[...rows, ...(account.role === "admin" ? adminRows : [])].map((row) => (
           <Link key={row.to} to={row.to} className={styles.row}>
             {row.label}
             <span className={styles.chevron} aria-hidden="true">

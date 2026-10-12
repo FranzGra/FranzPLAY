@@ -27,6 +27,21 @@ describe("profile page", () => {
     expect(within(pages).queryByRole("link", { name: /playlist/i })).not.toBeInTheDocument();
   });
 
+  it("links the administrator, and only them, to the administration", async () => {
+    renderApp("/profilo");
+    const pages = await screen.findByRole("navigation", { name: "Le tue pagine" });
+    expect(within(pages).getByRole("link", { name: /Amministrazione/ })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
+  });
+
+  it("does not show the administration to a normal user", async () => {
+    renderApp("/profilo", signedIn({ ...testAccount, role: "user" }));
+    const pages = await screen.findByRole("navigation", { name: "Le tue pagine" });
+    expect(within(pages).queryByRole("link", { name: /Amministrazione/ })).not.toBeInTheDocument();
+  });
+
   it("shows the server version", async () => {
     renderApp("/profilo", {
       ...signedIn(),
