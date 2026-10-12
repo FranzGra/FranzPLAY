@@ -21,7 +21,9 @@ Pi con 2 GB.
   automatici sono spenti e tutto il resto funziona come prima.
 - **I modelli** (i file `ggml-small.bin`, `ggml-medium.bin`… che contengono "l'orecchio" di
   Whisper) stanno nella cartella dati, in `whisper/`. L'amministratore sceglie quale usare per ogni
-  video, come nel vecchio (che offriva `small` e `medium`).
+  video, come nel vecchio (che offriva `small` e `medium`). FranzPLAY li **scarica da solo** dalla
+  pagina, come faceva il vecchio, dal sito di whisper.cpp (Hugging Face), e controlla l'impronta
+  pubblicata da whisper.cpp prima di usarli: un file diverso viene buttato.
 - **La traduzione** chiede a un server **LibreTranslate**, come il vecchio, ma solo se
   l'amministratore ne scrive l'indirizzo (`FRANZPLAY_TRANSLATE_URL`). Senza, si fanno solo i
   sottotitoli nella lingua parlata. Il testo si manda a pezzi di 40 righe: il vecchio aveva
@@ -50,6 +52,7 @@ Pi con 2 GB.
 
 1. Installare whisper.cpp, così che `whisper-cli` sia nel PATH (o indicarlo in
    `FRANZPLAY_WHISPER`).
-2. Mettere almeno un modello in `cartella-dati/whisper/` (per esempio `ggml-small.bin`).
+2. In Amministrazione › Sottotitoli premere «Scarica» accanto a un modello (`small` va bene su un
+   Raspberry Pi), oppure mettere il file in `cartella-dati/whisper/`.
 3. Per tradurre: avviare LibreTranslate e scriverne l'indirizzo in `FRANZPLAY_TRANSLATE_URL`
    (e la chiave in `FRANZPLAY_TRANSLATE_KEY`, se il server la chiede).

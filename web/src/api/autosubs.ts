@@ -11,6 +11,18 @@ export type SubtitlesSetup = {
   translatorLanguages: string[];
   languages: string[]; // what can be asked: "it", "en"…
   modelsFolder: string; // where the models go
+  downloadable: DownloadableModel[]; // what FranzPLAY can download by itself
+  download: ModelDownload | null; // how the last download goes
+};
+
+export type DownloadableModel = { name: string; size: number; about: string };
+
+export type ModelDownload = {
+  name: string;
+  done: number; // bytes
+  total: number; // bytes, 0 = not known yet
+  error: string;
+  ended: boolean;
 };
 
 export type SubtitleSource = "file" | "inside" | "auto";
@@ -67,7 +79,35 @@ export function parseSetup(data: unknown): SubtitlesSetup {
     translatorLanguages: strings(d.translatorLanguages, "translatorLanguages"),
     languages: strings(d.languages, "languages"),
     modelsFolder: d.modelsFolder,
+    downloadable: parseDownloadable(d.downloadable),
+    download: d.download === null ? null : parseDownload(d.download),
   };
+}
+
+function parseDownloadable(data: unknown): DownloadableModel[] {
+  if (!Array.isArray(data)) throw new Error("downloadable: not a list");
+  return data.map((m: unknown) => {
+    const d = (m ?? {}) as Record<string, unknown>;
+    if (typeof d.name !== "string" || typeof d.about !== "string" || typeof d.size !== "number") {
+      throw new Error("downloadable: bad model");
+    }
+    return { name: d.name, size: d.size, about: d.about };
+  });
+}
+
+function parseDownload(data: unknown): ModelDownload {
+  const d = (data ?? {}) as Record<string, unknown>;
+  if (typeof d.name !== "string" || typeof d.error !== "string" || typeof d.ended !== "boolean") {
+    throw new Error("download: bad text");
+  }
+  if (typeof d.done !== "number" || typeof d.total !== "number")
+    throw new Error("download: bad size");
+  return { name: d.name, done: d.done, total: d.total, error: d.error, ended: d.ended };
+}
+
+// downloadModel has FranzPLAY download a whisper model by itself.
+export async function downloadModel(name: string): Promise<void> {
+  await request(`/api/admin/subtitles/models/${encodeURIComponent(name)}`, { method: "POST" });
 }
 
 const sources: readonly SubtitleSource[] = ["file", "inside", "auto"];

@@ -36,14 +36,16 @@ type Languages interface {
 // Options are the parts of the machine the page depends on.
 type Options struct {
 	DataDir    string
-	Whisper    bool      // whisper.cpp and ffmpeg were found: subtitles can be made
-	Translator Languages // nil: no translator set, nothing is translated
+	Whisper    bool        // whisper.cpp and ffmpeg were found: subtitles can be made
+	Translator Languages   // nil: no translator set, nothing is translated
+	Downloader *Downloader // downloads the models; nil: none can be downloaded
 }
 
 // Routes adds the API of the page to mux, for administrators only:
 //
 //	GET    /api/admin/subtitles                     the videos and their subtitles (?q=&have=with|without&lang=&limit=&offset=)
 //	GET    /api/admin/subtitles/setup               what this machine can do: whisper, models, translator
+//	POST   /api/admin/subtitles/models/{name}       download a whisper model
 //	PUT    /api/admin/subtitles/{id}                ask for subtitles {spoken, model, translate}
 //	DELETE /api/admin/subtitles/{id}/request        take the request back
 //	DELETE /api/admin/subtitles/{id}/made/{lang}    delete subtitles whisper made
@@ -57,6 +59,7 @@ func Routes(db *sql.DB, opts Options, queued func(), logger *slog.Logger) func(m
 func (p page) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/subtitles", p.only(p.handleList))
 	mux.HandleFunc("GET /api/admin/subtitles/setup", p.only(p.handleSetup))
+	mux.HandleFunc("POST /api/admin/subtitles/models/{name}", p.only(p.handleDownload))
 	mux.HandleFunc("PUT /api/admin/subtitles/{id}", p.only(p.handleAsk))
 	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/request", p.only(p.handleTakeBack))
 	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/made/{lang}", p.only(p.handleDelete))
@@ -98,6 +101,10 @@ type Setup struct {
 	TranslatorLanguages []string `json:"translatorLanguages"`
 	Languages           []string `json:"languages"`    // what can be asked: "it", "en"…
 	ModelsFolder        string   `json:"modelsFolder"` // where the models go
+	// Downloadable are the models FranzPLAY can download by itself, and
+	// Download how the last download goes; null if none.
+	Downloadable []Model   `json:"downloadable"`
+	Download     *Download `json:"download"`
 }
 
 // translatorTimeout is how long the page waits for the translator.
@@ -119,6 +126,11 @@ func (p page) handleSetup(w http.ResponseWriter, r *http.Request) {
 	if s.Models == nil {
 		s.Models = []string{}
 	}
+	s.Downloadable = []Model{}
+	if p.opts.Downloader != nil {
+		s.Downloadable = Models
+		s.Download = p.opts.Downloader.Status()
+	}
 	if p.opts.Translator != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), translatorTimeout)
 		known, err := p.opts.Translator.Languages(ctx)
@@ -131,6 +143,26 @@ func (p page) handleSetup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respond.JSON(w, r, p.logger, http.StatusOK, s)
+}
+
+func (p page) handleDownload(w http.ResponseWriter, r *http.Request) {
+	if p.opts.Downloader == nil {
+		respond.Error(w, r, p.logger, http.StatusNotFound, "no downloads here")
+		return
+	}
+	name := r.PathValue("name")
+	switch err := p.opts.Downloader.Start(name); {
+	case errors.Is(err, errUnknownModel):
+		respond.Error(w, r, p.logger, http.StatusNotFound, err.Error())
+	case errors.Is(err, errBusy):
+		respond.Error(w, r, p.logger, http.StatusConflict, err.Error())
+	case err != nil:
+		respond.InternalError(w, r, p.logger, err)
+	default:
+		who, _ := p.account(r.Context())
+		p.logger.InfoContext(r.Context(), "whisper model download started", "model", name, "by", who.Name)
+		w.WriteHeader(http.StatusAccepted)
+	}
 }
 
 // askBody is the body of PUT /api/admin/subtitles/{id}.

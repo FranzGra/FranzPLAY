@@ -111,7 +111,9 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		jobs.Online: tell(online.NewFetcher(db, cfg.DataDir).Handle),
 	}
 	var remux catalog.Remuxer // stays nil without ffmpeg and ffprobe
-	subtitles := autosubs.Options{DataDir: cfg.DataDir}
+	// The whisper models can be downloaded from the administration.
+	downloader := autosubs.NewDownloader(cfg.DataDir, autosubs.ModelsURL, func() { hub.Publish(events.Jobs) }, logger)
+	subtitles := autosubs.Options{DataDir: cfg.DataDir, Downloader: downloader}
 	translatorClient := translate.New(cfg.TranslateURL, cfg.TranslateKey)
 	if cfg.TranslateURL != "" {
 		subtitles.Translator = translatorClient
@@ -201,6 +203,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	var background sync.WaitGroup
 	background.Go(func() { worker.Run(bgCtx) })
 	background.Go(func() { scanner.Run(bgCtx, scanInterval) })
+	background.Go(func() { downloader.Run(bgCtx) })
 	defer func() {
 		stopBackground()
 		background.Wait()
