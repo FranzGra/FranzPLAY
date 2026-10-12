@@ -1,10 +1,10 @@
-# 0016 · Condividere solo con alcune persone
+# 0017 · Condividere solo con alcune persone
 
 12 ottobre 2026.
 
 ## Cosa si è deciso
 
-Un video caricato dal browser (e, nel passo dopo, una playlist) si può far vedere a tre gruppi:
+Un video caricato dal browser e una playlist si possono far vedere a tre gruppi:
 **Tutti**, **Solo io**, **Alcune persone**. Con «Alcune persone» chi carica sceglie i nomi da un
 elenco di chi usa FranzPLAY.
 
@@ -29,7 +29,11 @@ canali o nelle playlist, e il suo indirizzo risponde «non trovato».
 - **Gli aggiornamenti in tempo reale (SSE) non portano dati**, solo «qualcosa è cambiato»
   (decisione 0005): non possono far trapelare niente.
 
+**Le playlist** funzionano allo stesso modo: «Tutti» vuol dire sul mio canale, «Solo io» è la
+playlist privata di sempre, «Alcune persone» usa la tabella `playlist_shares`. Una playlist
+condivisa mostra solo i video che tutti possono vedere: un video privato non entra mai in una
+playlist. «Guarda più tardi» non si condivide.
+
 ## Cosa resta per dopo
 
-- Playlist condivise con alcune persone.
 - Mi piace e commenti sui video condivisi.
