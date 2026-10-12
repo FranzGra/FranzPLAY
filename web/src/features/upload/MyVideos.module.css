@@ -33,6 +33,7 @@
 
 .row {
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 12px;
   border-radius: var(--radius-m);
@@ -146,4 +147,13 @@
   .cover {
     width: 88px;
   }
+}
+
+/* Who sees it opens under the whole row, so the options fit on a phone. */
+.who {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }

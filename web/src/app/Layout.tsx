@@ -14,6 +14,7 @@ function sideLinks(me: number) {
     { to: "/", label: "Home", icon: "home" },
     { to: "/cronologia", label: "Cronologia", icon: "history" },
     { to: "/mi-piace", label: "Mi piace", icon: "like" },
+    { to: "/condivisi", label: "Condivisi con te", icon: "share" },
     { to: "/categorie", label: "Categorie", icon: "categories" },
     { to: `/canale/${me}`, label: "Il mio canale", icon: "channel" },
   ] as const;

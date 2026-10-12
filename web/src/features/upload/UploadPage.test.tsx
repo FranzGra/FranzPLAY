@@ -73,6 +73,7 @@ describe("upload page", () => {
       title: "Al mare",
       size: 5,
       private: true,
+      sharedWith: [],
     });
     expect(received).toBe(5);
   });
@@ -180,6 +181,7 @@ describe("upload page", () => {
     cover: "/api/covers/12.jpg",
     hidden: false,
     private: false,
+    sharedWith: [],
   };
 
   it("lists my videos and renames one", async () => {
@@ -211,6 +213,11 @@ describe("upload page", () => {
     expect(await server.requests.at(-1)?.json()).toEqual({ title: "Al mare d'estate" });
   });
 
+  const people = [
+    { id: 3, name: "Anna", avatar: 0 },
+    { id: 4, name: "Marco", avatar: 0 },
+  ];
+
   it("keeps one of my videos only for me", async () => {
     const { user, server } = renderApp(
       "/carica",
@@ -221,10 +228,76 @@ describe("upload page", () => {
     );
     const mine = await screen.findByRole("region", { name: "I tuoi video" });
     expect(await within(mine).findByText(/lo vedono tutti/)).toBeInTheDocument();
-    await user.click(within(mine).getByRole("button", { name: "Tienilo solo per te" }));
+    await user.click(within(mine).getByRole("button", { name: "Chi lo vede" }));
+    await user.click(within(mine).getByRole("radio", { name: "Solo io" }));
+    await user.click(within(mine).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/solo tu lo vedi/)).toBeInTheDocument();
-    expect(within(mine).getByRole("button", { name: "Fallo vedere a tutti" })).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({ private: true });
+    expect(await server.requests.at(-1)?.json()).toEqual({ private: true, sharedWith: [] });
+  });
+
+  it("shares one of my videos with some people", async () => {
+    const { user, server } = renderApp(
+      "/carica",
+      uploads({
+        "GET /api/uploads/videos": { body: [mare] },
+        "GET /api/people": { body: people },
+        "PUT /api/uploads/videos/12": {
+          body: { ...mare, private: true, sharedWith: [people[1]] },
+        },
+      }),
+    );
+    const mine = await screen.findByRole("region", { name: "I tuoi video" });
+    await user.click(await within(mine).findByRole("button", { name: "Chi lo vede" }));
+    await user.click(within(mine).getByRole("radio", { name: "Alcune persone" }));
+    // Nobody chosen yet: nothing is sent.
+    await user.click(await within(mine).findByRole("checkbox", { name: "Marco" }));
+    await user.click(within(mine).getByRole("checkbox", { name: "Marco" }));
+    await user.click(within(mine).getByRole("button", { name: "Salva" }));
+    expect(within(mine).getByRole("alert")).toHaveTextContent("Scegli almeno una persona");
+    expect(server.requests.some((r) => r.method === "PUT")).toBe(false);
+
+    await user.click(within(mine).getByRole("checkbox", { name: "Marco" }));
+    await user.click(within(mine).getByRole("button", { name: "Salva" }));
+    expect(await within(mine).findByText(/lo vedono anche Marco$/)).toBeInTheDocument();
+    expect(await server.requests.at(-1)?.json()).toEqual({ private: true, sharedWith: [4] });
+  });
+
+  it("chooses the people when uploading", async () => {
+    const { user, server } = renderApp(
+      "/carica",
+      uploads({
+        "GET /api/people": { body: people },
+        "POST /api/uploads": {
+          status: 201,
+          body: { id: 4, name: "mare.mp4", title: "mare", size: 5, received: 0, private: true },
+        },
+        "PUT /api/uploads/4": {
+          body: {
+            id: 4,
+            name: "mare.mp4",
+            title: "mare",
+            size: 5,
+            received: 5,
+            private: true,
+            video: 12,
+          },
+        },
+      }),
+    );
+    await user.upload(await screen.findByLabelText(/Scegli un video/), video("mare.mp4", "abcde"));
+    await user.click(screen.getByRole("radio", { name: "Alcune persone" }));
+    expect(screen.getByText(/nella pagina «Condivisi con te»/)).toBeInTheDocument();
+    await user.click(await screen.findByRole("checkbox", { name: "Anna" }));
+    await user.click(screen.getByRole("button", { name: "Carica" }));
+    expect(await screen.findByRole("link", { name: "Guarda il video" })).toBeInTheDocument();
+    const start = server.requests.find((r) => r.method === "POST");
+    expect(await start?.json()).toEqual({
+      name: "mare.mp4",
+      title: "mare",
+      size: 5,
+      private: true,
+      sharedWith: [3],
+    });
   });
 
   it("deletes one of my videos after asking", async () => {
