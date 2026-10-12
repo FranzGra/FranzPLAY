@@ -83,6 +83,15 @@ func TestProberSavesWhatFFprobeFound(t *testing.T) {
 		got.videoCodec.String != "vp9" || got.audioCodec.String != "opus" || got.container.String != "matroska,webm" {
 		t.Errorf("saved %+v", got)
 	}
+	// What the reading makes possible is asked for next.
+	var kinds string
+	if err := db.QueryRow(`SELECT group_concat(kind, ' ') FROM (SELECT kind FROM jobs
+		WHERE video_id = ? AND state = 'pending' ORDER BY kind)`, id).Scan(&kinds); err != nil {
+		t.Fatal(err)
+	}
+	if kinds != "clip convert cover preview tracks" {
+		t.Errorf("jobs asked for: %q", kinds)
+	}
 }
 
 func TestProberFailures(t *testing.T) {

@@ -104,6 +104,9 @@ func (p *Prober) save(ctx context.Context, videoID int64, fingerprint string, in
 	if err := jobs.Enqueue(ctx, tx, videoID, jobs.Preview, false, p.now()); err != nil {
 		return err
 	}
+	if err := jobs.Enqueue(ctx, tx, videoID, jobs.Clip, false, p.now()); err != nil {
+		return err
+	}
 	if err := jobs.Enqueue(ctx, tx, videoID, jobs.Tracks, false, p.now()); err != nil {
 		return err
 	}

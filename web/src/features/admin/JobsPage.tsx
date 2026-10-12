@@ -22,7 +22,8 @@ export const kindNames: Record<JobKind, string> = {
   details: "Informazioni dal file accanto",
   online: "Informazioni da internet",
   cover: "Copertina",
-  preview: "Anteprime",
+  preview: "Anteprime sulla barra",
+  clip: "Anteprima sulla copertina",
   tracks: "Lingue e sottotitoli",
   convert: "Copia per i browser",
 };
@@ -34,6 +35,7 @@ const missingTool: Record<JobKind, string> = {
   online: "", // the same
   cover: "ffmpeg",
   preview: "ffmpeg",
+  clip: "ffmpeg",
   tracks: "ffmpeg", // and ffprobe, which "probe" already names
   convert: "ffmpeg",
 };

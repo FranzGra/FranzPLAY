@@ -28,6 +28,7 @@ type Video struct {
 	AddedAt  time.Time `json:"addedAt"`  // when FranzPLAY found it
 	Playable bool      `json:"playable"` // every browser can play it: as it is, or its copy
 	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
+	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
 	// From a details file next to the video, like yt-dlp's .info.json:
 	Author      string  `json:"author"`                // who published it; "" = not known
 	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
@@ -61,7 +62,7 @@ type store struct {
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
-	v.shown_author, v.shown_published_on`
+	v.shown_author, v.shown_published_on, v.clip`
 
 // rowScanner is a *sql.Row or *sql.Rows.
 type rowScanner interface{ Scan(dest ...any) error }
@@ -78,12 +79,12 @@ func (m moreColumns) Scan(dest ...any) error { return m.row.Scan(append(dest, m.
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
 	var duration, width, height, previewGap, previewCount sql.NullInt64
-	var cover, videoCodec, audioCodec, preview, converted, author, published sql.NullString
+	var cover, videoCodec, audioCodec, preview, converted, author, published, clip sql.NullString
 	var addedAt int64
 	var relPath string
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
-		&author, &published); err != nil {
+		&author, &published, &clip); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -104,6 +105,10 @@ func scanVideo(row rowScanner) (Video, error) {
 			Src: "/api/previews/" + preview.String, Gap: previewGap.Int64, Count: count, Columns: columns,
 			Width: video.PreviewWidth, Height: video.PreviewHeight,
 		}
+	}
+	if clip.Valid {
+		address := "/api/clips/" + clip.String
+		v.Clip = &address
 	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
 	v.Author = author.String

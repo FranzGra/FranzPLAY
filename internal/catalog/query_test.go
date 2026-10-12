@@ -58,8 +58,9 @@ func TestParseID(t *testing.T) {
 	}
 }
 
-func TestValidCoverName(t *testing.T) {
+func TestValidMadeName(t *testing.T) {
 	tests := map[string]bool{
+		"12-0a1b2c3d.mp4":   false, // a clip is not an image
 		"12-0a1b2c3d.jpg":   true,
 		"1-f.jpg":           true,
 		"../franzplay.db":   false,
@@ -72,8 +73,19 @@ func TestValidCoverName(t *testing.T) {
 		"12-0a/../../x.jpg": false,
 	}
 	for name, want := range tests {
-		if got := validImageName(name); got != want {
-			t.Errorf("validImageName(%q) = %v, want %v", name, got, want)
+		if got := validMadeName(name, ".jpg"); got != want {
+			t.Errorf("validMadeName(%q, .jpg) = %v, want %v", name, got, want)
+		}
+	}
+	clips := map[string]bool{
+		"12-0a1b2c3d.mp4":   true,
+		"12-0a1b2c3d.jpg":   false,
+		".new-123.mp4":      false,
+		"12-0a/../../x.mp4": false,
+	}
+	for name, want := range clips {
+		if got := validMadeName(name, ".mp4"); got != want {
+			t.Errorf("validMadeName(%q, .mp4) = %v, want %v", name, got, want)
 		}
 	}
 }

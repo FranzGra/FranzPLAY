@@ -119,6 +119,8 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	} else {
 		handlers[jobs.Cover] = tell(media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle)
 		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
+		// A ready clip plays on the video's card: the pages hear about it.
+		handlers[jobs.Clip] = tell(media.NewClipper(db, ffmpeg, cfg.DataDir).Handle)
 		// A ready copy makes a video playable: the pages hear about it.
 		handlers[jobs.Convert] = tell(media.NewConverter(db, ffmpeg, cfg.DataDir).Handle)
 		if ffprobe, err := exec.LookPath(cfg.FFprobe); err == nil {
@@ -136,6 +138,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		logger.Error("remove unused previews", "error", err)
 	} else if n > 0 {
 		logger.Info("removed unused previews", "count", n)
+	}
+	if n, err := media.RemoveOrphanClips(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused clips", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused clips", "count", n)
 	}
 	if n, err := media.RemoveOrphanSubtitles(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused subtitles", "error", err)

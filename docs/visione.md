@@ -115,6 +115,8 @@ Si costruisce **una tappa alla volta**. Ogni tappa finisce con qualcosa che si p
 - **Più playlist per utente**, create da lui, più la playlist speciale "Guarda più tardi".
 - **Cronologia** di cosa ho visto.
 - **Anteprime al passaggio del mouse** (le immagini che scorrono sulla barra del player).
+  ✅ Anche sulla copertina: pochi secondi del video al passaggio del mouse, o tenendo premuto sul
+  telefono (`docs/decisioni/0012-anteprima-sulla-copertina.md`).
 - **Aggiornamenti in tempo reale**: un video nuovo compare senza ricaricare la pagina; l'admin
   vede l'avanzamento dei lavori (copertine, anteprime).
 - **Pannello admin**: librerie, utenti, video, copertine, commenti, lavori in coda e falliti (con tasto "riprova").

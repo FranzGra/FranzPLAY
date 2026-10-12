@@ -61,6 +61,8 @@ describe("parseVideo", () => {
     ["bad date", { ...sampleVideo, addedAt: "yesterday" }],
     ["missing playable", { ...sampleVideo, playable: undefined }],
     ["missing preview", { ...sampleVideo, preview: undefined }],
+    ["missing clip", { ...sampleVideo, clip: undefined }],
+    ["clip elsewhere", { ...sampleVideo, clip: "https://evil.example/x.mp4" }],
     [
       "preview elsewhere",
       {

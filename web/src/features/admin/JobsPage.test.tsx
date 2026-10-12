@@ -54,7 +54,9 @@ describe("jobs page", () => {
       },
     });
     expect(await screen.findByText("12.345")).toBeInTheDocument();
-    expect(screen.getByText(/Anteprime di/)).toHaveTextContent("Anteprime di Neve");
+    expect(screen.getByText(/Anteprime sulla barra di/)).toHaveTextContent(
+      "Anteprime sulla barra di Neve",
+    );
     expect(screen.getByText("(1 da riprovare)")).toBeInTheDocument();
     const failed = screen.getByRole("list", { name: "Lavori falliti" });
     expect(within(failed).getByRole("link", { name: "Mare 2024" })).toHaveAttribute(
