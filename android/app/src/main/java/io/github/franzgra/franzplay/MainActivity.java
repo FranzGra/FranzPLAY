@@ -151,9 +151,13 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    /** Back before Android 13; from 13 the callback registered in onCreate is used. */
+    /**
+     * Back before Android 13. From 13 on, the callback registered in onCreate is
+     * used instead, and Android no longer calls this method.
+     */
     @Override
     @SuppressWarnings("deprecation")
+    @SuppressLint("GestureBackNavigation")
     public void onBackPressed() {
         goBack();
     }
