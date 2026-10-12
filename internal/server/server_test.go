@@ -58,7 +58,7 @@ func TestUnknownAPIRouteIsNotFound(t *testing.T) {
 			if rec.Code != http.StatusNotFound {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
 			}
-			var body errorResponse
+			var body struct{ Error string }
 			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil || body.Error == "" {
 				t.Errorf("body is not a JSON error: %v", err)
 			}

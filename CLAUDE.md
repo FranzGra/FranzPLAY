@@ -60,6 +60,8 @@ internal/library/   trova i video nelle cartelle (sola lettura) e aggiorna il ca
 internal/jobs/      coda dei lavori pesanti nel database, eseguiti uno alla volta
 internal/media/     lancia ffprobe e ffmpeg (solo da qui)
 internal/server/    le rotte HTTP dell'API
+internal/respond/   risposte dell'API, tutte in JSON e tutte uguali
+internal/catalog/   l'API dei video: elenco, un video, categorie, copertine, streaming
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
 internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)
