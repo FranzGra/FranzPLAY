@@ -58,7 +58,7 @@ type Coverer struct {
 // NewCoverer returns a coverer that runs the given ffmpeg program and
 // writes covers in dataDir/covers.
 func NewCoverer(db *sql.DB, ffmpeg, dataDir string) *Coverer {
-	return &Coverer{db: db, ffmpeg: ffmpeg, dataDir: dataDir, run: run}
+	return &Coverer{db: db, ffmpeg: ffmpeg, dataDir: dataDir, run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Cover.

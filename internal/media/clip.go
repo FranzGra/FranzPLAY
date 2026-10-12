@@ -35,7 +35,7 @@ type Clipper struct {
 // writes clips in dataDir/clips. Like conversions, it leaves half of the
 // processor free, so the site stays quick on a Raspberry Pi.
 func NewClipper(db *sql.DB, ffmpeg, dataDir string) *Clipper {
-	return &Clipper{db: db, ffmpeg: ffmpeg, dataDir: dataDir, threads: max(1, runtime.NumCPU()/2), run: run}
+	return &Clipper{db: db, ffmpeg: ffmpeg, dataDir: dataDir, threads: max(1, runtime.NumCPU()/2), run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Clip.

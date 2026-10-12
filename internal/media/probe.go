@@ -23,12 +23,31 @@ type runFunc func(ctx context.Context, program string, args ...string) ([]byte, 
 
 // run starts a program and waits for it. On failure the error carries the
 // end of what the program printed on its error output, to explain why.
+// It is for work someone is waiting for, like starting a video with
+// another sound track.
 func run(ctx context.Context, program string, args ...string) ([]byte, error) {
+	return runWith(ctx, (*exec.Cmd).Start, program, args...)
+}
+
+// runInBackground is run for the job queue's work: covers, previews,
+// copies. The program gets the lowest share of the processor and of the
+// disk, so a video someone is watching never waits for it (see
+// startInBackground).
+func runInBackground(ctx context.Context, program string, args ...string) ([]byte, error) {
+	return runWith(ctx, startInBackground, program, args...)
+}
+
+// runWith is run and runInBackground: start decides how the program starts.
+func runWith(ctx context.Context, start func(*exec.Cmd) error, program string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, program, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	err := start(cmd)
+	if err == nil {
+		err = cmd.Wait()
+	}
+	if err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if len(msg) > 500 {
 			msg = "…" + msg[len(msg)-500:]
@@ -48,7 +67,7 @@ type Prober struct {
 
 // NewProber returns a prober that runs the given ffprobe program.
 func NewProber(db *sql.DB, ffprobe string) *Prober {
-	return &Prober{db: db, ffprobe: ffprobe, run: run, now: time.Now}
+	return &Prober{db: db, ffprobe: ffprobe, run: runInBackground, now: time.Now}
 }
 
 // Handle is the job handler for jobs.Probe.

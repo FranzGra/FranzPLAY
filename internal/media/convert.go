@@ -40,7 +40,7 @@ type Converter struct {
 // writes in dataDir/converted. ffmpeg uses half the processor cores, so
 // the site stays quick while a film is being encoded.
 func NewConverter(db *sql.DB, ffmpeg, dataDir string) *Converter {
-	return &Converter{db: db, ffmpeg: ffmpeg, dataDir: dataDir, threads: max(1, runtime.NumCPU()/2), run: run}
+	return &Converter{db: db, ffmpeg: ffmpeg, dataDir: dataDir, threads: max(1, runtime.NumCPU()/2), run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Convert. For a video that plays as it

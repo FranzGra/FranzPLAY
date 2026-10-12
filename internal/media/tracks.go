@@ -31,7 +31,7 @@ type Tracker struct {
 // NewTracker returns a tracker that runs the given ffprobe and ffmpeg
 // programs and writes in dataDir/subtitles.
 func NewTracker(db *sql.DB, ffprobe, ffmpeg, dataDir string) *Tracker {
-	return &Tracker{db: db, ffprobe: ffprobe, ffmpeg: ffmpeg, dataDir: dataDir, run: run}
+	return &Tracker{db: db, ffprobe: ffprobe, ffmpeg: ffmpeg, dataDir: dataDir, run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Tracks. ffprobe lists the tracks of
