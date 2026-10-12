@@ -180,7 +180,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		background.Wait()
 	}()
 
-	accounts, err := users.NewService(ctx, db, logger)
+	accounts, err := users.NewService(ctx, db, cfg.DataDir, logger)
 	if err != nil {
 		return err
 	}

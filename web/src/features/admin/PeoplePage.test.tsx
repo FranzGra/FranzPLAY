@@ -1,7 +1,14 @@
 import { screen, within } from "@testing-library/react";
 import { renderApp, signedIn, testAccount } from "../../test/render";
 
-const giulia = { id: 2, name: "Giulia", role: "user", canUpload: false, accentColor: "" };
+const giulia = {
+  id: 2,
+  name: "Giulia",
+  role: "user",
+  canUpload: false,
+  accentColor: "",
+  avatar: 0,
+};
 
 function people(extra: Record<string, unknown> = {}) {
   return {
@@ -56,7 +63,7 @@ describe("people page", () => {
       people({
         "POST /api/users": {
           status: 201,
-          body: { id: 3, name: "Anna", role: "user", canUpload: true, accentColor: "" },
+          body: { id: 3, name: "Anna", role: "user", canUpload: true, accentColor: "", avatar: 0 },
         },
       }),
     );

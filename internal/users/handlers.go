@@ -22,6 +22,9 @@ const maxBody = 4 << 10
 //	POST   /api/me/password   {current, new}
 //	PUT    /api/me/name       {name}: the user with the new name
 //	PUT    /api/me/color      {color}: "#rrggbb", or "" for FranzPLAY's own
+//	PUT    /api/me/avatar     a square JPEG or PNG picture: my new profile photo
+//	DELETE /api/me/avatar     no profile photo any more
+//	GET    /api/users/{id}/avatar  someone's profile photo
 //	DELETE /api/me            delete my own account {password}, with everything of mine
 //	GET    /api/users         administrators only
 //	POST   /api/users         administrators only {name, password, role, canUpload}
@@ -45,6 +48,9 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/me/password", s.handlePassword)
 	mux.HandleFunc("PUT /api/me/name", s.handleRename)
 	mux.HandleFunc("PUT /api/me/color", s.handleAccentColor)
+	mux.HandleFunc("PUT /api/me/avatar", s.handleSetAvatar)
+	mux.HandleFunc("DELETE /api/me/avatar", s.handleRemoveAvatar)
+	mux.HandleFunc("GET /api/users/{id}/avatar", s.handleAvatar)
 	mux.HandleFunc("DELETE /api/me", s.handleDeleteMe)
 	mux.HandleFunc("GET /api/users", s.adminOnly(s.handleList))
 	mux.HandleFunc("POST /api/users", s.adminOnly(s.handleCreate))
@@ -74,7 +80,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errBadName), errors.Is(err, errWeakPassword), errors.Is(err, errBadNote),
-		errors.Is(err, errBadColor):
+		errors.Is(err, errBadColor), errors.Is(err, errBadAvatar):
 		respond.Error(w, r, s.logger, http.StatusBadRequest, err.Error())
 	case errors.Is(err, errBadCredentials), errors.Is(err, errBadSetupCode):
 		respond.Error(w, r, s.logger, http.StatusUnauthorized, err.Error())
@@ -342,6 +348,7 @@ func (s *Service) handleDelete(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.forgetAvatar(r.Context(), id)
 	s.logger.InfoContext(r.Context(), "user deleted", "id", id, "by", admin.Name)
 	w.WriteHeader(http.StatusNoContent)
 }

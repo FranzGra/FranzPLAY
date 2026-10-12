@@ -38,7 +38,7 @@ describe("request", () => {
 
 describe("parseAccount", () => {
   it("accepts a valid user", () => {
-    const a = { id: 3, name: "Giulia", role: "user", canUpload: false, accentColor: "" };
+    const a = { id: 3, name: "Giulia", role: "user", canUpload: false, accentColor: "", avatar: 0 };
     expect(parseAccount(a)).toEqual(a);
   });
 
@@ -48,8 +48,16 @@ describe("parseAccount", () => {
     ["zero id", { id: 0, name: "G", role: "user", canUpload: false }],
     ["empty name", { id: 1, name: "", role: "user", canUpload: false }],
     ["unknown role", { id: 1, name: "G", role: "root", canUpload: false }],
-    ["text canUpload", { id: 1, name: "G", role: "user", canUpload: "yes", accentColor: "" }],
-    ["no accentColor", { id: 1, name: "G", role: "user", canUpload: false }],
+    [
+      "text canUpload",
+      { id: 1, name: "G", role: "user", canUpload: "yes", accentColor: "", avatar: 0 },
+    ],
+    ["no accentColor", { id: 1, name: "G", role: "user", canUpload: false, avatar: 0 }],
+    ["no avatar", { id: 1, name: "G", role: "user", canUpload: false, accentColor: "" }],
+    [
+      "negative avatar",
+      { id: 1, name: "G", role: "user", canUpload: false, accentColor: "", avatar: -1 },
+    ],
     ["not a color", { id: 1, name: "G", role: "user", canUpload: false, accentColor: "red" }],
   ])("rejects %s", (_label, data) => {
     expect(() => parseAccount(data)).toThrow();

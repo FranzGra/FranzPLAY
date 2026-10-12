@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { avatarUrl } from "../api/auth";
 import { fetchPlaylists, onPlaylistsChanged, type Playlist, playlistName } from "../api/playlists";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
@@ -69,7 +70,7 @@ export function Layout() {
         </Link>
 
         <Link to="/profilo" className={styles.avatar} aria-label="Il tuo profilo">
-          <Avatar name={account.name} size={40} />
+          <Avatar name={account.name} size={40} photo={avatarUrl(account.id, account.avatar)} />
         </Link>
       </header>
 

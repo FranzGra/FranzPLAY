@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { useAccount, useAuth } from "../../app/auth";
-import { Avatar } from "../../components/Avatar";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { AccentPicker } from "./AccentPicker";
@@ -9,6 +8,7 @@ import { DeleteAccount } from "./DeleteAccount";
 import { NameForm } from "./NameForm";
 import { PasswordForm } from "./PasswordForm";
 import styles from "./ProfilePage.module.css";
+import { ProfilePhoto } from "./ProfilePhoto";
 import { type ServerInfoState, useServerInfo } from "./useServerInfo";
 
 const rows = (me: number) => [
@@ -48,13 +48,10 @@ export function ProfilePage() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.identity}>
-        <Avatar name={account.name} size={64} />
-        <div>
-          <h1 className={styles.name}>{account.name}</h1>
-          <p className={styles.role}>{account.role === "admin" ? "Amministratore" : "Utente"}</p>
-        </div>
-      </div>
+      <ProfilePhoto>
+        <h1 className={styles.name}>{account.name}</h1>
+        <p className={styles.role}>{account.role === "admin" ? "Amministratore" : "Utente"}</p>
+      </ProfilePhoto>
 
       <button type="button" className={styles.upload} disabled aria-describedby="upload-hint">
         <Icon name="upload" size={20} />

@@ -219,3 +219,30 @@
   color: var(--color-text-muted);
   cursor: default;
 }
+
+.fileInput {
+  display: none;
+}
+
+.photoButtons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-top: 6px;
+}
+
+.link {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--color-accent-hover);
+}

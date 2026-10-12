@@ -25,7 +25,7 @@ export function onUnauthorized(listener: Listener): () => void {
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
-  body?: unknown;
+  body?: unknown; // sent as JSON, or as it is when it is a file (Blob)
   signal?: AbortSignal;
   // keepalive lets the request finish even if the page is closing.
   keepalive?: boolean;
@@ -39,8 +39,8 @@ export async function request(path: string, options: RequestOptions = {}): Promi
     method,
     signal,
     keepalive,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined ? undefined : { "Content-Type": contentType(body) },
+    body: body === undefined || body instanceof Blob ? body : JSON.stringify(body),
   });
   if (response.status === 204) {
     return undefined;
@@ -55,6 +55,13 @@ export async function request(path: string, options: RequestOptions = {}): Promi
     throw new ApiError(response.status, errorMessage(data, response.status));
   }
   return data;
+}
+
+function contentType(body: unknown): string {
+  if (body instanceof Blob) {
+    return body.type || "application/octet-stream";
+  }
+  return "application/json";
 }
 
 function errorMessage(data: unknown, status: number): string {
