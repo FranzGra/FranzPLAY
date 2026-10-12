@@ -1,6 +1,7 @@
 import {
   cueLines,
   defaultSubtitleStyle,
+  linesAt,
   optionLabel,
   parseSubtitleStyle,
   subtitleCSS,
@@ -59,5 +60,21 @@ describe("cueLines", () => {
     ["\n  \n", []],
   ])("%j", (text, want) => {
     expect(cueLines(text)).toEqual(want);
+  });
+});
+
+describe("linesAt", () => {
+  const cues = [
+    { startTime: 1, endTime: 3, text: "Ciao" },
+    { startTime: 2, endTime: 4, text: "<i>a tutti</i>" },
+  ];
+  it.each([
+    [0, []],
+    [1, ["Ciao"]],
+    [2.5, ["Ciao", "a tutti"]],
+    [3, ["a tutti"]],
+    [4, []],
+  ])("at %s seconds", (time, lines) => {
+    expect(linesAt(cues, time)).toEqual(lines);
   });
 });

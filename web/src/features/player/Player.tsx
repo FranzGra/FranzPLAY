@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { AudioStart, AudioTrack } from "../../api/audio";
 import type { Preview, SubtitleTrack } from "../../api/videos";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
@@ -15,13 +16,16 @@ import {
   bufferedEnd,
   clampTime,
   clampVolume,
+  insideRanges,
   keyAction,
+  originalAudio,
+  pickAudio,
   skipSeconds,
   tapZone,
 } from "./controls";
 import styles from "./Player.module.css";
 import { SettingsMenu } from "./SettingsMenu";
-import { cueLines, defaultSubtitleStyle, parseSubtitleStyle, subtitleCSS } from "./subtitleStyle";
+import { defaultSubtitleStyle, linesAt, parseSubtitleStyle, subtitleCSS } from "./subtitleStyle";
 import { Timeline } from "./Timeline";
 
 type PlayerProps = {
@@ -40,6 +44,13 @@ type PlayerProps = {
   onPosition?: (seconds: number) => void;
   // preview holds small frames of the video, shown over the timeline.
   preview?: Preview | null;
+  // audio lists the sound tracks, when there is a choice of language.
+  audio?: AudioTrack[];
+  // findAudio asks the server where to play a sound track from.
+  findAudio?: (stream: number, at: number) => Promise<AudioStart>;
+  // length is the duration the server knows, in seconds: a sound track
+  // made while it plays cannot tell its own.
+  length?: number | null;
 };
 
 // reportEvery is how often, in seconds of video, onPosition hears the
@@ -83,7 +94,42 @@ export function pickTrack(tracks: SubtitleTrack[], choice: SubtitleChoice): stri
   return (same ?? tracks[0])?.key ?? null;
 }
 
+const parseLang = (data: unknown) => {
+  if (typeof data !== "string") throw new Error("bad language");
+  return data;
+};
+
+// Sound is a sound track other than the original one. The server makes the
+// video with it while it plays, starting at offset seconds: the video
+// element counts its time from there.
+type Sound = { stream: number; src: string; offset: number };
+
+// showNoticeFor is how long a short message stays over the video.
+const showNoticeFor = 5000;
+
+function rangesOf(list: TimeRanges): { start: number; end: number }[] {
+  return Array.from({ length: list.length }, (_, i) => ({
+    start: list.start(i),
+    end: list.end(i),
+  }));
+}
+
+function sameLines(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((line, i) => line === b[i]);
+}
+
 const noTracks: SubtitleTrack[] = [];
+const noAudio: AudioTrack[] = [];
+
+// startPlaying starts the video. The browser may refuse to start a video by
+// itself: that is not an error.
+function startPlaying(v: HTMLVideoElement) {
+  v.play().catch((error: unknown) => {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      console.warn("play refused", error);
+    }
+  });
+}
 
 // Player is FranzPLAY's video player, made to feel like YouTube's: a big
 // timeline, big buttons, ±10 seconds with buttons, keys and double taps,
@@ -96,6 +142,9 @@ export function Player({
   startAt = 0,
   onPosition,
   preview,
+  audio = noAudio,
+  findAudio,
+  length = null,
 }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -120,6 +169,19 @@ export function Player({
     loadSetting("subtitleStyle", parseSubtitleStyle, defaultSubtitleStyle),
   );
   const [caption, setCaption] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  // The sound track playing, when it is not the original one. The ref is
+  // for the video's events, which must not wait for a new render.
+  const [sound, setSound] = useState<Sound | null>(null);
+  const soundRef = useRef<Sound | null>(null);
+  // Where to go once the video with another sound track has loaded.
+  const pending = useRef<{ at: number; play: boolean } | null>(null);
+  // Counts the changes of sound track: an answer to an old one is ignored.
+  const switches = useRef(0);
+  const lengthRef = useRef(length);
+  useEffect(() => {
+    lengthRef.current = length;
+  }, [length]);
   // The subtitles may arrive after the player: choose again when they do.
   useEffect(() => {
     setTrack(
@@ -188,17 +250,22 @@ export function Player({
       t.mode = key !== undefined && key === track ? "hidden" : "disabled";
       if (t.mode === "hidden") shown = t;
     }
-    if (!shown) return;
+    const v = video.current;
+    if (!shown || !v) return;
     const current = shown;
-    const onCue = () => {
-      const lines: string[] = [];
-      for (const cue of Array.from(current.activeCues ?? [])) {
-        lines.push(...cueLines((cue as VTTCue).text ?? ""));
-      }
-      setCaption(lines);
+    // The time of the whole video: with another sound track the video
+    // element counts from where the server's copy starts.
+    const update = () => {
+      const time = v.currentTime + (soundRef.current?.offset ?? 0);
+      const lines = linesAt((current.cues ?? []) as ArrayLike<VTTCue>, time);
+      setCaption((before) => (sameLines(before, lines) ? before : lines));
     };
-    current.addEventListener("cuechange", onCue);
-    return () => current.removeEventListener("cuechange", onCue);
+    current.addEventListener("cuechange", update);
+    v.addEventListener("timeupdate", update);
+    return () => {
+      current.removeEventListener("cuechange", update);
+      v.removeEventListener("timeupdate", update);
+    };
   }, [track, subtitles]);
 
   const chooseTrack = useCallback(
@@ -234,24 +301,112 @@ export function Player({
     const v = video.current;
     if (!v) return;
     if (v.paused || v.ended) {
-      v.play().catch((error: unknown) => {
-        // The browser may refuse to start a video by itself: not an error.
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          console.warn("play refused", error);
-        }
-      });
+      startPlaying(v);
     } else {
       v.pause();
     }
   }, []);
 
-  const seekTo = useCallback((t: number) => {
+  // realTime and realDuration are those of the whole video, whatever the
+  // sound track.
+  const realTime = useCallback(
+    (v: HTMLVideoElement) => v.currentTime + (soundRef.current?.offset ?? 0),
+    [],
+  );
+  const realDuration = useCallback(
+    (v: HTMLVideoElement) => (soundRef.current ? (lengthRef.current ?? Number.NaN) : v.duration),
+    [],
+  );
+
+  // switchAudio plays the video with a sound track (null: the original
+  // one), from at seconds.
+  const switchAudio = useCallback(
+    async (stream: number | null, at: number, play: boolean) => {
+      const turn = ++switches.current;
+      let next: Sound | null = null;
+      if (stream !== null && stream !== originalAudio(audio)?.stream) {
+        if (!findAudio) return;
+        try {
+          const found = await findAudio(stream, at);
+          next = { stream, src: found.src, offset: found.start };
+        } catch (error) {
+          if (turn !== switches.current) return;
+          console.error(error);
+          setNotice("Adesso non si riesce a cambiare lingua: riprova tra poco.");
+          return;
+        }
+        if (turn !== switches.current) return;
+      }
+      const v = video.current;
+      const same = (next?.src ?? src) === (soundRef.current?.src ?? src);
+      pending.current = same ? null : { at, play };
+      soundRef.current = next;
+      setSound(next);
+      setTime(at);
+      if (v && same) {
+        // Same address: the video is already there, only the time moves.
+        v.currentTime = Math.max(0, at - (next?.offset ?? 0));
+        if (play) startPlaying(v);
+      }
+    },
+    [audio, findAudio, src],
+  );
+
+  const seekTo = useCallback(
+    (t: number) => {
+      const v = video.current;
+      if (!v) return;
+      const target = clampTime(t, realDuration(v));
+      setTime(target);
+      const s = soundRef.current;
+      if (!s) {
+        v.currentTime = target;
+        return;
+      }
+      // The server's copy is made while it plays: a time not downloaded
+      // yet is asked for again.
+      const local = target - s.offset;
+      if (local >= 0 && insideRanges(rangesOf(v.buffered), local)) {
+        v.currentTime = local;
+      } else {
+        void switchAudio(s.stream, target, !v.paused);
+      }
+    },
+    [realDuration, switchAudio],
+  );
+
+  // A new address does not load by itself (preload "none" for the server's
+  // copies): playing it does, and the time is set once it has loaded.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new sound is the reason to start
+  useEffect(() => {
     const v = video.current;
-    if (!v) return;
-    const target = clampTime(t, v.duration);
-    v.currentTime = target;
-    setTime(target);
-  }, []);
+    if (v && pending.current?.play) startPlaying(v);
+  }, [sound]);
+
+  // The language chosen last time, if this video has it.
+  useEffect(() => {
+    const want = pickAudio(audio, loadSetting("audio", parseLang, ""));
+    const now = soundRef.current?.stream ?? originalAudio(audio)?.stream ?? null;
+    if (want === null || want === now) return;
+    const v = video.current;
+    void switchAudio(want, position.current.time, v ? !v.paused : false);
+  }, [audio, switchAudio]);
+
+  const chooseAudio = useCallback(
+    (stream: number) => {
+      const v = video.current;
+      if (!v) return;
+      saveSetting("audio", audio.find((a) => a.stream === stream)?.lang ?? "");
+      void switchAudio(stream, realTime(v), !v.paused);
+    },
+    [audio, realTime, switchAudio],
+  );
+
+  useEffect(() => {
+    if (notice === null) return;
+    const timer = window.setTimeout(() => setNotice(null), showNoticeFor);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const toggleFullscreen = useCallback(() => {
     const el = root.current;
@@ -275,11 +430,11 @@ export function Player({
           togglePlay();
           break;
         case "seek-by":
-          seekTo(v.currentTime + action.seconds);
+          seekTo(realTime(v) + action.seconds);
           showFlash(action.seconds < 0 ? "back10" : "forward10");
           break;
         case "seek-to-fraction":
-          if (Number.isFinite(v.duration)) seekTo(v.duration * action.fraction);
+          if (Number.isFinite(realDuration(v))) seekTo(realDuration(v) * action.fraction);
           break;
         case "volume-by": {
           const next = clampVolume(v.volume + action.amount);
@@ -306,7 +461,18 @@ export function Player({
       }
       showControls();
     },
-    [seekTo, showControls, showFlash, toggleFullscreen, togglePlay, subtitles, track, chooseTrack],
+    [
+      seekTo,
+      realTime,
+      realDuration,
+      showControls,
+      showFlash,
+      toggleFullscreen,
+      togglePlay,
+      subtitles,
+      track,
+      chooseTrack,
+    ],
   );
 
   // Keys work anywhere on the page, as on YouTube, except while typing.
@@ -363,7 +529,7 @@ export function Player({
       start: v.buffered.start(i),
       end: v.buffered.end(i),
     }));
-    setBuffered(bufferedEnd(ranges, v.currentTime));
+    setBuffered(bufferedEnd(ranges, v.currentTime) + (soundRef.current?.offset ?? 0));
   }
 
   const controlsVisible = !playing || active || menuOpen;
@@ -379,9 +545,10 @@ export function Player({
       <video
         ref={video}
         className={styles.video}
-        src={src}
+        src={sound?.src ?? src}
         poster={poster ?? undefined}
-        preload="metadata"
+        // The server makes a sound track only while it is watched.
+        preload={sound ? "none" : "metadata"}
         playsInline
         onPlay={() => {
           position.current.played = true;
@@ -399,18 +566,27 @@ export function Player({
         }}
         onTimeUpdate={(event) => {
           const v = event.currentTarget;
-          setTime(v.currentTime);
-          position.current.time = v.currentTime;
-          if (!v.paused && Math.abs(v.currentTime - position.current.told) >= reportEvery) tell();
+          if (pending.current) return; // still the time of the video left
+          const now = realTime(v);
+          setTime(now);
+          position.current.time = now;
+          if (!v.paused && Math.abs(now - position.current.told) >= reportEvery) tell();
         }}
         onSeeked={(event) => {
-          position.current.time = event.currentTarget.currentTime;
+          position.current.time = realTime(event.currentTarget);
           if (event.currentTarget.paused) tell();
         }}
-        onDurationChange={(event) => setDuration(event.currentTarget.duration)}
+        onDurationChange={(event) => setDuration(realDuration(event.currentTarget))}
         onLoadedMetadata={(event) => {
           const v = event.currentTarget;
-          setDuration(v.duration);
+          setDuration(realDuration(v));
+          const p = pending.current;
+          if (p) {
+            // Another sound track: go back to where the person was.
+            pending.current = null;
+            v.currentTime = Math.max(0, p.at - (soundRef.current?.offset ?? 0));
+            return;
+          }
           // Start where the person stopped, if that is still inside the video.
           if (startAt > 0 && v.currentTime === 0 && !(startAt >= v.duration)) {
             v.currentTime = startAt;
@@ -421,7 +597,15 @@ export function Player({
         onWaiting={() => setWaiting(true)}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
-        onError={() => setFailed(true)}
+        onError={() => {
+          if (soundRef.current) {
+            // The server could not make this sound track: back to the original.
+            setNotice("Questa lingua adesso non si riesce a caricare: riprova tra poco.");
+            void switchAudio(null, position.current.time, false);
+            return;
+          }
+          setFailed(true);
+        }}
       >
         {subtitles.map((t) => (
           <track
@@ -473,6 +657,12 @@ export function Player({
         </button>
       )}
 
+      {notice && (
+        <div className={`glass ${styles.notice}`} role="status">
+          {notice}
+        </div>
+      )}
+
       {failed && (
         <div className={styles.failure} role="alert">
           <p className={styles.failureTitle}>Questo video non si riesce a riprodurre</p>
@@ -489,6 +679,9 @@ export function Player({
           onSpeed={setSpeed}
           tracks={subtitles}
           track={track}
+          audio={audio}
+          audioStream={sound?.stream ?? originalAudio(audio)?.stream ?? null}
+          onAudio={chooseAudio}
           onTrack={chooseTrack}
           subtitleStyle={subtitleStyle}
           onSubtitleStyle={chooseStyle}

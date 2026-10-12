@@ -298,3 +298,112 @@ describe("where the video was left", () => {
     expect(onPosition).toHaveBeenCalledWith(7);
   });
 });
+
+describe("sound tracks", () => {
+  const audio = [
+    { stream: 1, lang: "it", label: "Italiano", default: true },
+    { stream: 2, lang: "en", label: "Inglese", default: false },
+  ];
+  const findAudio = vi.fn(async (stream: number, at: number) => ({
+    start: Math.floor(at / 5) * 5, // a keyframe every 5 seconds
+    src: `/api/videos/7/audio/${stream}/stream?at=${at}`,
+  }));
+  afterEach(() => findAudio.mockClear());
+
+  async function chooseInSettings(user: ReturnType<typeof userEvent.setup>, label: string) {
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Audio/ }));
+    await user.click(screen.getByRole("button", { name: label }));
+  }
+
+  it("offers no choice with only one sound track", async () => {
+    const { user } = setup({ audio: audio.slice(0, 1), findAudio });
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    expect(screen.queryByRole("button", { name: /^Audio/ })).not.toBeInTheDocument();
+  });
+
+  it("plays another language from where the video was, and remembers it", async () => {
+    const { user, video } = setup({ audio, findAudio, length: 245 });
+    video.currentTime = 12;
+    fireEvent.timeUpdate(video);
+    await chooseInSettings(user, "Inglese");
+
+    expect(findAudio).toHaveBeenCalledWith(2, 12);
+    expect(video.getAttribute("src")).toBe("/api/videos/7/audio/2/stream?at=12");
+    expect(window.localStorage.getItem("franzplay.audio")).toBe('"en"');
+
+    // The new video starts at 10 seconds: the player goes 2 seconds in and
+    // counts the time of the whole video.
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(2);
+    video.currentTime = 5;
+    fireEvent.timeUpdate(video);
+    expect(screen.getByText("0:15")).toBeInTheDocument();
+    expect(screen.getByText(/4:05/)).toBeInTheDocument(); // the server's duration
+
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^Audio/ }),
+    ).toHaveTextContent("Inglese");
+  });
+
+  it("keeps playing in the new language", async () => {
+    const { user, video, play } = setup({ audio, findAudio });
+    await user.click(screen.getByRole("button", { name: "Guarda" }));
+    play.mockClear();
+    await chooseInSettings(user, "Inglese");
+    expect(video.getAttribute("src")).toContain("/audio/2/");
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes back to the original language", async () => {
+    const { user, video } = setup({ audio, findAudio });
+    await chooseInSettings(user, "Inglese");
+    expect(video.getAttribute("src")).toContain("/audio/2/");
+    await chooseInSettings(user, "Italiano");
+    expect(video.getAttribute("src")).toBe("/api/videos/7/stream");
+    expect(findAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks the server again for a time not downloaded yet", async () => {
+    const { user, video } = setup({ audio, findAudio, length: 245 });
+    await chooseInSettings(user, "Inglese");
+    fireEvent.loadedMetadata(video);
+    await user.click(screen.getByRole("button", { name: "Avanti di 10 secondi (l)" }));
+    expect(findAudio).toHaveBeenLastCalledWith(2, 10);
+    expect(video.getAttribute("src")).toBe("/api/videos/7/audio/2/stream?at=10");
+  });
+
+  it("opens in the language chosen last time", async () => {
+    window.localStorage.setItem("franzplay.audio", '"en"');
+    const { video } = setup({ audio, findAudio, startAt: 33 });
+    expect(findAudio).toHaveBeenCalledWith(2, 33);
+    await vi.waitFor(() =>
+      expect(video.getAttribute("src")).toBe("/api/videos/7/audio/2/stream?at=33"),
+    );
+    expect(video.getAttribute("preload")).toBe("none");
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(3);
+  });
+
+  it("says so when the language cannot be changed", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refuse = vi.fn(async () => {
+      throw new Error("busy");
+    });
+    const { user, video } = setup({ audio, findAudio: refuse });
+    await chooseInSettings(user, "Inglese");
+    expect(await screen.findByRole("status")).toHaveTextContent(/non si riesce a cambiare lingua/);
+    expect(video.getAttribute("src")).toBe("/api/videos/7/stream");
+    quiet.mockRestore();
+  });
+
+  it("goes back to the original language when the server cannot make the other", async () => {
+    const { user, video } = setup({ audio, findAudio });
+    await chooseInSettings(user, "Inglese");
+    fireEvent.error(video);
+    expect(await screen.findByRole("status")).toHaveTextContent(/non si riesce a caricare/);
+    expect(video.getAttribute("src")).toBe("/api/videos/7/stream");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});

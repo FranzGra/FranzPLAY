@@ -119,3 +119,28 @@ export function clampVolume(volume: number): number {
 export function speedLabel(speed: number): string {
   return speed === 1 ? "Normale" : `${String(speed).replace(".", ",")}×`;
 }
+
+// insideRanges says whether time is in one of the downloaded ranges.
+export function insideRanges(ranges: { start: number; end: number }[], time: number): boolean {
+  return ranges.some((r) => time >= r.start && time <= r.end);
+}
+
+// originalAudio is the sound track the browser plays by itself: the one
+// the file marks as default, or else the first.
+export function originalAudio<T extends { default: boolean }>(tracks: T[]): T | undefined {
+  return tracks.find((t) => t.default) ?? tracks[0];
+}
+
+// pickAudio chooses the sound track to play when a video opens: the
+// language chosen last time if the video has it, else the original one.
+export function pickAudio<T extends { stream: number; lang: string; default: boolean }>(
+  tracks: T[],
+  lang: string,
+): number | null {
+  const base = (l: string) => l.toLowerCase().split("-")[0];
+  const same =
+    lang === ""
+      ? undefined
+      : (tracks.find((t) => t.lang === lang) ?? tracks.find((t) => base(t.lang) === base(lang)));
+  return (same ?? originalAudio(tracks))?.stream ?? null;
+}

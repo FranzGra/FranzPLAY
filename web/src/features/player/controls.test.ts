@@ -2,7 +2,10 @@ import {
   bufferedEnd,
   clampTime,
   clampVolume,
+  insideRanges,
   keyAction,
+  originalAudio,
+  pickAudio,
   previewFrame,
   speedLabel,
   tapZone,
@@ -116,5 +119,48 @@ describe("previewFrame", () => {
     [-3, 0, 0],
   ])("at %s seconds the frame is at %i,%i", (time, x, y) => {
     expect(previewFrame(preview, time)).toEqual({ x, y });
+  });
+});
+
+describe("insideRanges", () => {
+  const ranges = [
+    { start: 0, end: 10 },
+    { start: 20, end: 30 },
+  ];
+  it.each([
+    [5, true],
+    [10, true],
+    [15, false],
+    [25, true],
+    [31, false],
+  ])("time %s → %s", (time, inside) => {
+    expect(insideRanges(ranges, time)).toBe(inside);
+  });
+});
+
+describe("pickAudio", () => {
+  const tracks = [
+    { stream: 1, lang: "en", default: false },
+    { stream: 2, lang: "it", default: true },
+    { stream: 3, lang: "", default: false },
+  ];
+  it.each([
+    ["", 2],
+    ["it", 2],
+    ["en", 1],
+    ["en-GB", 1],
+    ["fr", 2],
+  ])("language %j → track %s", (lang, stream) => {
+    expect(pickAudio(tracks, lang)).toBe(stream);
+  });
+
+  it("without a default track the original is the first", () => {
+    const plain = tracks.map((t) => ({ ...t, default: false }));
+    expect(originalAudio(plain)?.stream).toBe(1);
+    expect(pickAudio(plain, "fr")).toBe(1);
+  });
+
+  it("no tracks, nothing to play", () => {
+    expect(pickAudio([], "it")).toBeNull();
   });
 });

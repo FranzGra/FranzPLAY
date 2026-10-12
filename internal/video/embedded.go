@@ -3,6 +3,7 @@ package video
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -31,59 +32,113 @@ var textSubtitleCodecs = map[string]bool{
 	"webvtt": true, "mov_text": true, "text": true,
 }
 
-// SubtitleProbeArgs are the ffprobe arguments, without the file, whose
-// output ParseSubtitleStreams reads: only the subtitle streams.
-var SubtitleProbeArgs = []string{
-	"-v", "error",
-	"-select_streams", "s",
-	"-print_format", "json",
-	"-show_entries", "stream=index,codec_name:stream_tags=language,title:stream_disposition=forced",
+// EmbeddedAudio is a sound track inside the video file, like the
+// Italian and the English of a film.
+type EmbeddedAudio struct {
+	Stream   int    // the stream's number inside the file, as ffprobe counts it
+	Lang     string // "ita", "en"…; "" when the file does not say
+	Title    string // the name the file gives it, "" if none
+	Codec    string // like "aac", "ac3"
+	Channels int    // 2 = stereo, 6 = 5.1; 0 = not said
+	Default  bool   // the one the file plays first
 }
 
-type subtitleProbe struct {
+// MaxEmbeddedAudio is the most sound tracks kept from one file.
+const MaxEmbeddedAudio = 30
+
+// Tracks are the sound tracks and the text subtitles inside a file.
+type Tracks struct {
+	Audio     []EmbeddedAudio
+	Subtitles []EmbeddedSubtitle
+}
+
+// TrackProbeArgs are the ffprobe arguments, without the file, whose
+// output ParseTracks reads.
+var TrackProbeArgs = []string{
+	"-v", "error",
+	"-print_format", "json",
+	"-show_entries", "stream=index,codec_type,codec_name,channels:" +
+		"stream_tags=language,title:stream_disposition=forced,default",
+}
+
+type trackProbe struct {
 	Streams []struct {
 		Index     int    `json:"index"`
+		CodecType string `json:"codec_type"`
 		CodecName string `json:"codec_name"`
+		Channels  int    `json:"channels"`
 		Tags      struct {
 			Language string `json:"language"`
 			Title    string `json:"title"`
 		} `json:"tags"`
 		Disposition struct {
-			Forced int `json:"forced"`
+			Forced  int `json:"forced"`
+			Default int `json:"default"`
 		} `json:"disposition"`
 	} `json:"streams"`
 }
 
-// ParseSubtitleStreams reads ffprobe's answer (see SubtitleProbeArgs)
-// into the text subtitles of a file. What comes from the file is checked
-// here, once: a strange language becomes "", a title is cleaned and cut.
-func ParseSubtitleStreams(data []byte) ([]EmbeddedSubtitle, error) {
-	var out subtitleProbe
+// ParseTracks reads ffprobe's answer (see TrackProbeArgs) into the sound
+// tracks and the text subtitles of a file. What comes from the file is
+// checked here, once: a strange language becomes "", a title is cleaned
+// and cut, a codec name with odd characters becomes "".
+func ParseTracks(data []byte) (Tracks, error) {
+	var out trackProbe
 	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrBadProbe, err)
+		return Tracks{}, fmt.Errorf("%w: %w", ErrBadProbe, err)
 	}
-	var subs []EmbeddedSubtitle
+	var t Tracks
 	seen := map[int]bool{}
 	for _, s := range out.Streams {
-		if !textSubtitleCodecs[s.CodecName] || s.Index < 0 || seen[s.Index] {
+		if s.Index < 0 || seen[s.Index] {
 			continue
 		}
 		seen[s.Index] = true
-		lang := strings.TrimSpace(s.Tags.Language)
-		if !validLang(lang) || strings.EqualFold(lang, "und") {
-			lang = "" // "und" is how files say "not known"
-		}
-		subs = append(subs, EmbeddedSubtitle{
-			Stream: s.Index,
-			Lang:   lang,
-			Title:  cleanTitle(s.Tags.Title),
-			Forced: s.Disposition.Forced != 0,
-		})
-		if len(subs) == MaxEmbeddedSubtitles {
-			break
+		lang := cleanLang(s.Tags.Language)
+		switch {
+		case s.CodecType == "audio" && len(t.Audio) < MaxEmbeddedAudio:
+			t.Audio = append(t.Audio, EmbeddedAudio{
+				Stream:   s.Index,
+				Lang:     lang,
+				Title:    cleanTitle(s.Tags.Title),
+				Codec:    cleanCodec(s.CodecName),
+				Channels: max(0, min(s.Channels, 64)),
+				Default:  s.Disposition.Default != 0,
+			})
+		case s.CodecType == "subtitle" && textSubtitleCodecs[s.CodecName] && len(t.Subtitles) < MaxEmbeddedSubtitles:
+			t.Subtitles = append(t.Subtitles, EmbeddedSubtitle{
+				Stream: s.Index,
+				Lang:   lang,
+				Title:  cleanTitle(s.Tags.Title),
+				Forced: s.Disposition.Forced != 0,
+			})
 		}
 	}
-	return subs, nil
+	return t, nil
+}
+
+// cleanLang keeps a language code that looks like one; "und" is how
+// files say "not known".
+func cleanLang(lang string) string {
+	lang = strings.TrimSpace(lang)
+	if !validLang(lang) || strings.EqualFold(lang, "und") {
+		return ""
+	}
+	return lang
+}
+
+// cleanCodec keeps a codec name made of plain characters.
+func cleanCodec(codec string) string {
+	if len(codec) > 30 {
+		return ""
+	}
+	for _, r := range codec {
+		plain := r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_'
+		if !plain {
+			return ""
+		}
+	}
+	return codec
 }
 
 // cleanTitle makes a title from a file safe to show: valid text, one
@@ -105,14 +160,29 @@ func cleanTitle(title string) string {
 // "Inglese (forzati)", "Italiano · Commento del regista".
 func (s EmbeddedSubtitle) Label() string {
 	label := SubtitleLabel(s.Lang)
-	switch {
-	case s.Forced:
+	if s.Forced {
 		return label + " (forzati)"
-	case s.Title != "" && !sameLanguage(s.Title, label, s.Lang):
-		return label + " · " + s.Title
-	default:
+	}
+	return withTitle(label, s.Title, s.Lang)
+}
+
+// Label is the sound track's name in the player's menu: "Italiano",
+// "Inglese · Commento", or "Audio 2" (the number among the tracks, from
+// 1) when the file does not say the language.
+func (a EmbeddedAudio) Label(number int) string {
+	label := "Audio " + strconv.Itoa(number)
+	if a.Lang != "" {
+		label = SubtitleLabel(a.Lang)
+	}
+	return withTitle(label, a.Title, a.Lang)
+}
+
+// withTitle adds a title to a label, unless it only repeats the language.
+func withTitle(label, title, lang string) string {
+	if title == "" || sameLanguage(title, label, lang) {
 		return label
 	}
+	return label + " · " + title
 }
 
 // englishNames are the languages as files often title their subtitles.
