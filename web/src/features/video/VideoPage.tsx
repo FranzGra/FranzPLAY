@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
+import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
 import { ApiError } from "../../api/client";
 import { fetchProgress, saveProgress } from "../../api/progress";
 import {
@@ -96,6 +97,11 @@ async function startPosition(id: number, signal: AbortSignal): Promise<number> {
 function Watch({ video, startAt }: { video: Video; startAt: number }) {
   const [now] = useState(() => new Date());
   const subtitles = useSubtitles(video.id);
+  const audio = useAudio(video.id);
+  const findAudio = useCallback(
+    (stream: number, at: number) => fetchAudioStart(video.id, stream, at),
+    [video.id],
+  );
   const remember = useCallback(
     (seconds: number) => {
       saveProgress(video.id, seconds).catch((error: unknown) => console.error(error));
@@ -118,6 +124,9 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           startAt={startAt}
           onPosition={remember}
           preview={video.preview}
+          audio={audio}
+          findAudio={findAudio}
+          length={video.duration}
           unsupportedHint={
             video.playable
               ? undefined
@@ -181,6 +190,25 @@ function useSubtitles(id: number): SubtitleTrack[] {
     const controller = new AbortController();
     setTracks(none);
     fetchSubtitles(id, controller.signal)
+      .then(setTracks)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
+    return () => controller.abort();
+  }, [id]);
+  return tracks;
+}
+
+const noAudio: AudioTrack[] = [];
+
+// useAudio loads the sound tracks of a video, when there is a choice of
+// language. Without them the video still plays in its own language.
+function useAudio(id: number): AudioTrack[] {
+  const [tracks, setTracks] = useState<AudioTrack[]>(noAudio);
+  useEffect(() => {
+    const controller = new AbortController();
+    setTracks(noAudio);
+    fetchAudioTracks(id, controller.signal)
       .then(setTracks)
       .catch((error: unknown) => {
         if (!controller.signal.aborted) console.error(error);

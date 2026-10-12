@@ -261,3 +261,25 @@ func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, 
 	}
 	return name, nil
 }
+
+// audio returns the sound tracks inside a video file, in the order of the
+// file.
+func (s store) audio(ctx context.Context, id int64) (tracks []video.EmbeddedAudio, err error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT stream, lang, title, codec, channels, is_default FROM video_audio
+		WHERE video_id = ? ORDER BY stream`, id)
+	if err != nil {
+		return nil, fmt.Errorf("read sound tracks of video %d: %w", id, err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		var a video.EmbeddedAudio
+		if err := rows.Scan(&a.Stream, &a.Lang, &a.Title, &a.Codec, &a.Channels, &a.Default); err != nil {
+			return nil, fmt.Errorf("read sound tracks of video %d: %w", id, err)
+		}
+		tracks = append(tracks, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read sound tracks of video %d: %w", id, err)
+	}
+	return tracks, nil
+}

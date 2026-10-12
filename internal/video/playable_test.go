@@ -27,3 +27,11 @@ func TestDirectlyPlayable(t *testing.T) {
 		}
 	}
 }
+
+func TestCopyAudioToMP4(t *testing.T) {
+	for codec, want := range map[string]bool{"aac": true, "opus": true, "mp3": true, "flac": true, "ac3": false, "dts": false, "vorbis": false, "": false} {
+		if got := CopyAudioToMP4(codec); got != want {
+			t.Errorf("CopyAudioToMP4(%q) = %v, want %v", codec, got, want)
+		}
+	}
+}

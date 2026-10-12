@@ -35,6 +35,11 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
+// remuxPlayers is how many videos can play at once with another sound
+// track. Each one is an ffmpeg copying the picture: light, but not free
+// on a Raspberry Pi.
+const remuxPlayers = 3
+
 // shutdownTimeout is how long open requests get to finish when FranzPLAY stops.
 const shutdownTimeout = 10 * time.Second
 
@@ -94,6 +99,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		}
 	}
 	handlers := map[jobs.Kind]jobs.Handler{}
+	var remux catalog.Remuxer // stays nil without ffmpeg and ffprobe
 	if ffprobe, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe not found: videos will have no duration until it is installed",
 			"setting", config.EnvFFprobe, "error", err)
@@ -107,7 +113,8 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		handlers[jobs.Cover] = tell(media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle)
 		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
 		if ffprobe, err := exec.LookPath(cfg.FFprobe); err == nil {
-			handlers[jobs.Tracks] = media.NewSubtitler(db, ffprobe, ffmpeg, cfg.DataDir).Handle
+			handlers[jobs.Tracks] = media.NewTracker(db, ffprobe, ffmpeg, cfg.DataDir).Handle
+			remux = media.NewRemuxer(ffmpeg, remuxPlayers)
 		}
 	}
 	// Before the worker starts, so it never sees a cover or a preview being made.
@@ -153,6 +160,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	site := server.New(version, logger, webui.Handler(webui.Files(), logger),
 		accounts.Routes,
 		catalog.Routes(db, cfg.DataDir, logger),
+		catalog.AudioRoutes(db, remux, logger),
 		catalog.AdminRoutes(db,
 			func() { hub.Publish(events.Library) },
 			func() { worker.Wake(); hub.Publish(events.Jobs) },

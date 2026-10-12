@@ -19,3 +19,13 @@ func DirectlyPlayable(ext string, info Info) bool {
 		playableVideoCodecs[info.VideoCodec] &&
 		playableAudioCodecs[info.AudioCodec]
 }
+
+// mp4AudioCodecs are the sounds a browser plays inside an MP4 file.
+var mp4AudioCodecs = map[string]bool{"aac": true, "mp3": true, "opus": true, "flac": true}
+
+// CopyAudioToMP4 reports whether a sound track can go as it is into the
+// MP4 a browser plays; if not (like the AC3 or DTS of many films), it
+// must be converted, which costs a little work.
+func CopyAudioToMP4(codec string) bool {
+	return mp4AudioCodecs[codec]
+}

@@ -15,14 +15,14 @@ import (
 // data folder.
 type subtitleFixture struct {
 	fx      *previewFixture // same catalog and data folder
-	s       *Subtitler
+	s       *Tracker
 	ffmpegs int // how many times ffmpeg ran
 }
 
 func newSubtitleFixture(t *testing.T, probe string) *subtitleFixture {
 	t.Helper()
 	pf := newPreviewFixture(t, "/videos", "film.mkv", 60)
-	sf := &subtitleFixture{fx: pf, s: NewSubtitler(pf.db, "ffprobe", "ffmpeg", pf.dataDir)}
+	sf := &subtitleFixture{fx: pf, s: NewTracker(pf.db, "ffprobe", "ffmpeg", pf.dataDir)}
 	sf.s.run = func(_ context.Context, program string, args ...string) ([]byte, error) {
 		if program == "ffprobe" {
 			return []byte(probe), nil
@@ -87,9 +87,12 @@ func (sf *subtitleFixture) files(t *testing.T) []string {
 }
 
 const twoSubtitles = `{"streams": [
-	{"index": 2, "codec_name": "subrip", "tags": {"language": "ita"}},
-	{"index": 3, "codec_name": "hdmv_pgs_subtitle", "tags": {"language": "ita"}},
-	{"index": 4, "codec_name": "ass", "tags": {"language": "eng", "title": "Forced"}, "disposition": {"forced": 1}}
+	{"index": 0, "codec_type": "video", "codec_name": "h264"},
+	{"index": 1, "codec_type": "audio", "codec_name": "ac3", "channels": 6, "tags": {"language": "ita"}, "disposition": {"default": 1}},
+	{"index": 5, "codec_type": "audio", "codec_name": "aac", "channels": 2, "tags": {"language": "eng", "title": "Commento"}},
+	{"index": 2, "codec_type": "subtitle", "codec_name": "subrip", "tags": {"language": "ita"}},
+	{"index": 3, "codec_type": "subtitle", "codec_name": "hdmv_pgs_subtitle", "tags": {"language": "ita"}},
+	{"index": 4, "codec_type": "subtitle", "codec_name": "ass", "tags": {"language": "eng", "title": "Forced"}, "disposition": {"forced": 1}}
 ]}`
 
 func TestSubtitlesSaved(t *testing.T) {
@@ -110,14 +113,63 @@ func TestSubtitlesSaved(t *testing.T) {
 	if sf.ffmpegs != 1 {
 		t.Errorf("ffmpeg ran %d times, want once for all subtitles", sf.ffmpegs)
 	}
-}
+	wantAudio := []savedAudio{
+		{stream: 1, lang: "ita", codec: "ac3", channels: 6, isDefault: true},
+		{stream: 5, lang: "eng", title: "Commento", codec: "aac", channels: 2},
+	}
+	if got := sf.audio(t); !slices.Equal(got, wantAudio) {
+		t.Errorf("sound tracks %+v\nwant %+v", got, wantAudio)
+	}
 
-func TestSubtitlesOfAFileWithoutAny(t *testing.T) {
-	sf := newSubtitleFixture(t, `{"streams": [{"index": 3, "codec_name": "dvd_subtitle"}]}`)
+	// Read again (the file did not change): the copies are kept, ffmpeg
+	// does not run.
 	if err := sf.s.Handle(context.Background(), sf.fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if len(sf.saved(t)) != 0 || len(sf.files(t)) != 0 || sf.ffmpegs != 0 {
+	if sf.ffmpegs != 1 || len(sf.saved(t)) != 2 || len(sf.audio(t)) != 2 || len(sf.files(t)) != 2 {
+		t.Errorf("reading again: ffmpeg ran %d times, saved %+v, files %q", sf.ffmpegs, sf.saved(t), sf.files(t))
+	}
+}
+
+type savedAudio struct {
+	stream      int
+	lang, title string
+	codec       string
+	channels    int
+	isDefault   bool
+}
+
+func (sf *subtitleFixture) audio(t *testing.T) []savedAudio {
+	t.Helper()
+	rows, err := sf.fx.db.Query(`SELECT stream, lang, title, codec, channels, is_default FROM video_audio WHERE video_id = ? ORDER BY stream`, sf.fx.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	var out []savedAudio
+	for rows.Next() {
+		var a savedAudio
+		if err := rows.Scan(&a.stream, &a.lang, &a.title, &a.codec, &a.channels, &a.isDefault); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestSubtitlesOfAFileWithoutAny(t *testing.T) {
+	sf := newSubtitleFixture(t, `{"streams": [{"index": 3, "codec_type": "subtitle", "codec_name": "dvd_subtitle"}]}`)
+	if err := sf.s.Handle(context.Background(), sf.fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if len(sf.saved(t)) != 0 || len(sf.files(t)) != 0 || len(sf.audio(t)) != 0 || sf.ffmpegs != 0 {
 		t.Errorf("saved %+v, files %q, ffmpeg ran %d times; want nothing", sf.saved(t), sf.files(t), sf.ffmpegs)
 	}
 }
@@ -131,7 +183,7 @@ func TestNewSubtitlesReplaceTheOldOnes(t *testing.T) {
 	if _, err := sf.fx.db.Exec(`UPDATE videos SET fingerprint = 'v1:new' WHERE id = ?`, sf.fx.id); err != nil {
 		t.Fatal(err)
 	}
-	sf.s.run = newSubtitleFixture(t, `{"streams": [{"index": 4, "codec_name": "subrip", "tags": {"language": "eng"}}]}`).s.run
+	sf.s.run = newSubtitleFixture(t, `{"streams": [{"index": 4, "codec_type": "subtitle", "codec_name": "subrip", "tags": {"language": "eng"}}]}`).s.run
 	if err := sf.s.Handle(context.Background(), sf.fx.id); err != nil {
 		t.Fatal(err)
 	}
@@ -203,9 +255,10 @@ func TestRemoveOrphanSubtitles(t *testing.T) {
 	}
 }
 
-// TestSubtitlesWithRealFFmpeg makes a small .mkv with an Italian subtitle
-// inside and copies it out. Skipped where ffmpeg is missing.
-func TestSubtitlesWithRealFFmpeg(t *testing.T) {
+// TestTracksWithRealFFmpeg makes a small .mkv with an English sound track
+// and an Italian subtitle, reads them and copies the subtitle out.
+// Skipped where ffmpeg is missing.
+func TestTracksWithRealFFmpeg(t *testing.T) {
 	ffmpeg, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		t.Skip("ffmpeg not installed")
@@ -222,12 +275,14 @@ func TestSubtitlesWithRealFFmpeg(t *testing.T) {
 	name := filepath.Join(root, "film: uno.mkv")
 	if _, err := run(context.Background(), ffmpeg, "-v", "error",
 		"-f", "lavfi", "-i", "testsrc=duration=2:size=160x120:rate=10", "-i", "file:"+srt,
-		"-map", "0", "-map", "1", "-c:s", "srt", "-metadata:s:s:0", "language=ita",
+		"-f", "lavfi", "-i", "sine=duration=2",
+		"-map", "0", "-map", "1", "-map", "2", "-c:s", "srt", "-metadata:s:s:0", "language=ita",
+		"-c:a", "libopus", "-metadata:s:a:0", "language=eng",
 		"-pix_fmt", "yuv420p", "file:"+name); err != nil {
 		t.Fatal(err)
 	}
 	pf := newPreviewFixture(t, root, "film: uno.mkv", 2)
-	s := NewSubtitler(pf.db, ffprobe, ffmpeg, pf.dataDir)
+	s := NewTracker(pf.db, ffprobe, ffmpeg, pf.dataDir)
 	libraryBefore := listDir(t, root)
 
 	if err := s.Handle(context.Background(), pf.id); err != nil {
@@ -237,6 +292,9 @@ func TestSubtitlesWithRealFFmpeg(t *testing.T) {
 	saved := sf.saved(t)
 	if len(saved) != 1 || saved[0].lang != "ita" {
 		t.Fatalf("saved %+v, want one Italian subtitle", saved)
+	}
+	if audio := sf.audio(t); len(audio) != 1 || audio[0].lang != "eng" || audio[0].codec != "opus" {
+		t.Errorf("sound tracks %+v, want one English opus track", audio)
 	}
 	data, err := os.ReadFile(filepath.Join(pf.dataDir, SubtitlesDir, saved[0].file))
 	if err != nil {

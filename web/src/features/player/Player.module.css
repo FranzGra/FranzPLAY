@@ -115,6 +115,19 @@
   }
 }
 
+/* A short message over the video, at the top. */
+.notice {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  max-width: calc(100% - 24px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
 .failure {
   position: absolute;
   inset: 0;

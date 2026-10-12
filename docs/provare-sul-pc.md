@@ -196,8 +196,8 @@ video per guardarlo con il player di FranzPLAY:
 - **±10 secondi** con i tasti accanto a Play, con le frecce o J e L della tastiera, oppure con un
   doppio tocco ai lati del video sul telefono;
 - altri tasti: **spazio** o K per pausa, **F** schermo intero, **M** muto, **C** sottotitoli;
-- l'**ingranaggio** apre le impostazioni: velocità, sottotitoli e il loro stile (dimensione,
-  colore, sfondo, posizione).
+- l'**ingranaggio** apre le impostazioni: velocità, lingua dell'audio (se il video ne ha più di
+  una), sottotitoli e il loro stile (dimensione, colore, sfondo, posizione).
 
 **Continua a guardare.** FranzPLAY ricorda dove hai fermato ogni video, per ogni persona. Quando lo
 riapri riparte da lì, e nella Home compare la riga **Continua a guardare** con una barra che mostra
@@ -237,6 +237,16 @@ dei sottotitoli del player insieme agli altri. Per un film lungo la copia può r
 tempo, perché ffmpeg deve leggere tutto il file: la vedi in Amministrazione › Lavori come
 «Lingue e sottotitoli». I sottotitoli fatti di immagini (quelli dei DVD e dei Blu-ray) il browser
 non li sa mostrare, quindi per ora vengono saltati.
+
+**Più lingue audio.** Se un video ha dentro più lingue (capita con molti film `.mkv`), nel player
+compare **ingranaggio › Audio**. Scegli un'altra lingua e il video continua dallo stesso punto con
+l'audio nuovo: FranzPLAY lo rimonta al volo con ffmpeg, senza toccare il file. Il player si ricorda
+la lingua per i video successivi. Se il computer sta già facendo questo lavoro per 3 video, il
+player resta sulla lingua del file e te lo dice. Per creare un video di prova con due lingue:
+
+```sh
+ffmpeg -f lavfi -i testsrc2=duration=60 -f lavfi -i sine=frequency=440:duration=60 -f lavfi -i sine=frequency=880:duration=60 -map 0 -map 1 -map 2 -c:v libvpx-vp9 -c:a libopus -metadata:s:a:0 language=ita -metadata:s:a:1 language=eng "due lingue.mkv"
+```
 
 Se un video resta nero o compare «Questo video non si riesce a riprodurre», il browser non conosce
 il suo formato (capita con alcuni `.mkv` e `.avi`). La conversione automatica arriverà in una

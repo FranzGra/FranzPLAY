@@ -130,3 +130,16 @@ export function cueLines(text: string): string[] {
     .map((line) => line.trim())
     .filter(Boolean);
 }
+
+// linesAt returns the lines of the subtitles to show at time, in seconds
+// of the whole video.
+export function linesAt(
+  cues: ArrayLike<{ startTime: number; endTime: number; text?: string }>,
+  time: number,
+): string[] {
+  const lines: string[] = [];
+  for (const cue of Array.from(cues)) {
+    if (time >= cue.startTime && time < cue.endTime) lines.push(...cueLines(cue.text ?? ""));
+  }
+  return lines;
+}

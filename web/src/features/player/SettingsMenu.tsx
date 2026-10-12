@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import type { AudioTrack } from "../../api/audio";
 import type { SubtitleTrack } from "../../api/videos";
 import { Icon } from "../../components/Icon";
 import { speedLabel, speeds } from "./controls";
@@ -17,17 +18,21 @@ type SettingsMenuProps = {
   tracks: SubtitleTrack[];
   track: string | null; // key of the subtitles shown, null = off
   onTrack: (key: string | null) => void;
+  audio: AudioTrack[]; // the sound tracks; fewer than two = no choice
+  audioStream: number | null; // the one playing
+  onAudio: (stream: number) => void;
   subtitleStyle: SubtitleStyle;
   onSubtitleStyle: (style: SubtitleStyle) => void;
   onClose: () => void;
 };
 
-type Page = "main" | "speed" | "subtitles" | "style" | keyof SubtitleStyle;
+type Page = "main" | "speed" | "audio" | "subtitles" | "style" | keyof SubtitleStyle;
 
 // SettingsMenu is the panel opened by the gear button. Each setting has its
 // own page, as on YouTube, so the panel stays small on phones.
 export function SettingsMenu(props: SettingsMenuProps) {
-  const { speed, onSpeed, tracks, track, onTrack, subtitleStyle, onSubtitleStyle, onClose } = props;
+  const { speed, onSpeed, tracks, track, onTrack, audio, audioStream, onAudio } = props;
+  const { subtitleStyle, onSubtitleStyle, onClose } = props;
   const [page, setPage] = useState<Page>("main");
   const trackLabel = tracks.find((t) => t.key === track)?.label ?? "Disattivati";
 
@@ -46,6 +51,13 @@ export function SettingsMenu(props: SettingsMenuProps) {
       {page === "main" && (
         <>
           <Row label="Velocità" value={speedLabel(speed)} onClick={() => setPage("speed")} />
+          {audio.length > 1 && (
+            <Row
+              label="Audio"
+              value={audio.find((a) => a.stream === audioStream)?.label ?? ""}
+              onClick={() => setPage("audio")}
+            />
+          )}
           <Row
             label="Sottotitoli"
             value={tracks.length === 0 ? "Nessuno" : trackLabel}
@@ -66,6 +78,22 @@ export function SettingsMenu(props: SettingsMenuProps) {
           }))}
           onChoose={(key) => {
             onSpeed(Number(key));
+            onClose();
+          }}
+        />
+      )}
+
+      {page === "audio" && (
+        <Choices
+          title="Audio"
+          onBack={() => setPage("main")}
+          options={audio.map((a) => ({
+            key: String(a.stream),
+            label: a.label,
+            chosen: a.stream === audioStream,
+          }))}
+          onChoose={(key) => {
+            onAudio(Number(key));
             onClose();
           }}
         />
