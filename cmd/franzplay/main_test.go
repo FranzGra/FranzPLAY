@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,14 +50,37 @@ func waitForHealth(addr string) error {
 	return fmt.Errorf("server at %s did not become healthy", addr)
 }
 
+// syncBuffer collects the program's log while it runs.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 func TestRunStartsAndStopsCleanly(t *testing.T) {
 	addr := freeAddr(t)
 	dataDir := filepath.Join(t.TempDir(), "dati")
-	env := map[string]string{config.EnvAddr: addr, config.EnvDataDir: dataDir}
+	videos := t.TempDir()
+	if err := os.WriteFile(filepath.Join(videos, "mare.mp4"), []byte("sea"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{config.EnvAddr: addr, config.EnvDataDir: dataDir, config.EnvLibraries: videos}
+	var logs syncBuffer
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- run(ctx, func(k string) string { return env[k] }, io.Discard) }()
+	go func() { done <- run(ctx, func(k string) string { return env[k] }, &logs) }()
 
 	if err := waitForHealth(addr); err != nil {
 		cancel()
@@ -65,6 +91,13 @@ func TestRunStartsAndStopsCleanly(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, database.FileName)); err != nil {
 		t.Errorf("database was not created in the data folder: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(logs.String(), "added=1") && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.Contains(logs.String(), "added=1") {
+		t.Errorf("the video folder was not scanned at start; log:\n%s", logs.String())
 	}
 
 	cancel()

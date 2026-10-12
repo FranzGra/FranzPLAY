@@ -101,10 +101,32 @@ come `{"status":"ok","version":"dev"}`.
   stesso computer non serve aprire niente.
 - Per **fermarlo**, torna nella finestra del terminale e premi **Ctrl+C**. Vedrai
   `FranzPLAY stopped`.
-- Il programma crea una cartella `data` accanto al progetto: è la sua cartella dati. Puoi
-  cancellarla quando vuoi, per ora è vuota.
+- Il programma crea una cartella `data` accanto al progetto: è la sua cartella dati, con dentro
+  il database `franzplay.db`. Puoi cancellarla quando vuoi: FranzPLAY la ricrea.
 
-### Cambiare porta o cartella dati
+### Indicare la cartella dei tuoi video
+
+FranzPLAY cerca i video nelle cartelle scritte in `FRANZPLAY_LIBRARIES`. Le legge e basta: non
+crea, non rinomina e non cancella mai niente lì dentro. Le sottocartelle diventano categorie.
+
+Windows (PowerShell), con più cartelle separate da `;`:
+
+```powershell
+$env:FRANZPLAY_LIBRARIES = "D:\Video;E:\Film di famiglia"
+go run ./cmd/franzplay
+```
+
+Mac e Linux, con più cartelle separate da `:`:
+
+```sh
+FRANZPLAY_LIBRARIES="$HOME/Video:/media/disco/Famiglia" go run ./cmd/franzplay
+```
+
+All'avvio e poi ogni minuto FranzPLAY controlla le cartelle e scrive nel terminale cosa ha trovato,
+per esempio `library scan finished ... added=12`. I video non si vedono ancora nell'interfaccia:
+arriveranno nei prossimi passi.
+
+### Cambiare porta
 
 Se la porta 8090 è occupata, puoi sceglierne un'altra.
 
