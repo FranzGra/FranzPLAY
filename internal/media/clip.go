@@ -18,6 +18,14 @@ import (
 // that play on a video's card when the pointer rests on it.
 const ClipsDir = "clips"
 
+// OwnClipsDir is the folder, inside the data folder, that holds the
+// videos the administrator uploaded as clips, as they were sent. The clip
+// job turns them into clips like the others: small, silent, quick to load.
+const OwnClipsDir = "own-clips"
+
+// ownClipSeconds is the most of an uploaded video kept in its clip.
+const ownClipSeconds = 15
+
 // clipFPS is the frames per second of every clip: smooth enough for a
 // card, and lighter than the 30 or 60 of the videos.
 const clipFPS = 24
@@ -45,17 +53,37 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 		return err
 	}
 	var duration sql.NullInt64
-	var old sql.NullString
-	if err := c.db.QueryRowContext(ctx, `SELECT duration, clip FROM videos WHERE id = ?`, videoID).
-		Scan(&duration, &old); err != nil {
+	var old, own sql.NullString
+	var noClip bool
+	if err := c.db.QueryRowContext(ctx, `SELECT duration, clip, own_clip, no_clip FROM videos WHERE id = ?`, videoID).
+		Scan(&duration, &old, &own, &noClip); err != nil {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
-	parts := video.ClipParts(duration.Int64)
-	if len(parts) == 0 {
-		return nil // too short to need a clip
+	dir := filepath.Join(c.dataDir, ClipsDir)
+	if noClip {
+		// The administrator does not want a clip on this video.
+		if _, err := c.db.ExecContext(ctx, `UPDATE videos SET clip = NULL WHERE id = ?`, videoID); err != nil {
+			return fmt.Errorf("remove clip of video %d: %w", videoID, err)
+		}
+		if old.Valid {
+			return removeFile(dir, old.String)
+		}
+		return nil
+	}
+	name := clipName(videoID, fingerprint)
+	var args func(out string) []string
+	if own.Valid {
+		uploaded := filepath.Join(c.dataDir, OwnClipsDir, filepath.Base(own.String))
+		name = strings.TrimSuffix(name, ".mp4") + "-o" + ownTag(own.String) + ".mp4"
+		args = func(out string) []string { return ownClipArgs(uploaded, c.threads, out) }
+	} else {
+		parts := video.ClipParts(duration.Int64)
+		if len(parts) == 0 {
+			return nil // too short to need a clip
+		}
+		args = func(out string) []string { return clipArgs(file, parts, c.threads, out) }
 	}
 
-	dir := filepath.Join(c.dataDir, ClipsDir)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create clips folder: %w", err)
 	}
@@ -74,14 +102,13 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 		}
 	}()
 
-	if _, err := c.run(ctx, c.ffmpeg, clipArgs(file, parts, c.threads, tmpName)...); err != nil {
+	if _, err := c.run(ctx, c.ffmpeg, args(tmpName)...); err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
 	}
 	if info, err := os.Stat(tmpName); err != nil || info.Size() == 0 {
 		return errors.Join(fmt.Errorf("clip of video %d: ffmpeg wrote nothing", videoID), err)
 	}
 
-	name := clipName(videoID, fingerprint)
 	if err := os.Rename(tmpName, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
 	}
@@ -108,6 +135,30 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 // the content changes, so a browser never plays the clip of the old file.
 func clipName(videoID int64, fingerprint string) string {
 	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") + ".mp4"
+}
+
+// ownTag is a short piece of an uploaded file's name, which is new at
+// every upload: the clip's name changes with it, so browsers never play
+// the old one.
+func ownTag(uploaded string) string {
+	base := strings.TrimSuffix(filepath.Base(uploaded), filepath.Ext(uploaded))
+	return base[max(0, len(base)-8):]
+}
+
+// ownClipArgs builds the ffmpeg command that turns a video uploaded by the
+// administrator into a clip: its first ownClipSeconds, made like the
+// others.
+func ownClipArgs(uploaded string, threads int, out string) []string {
+	return []string{"-v", "error", "-y",
+		"-t", strconv.Itoa(ownClipSeconds), "-i", "file:" + uploaded,
+		"-map", "0:v:0",
+		"-vf", fmt.Sprintf("fps=%d,scale=-2:%d,setsar=1,format=yuv420p", clipFPS, video.ClipHeight),
+		"-an", "-sn", "-dn",
+		"-c:v", "libx264", "-preset", "veryfast", "-crf", "30",
+		"-threads", strconv.Itoa(threads),
+		"-movflags", "+faststart",
+		"-f", "mp4", "file:" + out,
+	}
 }
 
 // clipArgs builds the ffmpeg command for a clip: each part is read
@@ -137,6 +188,13 @@ func clipArgs(file string, parts []video.ClipPart, threads int, out string) []st
 		"-movflags", "+faststart",
 		"-f", "mp4", "file:"+out,
 	)
+}
+
+// RemoveOrphanOwnClips deletes the videos uploaded as clips that no video
+// uses any more. Like RemoveOrphanCovers, it must run before the job
+// worker and the web server start.
+func RemoveOrphanOwnClips(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
+	return removeOrphans(ctx, db, filepath.Join(dataDir, OwnClipsDir), "videos", "own_clip")
 }
 
 // RemoveOrphanClips deletes the files in the clips folder that no video

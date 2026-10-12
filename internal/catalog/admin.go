@@ -18,8 +18,8 @@ import (
 
 // The administrator's changes to the catalog live here and in edit.go:
 // hiding a video, asking for its information, cover and previews again,
-// changing its title and category (edit.go) and choosing its cover
-// (cover.go). Everything else in this package
+// changing its title and category (edit.go), and choosing its cover
+// (cover.go) and its clip (clip.go). Everything else in this package
 // only reads.
 
 // errFileMissing means the video's file was not found at the last scan.
@@ -43,6 +43,9 @@ type AdminVideo struct {
 	// the video (CoverSecond), or "" for the one FranzPLAY picks.
 	CoverChoice string `json:"coverChoice"`
 	CoverSecond *int64 `json:"coverSecond"`
+	// The clip the administrator chose: a "video" uploaded, "none", or ""
+	// for the one FranzPLAY makes.
+	ClipChoice string `json:"clipChoice"`
 }
 
 // adminFilter narrows the administrator's list.
@@ -64,6 +67,9 @@ const (
 //	PUT  /api/admin/videos/{id}/cover      an image as cover (the body is the image)
 //	PUT  /api/admin/videos/{id}/cover-second  a moment of the video as cover {second}
 //	DELETE /api/admin/videos/{id}/cover    back to the cover FranzPLAY picks
+//	PUT  /api/admin/videos/{id}/clip       a video as the card's clip (the body is the video)
+//	POST /api/admin/videos/{id}/clip/remake  back to the clip FranzPLAY makes, made again
+//	DELETE /api/admin/videos/{id}/clip     no clip on the card
 //
 // changed tells the open pages the list of videos changed; queued tells
 // the job worker (and the pages) that there is new work.
@@ -91,6 +97,9 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/admin/videos/{id}/cover", a.only(a.handleOwnCover))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/cover-second", a.only(a.handleCoverSecond))
 	mux.HandleFunc("DELETE /api/admin/videos/{id}/cover", a.only(a.handleResetCover))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/clip", a.only(a.handleOwnClip))
+	mux.HandleFunc("POST /api/admin/videos/{id}/clip/remake", a.only(a.handleRemakeClip))
+	mux.HandleFunc("DELETE /api/admin/videos/{id}/clip", a.only(a.handleNoClip))
 }
 
 // only lets only administrators through.
@@ -215,7 +224,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL,
 		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
 		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL,
-		       v.own_cover IS NOT NULL, v.cover_second
+		       v.own_cover IS NOT NULL, v.cover_second, v.own_clip IS NOT NULL, v.no_clip
 		FROM videos v JOIN libraries l ON l.id = v.library_id
 		WHERE `+where+`
 		ORDER BY v.added_at DESC, v.id DESC LIMIT ? OFFSET ?`, append(args, q.limit, q.offset)...)
@@ -226,10 +235,10 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 	out := []AdminVideo{}
 	for rows.Next() {
 		var av AdminVideo
-		var ownCover bool
+		var ownCover, ownClip, noClip bool
 		var second sql.NullInt64
 		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing,
-			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second}})
+			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second, &ownClip, &noClip}})
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
 		}
@@ -239,6 +248,12 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		case second.Valid:
 			av.CoverChoice = "moment"
 			av.CoverSecond = &second.Int64
+		}
+		switch {
+		case ownClip:
+			av.ClipChoice = "video"
+		case noClip:
+			av.ClipChoice = "none"
 		}
 		out = append(out, av)
 	}
