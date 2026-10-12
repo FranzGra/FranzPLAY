@@ -189,6 +189,12 @@ const paths = {
       <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
     </>
   ),
+  share: (
+    <>
+      <path d="M14 5l6 6-6 6" />
+      <path d="M20 11H11a7 7 0 0 0-7 7v1" />
+    </>
+  ),
   chevronLeft: <path d="M15 5l-7 7 7 7" />,
   chevronRight: <path d="M9 5l7 7-7 7" />,
 } as const;

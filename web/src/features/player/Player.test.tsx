@@ -191,6 +191,46 @@ describe("player", () => {
     expect(screen.getByText("1:02")).toBeInTheDocument();
   });
 
+  it("shows how much is left with a click on the time, and remembers it", async () => {
+    const { user, video, unmount } = setup();
+    video.currentTime = 62;
+    fireEvent.timeUpdate(video);
+    await user.click(screen.getByRole("button", { name: "Mostra quanto manca" }));
+    expect(screen.getByText("-3:03")).toBeInTheDocument();
+    expect(window.localStorage.getItem("franzplay.timeLeft")).toBe("true");
+    unmount();
+
+    setup();
+    expect(screen.getByText("-4:05")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Mostra il tempo passato" }));
+    expect(screen.getByText("0:00")).toBeInTheDocument();
+  });
+
+  it("starts again at the end when Ripeti is on", async () => {
+    const onPosition = vi.fn();
+    const { user, video, play } = setup({ onPosition });
+    await user.click(screen.getByRole("button", { name: "Guarda" }));
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    const repeat = screen.getByRole("switch", { name: "Ripeti" });
+    expect(repeat).toHaveAttribute("aria-checked", "false");
+    await user.click(repeat);
+    expect(repeat).toHaveAttribute("aria-checked", "true");
+
+    play.mockClear();
+    video.currentTime = 245;
+    fireEvent.ended(video);
+    expect(video.currentTime).toBe(0);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(onPosition).not.toHaveBeenCalledWith(245);
+
+    await user.click(repeat);
+    video.currentTime = 245;
+    fireEvent.timeUpdate(video);
+    fireEvent.ended(video);
+    expect(video.currentTime).toBe(245);
+    expect(onPosition).toHaveBeenLastCalledWith(245);
+  });
+
   it("explains a video the browser cannot play", () => {
     const { video } = setup({ unsupportedHint: "Formato non adatto." });
     fireEvent.error(video);

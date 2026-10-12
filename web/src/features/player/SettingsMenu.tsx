@@ -23,6 +23,8 @@ type SettingsMenuProps = {
   onAudio: (stream: number) => void;
   subtitleStyle: SubtitleStyle;
   onSubtitleStyle: (style: SubtitleStyle) => void;
+  repeat: boolean; // start again at the end
+  onRepeat: (repeat: boolean) => void;
   onClose: () => void;
 };
 
@@ -32,7 +34,7 @@ type Page = "main" | "speed" | "audio" | "subtitles" | "style" | keyof SubtitleS
 // own page, as on YouTube, so the panel stays small on phones.
 export function SettingsMenu(props: SettingsMenuProps) {
   const { speed, onSpeed, tracks, track, onTrack, audio, audioStream, onAudio } = props;
-  const { subtitleStyle, onSubtitleStyle, onClose } = props;
+  const { subtitleStyle, onSubtitleStyle, repeat, onRepeat, onClose } = props;
   const [page, setPage] = useState<Page>("main");
   const trackLabel = tracks.find((t) => t.key === track)?.label ?? "Disattivati";
 
@@ -64,6 +66,16 @@ export function SettingsMenu(props: SettingsMenuProps) {
             onClick={() => setPage("subtitles")}
           />
           <Row label="Stile dei sottotitoli" value="" onClick={() => setPage("style")} />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={repeat}
+            className={styles.menuRow}
+            onClick={() => onRepeat(!repeat)}
+          >
+            <span>Ripeti</span>
+            <span className={styles.switch} aria-hidden="true" />
+          </button>
         </>
       )}
 
