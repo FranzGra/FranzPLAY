@@ -7,6 +7,11 @@ describe("video page", () => {
     const { server } = renderApp("/video/7", {
       ...signedIn(),
       "GET /api/videos/7": { body: videoJSON() },
+      "GET /api/videos/7/subtitles": {
+        body: [
+          { key: "it.srt", lang: "it", label: "Italiano", src: "/api/videos/7/subtitles/it.srt" },
+        ],
+      },
       "GET /api/videos": {
         body: { videos: [videoJSON(), videoJSON({ id: 8, title: "Montagna" })], total: 2 },
       },
@@ -18,6 +23,11 @@ describe("video page", () => {
       "/categorie/Vacanze",
     );
     expect(screen.getByText(/1080p/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Sottotitoli (c)" })).toBeEnabled();
+    expect(document.querySelector("track")).toHaveAttribute(
+      "src",
+      "/api/videos/7/subtitles/it.srt",
+    );
 
     const side = screen.getByRole("complementary", { name: "Altri video" });
     expect(await within(side).findByRole("heading", { name: "Montagna" })).toBeInTheDocument();

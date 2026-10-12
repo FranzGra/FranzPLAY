@@ -128,3 +128,31 @@ export async function fetchCategories(signal?: AbortSignal): Promise<Category[]>
 export function streamURL(id: number): string {
   return `/api/videos/${id}/stream`;
 }
+
+// SubtitleTrack is a subtitle file found next to a video.
+export type SubtitleTrack = {
+  key: string;
+  lang: string; // "it", "en-US"; "" = unknown
+  label: string; // "Italiano"
+  src: string;
+};
+
+export function parseSubtitles(data: unknown): SubtitleTrack[] {
+  if (!Array.isArray(data)) {
+    throw new Error("subtitles: not a list");
+  }
+  return data.map((item) => {
+    const s = record(item, "subtitle");
+    if (typeof s.key !== "string" || s.key === "") throw new Error("subtitle key: empty");
+    if (typeof s.lang !== "string") throw new Error("subtitle lang: not text");
+    if (typeof s.label !== "string" || s.label === "") throw new Error("subtitle label: empty");
+    if (typeof s.src !== "string" || !s.src.startsWith("/api/videos/")) {
+      throw new Error("subtitle src: not a subtitle address");
+    }
+    return { key: s.key, lang: s.lang, label: s.label, src: s.src };
+  });
+}
+
+export async function fetchSubtitles(id: number, signal?: AbortSignal): Promise<SubtitleTrack[]> {
+  return parseSubtitles(await request(`/api/videos/${id}/subtitles`, { signal }));
+}

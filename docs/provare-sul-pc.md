@@ -151,12 +151,23 @@ Apri <http://localhost:8090>: compare la pagina **Benvenuto in FranzPLAY**. Scri
 il tuo nome e una password (almeno 8 caratteri) e premi **Crea e entra**. Le volte successive
 basta nome e password. Per uscire: pagina **Profilo**, tasto **Esci**.
 
-I video non si vedono ancora nella Home, ma una volta entrato puoi già curiosare con il browser:
+Nella **Home** compaiono i video più recenti, con le categorie in alto per filtrarli. Clicca su un
+video per guardarlo con il player di FranzPLAY:
 
-- <http://localhost:8090/api/videos>: l'elenco dei video, con durata e copertina;
-- <http://localhost:8090/api/categories>: le categorie;
-- <http://localhost:8090/api/videos/1/stream>: il primo video, che il browser riproduce
-  (se è un `.mp4` o un `.webm`).
+- **barra del tempo** grande: cliccala o trascinala per spostarti;
+- **±10 secondi** con i tasti accanto a Play, con le frecce o J e L della tastiera, oppure con un
+  doppio tocco ai lati del video sul telefono;
+- altri tasti: **spazio** o K per pausa, **F** schermo intero, **M** muto, **C** sottotitoli;
+- l'**ingranaggio** apre le impostazioni: velocità, sottotitoli e il loro stile (dimensione,
+  colore, sfondo, posizione).
+
+**Sottotitoli.** FranzPLAY usa i file `.srt` e `.vtt` che stanno accanto al video con lo stesso
+nome, per esempio `mare.srt`, oppure `mare.it.srt` e `mare.en.srt` se ci sono più lingue. Non li
+modifica: li legge e li converte al volo.
+
+Se un video resta nero o compare «Questo video non si riesce a riprodurre», il browser non conosce
+il suo formato (capita con alcuni `.mkv` e `.avi`). La conversione automatica arriverà in una
+prossima tappa.
 
 ### Cambiare porta
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/FranzGra/FranzPLAY/internal/database"
@@ -282,5 +284,77 @@ func TestCover(t *testing.T) {
 		if rec := s.get(t, target); rec.Code != http.StatusNotFound {
 			t.Errorf("%s: status %d, want 404", target, rec.Code)
 		}
+	}
+}
+
+func TestSubtitles(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "Viaggi/mare.mp4", "sea", "Viaggi", 1, true)
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(s.library, "Viaggi", name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("mare.it.srt", "1\r\n00:00:01,000 --> 00:00:02,000\r\nPerch\xe9 s\xec\r\n")
+	write("mare.en.vtt", "WEBVTT\n\n00:01.000 --> 00:02.000\nWhy yes\n")
+	write("monte.it.srt", "not mine")
+	write("mare.txt", "not a subtitle")
+
+	rec := s.get(t, "/api/videos/"+strconv.FormatInt(id, 10)+"/subtitles")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	tracks := decode[[]subtitleTrack](t, rec)
+	want := []subtitleTrack{
+		{Key: "en.vtt", Lang: "en", Label: "Inglese", Src: "/api/videos/1/subtitles/en.vtt"},
+		{Key: "it.srt", Lang: "it", Label: "Italiano", Src: "/api/videos/1/subtitles/it.srt"},
+	}
+	if !reflect.DeepEqual(tracks, want) {
+		t.Fatalf("tracks = %+v", tracks)
+	}
+
+	rec = s.get(t, tracks[1].Src)
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "text/vtt; charset=utf-8" {
+		t.Fatalf("subtitle: status %d, type %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	if body := rec.Body.String(); body != "WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nPerché sì\n" {
+		t.Errorf("converted subtitle = %q", body)
+	}
+
+	// Only the subtitles of this video can be read, nothing else on the disk.
+	for _, key := range []string{"txt", "..%2F..%2Fsecret.srt", "it.vtt", "monte.it.srt"} {
+		if rec := s.get(t, "/api/videos/1/subtitles/"+key); rec.Code != http.StatusNotFound {
+			t.Errorf("key %q: status %d, want 404", key, rec.Code)
+		}
+	}
+	// The library stays untouched.
+	entries, err := os.ReadDir(filepath.Join(s.library, "Viaggi"))
+	if err != nil || len(entries) != 5 {
+		t.Errorf("library folder changed: %d files, %v", len(entries), err)
+	}
+}
+
+func TestSubtitlesOfAVideoWithout(t *testing.T) {
+	s := newSite(t)
+	s.addVideo(t, "mare.mp4", "sea", "", 1, true)
+	if body := s.get(t, "/api/videos/1/subtitles").Body.String(); body != "[]\n" {
+		t.Errorf("body = %q, want an empty list", body)
+	}
+	if rec := s.get(t, "/api/videos/9/subtitles"); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown video: status %d", rec.Code)
+	}
+}
+
+func TestReadSmallRefusesBigFiles(t *testing.T) {
+	name := filepath.Join(t.TempDir(), "big.srt")
+	if err := os.WriteFile(name, make([]byte, 11), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readSmall(name, 10); !errors.Is(err, errTooBig) {
+		t.Errorf("err = %v, want errTooBig", err)
+	}
+	if data, err := readSmall(name, 11); err != nil || len(data) != 11 {
+		t.Errorf("at the limit: %d bytes, %v", len(data), err)
 	}
 }

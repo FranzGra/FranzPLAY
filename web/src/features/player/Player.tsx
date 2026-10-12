@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { SubtitleTrack } from "../../api/videos";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
 import { loadSetting, saveSetting } from "../../lib/storage";
@@ -20,6 +21,7 @@ import {
 } from "./controls";
 import styles from "./Player.module.css";
 import { SettingsMenu } from "./SettingsMenu";
+import { cueLines, defaultSubtitleStyle, parseSubtitleStyle, subtitleCSS } from "./subtitleStyle";
 import { Timeline } from "./Timeline";
 
 type PlayerProps = {
@@ -28,6 +30,8 @@ type PlayerProps = {
   // unsupportedHint explains why the video may not play, when the server
   // already knows the browser may not manage its format.
   unsupportedHint?: string;
+  // subtitles found next to the video file.
+  subtitles?: SubtitleTrack[];
 };
 
 // hideAfter is how long the controls stay visible after the last movement,
@@ -47,10 +51,32 @@ const parseMuted = (data: unknown) => {
   return data;
 };
 
+// SubtitleChoice is remembered between videos: whether subtitles are on,
+// and in which language.
+type SubtitleChoice = { on: boolean; lang: string };
+const parseSubtitleChoice = (data: unknown): SubtitleChoice => {
+  const d = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  if (typeof d.on !== "boolean" || typeof d.lang !== "string")
+    throw new Error("bad subtitle choice");
+  return { on: d.on, lang: d.lang };
+};
+
+// pickTrack chooses the subtitles to show when a video opens.
+export function pickTrack(tracks: SubtitleTrack[], choice: SubtitleChoice): string | null {
+  if (!choice.on || tracks.length === 0) return null;
+  const base = (lang: string) => lang.toLowerCase().split("-")[0];
+  const same =
+    tracks.find((t) => t.lang === choice.lang) ??
+    tracks.find((t) => base(t.lang) === base(choice.lang));
+  return (same ?? tracks[0])?.key ?? null;
+}
+
+const noTracks: SubtitleTrack[] = [];
+
 // Player is FranzPLAY's video player, made to feel like YouTube's: a big
 // timeline, big buttons, ±10 seconds with buttons, keys and double taps,
 // speed in the settings, full screen.
-export function Player({ src, poster, unsupportedHint }: PlayerProps) {
+export function Player({ src, poster, unsupportedHint, subtitles = noTracks }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -67,6 +93,19 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState(true); // the person moved recently
   const [flash, setFlash] = useState<Flash | null>(null);
+  const [track, setTrack] = useState<string | null>(() =>
+    pickTrack(subtitles, loadSetting("subtitles", parseSubtitleChoice, { on: false, lang: "" })),
+  );
+  const [subtitleStyle, setSubtitleStyle] = useState(() =>
+    loadSetting("subtitleStyle", parseSubtitleStyle, defaultSubtitleStyle),
+  );
+  const [caption, setCaption] = useState<string[]>([]);
+  // The subtitles may arrive after the player: choose again when they do.
+  useEffect(() => {
+    setTrack(
+      pickTrack(subtitles, loadSetting("subtitles", parseSubtitleChoice, { on: false, lang: "" })),
+    );
+  }, [subtitles]);
   const hideTimer = useRef<number | undefined>(undefined);
   const lastTap = useRef(0);
 
@@ -93,6 +132,46 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
     setDuration(Number.NaN);
     setBuffered(0);
   }, [src]);
+
+  // The browser loads the chosen subtitles; FranzPLAY draws them itself,
+  // so they can have the style chosen in the settings.
+  useEffect(() => {
+    const list = video.current?.textTracks;
+    setCaption([]);
+    if (!list) return;
+    let shown: TextTrack | null = null;
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i] as TextTrack;
+      const key = subtitles[i]?.key;
+      t.mode = key !== undefined && key === track ? "hidden" : "disabled";
+      if (t.mode === "hidden") shown = t;
+    }
+    if (!shown) return;
+    const current = shown;
+    const onCue = () => {
+      const lines: string[] = [];
+      for (const cue of Array.from(current.activeCues ?? [])) {
+        lines.push(...cueLines((cue as VTTCue).text ?? ""));
+      }
+      setCaption(lines);
+    };
+    current.addEventListener("cuechange", onCue);
+    return () => current.removeEventListener("cuechange", onCue);
+  }, [track, subtitles]);
+
+  const chooseTrack = useCallback(
+    (key: string | null) => {
+      setTrack(key);
+      const lang = subtitles.find((t) => t.key === key)?.lang ?? "";
+      saveSetting("subtitles", { on: key !== null, lang });
+    },
+    [subtitles],
+  );
+
+  const chooseStyle = useCallback((style: typeof subtitleStyle) => {
+    setSubtitleStyle(style);
+    saveSetting("subtitleStyle", style);
+  }, []);
 
   useEffect(() => {
     const onChange = () => setFullscreen(document.fullscreenElement === root.current);
@@ -175,11 +254,17 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
           toggleFullscreen();
           break;
         case "toggle-subtitles":
-          break; // subtitles arrive in a later step
+          if (subtitles.length > 0) {
+            // Turned on for the first time: the language of the browser, if there.
+            chooseTrack(
+              track === null ? pickTrack(subtitles, { on: true, lang: navigator.language }) : null,
+            );
+          }
+          break;
       }
       showControls();
     },
-    [seekTo, showControls, showFlash, toggleFullscreen, togglePlay],
+    [seekTo, showControls, showFlash, toggleFullscreen, togglePlay, subtitles, track, chooseTrack],
   );
 
   // Keys work anywhere on the page, as on YouTube, except while typing.
@@ -248,7 +333,7 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
       onPointerMove={(event) => event.pointerType !== "touch" && showControls()}
       onPointerLeave={() => playing && setActive(false)}
     >
-      {/* biome-ignore lint/a11y/useMediaCaption: subtitles arrive in a later step */}
+      {/* biome-ignore lint/a11y/useMediaCaption: many home videos have no subtitles; when they do, they are tracks below */}
       <video
         ref={video}
         className={styles.video}
@@ -271,7 +356,17 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
         onError={() => setFailed(true)}
-      />
+      >
+        {subtitles.map((t) => (
+          <track
+            key={t.key}
+            kind="subtitles"
+            src={t.src}
+            srcLang={t.lang || undefined}
+            label={t.label}
+          />
+        ))}
+      </video>
 
       {/* The surface catches clicks and taps on the picture. */}
       <div
@@ -284,6 +379,17 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
         }}
         aria-hidden="true"
       />
+
+      {caption.length > 0 && (
+        <div className={styles.captions} data-position={subtitleStyle.position} aria-live="off">
+          {caption.map((line, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: lines of one cue have no other identity
+            <span key={i} className={styles.captionLine} style={subtitleCSS(subtitleStyle)}>
+              {line}
+            </span>
+          ))}
+        </div>
+      )}
 
       {waiting && playing && (
         <div className={styles.spinner} role="status" aria-label="Caricamento" />
@@ -312,7 +418,16 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
       )}
 
       {menuOpen && (
-        <SettingsMenu speed={speed} onSpeed={setSpeed} onClose={() => setMenuOpen(false)} />
+        <SettingsMenu
+          speed={speed}
+          onSpeed={setSpeed}
+          tracks={subtitles}
+          track={track}
+          onTrack={chooseTrack}
+          subtitleStyle={subtitleStyle}
+          onSubtitleStyle={chooseStyle}
+          onClose={() => setMenuOpen(false)}
+        />
       )}
 
       <div className={styles.controls}>
@@ -373,6 +488,19 @@ export function Player({ src, poster, unsupportedHint }: PlayerProps) {
             )}
           </span>
           <span className={styles.spacer} />
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => run({ kind: "toggle-subtitles" })}
+            disabled={subtitles.length === 0}
+            aria-pressed={track !== null}
+            aria-label={
+              subtitles.length === 0 ? "Nessun sottotitolo per questo video" : "Sottotitoli (c)"
+            }
+            title={subtitles.length === 0 ? "Nessun sottotitolo per questo video" : undefined}
+          >
+            <Icon name="subtitles" size={26} />
+          </button>
 
           <button
             type="button"
