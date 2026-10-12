@@ -31,12 +31,14 @@ Il vecchio non va mai modificato, e l'importazione deve poter girare più volte 
   `docker-compose.yml`); le colonne TIMESTAMP che `mariadb-dump` scrive in UTC si leggono in UTC.
   La tabella dei fusi orari è dentro il programma (`time/tzdata`, circa 450 KB), così funziona
   anche dove il sistema non ce l'ha.
+- **Le foto del profilo** vivono in una cartella del vecchio (`App_Data/User_Images`), non nel
+  database: con `-photos cartella` si portano anche quelle, dopo aver salvato il resto. Si
+  ritagliano quadrate e si rimpiccioliscono a 512 pixel (al massimo), come quelle che manda
+  l'interfaccia; la libreria standard di Go basta. Chi ha già una foto nel nuovo tiene la sua.
 - **Niente si perde in silenzio.** Ciò che il nuovo non sa ancora tenere (titoli e categorie
-  cambiati a mano, copertine scelte a mano, foto del profilo, sottotitoli di Whisper) e le righe
-  che non si leggono sono contati nel resoconto.
+  cambiati a mano, copertine scelte a mano, sottotitoli di Whisper, foto WEBP) e le righe che non
+  si leggono sono contati nel resoconto.
 
 ## Cosa resta per dopo
 
-- Le foto del profilo: vivono nella cartella `App_Data/User_Images` del vecchio, non nel
-  database. Serve un passo in più che le legga da lì.
 - Titoli e categorie cambiati a mano e copertine scelte a mano, quando il nuovo saprà tenerli.

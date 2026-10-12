@@ -174,3 +174,29 @@ func TestDeletedAccountsLeaveNoPhoto(t *testing.T) {
 		t.Fatalf("photos left behind: %v", entries)
 	}
 }
+
+func TestImportAvatar(t *testing.T) {
+	s := newSite(t)
+	s.setUp() // the administrator, id 1, without a photo
+	ctx := t.Context()
+	img := image.NewRGBA(image.Rect(0, 0, 128, 128))
+
+	if _, err := ImportAvatar(ctx, s.db, s.dataDir, 1, image.NewRGBA(image.Rect(0, 0, 128, 100)), s.now); !errors.Is(err, errBadAvatar) {
+		t.Fatalf("not square: err = %v", err)
+	}
+	added, err := ImportAvatar(ctx, s.db, s.dataDir, 1, img, s.now)
+	if err != nil || !added {
+		t.Fatalf("ImportAvatar = %v, %v", added, err)
+	}
+	if _, err := os.Stat(filepath.Join(s.dataDir, avatarDir, "1.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	var version int64
+	if err := s.db.QueryRow(`SELECT avatar FROM users WHERE id = 1`).Scan(&version); err != nil || version != s.now.UnixMilli() {
+		t.Fatalf("avatar = %d, %v", version, err)
+	}
+	// A person who has a photo keeps it.
+	if added, err := ImportAvatar(ctx, s.db, s.dataDir, 1, img, s.now.Add(time.Hour)); err != nil || added {
+		t.Fatalf("second ImportAvatar = %v, %v", added, err)
+	}
+}
