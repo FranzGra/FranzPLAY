@@ -97,3 +97,8 @@ export async function logout(): Promise<void> {
 export async function changePassword(current: string, next: string): Promise<void> {
   await request("/api/me/password", { method: "POST", body: { current, new: next } });
 }
+
+// rename changes my name, which is also the one I log in with.
+export async function rename(name: string): Promise<Account> {
+  return parseAccount(await request("/api/me/name", { method: "PUT", body: { name } }));
+}
