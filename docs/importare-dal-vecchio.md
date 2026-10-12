@@ -22,10 +22,12 @@ solo quel file. Se qualcosa va storto, il vecchio è esattamente com'era.
 | Registro degli accessi (ultimi 90 giorni) | Registro degli accessi |
 | Nome e colore del sito, se li avevi cambiati | Nome e colore del sito |
 | Foto del profilo (se copi anche la loro cartella) | Foto del profilo, ritagliate quadrate |
+| Titoli dei video cambiati a mano | Titoli scelti dall'amministratore |
+| Nomi delle categorie cambiati a mano | Nomi mostrati delle categorie |
+| Copertine scelte a mano | Copertine scelte dall'amministratore |
 
-Il nuovo FranzPLAY **non sa ancora tenere** alcune cose del vecchio: titoli e nomi di categorie
-cambiati a mano, copertine scelte a mano, sottotitoli fatti da Whisper. Il
-resoconto finale le conta, così sai cosa manca; arriveranno con i prossimi passi.
+I **sottotitoli fatti da Whisper** non vengono portati: il nuovo li può rifare. Il resoconto
+finale li conta, così sai cosa manca.
 
 Qualche dettaglio utile:
 
@@ -43,6 +45,14 @@ Qualche dettaglio utile:
   Un video che una persona aveva tolto da «Continua a guardare» resta fuori.
 - **Commenti** più lunghi di 2000 caratteri vengono accorciati (con «…» alla fine); quelli vuoti
   restano fuori.
+- **Titoli, categorie e copertine scelti a mano.** Cambiano solo quello che FranzPLAY mostra: i
+  file restano com'erano. Un titolo uguale al nome del file non serve e non viene portato. Il nome
+  di una categoria va alla categoria della stessa cartella. Se nel nuovo avevi già scelto un
+  titolo, un nome o una copertina, resta il tuo.
+- **Le copertine** il vecchio le teneva dentro la cartella dei video (per esempio
+  `Film/copertine_Film/`). Il nuovo le legge lì, senza toccarle, e ne tiene una copia nella sua
+  cartella dati. Una copertina che non trova, o che non è un'immagine JPEG, PNG o WebP, viene
+  solo scritta nel resoconto.
 
 ## Come si riconoscono i video
 

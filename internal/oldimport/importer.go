@@ -29,7 +29,7 @@ type Options struct {
 	// PhotosDir is the old FranzPLAY's folder of profile photos
 	// (App_Data/User_Images); empty leaves the photos out.
 	PhotosDir string
-	// DataDir is the new FranzPLAY's data folder, where photos go.
+	// DataDir is the new FranzPLAY's data folder, where photos and covers go.
 	DataDir string
 }
 
@@ -61,16 +61,14 @@ func Import(ctx context.Context, db *sql.DB, file io.Reader, opt Options) (*Repo
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("import: save: %w", err)
 		}
-		// Photos are files: they come once the people are saved.
-		if opt.PhotosDir != "" {
-			if err := im.photos(opt.PhotosDir, opt.DataDir); err != nil {
-				return nil, err
-			}
+		// Photos and covers are files: they come once the rest is saved.
+		if err := im.files(opt); err != nil {
+			return nil, err
 		}
 		return im.report, nil
 	}
-	if err == nil && opt.PhotosDir != "" {
-		err = im.photos(opt.PhotosDir, opt.DataDir) // a try only reads them
+	if err == nil {
+		err = im.files(opt) // a try only reads them
 	}
 	if rbErr := tx.Rollback(); rbErr != nil {
 		return nil, errors.Join(err, fmt.Errorf("import: rollback: %w", rbErr))
@@ -79,6 +77,17 @@ func Import(ctx context.Context, db *sql.DB, file io.Reader, opt Options) (*Repo
 		return nil, err
 	}
 	return im.report, nil
+}
+
+// files brings the profile photos, if their folder was given, and the
+// covers chosen by hand.
+func (im *importer) files(opt Options) error {
+	if opt.PhotosDir != "" {
+		if err := im.photos(opt.PhotosDir, opt.DataDir); err != nil {
+			return err
+		}
+	}
+	return im.covers(opt.DataDir)
 }
 
 type importer struct {
@@ -93,11 +102,16 @@ type importer struct {
 
 	userOf  map[int64]int64 // old user id → new user id
 	videoOf map[int64]int64 // old video id → new video id
+	// folderOf is the video folder of each new video, and pathOf its path
+	// inside it.
+	folderOf map[int64]string
+	pathOf   map[int64]string
 }
 
 func (im *importer) run() error {
 	for _, step := range []func() error{
-		im.videos, im.users, im.likes, im.comments, im.saved, im.history, im.logins, im.look, im.leftOut,
+		im.videos, im.users, im.likes, im.comments, im.saved, im.history, im.logins, im.look,
+		im.titles, im.categoryNames, im.leftOut,
 	} {
 		if err := step(); err != nil {
 			return err
@@ -117,18 +131,22 @@ func added(res sql.Result) (bool, error) {
 }
 
 func (im *importer) videos() (err error) {
-	rows, err := im.tx.QueryContext(im.ctx, `SELECT id, path FROM videos WHERE missing_since IS NULL`)
+	rows, err := im.tx.QueryContext(im.ctx, `SELECT v.id, v.path, l.path FROM videos v
+		JOIN libraries l ON l.id = v.library_id WHERE v.missing_since IS NULL`)
 	if err != nil {
 		return fmt.Errorf("import: read videos: %w", err)
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	var current []newVideo
+	im.folderOf, im.pathOf = map[int64]string{}, map[int64]string{}
 	for rows.Next() {
 		var v newVideo
-		if err := rows.Scan(&v.id, &v.path); err != nil {
+		var folder string
+		if err := rows.Scan(&v.id, &v.path, &folder); err != nil {
 			return fmt.Errorf("import: read videos: %w", err)
 		}
 		current = append(current, v)
+		im.folderOf[v.id], im.pathOf[v.id] = folder, v.path
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("import: read videos: %w", err)
@@ -505,19 +523,6 @@ func (im *importer) look() error {
 // yet, so that nothing is lost without anybody knowing.
 func (im *importer) leftOut() error {
 	r := &im.report.LeftOut
-	for _, v := range im.old.videos {
-		if v.title != "" && v.title != fileTitle(v.path) {
-			r.Titles++
-		}
-		if v.manual {
-			r.Covers++
-		}
-	}
-	for _, c := range im.old.categories {
-		if c.name != c.path {
-			r.Categories++
-		}
-	}
 	if im.photosDir == "" {
 		for _, u := range im.old.users {
 			if u.photo != "" {

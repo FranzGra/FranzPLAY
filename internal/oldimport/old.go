@@ -37,8 +37,9 @@ type oldVideo struct {
 	id       int64
 	path     string // inside the old video folder, with "/"
 	title    string
-	category int64 // 0 = none
-	manual   bool  // cover chosen by hand
+	category int64  // 0 = none
+	manual   bool   // cover chosen by hand
+	cover    string // its cover, inside the old video folder, with "/"; "" = none
 }
 
 type oldCategory struct {
@@ -120,7 +121,8 @@ func readOld(d *Dump) (*oldData, error) {
 		}),
 		r.each("Video", func(c cells) error {
 			v := oldVideo{id: c.int("id"), path: c.text("percorso_file"), title: c.text("Titolo"),
-				category: c.optInt("id_Categoria"), manual: c.optText("copertina_origine") == "manuale"}
+				category: c.optInt("id_Categoria"), manual: c.optText("copertina_origine") == "manuale",
+				cover: c.optText("percorso_copertina")}
 			if c.err == nil {
 				o.videos = append(o.videos, v)
 			}
