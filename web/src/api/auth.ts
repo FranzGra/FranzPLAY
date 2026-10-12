@@ -66,17 +66,26 @@ export async function fetchMe(signal?: AbortSignal): Promise<Account | null> {
   }
 }
 
-// fetchSetupNeeded tells whether FranzPLAY still waits for its administrator.
-export async function fetchSetupNeeded(signal?: AbortSignal): Promise<boolean> {
+// SetupStatus is what the login page needs to know before anyone logs in.
+export type SetupStatus = {
+  needed: boolean; // FranzPLAY still waits for its administrator
+  openRegistration: boolean; // anyone may create an account by themselves
+};
+
+// fetchSetup asks the server what the login page should offer.
+export async function fetchSetup(signal?: AbortSignal): Promise<SetupStatus> {
   const data = await request("/api/setup", { signal });
   if (typeof data !== "object" || data === null) {
     throw new Error("setup: response is not an object");
   }
-  const { needed } = data as Record<string, unknown>;
+  const { needed, openRegistration } = data as Record<string, unknown>;
   if (typeof needed !== "boolean") {
     throw new Error("setup: missing needed");
   }
-  return needed;
+  if (typeof openRegistration !== "boolean") {
+    throw new Error("setup: missing openRegistration");
+  }
+  return { needed, openRegistration };
 }
 
 export async function login(name: string, password: string): Promise<Account> {
@@ -87,6 +96,33 @@ export async function setup(code: string, name: string, password: string): Promi
   return parseAccount(
     await request("/api/setup", { method: "POST", body: { code, name, password } }),
   );
+}
+
+// register creates my account without an invite, when the administrator
+// allows it, and logs me in.
+export async function register(name: string, password: string): Promise<Account> {
+  return parseAccount(await request("/api/register", { method: "POST", body: { name, password } }));
+}
+
+// fetchRegistration tells the administrator whether anyone may register.
+export async function fetchRegistration(signal?: AbortSignal): Promise<boolean> {
+  return parseRegistration(await request("/api/registration", { signal }));
+}
+
+// saveRegistration lets anyone register (true) or only invited people (false).
+export async function saveRegistration(open: boolean): Promise<boolean> {
+  return parseRegistration(await request("/api/registration", { method: "PUT", body: { open } }));
+}
+
+function parseRegistration(data: unknown): boolean {
+  if (typeof data !== "object" || data === null) {
+    throw new Error("registration: response is not an object");
+  }
+  const { open } = data as Record<string, unknown>;
+  if (typeof open !== "boolean") {
+    throw new Error("registration: missing open");
+  }
+  return open;
 }
 
 export async function logout(): Promise<void> {

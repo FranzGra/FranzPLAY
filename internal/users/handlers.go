@@ -14,7 +14,7 @@ const maxBody = 4 << 10
 
 // Routes adds the users API to mux:
 //
-//	GET    /api/setup         does FranzPLAY still need its administrator?
+//	GET    /api/setup         does FranzPLAY still need its administrator? may people register?
 //	POST   /api/setup         create the administrator {code, name, password}
 //	POST   /api/login         {name, password}
 //	POST   /api/logout
@@ -31,6 +31,9 @@ const maxBody = 4 << 10
 //	DELETE /api/invites/{id}  administrators only
 //	POST   /api/join/check    does an invite code still work? {code}
 //	POST   /api/join          create an account with an invite {code, name, password}
+//	GET    /api/registration  administrators only: may anyone create an account? {open}
+//	PUT    /api/registration  administrators only {open}
+//	POST   /api/register      create an account without an invite, when allowed {name, password}
 func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/setup", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/setup", s.handleSetup)
@@ -49,6 +52,9 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/invites/{id}", s.adminOnly(s.handleDeleteInvite))
 	mux.HandleFunc("POST /api/join/check", s.handleCheckInvite)
 	mux.HandleFunc("POST /api/join", s.handleJoin)
+	mux.HandleFunc("GET /api/registration", s.adminOnly(s.handleRegistration))
+	mux.HandleFunc("PUT /api/registration", s.adminOnly(s.handleSetRegistration))
+	mux.HandleFunc("POST /api/register", s.handleRegister)
 }
 
 // readJSON reads a small JSON body into v. Unknown fields are refused, so
@@ -70,6 +76,11 @@ func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errTooManyTries):
 		w.Header().Set("Retry-After", strconv.Itoa(int(lockout.Seconds())))
 		respond.Error(w, r, s.logger, http.StatusTooManyRequests, err.Error())
+	case errors.Is(err, errTooManyAccounts):
+		w.Header().Set("Retry-After", strconv.Itoa(int(registrationWindow.Seconds())))
+		respond.Error(w, r, s.logger, http.StatusTooManyRequests, err.Error())
+	case errors.Is(err, errRegistrationClosed):
+		respond.Error(w, r, s.logger, http.StatusForbidden, err.Error())
 	case errors.Is(err, errNameTaken), errors.Is(err, errAlreadySetUp), errors.Is(err, errLastAdmin):
 		respond.Error(w, r, s.logger, http.StatusConflict, err.Error())
 	case errors.Is(err, errInviteInvalid):
@@ -87,10 +98,17 @@ func (s *Service) badRequest(w http.ResponseWriter, r *http.Request) {
 
 type setupStatus struct {
 	Needed bool `json:"needed"`
+	// OpenRegistration says the login page may offer to create an account.
+	OpenRegistration bool `json:"openRegistration"`
 }
 
 func (s *Service) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
-	respond.JSON(w, r, s.logger, http.StatusOK, setupStatus{Needed: s.needsSetup()})
+	open, err := s.store.openRegistration(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	respond.JSON(w, r, s.logger, http.StatusOK, setupStatus{Needed: s.needsSetup(), OpenRegistration: open})
 }
 
 type setupRequest struct {

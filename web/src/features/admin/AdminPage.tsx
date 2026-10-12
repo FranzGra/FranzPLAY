@@ -14,6 +14,7 @@ const sections = [
   { to: "cartelle", label: "Cartelle" },
   { to: "internet", label: "Internet" },
   { to: "lavori", label: "Lavori" },
+  { to: "sito", label: "Sito" },
 ] as const;
 
 // AdminPage is the frame of the administration pages: only the

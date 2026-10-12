@@ -32,7 +32,9 @@ type Service struct {
 	logger  *slog.Logger
 	now     func() time.Time
 	limiter *limiter
-	hashing chan struct{} // one slot per password check in progress
+	// registrations counts the accounts people make by themselves.
+	registrations *registrations
+	hashing       chan struct{} // one slot per password check in progress
 
 	mu        sync.Mutex
 	setupCode string // "" once FranzPLAY has its administrator
@@ -53,12 +55,13 @@ func NewService(ctx context.Context, db *sql.DB, logger *slog.Logger) (*Service,
 		return nil, err
 	}
 	s := &Service{
-		store:     store{db: db},
-		logger:    logger,
-		now:       time.Now,
-		limiter:   newLimiter(),
-		hashing:   make(chan struct{}, maxHashing),
-		dummyHash: dummy,
+		store:         store{db: db},
+		logger:        logger,
+		now:           time.Now,
+		limiter:       newLimiter(),
+		registrations: newRegistrations(),
+		hashing:       make(chan struct{}, maxHashing),
+		dummyHash:     dummy,
 	}
 	n, err := s.store.countUsers(ctx)
 	if err != nil {

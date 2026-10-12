@@ -122,7 +122,7 @@ func TestSetupNeedsTheCodeFromTheLog(t *testing.T) {
 	b := s.browser()
 	rec := b.do("GET", "/api/setup", nil)
 	expect(t, rec, http.StatusOK)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":true}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"openRegistration":false}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 	expect(t, b.do("POST", "/api/setup", map[string]string{
@@ -148,7 +148,7 @@ func TestSetupNeedsTheCodeFromTheLog(t *testing.T) {
 		"code": code, "name": "Second", "password": "second-password",
 	}), http.StatusConflict)
 	rec = b.do("GET", "/api/setup", nil)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":false}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"openRegistration":false}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 }

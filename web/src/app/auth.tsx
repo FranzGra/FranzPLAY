@@ -1,12 +1,12 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
-import { type Account, fetchMe, fetchSetupNeeded, logout } from "../api/auth";
+import { type Account, fetchMe, fetchSetup, logout } from "../api/auth";
 import { onUnauthorized } from "../api/client";
 
 // AuthState is where the interface stands with the login.
 export type AuthState =
   | { kind: "loading" }
   | { kind: "error" } // the server does not answer
-  | { kind: "signed-out"; setupNeeded: boolean }
+  | { kind: "signed-out"; setupNeeded: boolean; openRegistration: boolean }
   | { kind: "signed-in"; account: Account };
 
 type AuthContextValue = {
@@ -14,6 +14,15 @@ type AuthContextValue = {
   signedIn: (account: Account) => void;
   signOut: () => Promise<void>;
   retry: () => void;
+};
+
+// signedOut is the state after losing the session while the page is open.
+// Whether anyone may register is not known then: the login page offers it
+// again once the page is reloaded.
+const signedOut: Extract<AuthState, { kind: "signed-out" }> = {
+  kind: "signed-out",
+  setupNeeded: false,
+  openRegistration: false,
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,9 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(
     () =>
       onUnauthorized(() =>
-        setState((current) =>
-          current.kind === "signed-in" ? { kind: "signed-out", setupNeeded: false } : current,
-        ),
+        setState((current) => (current.kind === "signed-in" ? signedOut : current)),
       ),
     [],
   );
@@ -52,7 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signedIn = useCallback((account: Account) => setState({ kind: "signed-in", account }), []);
   const signOut = useCallback(async () => {
     await logout();
-    setState({ kind: "signed-out", setupNeeded: false });
+    // The login page shown next asks again whether anyone may register;
+    // if the server does not say, it just does not offer it.
+    const setup = await fetchSetup().catch((error: unknown) => {
+      console.error(error);
+      return { openRegistration: false };
+    });
+    setState({ ...signedOut, openRegistration: setup.openRegistration });
   }, []);
   const retry = useCallback(() => {
     setState({ kind: "loading" });
@@ -71,7 +84,12 @@ async function load(signal: AbortSignal): Promise<AuthState> {
   if (account) {
     return { kind: "signed-in", account };
   }
-  return { kind: "signed-out", setupNeeded: await fetchSetupNeeded(signal) };
+  const setup = await fetchSetup(signal);
+  return {
+    kind: "signed-out",
+    setupNeeded: setup.needed,
+    openRegistration: setup.openRegistration,
+  };
 }
 
 export function useAuth(): AuthContextValue {

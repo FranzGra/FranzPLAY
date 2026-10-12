@@ -5,12 +5,12 @@ import { checkSetup } from "./AuthPage";
 const signedOut: Routes = {
   ...emptyLibrary,
   "GET /api/me": { status: 401, body: { error: "login required" } },
-  "GET /api/setup": { body: { needed: false } },
+  "GET /api/setup": { body: { needed: false, openRegistration: false } },
 };
 
 const newFranzPLAY: Routes = {
   ...signedOut,
-  "GET /api/setup": { body: { needed: true } },
+  "GET /api/setup": { body: { needed: true, openRegistration: false } },
 };
 
 describe("login", () => {
@@ -58,7 +58,7 @@ describe("login", () => {
         expired
           ? new Response(JSON.stringify({ error: "login required" }), { status: 401 })
           : new Response(JSON.stringify(testAccount)),
-      "GET /api/setup": { body: { needed: false } },
+      "GET /api/setup": { body: { needed: false, openRegistration: false } },
       "GET /api/health": () =>
         new Response(JSON.stringify({ error: "login required" }), { status: 401 }),
     });
@@ -118,6 +118,66 @@ describe("first setup", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Il codice di installazione non è giusto",
     );
+  });
+});
+
+describe("registering without an invite", () => {
+  const open: Routes = {
+    ...signedOut,
+    "GET /api/setup": { body: { needed: false, openRegistration: true } },
+  };
+
+  it("is not offered while the administrator keeps it closed", async () => {
+    renderApp("/", signedOut);
+    expect(await screen.findByRole("heading", { name: "Accedi a FranzPLAY" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Registrati" })).not.toBeInTheDocument();
+  });
+
+  it("creates my account and lets me in", async () => {
+    const newcomer = { id: 7, name: "Giulia", role: "user", canUpload: false };
+    const { user, server } = renderApp("/", {
+      ...open,
+      "POST /api/register": { status: 201, body: newcomer },
+    });
+    await user.click(await screen.findByRole("button", { name: "Registrati" }));
+    expect(screen.getByRole("heading", { name: "Crea il tuo account" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Nome"), "Giulia");
+    await user.type(screen.getByLabelText("Password"), "una-password");
+    await user.type(screen.getByLabelText("Ripeti la password"), "altra-password");
+    await user.click(screen.getByRole("button", { name: "Crea e entra" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Le due password non sono uguali.");
+
+    await user.clear(screen.getByLabelText("Ripeti la password"));
+    await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
+    await user.click(screen.getByRole("button", { name: "Crea e entra" }));
+    expect(await screen.findByRole("heading", { name: "Ancora nessun video" })).toBeInTheDocument();
+    const sent = server.requests.find((r) => r.url.endsWith("/api/register"));
+    expect(await sent?.json()).toEqual({ name: "Giulia", password: "una-password" });
+  });
+
+  it.each([
+    [403, "La registrazione è chiusa"],
+    [409, "Questo nome lo usa già un'altra persona"],
+    [429, "Troppi account nuovi da questa rete"],
+  ])("explains a %i answer", async (status, message) => {
+    const { user } = renderApp("/", {
+      ...open,
+      "POST /api/register": { status, body: { error: "refused" } },
+    });
+    await user.click(await screen.findByRole("button", { name: "Registrati" }));
+    await user.type(screen.getByLabelText("Nome"), "Giulia");
+    await user.type(screen.getByLabelText("Password"), "una-password");
+    await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
+    await user.click(screen.getByRole("button", { name: "Crea e entra" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  });
+
+  it("goes back to the login", async () => {
+    const { user } = renderApp("/", open);
+    await user.click(await screen.findByRole("button", { name: "Registrati" }));
+    await user.click(screen.getByRole("button", { name: "Accedi" }));
+    expect(screen.getByRole("heading", { name: "Accedi a FranzPLAY" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Ripeti la password")).not.toBeInTheDocument();
   });
 });
 
