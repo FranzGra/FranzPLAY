@@ -85,4 +85,17 @@
   .below {
     padding: 0 16px;
   }
+
+  /* The buttons stay on one line and scroll sideways, like on YouTube,
+     instead of wrapping onto a second line. */
+  .actions {
+    position: relative;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .actions > * {
+    flex: none;
+  }
 }

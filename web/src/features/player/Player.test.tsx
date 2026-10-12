@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SubtitleTrack } from "../../api/videos";
-import { Player, pickTrack } from "./Player";
+import { failureText, Player, pickTrack } from "./Player";
 
 // jsdom has no real video: these stand-ins make play() and pause() behave.
 function fakeMedia() {
@@ -235,6 +235,13 @@ describe("player", () => {
     const { video } = setup({ unsupportedHint: "Formato non adatto." });
     fireEvent.error(video);
     expect(screen.getByRole("alert")).toHaveTextContent("Formato non adatto.");
+  });
+
+  it("says when the browser cannot read the format", () => {
+    const { video } = setup();
+    Object.defineProperty(video, "error", { value: { code: 4 } });
+    fireEvent.error(video);
+    expect(screen.getByRole("alert")).toHaveTextContent("Questo browser non sa leggere il formato");
   });
 });
 
@@ -502,5 +509,16 @@ describe("sound tracks", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/non si riesce a caricare/);
     expect(video.getAttribute("src")).toBe("/api/videos/7/stream");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("failureText", () => {
+  it.each([
+    [2, undefined, "La connessione"],
+    [4, undefined, "non sa leggere il formato"],
+    [undefined, undefined, "spostato o danneggiato"],
+    [4, "Copia in arrivo.", "Copia in arrivo."],
+  ])("code %s, hint %s", (code, hint, want) => {
+    expect(failureText(code, hint)).toContain(want);
   });
 });
