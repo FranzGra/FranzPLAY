@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/config"
+	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
 )
@@ -37,7 +38,7 @@ func main() {
 
 // run starts the server and blocks until ctx is cancelled or the server fails.
 // It takes its inputs as arguments, so tests can run it without touching the real environment.
-func run(ctx context.Context, getenv func(string) string, logOut io.Writer) error {
+func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err error) {
 	logger := slog.New(slog.NewTextHandler(logOut, nil))
 
 	cfg, err := config.Load(getenv)
@@ -47,6 +48,16 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) erro
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("create data folder %q: %w", cfg.DataDir, err)
 	}
+
+	db, err := database.Open(ctx, cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close database: %w", closeErr))
+		}
+	}()
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

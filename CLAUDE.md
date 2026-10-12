@@ -55,11 +55,12 @@ Ognuna viene da un danno vero visto nella versione vecchia. Ognuna deve avere un
 ```
 cmd/franzplay/      avvio del programma: collega i pezzi, nient'altro
 internal/config/    impostazioni lette dalle variabili d'ambiente
+internal/database/  apre il database SQLite; lo schema vive in migrations/, file numerati
 internal/server/    le rotte HTTP dell'API
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
 internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)
-docs/               visione, decisioni e guida per provare sul PC
+docs/               visione, decisioni (docs/decisioni/) e guida per provare sul PC
 ```
 
 - **Cartelle per funzionalità** (`catalog/`, `comments/`, `playlists/`…), non per tipo di file.
