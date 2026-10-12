@@ -22,6 +22,12 @@
     color 150ms;
 }
 
+/* How many people like it, after a thin line, as on YouTube. */
+.count {
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+
 .button:hover {
   background: var(--glass-bg-strong);
 }

@@ -100,12 +100,32 @@ export async function fetchPlaylist(id: number, signal?: AbortSignal): Promise<P
   return parsePlaylistPage(await request(`/api/playlists/${id}`, { signal }));
 }
 
+// changes tells the parts of the page that show my lists, like the side
+// menu, that one was created, renamed or deleted.
+const changes = new EventTarget();
+
+// onPlaylistsChanged calls listener after each change to my lists, and
+// returns the function that stops it.
+export function onPlaylistsChanged(listener: () => void): () => void {
+  changes.addEventListener("change", listener);
+  return () => changes.removeEventListener("change", listener);
+}
+
+function changed() {
+  changes.dispatchEvent(new Event("change"));
+}
+
 export async function createPlaylist(name: string): Promise<Playlist> {
-  return parsePlaylist(await request("/api/playlists", { method: "POST", body: { name } }));
+  const created = parsePlaylist(
+    await request("/api/playlists", { method: "POST", body: { name } }),
+  );
+  changed();
+  return created;
 }
 
 export async function renamePlaylist(id: number, name: string): Promise<void> {
   await request(`/api/playlists/${id}`, { method: "PUT", body: { name } });
+  changed();
 }
 
 // publishPlaylist puts one of my lists on my channel (true) or takes it off.
@@ -115,6 +135,7 @@ export async function publishPlaylist(id: number, shown: boolean): Promise<void>
 
 export async function deletePlaylist(id: number): Promise<void> {
   await request(`/api/playlists/${id}`, { method: "DELETE" });
+  changed();
 }
 
 // putInPlaylist adds a video to a list (in true) or takes it out.

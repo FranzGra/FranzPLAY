@@ -104,8 +104,7 @@
 }
 
 .avatar:hover {
-  color: var(--color-text);
-  background: var(--glass-bg-strong);
+  opacity: 0.85;
 }
 
 .searchIcon {
@@ -139,6 +138,18 @@
   transition:
     background-color 150ms,
     color 150ms;
+}
+
+.sideLink svg {
+  flex: none;
+}
+
+/* A long playlist name ends with "…" instead of growing the menu. */
+.sideText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sideLink:hover {
@@ -241,5 +252,7 @@
     margin: 0 auto;
     padding: 6px;
     border-radius: var(--radius-pill);
+    /* Stronger than the other glass: the page scrolls under it. */
+    background: var(--glass-bg-bar);
   }
 }

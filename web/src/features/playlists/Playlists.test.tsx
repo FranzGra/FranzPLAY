@@ -33,7 +33,8 @@ describe("playlists page", () => {
         body: [later, trips, { ...trips, id: 3, name: "Feste", public: true }],
       },
     });
-    const links = await screen.findAllByRole("link", { name: /Guarda più tardi|Gite|Feste/ });
+    const page = await screen.findByRole("main");
+    const links = await within(page).findAllByRole("link", { name: /Guarda più tardi|Gite|Feste/ });
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       "/playlist/1",
       "/playlist/2",

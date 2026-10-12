@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { type Channel, fetchChannel } from "../../api/channels";
 import { ApiError } from "../../api/client";
 import { useAccount } from "../../app/auth";
+import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { PlaylistCard } from "../playlists/PlaylistCard";
@@ -74,8 +75,8 @@ export function ChannelPage() {
   return (
     <>
       <header className={styles.identity}>
-        <span className={styles.avatar} aria-hidden="true">
-          {channel.name.charAt(0).toUpperCase()}
+        <span className={styles.avatar}>
+          <Avatar name={channel.name} />
         </span>
         <div>
           <h1 className={styles.name}>{channel.name}</h1>

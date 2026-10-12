@@ -12,15 +12,6 @@
   gap: 14px;
 }
 
-.avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-}
-
 .name {
   margin: 0;
   font-size: 22px;

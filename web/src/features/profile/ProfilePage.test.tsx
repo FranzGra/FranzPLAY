@@ -6,6 +6,8 @@ describe("profile page", () => {
     renderApp("/profilo");
     expect(await screen.findByRole("heading", { name: "Francesco" })).toBeInTheDocument();
     expect(screen.getByText("Amministratore")).toBeInTheDocument();
+    // The same round initial as on the channel page.
+    expect(screen.getByRole("main")).toHaveTextContent(/^F/);
   });
 
   it("shows a normal user as such", async () => {

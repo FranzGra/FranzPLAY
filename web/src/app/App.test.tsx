@@ -1,5 +1,5 @@
 import { screen, within } from "@testing-library/react";
-import { renderApp } from "../test/render";
+import { renderApp, signedIn } from "../test/render";
 
 describe("navigation", () => {
   it("shows the home page with an empty state", async () => {
@@ -44,6 +44,37 @@ describe("navigation", () => {
     for (const link of links) {
       expect(link.querySelector("svg")).not.toBeNull();
     }
+  });
+
+  it("lists my playlists in the side menu", async () => {
+    const list = (id: number, kind: string, name: string) => ({
+      id,
+      kind,
+      name,
+      owner: { id: 1, name: "Francesco" },
+      public: false,
+      videos: 0,
+      cover: null,
+      updatedAt: "2026-10-12T09:00:00Z",
+    });
+    renderApp("/", {
+      ...signedIn(),
+      "GET /api/playlists": { body: [list(1, "later", ""), list(2, "playlist", "Gite")] },
+    });
+    const menu = await screen.findByRole("navigation", { name: "Menu principale" });
+    expect(await within(menu).findByRole("link", { name: "Gite" })).toHaveAttribute(
+      "href",
+      "/playlist/2",
+    );
+    expect(within(menu).getByRole("link", { name: "Guarda più tardi" })).toHaveAttribute(
+      "href",
+      "/playlist/1",
+    );
+  });
+
+  it("shows my initial in the top bar, as on my profile", async () => {
+    renderApp("/");
+    expect(await screen.findByRole("link", { name: "Il tuo profilo" })).toHaveTextContent("F");
   });
 
   it("has no channel subscriptions in the side menu", async () => {

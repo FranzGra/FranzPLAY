@@ -51,8 +51,12 @@ export function LikeButton({ videoId }: { videoId: number }) {
         title={like.liked ? "Non mi piace più" : "Mi piace"}
       >
         <Icon name="like" size={20} />
-        <span className="visually-hidden">Mi piace</span>
-        <span aria-hidden="true">{like.count > 0 ? like.count.toLocaleString("it-IT") : ""}</span>
+        Mi piace
+        {like.count > 0 && (
+          <span className={styles.count} aria-hidden="true">
+            {like.count.toLocaleString("it-IT")}
+          </span>
+        )}
       </button>
       <span className="visually-hidden" aria-live="polite">
         {like.count === 1 ? "Piace a 1 persona" : `Piace a ${like.count} persone`}
