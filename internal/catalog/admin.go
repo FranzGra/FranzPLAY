@@ -170,15 +170,6 @@ func (a admin) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// moreColumns lets scanVideo read a row that has extra columns after the
-// usual ones: they go into more.
-type moreColumns struct {
-	row  rowScanner
-	more []any
-}
-
-func (m moreColumns) Scan(dest ...any) error { return m.row.Scan(append(dest, m.more...)...) }
-
 // adminList returns a page of every video, hidden and missing ones too,
 // newest first, and how many match in total.
 func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (_ []AdminVideo, total int, err error) {
@@ -191,7 +182,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		where = `v.missing_since IS NOT NULL`
 	}
 	for _, w := range q.words {
-		where += ` AND (v.title LIKE ? ESCAPE '\' OR v.category LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
+		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR v.category LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
 		p := likePattern(w)
 		args = append(args, p, p, p)
 	}
@@ -267,7 +258,7 @@ func (s store) refresh(ctx context.Context, id int64, now time.Time) (err error)
 		}
 		err = tx.Commit()
 	}()
-	for _, k := range []jobs.Kind{jobs.Probe, jobs.Cover, jobs.Preview, jobs.Tracks, jobs.Convert} {
+	for _, k := range []jobs.Kind{jobs.Probe, jobs.Details, jobs.Cover, jobs.Preview, jobs.Tracks, jobs.Convert} {
 		if err := jobs.Enqueue(ctx, tx, id, k, false, now); err != nil {
 			return err
 		}

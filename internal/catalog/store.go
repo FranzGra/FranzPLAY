@@ -28,6 +28,10 @@ type Video struct {
 	AddedAt  time.Time `json:"addedAt"`  // when FranzPLAY found it
 	Playable bool      `json:"playable"` // every browser can play it: as it is, or its copy
 	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
+	// From a details file next to the video, like yt-dlp's .info.json:
+	Author      string  `json:"author"`                // who published it; "" = not known
+	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
+	Description *string `json:"description,omitempty"` // only for one video; null = none
 }
 
 // Preview is the image with small frames of a video, shown over the
@@ -55,20 +59,31 @@ type store struct {
 }
 
 // videoColumns are read for every video, in the order scanVideo expects.
-const videoColumns = `v.id, v.title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
-	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted`
+const videoColumns = `v.id, v.shown_title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
+	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
+	v.author, v.published_on`
 
 // rowScanner is a *sql.Row or *sql.Rows.
 type rowScanner interface{ Scan(dest ...any) error }
 
+// moreColumns lets scanVideo read a row that has extra columns after the
+// usual ones: they go into more.
+type moreColumns struct {
+	row  rowScanner
+	more []any
+}
+
+func (m moreColumns) Scan(dest ...any) error { return m.row.Scan(append(dest, m.more...)...) }
+
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
 	var duration, width, height, previewGap, previewCount sql.NullInt64
-	var cover, videoCodec, audioCodec, preview, converted sql.NullString
+	var cover, videoCodec, audioCodec, preview, converted, author, published sql.NullString
 	var addedAt int64
 	var relPath string
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
-		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted); err != nil {
+		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
+		&author, &published); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -91,6 +106,10 @@ func scanVideo(row rowScanner) (Video, error) {
 		}
 	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
+	v.Author = author.String
+	if published.Valid {
+		v.PublishedOn = &published.String
+	}
 	v.Playable = converted.Valid || video.DirectlyPlayable(path.Ext(relPath),
 		video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String})
 	return v, nil
@@ -107,7 +126,7 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 	}
 	// LIKE ignores case for the letters A to Z; that is enough for a home search.
 	for _, w := range q.words {
-		where += ` AND (v.title LIKE ? ESCAPE '\' OR v.category LIKE ? ESCAPE '\')`
+		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR v.category LIKE ? ESCAPE '\')`
 		p := likePattern(w)
 		args = append(args, p, p)
 	}
@@ -135,15 +154,20 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 	return videos, total, nil
 }
 
-// get returns one visible video.
+// get returns one visible video, with its description.
 func (s store) get(ctx context.Context, id int64) (Video, error) {
-	v, err := scanVideo(s.db.QueryRowContext(ctx,
-		`SELECT `+videoColumns+` FROM videos v WHERE v.id = ? AND v.visible`, id))
+	var description sql.NullString
+	v, err := scanVideo(moreColumns{s.db.QueryRowContext(ctx,
+		`SELECT `+videoColumns+`, v.description FROM videos v WHERE v.id = ? AND v.visible`, id),
+		[]any{&description}})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, errNotFound
 	}
 	if err != nil {
 		return Video{}, fmt.Errorf("read video %d: %w", id, err)
+	}
+	if description.Valid {
+		v.Description = &description.String
 	}
 	return v, nil
 }

@@ -1,4 +1,11 @@
-import { formatAge, formatDay, formatDuration, formatSince, formatVideos } from "./format";
+import {
+  formatAge,
+  formatDate,
+  formatDay,
+  formatDuration,
+  formatSince,
+  formatVideos,
+} from "./format";
 
 describe("formatDuration", () => {
   it.each([
@@ -68,5 +75,11 @@ describe("formatSince", () => {
     [new Date(2026, 9, 9), "3 giorni fa"],
   ])("%s is %s", (date, want) => {
     expect(formatSince(date, now)).toBe(want);
+  });
+});
+
+describe("formatDate", () => {
+  it("writes the day in full", () => {
+    expect(formatDate(new Date(2019, 2, 15))).toBe("15 marzo 2019");
   });
 });

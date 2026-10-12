@@ -35,6 +35,35 @@ describe("video page", () => {
     expect(within(side).getByText("Visto da chi ha visto questo")).toBeInTheDocument();
   });
 
+  it("shows what the file next to the video says: author, day and description", async () => {
+    const { user } = renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": {
+        body: videoJSON({
+          title: "Gita in montagna",
+          author: "Famiglia Rossi",
+          publishedOn: "2019-03-15",
+          description: `Prima riga\nSeconda riga\nTerza riga\nQuarta riga, nascosta all'inizio`,
+        }),
+      },
+    });
+    expect(await screen.findByText(/Famiglia Rossi · 15 marzo 2019/)).toBeInTheDocument();
+    const box = screen.getByRole("region", { name: "Descrizione" });
+    expect(within(box).queryByText(/Quarta riga/)).not.toBeInTheDocument();
+    await user.click(within(box).getByRole("button", { name: "Mostra altro" }));
+    expect(within(box).getByText(/Quarta riga/)).toBeInTheDocument();
+    expect(within(box).getByRole("button", { name: "Mostra meno" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("shows no description box when there is none", async () => {
+    renderApp("/video/7", { ...signedIn(), "GET /api/videos/7": { body: videoJSON() } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Descrizione" })).not.toBeInTheDocument();
+  });
+
   it("says when a video does not exist", async () => {
     renderApp("/video/99", {
       ...signedIn(),

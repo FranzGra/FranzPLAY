@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 )
 
 // EmbeddedSubtitle is a subtitle stored inside the video file, as some
@@ -144,16 +142,7 @@ func cleanCodec(codec string) string {
 // cleanTitle makes a title from a file safe to show: valid text, one
 // line, at most maxTitleLen characters.
 func cleanTitle(title string) string {
-	if !utf8.ValidString(title) {
-		return ""
-	}
-	clean := strings.Join(strings.FieldsFunc(title, func(r rune) bool {
-		return unicode.IsSpace(r) || unicode.IsControl(r)
-	}), " ")
-	if utf8.RuneCountInString(clean) > maxTitleLen {
-		clean = string([]rune(clean)[:maxTitleLen])
-	}
-	return clean
+	return cut(oneLine(title), maxTitleLen)
 }
 
 // Label is the subtitle's name in the player's menu: "Italiano",

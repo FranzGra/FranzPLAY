@@ -263,6 +263,15 @@ player usa quella, senza che tu debba fare niente. La vedi in Amministrazione �
 Finché la copia non è pronta, un video così può restare nero o mostrare «Questo video non si riesce
 a riprodurre»: riprova più tardi.
 
+**Informazioni dal file accanto al video.** Se scarichi i video con
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) e l'opzione `--write-info-json`, accanto a ogni video
+c'è un file `.info.json` con lo stesso nome (per esempio `gita [abc123].mp4` e
+`gita [abc123].info.json`). FranzPLAY lo legge, senza modificarlo, e usa il **titolo vero** al posto
+di quello ricavato dal nome del file; nella pagina del video mostra anche **chi l'ha pubblicato**,
+il **giorno** e la **descrizione**. Lo vedi in Amministrazione › Lavori come «Informazioni dal file
+accanto». Se aggiungi o cambi il file `.info.json` dopo, premi **Rifai copertina** sul video in
+Amministrazione › Video: oltre alla copertina rilegge tutto.
+
 **Video consigliati.** Accanto al player, in **Da guardare dopo**, FranzPLAY propone i video più
 simili a quello che stai guardando, e sotto ognuno dice perché: «Visto da chi ha visto questo»
 (qualcun altro ha guardato tutti e due), «Anche questo in Vacanze» (stessa categoria) o «Titolo

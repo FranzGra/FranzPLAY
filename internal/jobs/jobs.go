@@ -17,6 +17,7 @@ type Kind string
 // The kinds of job.
 const (
 	Probe   Kind = "probe"   // read duration, size and codecs with ffprobe
+	Details Kind = "details" // read the file next to the video that says what it is
 	Cover   Kind = "cover"   // make the cover image
 	Preview Kind = "preview" // make the small frames shown over the timeline
 	Tracks  Kind = "tracks"  // list the languages inside the file, copy its subtitles

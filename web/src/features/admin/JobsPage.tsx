@@ -19,6 +19,7 @@ type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; jobs: Jo
 // kindNames say what each kind of job does, in words for people.
 export const kindNames: Record<JobKind, string> = {
   probe: "Lettura del video",
+  details: "Informazioni dal file accanto",
   cover: "Copertina",
   preview: "Anteprime",
   tracks: "Lingue e sottotitoli",
@@ -28,6 +29,7 @@ export const kindNames: Record<JobKind, string> = {
 // missingTool says which program a kind of job needs.
 const missingTool: Record<JobKind, string> = {
   probe: "ffprobe",
+  details: "", // needs no other program: it is always available
   cover: "ffmpeg",
   preview: "ffmpeg",
   tracks: "ffmpeg", // and ffprobe, which "probe" already names

@@ -177,7 +177,7 @@ func TestRefresh(t *testing.T) {
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(kinds, []string{"convert", "cover", "preview", "probe", "tracks"}) {
+	if !reflect.DeepEqual(kinds, []string{"convert", "cover", "details", "preview", "probe", "tracks"}) {
 		t.Errorf("pending jobs = %v, want convert, cover, preview, probe and tracks", kinds)
 	}
 
