@@ -55,7 +55,7 @@ type JobView struct {
 }
 
 // allKinds is every kind of job, in the order they run.
-var allKinds = []Kind{Probe, Cover, Preview, Tracks}
+var allKinds = []Kind{Probe, Cover, Preview, Tracks, Convert}
 
 // Routes adds the queue's API for administrators to mux:
 //

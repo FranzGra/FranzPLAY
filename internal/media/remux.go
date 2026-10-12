@@ -105,16 +105,16 @@ func parseFirstPacket(out []byte) (float64, error) {
 const maxKeyframeGap = 600
 
 // Stream writes to w the video in file from at (in truth from StartOf)
-// with the sound track audio, as a fragmented MP4 a browser plays while it
+// with its sound track number track (0 = the first), whose format is codec, as a fragmented MP4 a browser plays while it
 // arrives. It stops when ctx ends, as when the person closes the page.
-func (m *Remuxer) Stream(ctx context.Context, w io.Writer, file string, audio video.EmbeddedAudio, at float64) error {
+func (m *Remuxer) Stream(ctx context.Context, w io.Writer, file string, track int, codec string, at float64) error {
 	select {
 	case m.slots <- struct{}{}:
 		defer func() { <-m.slots }()
 	default:
 		return ErrBusy
 	}
-	cmd := exec.CommandContext(ctx, m.ffmpeg, remuxArgs(file, audio, at)...)
+	cmd := exec.CommandContext(ctx, m.ffmpeg, remuxArgs(file, track, codec, at)...)
 	var stderr bytes.Buffer
 	cmd.Stdout = w
 	cmd.Stderr = &stderr
@@ -134,17 +134,17 @@ func (m *Remuxer) Stream(ctx context.Context, w io.Writer, file string, audio vi
 // remuxArgs builds the ffmpeg command for Stream. The picture is copied
 // (V:0 leaves out cover images); the sound is copied too when the browser
 // knows it, or else converted to stereo AAC.
-func remuxArgs(file string, audio video.EmbeddedAudio, at float64) []string {
+func remuxArgs(file string, track int, codec string, at float64) []string {
 	args := []string{"-v", "error", "-nostdin"}
 	if at > 0 {
 		args = append(args, "-ss", seconds(at))
 	}
 	args = append(args,
 		"-i", "file:"+file,
-		"-map", "0:V:0", "-map", "0:"+strconv.Itoa(audio.Stream),
+		"-map", "0:V:0", "-map", "0:a:"+strconv.Itoa(track),
 		"-c:v", "copy",
 	)
-	if video.CopyAudioToMP4(audio.Codec) {
+	if video.CopyAudioToMP4(codec) {
 		args = append(args, "-c:a", "copy")
 	} else {
 		args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "192k")

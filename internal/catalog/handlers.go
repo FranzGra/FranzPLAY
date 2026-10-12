@@ -24,7 +24,8 @@ import (
 //	GET /api/covers/{name}                a cover image
 //	GET /api/previews/{name}              the frames shown over the timeline
 func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
-	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir), logger: logger}
+	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir),
+		convertedDir: filepath.Join(dataDir, media.ConvertedDir), logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos", h.list)
 		mux.HandleFunc("GET /api/videos/{id}", h.get)
@@ -40,6 +41,7 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 type handlers struct {
 	store        store
 	subtitlesDir string // the copies of the subtitles inside the videos
+	convertedDir string // the copies of the videos not every browser plays
 	logger       *slog.Logger
 }
 
@@ -93,6 +95,7 @@ func (h handlers) categories(w http.ResponseWriter, r *http.Request) {
 // stream sends the video file. http.ServeContent answers the browser's
 // "from byte X to byte Y" requests (Range), which is what lets the player
 // jump forward and back without downloading the whole file.
+// A video not every browser plays is sent as its copy, when it is ready.
 // The file is only opened for reading (rule 1).
 func (h handlers) stream(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
@@ -100,7 +103,7 @@ func (h handlers) stream(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
 		return
 	}
-	name, err := h.store.file(r.Context(), id)
+	name, _, err := h.store.played(r.Context(), id, h.convertedDir)
 	if errors.Is(err, errNotFound) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
 		return

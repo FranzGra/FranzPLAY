@@ -248,9 +248,20 @@ player resta sulla lingua del file e te lo dice. Per creare un video di prova co
 ffmpeg -f lavfi -i testsrc2=duration=60 -f lavfi -i sine=frequency=440:duration=60 -f lavfi -i sine=frequency=880:duration=60 -map 0 -map 1 -map 2 -c:v libvpx-vp9 -c:a libopus -metadata:s:a:0 language=ita -metadata:s:a:1 language=eng "due lingue.mkv"
 ```
 
-Se un video resta nero o compare «Questo video non si riesce a riprodurre», il browser non conosce
-il suo formato (capita con alcuni `.mkv` e `.avi`). La conversione automatica arriverà in una
-prossima tappa.
+**Copie per i browser.** Alcuni video (molti `.mkv` e `.avi`, o i film in HEVC) non si vedono in
+tutti i browser. FranzPLAY se ne accorge da solo e ne prepara una **copia** in formato MP4 nella
+cartella dati, in `converted/`: il file originale non viene toccato. Quando la copia è pronta, il
+player usa quella, senza che tu debba fare niente. La vedi in Amministrazione › Lavori come
+«Copia per i browser».
+
+- Se basta cambiare la "scatola" del video (per esempio un `.mkv` con immagine H.264), ci vuole
+  poco: l'immagine viene solo copiata.
+- Se va rifatta l'immagine (HEVC, vecchi `.avi`), su un Raspberry Pi può volerci anche più della
+  durata del film. Per questo FranzPLAY lo fa per ultimo, con metà dei processori, e **si ferma**
+  appena arriva un video nuovo: prima prepara la sua copertina, poi riprende la copia da capo.
+
+Finché la copia non è pronta, un video così può restare nero o mostrare «Questo video non si riesce
+a riprodurre»: riprova più tardi.
 
 ### Cambiare porta
 

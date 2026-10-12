@@ -26,7 +26,7 @@ type Video struct {
 	Height   *int      `json:"height"`   // on screen; null = not read yet
 	Cover    *string   `json:"cover"`    // address of the image; null = none yet
 	AddedAt  time.Time `json:"addedAt"`  // when FranzPLAY found it
-	Playable bool      `json:"playable"` // every browser can play it as it is
+	Playable bool      `json:"playable"` // every browser can play it: as it is, or its copy
 	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
 }
 
@@ -56,7 +56,7 @@ type store struct {
 
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
-	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count`
+	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted`
 
 // rowScanner is a *sql.Row or *sql.Rows.
 type rowScanner interface{ Scan(dest ...any) error }
@@ -64,11 +64,11 @@ type rowScanner interface{ Scan(dest ...any) error }
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
 	var duration, width, height, previewGap, previewCount sql.NullInt64
-	var cover, videoCodec, audioCodec, preview sql.NullString
+	var cover, videoCodec, audioCodec, preview, converted sql.NullString
 	var addedAt int64
 	var relPath string
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
-		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount); err != nil {
+		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -91,7 +91,7 @@ func scanVideo(row rowScanner) (Video, error) {
 		}
 	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
-	v.Playable = video.DirectlyPlayable(path.Ext(relPath),
+	v.Playable = converted.Valid || video.DirectlyPlayable(path.Ext(relPath),
 		video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String})
 	return v, nil
 }
@@ -218,6 +218,26 @@ func (s store) file(ctx context.Context, id int64) (string, error) {
 		return "", fmt.Errorf("find video %d: %w", id, err)
 	}
 	return filepath.Join(root, filepath.FromSlash(rel)), nil
+}
+
+// played returns the file the browser gets for a video: the copy made for
+// the browsers, in convertedDir, when there is one; else the file itself.
+func (s store) played(ctx context.Context, id int64, convertedDir string) (name string, isCopy bool, err error) {
+	var root, rel string
+	var converted sql.NullString
+	err = s.db.QueryRowContext(ctx, `
+		SELECT l.path, v.path, v.converted FROM videos v JOIN libraries l ON l.id = v.library_id
+		WHERE v.id = ? AND v.visible`, id).Scan(&root, &rel, &converted)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, errNotFound
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("find video %d: %w", id, err)
+	}
+	if converted.Valid {
+		return filepath.Join(convertedDir, filepath.Base(converted.String)), true, nil
+	}
+	return filepath.Join(root, filepath.FromSlash(rel)), false, nil
 }
 
 // embeddedSubtitle is a subtitle inside a video file, with its copy.

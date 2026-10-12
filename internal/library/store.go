@@ -105,9 +105,9 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 				return err
 			}
 		case u.wasMissing:
-			// Same content back: read it, and look for the subtitles inside
-			// it, only if that never succeeded.
-			for _, k := range []jobs.Kind{jobs.Probe, jobs.Tracks} {
+			// Same content back: read it, look for the subtitles inside it
+			// and make its copy for the browsers, only if that never succeeded.
+			for _, k := range []jobs.Kind{jobs.Probe, jobs.Tracks, jobs.Convert} {
 				if err := jobs.Enqueue(ctx, tx, u.id, k, true, now); err != nil {
 					return err
 				}

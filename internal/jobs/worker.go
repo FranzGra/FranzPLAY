@@ -12,9 +12,8 @@ import (
 // Handler does one kind of job for one video.
 type Handler func(ctx context.Context, videoID int64) error
 
-// jobTimeout stops a job that takes far too long, like ffmpeg stuck on a
-// broken file. The longest real job (a cover of a long film) takes seconds.
-const jobTimeout = 10 * time.Minute
+// errGaveWay is why a job that gives way was stopped: other work arrived.
+var errGaveWay = errors.New("stopped to let other jobs run first")
 
 // idleCheck is how often the worker looks at the queue when nobody wakes it,
 // for example to retry a job whose waiting time is over.
@@ -112,16 +111,28 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	defer w.changed()
 
 	h := w.handlers[j.kind]
-	jobCtx, cancel := context.WithTimeout(ctx, jobTimeout)
+	yieldCtx, yield := context.WithCancelCause(ctx)
+	jobCtx, cancel := context.WithTimeout(yieldCtx, j.kind.timeout())
+	stopWatching := func() {}
+	if j.kind.givesWay() {
+		stopWatching = w.watchForOthers(jobCtx, yield)
+	}
 	start := time.Now()
 	runErr := h(jobCtx, j.videoID)
+	stopWatching()
 	cancel()
+	gaveWay := errors.Is(context.Cause(yieldCtx), errGaveWay)
+	yield(nil)
 
 	if ctx.Err() != nil {
 		// FranzPLAY is stopping: the job did not fail, it was interrupted.
 		// It stays "running" and is put back in the queue at the next start.
 		return true, nil //nolint:nilerr // an interrupted job is not a queue error
-
+	}
+	if gaveWay {
+		w.logger.InfoContext(ctx, "job paused for other work", "kind", j.kind, "video", j.videoID,
+			"after", time.Since(start).Round(time.Second))
+		return true, w.giveBack(ctx, j)
 	}
 	if runErr == nil {
 		w.logger.InfoContext(ctx, "job done", "kind", j.kind, "video", j.videoID,
@@ -136,10 +147,85 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	return true, w.finish(ctx, j, next, runAfter, runErr.Error())
 }
 
+// watchForOthers watches the queue while a job that gives way runs, and
+// stops it with errGaveWay as soon as another job is due. The returned
+// function ends the watch, and returns once it has ended.
+func (w *Worker) watchForOthers(ctx context.Context, stop context.CancelCauseFunc) func() {
+	quit := make(chan struct{})
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		ticker := time.NewTicker(idleCheck)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-quit:
+				return
+			case <-w.wake:
+			case <-ticker.C:
+			}
+			waiting, err := w.othersWaiting(ctx)
+			if err != nil {
+				if ctx.Err() == nil {
+					w.logger.ErrorContext(ctx, "job queue", "error", err)
+				}
+				continue
+			}
+			if waiting {
+				stop(errGaveWay)
+				return
+			}
+		}
+	}()
+	return func() {
+		close(quit)
+		<-ended
+	}
+}
+
+// othersWaiting reports whether a job that does not give way is due.
+func (w *Worker) othersWaiting(ctx context.Context) (bool, error) {
+	args := []any{w.now().Unix()}
+	placeholders := ""
+	for k := range w.handlers {
+		if k.givesWay() {
+			continue
+		}
+		if placeholders != "" {
+			placeholders += ", "
+		}
+		placeholders += "?"
+		args = append(args, string(k))
+	}
+	if placeholders == "" {
+		return false, nil
+	}
+	var waiting bool
+	err := w.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
+		WHERE state = 'pending' AND run_after <= ? AND kind IN (`+placeholders+`))`, args...).Scan(&waiting)
+	if err != nil {
+		return false, fmt.Errorf("look for waiting jobs: %w", err)
+	}
+	return waiting, nil
+}
+
+// giveBack puts a job that gave way back in the queue, as if it had not
+// started: it is not a failed attempt.
+func (w *Worker) giveBack(ctx context.Context, j job) error {
+	if _, err := w.db.ExecContext(ctx, `UPDATE jobs SET state = 'pending', updated_at = ?
+		WHERE id = ? AND state = 'running'`, w.now().Unix(), j.id); err != nil {
+		return fmt.Errorf("put back job %d: %w", j.id, err)
+	}
+	return nil
+}
+
 // claim takes the oldest due job of a kind this worker can do and marks it
 // running. Probes go first, since covers and previews need the duration
-// they find; then covers, which every page shows, then previews, and last
-// the subtitles inside the files, which mean reading the whole file.
+// they find; then covers, which every page shows, then previews, then the
+// subtitles inside the files, which mean reading the whole file, and last
+// the conversions, which can take hours.
 func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	kinds := make([]any, 0, len(w.handlers))
 	placeholders := ""
@@ -161,7 +247,8 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	err := w.db.QueryRowContext(ctx, `
 		SELECT id, video_id, kind, attempts FROM jobs
 		WHERE state = 'pending' AND run_after <= ? AND kind IN (`+placeholders+`)
-		ORDER BY CASE kind WHEN 'probe' THEN 0 WHEN 'cover' THEN 1 WHEN 'preview' THEN 2 ELSE 3 END, id
+		ORDER BY CASE kind WHEN 'probe' THEN 0 WHEN 'cover' THEN 1 WHEN 'preview' THEN 2
+			WHEN 'convert' THEN 4 ELSE 3 END, id
 		LIMIT 1`, args...).Scan(&j.id, &j.videoID, &kind, &j.attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return job{}, false, nil
