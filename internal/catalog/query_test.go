@@ -3,6 +3,8 @@ package catalog
 import (
 	"errors"
 	"net/url"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -15,6 +17,8 @@ func TestParseListQuery(t *testing.T) {
 		{"category=Viaggi&limit=10&offset=20", listQuery{category: "Viaggi", limit: 10, offset: 20}},
 		{"category=%20Corsi%20", listQuery{category: "Corsi", limit: defaultLimit}},
 		{"limit=200", listQuery{limit: 200}},
+		{"q=%20mare%20%20Rimini%20", listQuery{words: []string{"mare", "Rimini"}, limit: defaultLimit}},
+		{"q=%20%20", listQuery{limit: defaultLimit}},
 	}
 	for _, tt := range tests {
 		values, err := url.ParseQuery(tt.query)
@@ -26,14 +30,15 @@ func TestParseListQuery(t *testing.T) {
 			t.Errorf("%q: %v", tt.query, err)
 			continue
 		}
-		if got != tt.want {
+		if !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%q: got %+v, want %+v", tt.query, got, tt.want)
 		}
 	}
 }
 
 func TestParseListQueryRejects(t *testing.T) {
-	for _, query := range []string{"limit=0", "limit=201", "limit=abc", "offset=-1", "offset=x"} {
+	for _, query := range []string{"limit=0", "limit=201", "limit=abc", "offset=-1", "offset=x",
+		"q=" + strings.Repeat("a", maxSearchLen+1)} {
 		values, err := url.ParseQuery(query)
 		if err != nil {
 			t.Fatal(err)
@@ -78,6 +83,37 @@ func TestContentType(t *testing.T) {
 	for ext, want := range tests {
 		if got := contentType(ext); got != want {
 			t.Errorf("contentType(%q) = %q, want %q", ext, got, want)
+		}
+	}
+}
+
+func TestSearchWords(t *testing.T) {
+	tests := map[string][]string{
+		"":                      nil,
+		"   ":                   nil,
+		"mare":                  {"mare"},
+		" mare  Rimini ":        {"mare", "Rimini"},
+		"mare MARE Mare rimini": {"mare", "rimini"},
+		"a b c d e f g h i j k": {"a", "b", "c", "d", "e", "f", "g", "h"},
+		"città\tdi\nmare":       {"città", "di", "mare"},
+	}
+	for search, want := range tests {
+		if got := searchWords(search); !reflect.DeepEqual(got, want) {
+			t.Errorf("searchWords(%q) = %q, want %q", search, got, want)
+		}
+	}
+}
+
+func TestLikePattern(t *testing.T) {
+	tests := map[string]string{
+		"mare": "%mare%",
+		"50%":  `%50\%%`,
+		"a_b":  `%a\_b%`,
+		`c:\x`: `%c:\\x%`,
+	}
+	for word, want := range tests {
+		if got := likePattern(word); got != want {
+			t.Errorf("likePattern(%q) = %q, want %q", word, got, want)
 		}
 	}
 }

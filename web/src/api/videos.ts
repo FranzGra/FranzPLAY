@@ -101,6 +101,7 @@ export function parseCategories(data: unknown): Category[] {
 
 export type ListOptions = {
   category?: string;
+  q?: string; // search words
   limit?: number;
   offset?: number;
 };
@@ -108,6 +109,7 @@ export type ListOptions = {
 export async function fetchVideos(options: ListOptions, signal?: AbortSignal): Promise<VideoList> {
   const params = new URLSearchParams();
   if (options.category) params.set("category", options.category);
+  if (options.q) params.set("q", options.q);
   if (options.limit !== undefined) params.set("limit", String(options.limit));
   if (options.offset) params.set("offset", String(options.offset));
   const query = params.toString();

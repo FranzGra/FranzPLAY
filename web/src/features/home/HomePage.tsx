@@ -11,7 +11,7 @@ export function HomePage() {
   usePageTitle("");
   const [category, setCategory] = useState("");
   const categories = useCategories();
-  const { state, loadMore } = useVideoList(category);
+  const { state, loadMore } = useVideoList({ category });
 
   return (
     <>
