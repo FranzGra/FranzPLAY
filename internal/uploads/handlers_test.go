@@ -65,7 +65,7 @@ func newSite(t *testing.T) *site {
 		a, ok := ctx.Value(userKey{}).(users.Account)
 		return a, ok
 	}
-	service.OnAdded(func() { s.added++ })
+	service.OnChange(func() { s.added++ })
 	service.Routes(s.mux)
 	return s
 }

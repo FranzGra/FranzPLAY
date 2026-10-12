@@ -24,6 +24,7 @@ import { PlaylistPage } from "../features/playlists/PlaylistPage";
 import { PlaylistsPage } from "../features/playlists/PlaylistsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { SearchPage } from "../features/search/SearchPage";
+import { UploadPage } from "../features/upload/UploadPage";
 import { VideoPage } from "../features/video/VideoPage";
 import { AuthProvider, useAuth } from "./auth";
 import { Layout } from "./Layout";
@@ -74,6 +75,7 @@ function Pages() {
         <Route path="playlist" element={<PlaylistsPage />} />
         <Route path="playlist/:id" element={<PlaylistPage />} />
         <Route path="profilo" element={<ProfilePage />} />
+        <Route path="carica" element={<UploadPage />} />
         <Route path="canale/:id" element={<ChannelPage />} />
         <Route path="cerca" element={<SearchPage />} />
         <Route path="video/:id" element={<VideoPage />} />

@@ -214,7 +214,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	scanner.OnNewJobs(worker.Wake)
 	scanner.OnChange(func() { hub.Publish(events.Library) })
 	scanner.OnScanning(func(bool) { hub.Publish(events.Scan) })
-	uploader.OnAdded(func() { worker.Wake(); hub.Publish(events.Library) })
+	uploader.OnChange(func() { worker.Wake(); hub.Publish(events.Library) })
 
 	bgCtx, stopBackground := context.WithCancel(ctx)
 	var background sync.WaitGroup

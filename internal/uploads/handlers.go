@@ -19,7 +19,10 @@ const maxBody = 4 << 10
 //	PUT    /api/uploads/{id}?offset=N  the next piece, as raw bytes starting at byte N:
 //	                          the upload, with the new video's id after the last piece
 //	DELETE /api/uploads/{id}  stop an upload and throw away what arrived
+//
+// and the routes of my uploaded videos (videos.go).
 func (s *Service) Routes(mux *http.ServeMux) {
+	s.videoRoutes(mux)
 	mux.HandleFunc("GET /api/uploads", s.handleMine)
 	mux.HandleFunc("POST /api/uploads", s.handleStart)
 	mux.HandleFunc("PUT /api/uploads/{id}", s.handlePiece)

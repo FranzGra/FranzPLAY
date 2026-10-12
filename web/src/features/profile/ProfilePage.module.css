@@ -37,6 +37,11 @@
   cursor: pointer;
 }
 
+.upload:hover {
+  color: var(--color-on-accent);
+  filter: brightness(1.08);
+}
+
 .upload:disabled {
   opacity: 0.45;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);

@@ -48,9 +48,10 @@ type Service struct {
 	// account returns the logged-in person: users.FromContext, replaced
 	// only in tests.
 	account func(context.Context) (users.Account, bool)
-	// added is called when a new video is in the catalog, usually to wake
-	// the job worker and tell the open pages.
-	added func()
+	// changed is called when the catalog has a new video, or one of the
+	// uploaded videos changed: usually it wakes the job worker and tells
+	// the open pages.
+	changed func()
 
 	mu   sync.Mutex
 	busy map[int64]bool // uploads receiving a piece right now
@@ -71,12 +72,13 @@ func NewService(db *sql.DB, dataDir string, logger *slog.Logger) (*Service, erro
 	}
 	return &Service{
 		store: store{db: db}, folder: folder, incoming: incoming, logger: logger,
-		now: time.Now, account: users.FromContext, added: func() {}, busy: map[int64]bool{},
+		now: time.Now, account: users.FromContext, changed: func() {}, busy: map[int64]bool{},
 	}, nil
 }
 
-// OnAdded sets what to call when an upload becomes a video.
-func (s *Service) OnAdded(f func()) { s.added = f }
+// OnChange sets what to call when an upload becomes a video, or an
+// uploaded video changes.
+func (s *Service) OnChange(f func()) { s.changed = f }
 
 // partName is the file of an upload still arriving, inside incoming/.
 func partName(id int64) string { return strconv.FormatInt(id, 10) + ".part" }
@@ -149,7 +151,7 @@ func (s *Service) receive(ctx context.Context, user, id, offset, length int64, b
 		return upload{}, err
 	}
 	u.Video = video
-	s.added()
+	s.changed()
 	return u, nil
 }
 

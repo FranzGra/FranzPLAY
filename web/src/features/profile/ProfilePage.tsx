@@ -53,13 +53,22 @@ export function ProfilePage() {
         <p className={styles.role}>{account.role === "admin" ? "Amministratore" : "Utente"}</p>
       </ProfilePhoto>
 
-      <button type="button" className={styles.upload} disabled aria-describedby="upload-hint">
-        <Icon name="upload" size={20} />
-        Carica un video
-      </button>
-      <p id="upload-hint" className={styles.hint}>
-        Il caricamento dei video arriverà in una prossima versione.
-      </p>
+      {account.canUpload ? (
+        <Link to="/carica" className={styles.upload}>
+          <Icon name="upload" size={20} />
+          Carica un video
+        </Link>
+      ) : (
+        <>
+          <button type="button" className={styles.upload} disabled aria-describedby="upload-hint">
+            <Icon name="upload" size={20} />
+            Carica un video
+          </button>
+          <p id="upload-hint" className={styles.hint}>
+            Per caricare video serve il permesso dell'amministratore.
+          </p>
+        </>
+      )}
 
       <nav className={`glass ${styles.rows}`} aria-label="Le tue pagine">
         {[...rows(account.id), ...(account.role === "admin" ? adminRows : [])].map((row) => (
