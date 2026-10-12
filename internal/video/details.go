@@ -122,8 +122,14 @@ func cut(s string, n int) string {
 // is not a real day between 1900 and 2100 becomes "".
 func compactDate(s string) string {
 	t, err := time.Parse("20060102", s)
-	if err != nil || t.Year() < 1900 || t.Year() > 2100 {
+	if err != nil || !sensibleYear(t) {
 		return ""
 	}
 	return t.Format(time.DateOnly)
+}
+
+// sensibleYear says if a day from a file is between 1900 and 2100:
+// anything else is a mistake in the file.
+func sensibleYear(t time.Time) bool {
+	return t.Year() >= 1900 && t.Year() <= 2100
 }

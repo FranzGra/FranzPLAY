@@ -16,7 +16,7 @@ import (
 )
 
 // Detailer reads the files next to the videos that say what they are,
-// like the .info.json yt-dlp writes. It only reads: nothing is written
+// like the .info.json yt-dlp writes or the .nfo of Kodi and Jellyfin. It only reads: nothing is written
 // next to the videos (rule 1).
 type Detailer struct {
 	db *sql.DB
@@ -50,14 +50,38 @@ func (d *Detailer) Handle(ctx context.Context, videoID int64) error {
 	return nil
 }
 
-// errDetailsTooBig means a details file is far bigger than yt-dlp writes.
+// errDetailsTooBig means a details file is far bigger than one should be.
 var errDetailsTooBig = errors.New("details file too big")
 
-// readDetails reads the details file next to a video file; no file means
+// detailsFiles are the files next to a video that say what it is, best
+// first: what the first one knows wins, the others fill the gaps.
+var detailsFiles = []struct {
+	suffix  string
+	maxSize int
+	parse   func([]byte) (video.Details, error)
+}{
+	{video.InfoJSONSuffix, video.MaxInfoJSONSize, video.ParseInfoJSON}, // yt-dlp
+	{video.NFOSuffix, video.MaxNFOSize, video.ParseNFO},                // Kodi and Jellyfin
+}
+
+// readDetails reads the details files next to a video file; no file means
 // no details. A file that cannot be understood is a permanent failure:
 // trying again would read the same file.
 func readDetails(videoFile string) (video.Details, error) {
-	name := strings.TrimSuffix(videoFile, filepath.Ext(videoFile)) + video.InfoJSONSuffix
+	base := strings.TrimSuffix(videoFile, filepath.Ext(videoFile))
+	var all video.Details
+	for _, f := range detailsFiles {
+		details, err := readDetailsFile(base+f.suffix, f.maxSize, f.parse)
+		if err != nil {
+			return video.Details{}, err
+		}
+		all = all.Or(details)
+	}
+	return all, nil
+}
+
+// readDetailsFile reads one details file, if it is there.
+func readDetailsFile(name string, maxSize int, parse func([]byte) (video.Details, error)) (video.Details, error) {
 	f, err := os.Open(name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return video.Details{}, nil
@@ -65,15 +89,15 @@ func readDetails(videoFile string) (video.Details, error) {
 	if err != nil {
 		return video.Details{}, err
 	}
-	data, err := io.ReadAll(io.LimitReader(f, video.MaxInfoJSONSize+1))
+	data, err := io.ReadAll(io.LimitReader(f, int64(maxSize)+1))
 	err = errors.Join(err, f.Close())
 	if err != nil {
 		return video.Details{}, err
 	}
-	if len(data) > video.MaxInfoJSONSize {
+	if len(data) > maxSize {
 		return video.Details{}, fmt.Errorf("%s: %w: %w", filepath.Base(name), errDetailsTooBig, jobs.ErrPermanent)
 	}
-	details, err := video.ParseInfoJSON(data)
+	details, err := parse(data)
 	if err != nil {
 		return video.Details{}, fmt.Errorf("%s: %w: %w", filepath.Base(name), err, jobs.ErrPermanent)
 	}

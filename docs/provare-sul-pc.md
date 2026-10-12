@@ -272,6 +272,10 @@ il **giorno** e la **descrizione**. Lo vedi in Amministrazione › Lavori come �
 accanto». Se aggiungi o cambi il file `.info.json` dopo, premi **Rifai copertina** sul video in
 Amministrazione › Video: oltre alla copertina rilegge tutto.
 
+Lo stesso vale per i file **`.nfo`** di Kodi e Jellyfin (`viaggio.mkv` e `viaggio.nfo`): FranzPLAY
+ne prende titolo, trama, autore e giorno. Se accanto a un video ci sono tutti e due i file, conta
+prima il `.info.json`, e il `.nfo` aggiunge solo quello che manca.
+
 **Video consigliati.** Accanto al player, in **Da guardare dopo**, FranzPLAY propone i video più
 simili a quello che stai guardando, e sotto ognuno dice perché: «Visto da chi ha visto questo»
 (qualcun altro ha guardato tutti e due), «Anche questo in Vacanze» (stessa categoria) o «Titolo

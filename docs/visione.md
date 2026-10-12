@@ -264,7 +264,8 @@ Ogni fonte è un **"fornitore"** intercambiabile: aggiungerne una nuova non deve
 programma. ❓ Quali fonti e in che ordine lo decidiamo quando arriviamo alla tappa 3.
 
 ✅ **Fatto (12/10/2026)**: la fonte 1, il file `.info.json` di yt-dlp accanto al video (titolo,
-descrizione, autore, giorno). Decisione in `docs/decisioni/0009-informazioni-dai-file.md`.
+descrizione, autore, giorno), e i file `.nfo` di Kodi e Jellyfin. Decisione in
+`docs/decisioni/0009-informazioni-dai-file.md`.
 
 ---
 
