@@ -121,7 +121,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
   ].filter(Boolean);
 
   return (
-    <div className={styles.root}>
+    <div className={video.private ? `${styles.root} ${styles.alone}` : styles.root}>
       <div className={styles.main}>
         <Player
           key={video.id}
@@ -129,7 +129,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           poster={video.cover}
           subtitles={subtitles}
           startAt={startAt}
-          onPosition={remember}
+          onPosition={video.private ? undefined : remember}
           preview={video.preview}
           audio={audio}
           findAudio={findAudio}
@@ -151,23 +151,36 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           )}
           {details.join(" · ")}
         </p>
-        <div className={styles.actions}>
-          <LikeButton videoId={video.id} />
-          <SaveButton videoId={video.id} />
-          <ShareButton title={video.title} path={`/video/${video.id}`} />
-        </div>
+        {video.private ? (
+          // Nobody else sees it: likes, playlists, sharing and comments
+          // would only lead others to a page that does not open.
+          <p className={`glass ${styles.private}`}>
+            Solo tu vedi questo video. Per farlo vedere a tutti, cambialo da «I tuoi video» nella
+            pagina <Link to="/carica">Carica un video</Link>.
+          </p>
+        ) : (
+          <div className={styles.actions}>
+            <LikeButton videoId={video.id} />
+            <SaveButton videoId={video.id} />
+            <ShareButton title={video.title} path={`/video/${video.id}`} />
+          </div>
+        )}
         {video.description && (
           <div className={styles.below}>
             <Description text={video.description} />
           </div>
         )}
-        <div className={styles.below}>
-          <Comments key={video.id} videoId={video.id} />
-        </div>
+        {!video.private && (
+          <div className={styles.below}>
+            <Comments key={video.id} videoId={video.id} />
+          </div>
+        )}
       </div>
-      <aside className={styles.side} aria-label="Altri video">
-        <UpNext video={video} now={now} />
-      </aside>
+      {!video.private && (
+        <aside className={styles.side} aria-label="Altri video">
+          <UpNext video={video} now={now} />
+        </aside>
+      )}
     </div>
   );
 }

@@ -193,6 +193,7 @@ function NewUpload({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [isPrivate, setPrivate] = useState(false);
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState("");
 
@@ -223,7 +224,7 @@ function NewUpload({
     }
     setStarting(true);
     setProblem("");
-    startUpload(file, title.trim())
+    startUpload(file, title.trim(), isPrivate)
       .then((upload) => onReady(file, upload))
       .catch((error: unknown) => {
         console.error(error);
@@ -251,6 +252,7 @@ function NewUpload({
           <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
         </label>
       )}
+      {file && <WhoSees isPrivate={isPrivate} onChange={setPrivate} />}
       {problem && (
         <p role="alert" className={styles.problem}>
           {problem}
@@ -260,6 +262,36 @@ function NewUpload({
         Carica
       </button>
     </form>
+  );
+}
+
+// WhoSees chooses who will see the new video: everybody, or only me.
+function WhoSees({
+  isPrivate,
+  onChange,
+}: {
+  isPrivate: boolean;
+  onChange: (isPrivate: boolean) => void;
+}) {
+  return (
+    <fieldset className={styles.who}>
+      <legend>Chi può vederlo</legend>
+      <div className={styles.choices}>
+        <label className={styles.choice}>
+          <input type="radio" name="who" checked={!isPrivate} onChange={() => onChange(false)} />
+          Tutti
+        </label>
+        <label className={styles.choice}>
+          <input type="radio" name="who" checked={isPrivate} onChange={() => onChange(true)} />
+          Solo io
+        </label>
+      </div>
+      <p className={styles.note}>
+        {isPrivate
+          ? "Non compare nelle liste di nessuno: lo apri da «I tuoi video». Puoi cambiare idea dopo."
+          : "Compare nella Home di tutti quelli che usano FranzPLAY."}
+      </p>
+    </fieldset>
   );
 }
 

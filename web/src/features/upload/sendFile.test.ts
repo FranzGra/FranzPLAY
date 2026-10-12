@@ -8,7 +8,14 @@ const json = (body: unknown, status = 200) =>
 // pretendServer keeps one upload and answers like the real server. trouble
 // decides, for each piece, whether something goes wrong instead.
 function pretendServer(size: number, trouble: (call: number) => "drop" | "cut" | "busy" | null) {
-  const upload: Upload = { id: 4, name: "mare.mp4", title: "Al mare", size, received: 0 };
+  const upload: Upload = {
+    id: 4,
+    name: "mare.mp4",
+    title: "Al mare",
+    size,
+    received: 0,
+    private: false,
+  };
   let bytes = "";
   let calls = 0;
   const server = fakeServer({
@@ -115,7 +122,7 @@ describe("sendFile", () => {
 
   it("stops at once when the video is already there", async () => {
     const server = fakeServer({ "PUT /api/uploads/4": () => json({ error: alreadyThere }, 409) });
-    const upload = { id: 4, name: "a.mp4", title: "a", size: 3, received: 0 };
+    const upload = { id: 4, name: "a.mp4", title: "a", size: 3, received: 0, private: false };
     await expect(
       sendFile(new Blob(["abc"]), upload, {
         signal: new AbortController().signal,
@@ -131,7 +138,7 @@ describe("sendFile", () => {
       "PUT /api/uploads/4": () => json({ error: "receive upload: disk full" }, 500),
       "GET /api/uploads": () => json({ space: { quota: 1, used: 0, reserved: 0 }, uploads: [] }),
     });
-    const upload = { id: 4, name: "a.mp4", title: "a", size: 3, received: 0 };
+    const upload = { id: 4, name: "a.mp4", title: "a", size: 3, received: 0, private: false };
     await expect(
       sendFile(new Blob(["abc"]), upload, {
         signal: new AbortController().signal,

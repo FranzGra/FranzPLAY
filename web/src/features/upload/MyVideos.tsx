@@ -1,14 +1,14 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ApiError } from "../../api/client";
-import { deleteMyVideo, fetchMyVideos, type MyVideo, renameMyVideo } from "../../api/myVideos";
+import { changeMyVideo, deleteMyVideo, fetchMyVideos, type MyVideo } from "../../api/myVideos";
 import { formatBytes, formatDate } from "../../lib/format";
 import styles from "./MyVideos.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; videos: MyVideo[] };
 
-// MyVideos lists the videos I uploaded, with a new title or a delete for
-// each. version changes when a new one arrives, to read the list again.
+// MyVideos lists the videos I uploaded, with a new title, who sees it or a
+// delete for each. version changes when a new one arrives, to read the list again.
 export function MyVideos({ version, onChange }: { version: number; onChange: () => void }) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -52,13 +52,14 @@ export function MyVideos({ version, onChange }: { version: number; onChange: () 
       <h2 className={styles.heading}>I tuoi video</h2>
       {state.videos.length === 0 ? (
         <p className={styles.note}>
-          Qui compariranno i video che carichi, con il tasto per cambiare titolo o eliminarli.
+          Qui compariranno i video che carichi, con i tasti per cambiare titolo, decidere chi li
+          vede o eliminarli.
         </p>
       ) : (
         <ul className={styles.list}>
           {state.videos.map((video) => (
             <li key={video.id}>
-              <VideoRow video={video} onRenamed={replace} onDeleted={() => remove(video.id)} />
+              <VideoRow video={video} onChanged={replace} onDeleted={() => remove(video.id)} />
             </li>
           ))}
         </ul>
@@ -69,11 +70,11 @@ export function MyVideos({ version, onChange }: { version: number; onChange: () 
 
 function VideoRow({
   video,
-  onRenamed,
+  onChanged,
   onDeleted,
 }: {
   video: MyVideo;
-  onRenamed: (video: MyVideo) => void;
+  onChanged: (video: MyVideo) => void;
   onDeleted: () => void;
 }) {
   const [asking, setAsking] = useState<"nothing" | "title" | "delete">("nothing");
@@ -100,7 +101,7 @@ function VideoRow({
       return;
     }
     run(async () => {
-      onRenamed(await renameMyVideo(video.id, clean));
+      onChanged(await changeMyVideo(video.id, { title: clean }));
       setAsking("nothing");
     });
   };
@@ -116,6 +117,7 @@ function VideoRow({
         </Link>
         <p className={styles.note}>
           {formatDate(video.addedAt)} · {formatBytes(video.size)}
+          {video.private ? " · solo tu lo vedi" : " · lo vedono tutti"}
           {video.hidden && " · nascosto dall'amministratore"}
         </p>
 
@@ -182,6 +184,18 @@ function VideoRow({
               onClick={() => setAsking("title")}
             >
               Cambia titolo
+            </button>
+            <button
+              type="button"
+              className={`glass ${styles.action}`}
+              disabled={busy}
+              onClick={() =>
+                run(async () =>
+                  onChanged(await changeMyVideo(video.id, { private: !video.private })),
+                )
+              }
+            >
+              {video.private ? "Fallo vedere a tutti" : "Tienilo solo per te"}
             </button>
             <button
               type="button"

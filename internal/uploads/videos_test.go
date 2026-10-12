@@ -57,7 +57,7 @@ func TestRenameMyVideo(t *testing.T) {
 	}{
 		"empty":         {giulia, `{"title":" "}`, http.StatusBadRequest},
 		"too long":      {giulia, `{"title":"` + strings.Repeat("a", 201) + `"}`, http.StatusBadRequest},
-		"unknown field": {giulia, `{"title":"a","private":true}`, http.StatusBadRequest},
+		"unknown field": {giulia, `{"title":"a","hidden":true}`, http.StatusBadRequest},
 		"someone else":  {marco, `{"title":"Mio"}`, http.StatusNotFound},
 	} {
 		if rec := s.do(t, tc.who, "PUT", videoPath(id), strings.NewReader(tc.body)); rec.Code != tc.want {
@@ -71,6 +71,41 @@ func TestRenameMyVideo(t *testing.T) {
 	if title != "Al mare" {
 		t.Errorf("title is %q after refused changes", title)
 	}
+}
+
+func TestPrivateVideo(t *testing.T) {
+	s := newSite(t)
+	body := strings.NewReader(`{"name":"mare.mp4","size":3,"private":true}`)
+	u := decode[upload](t, s.do(t, giulia, "POST", "/api/uploads", body))
+	if !u.Private {
+		t.Fatalf("upload = %+v, want private", u)
+	}
+	id := decode[upload](t, s.piece(t, giulia, u.ID, 0, "sea")).Video
+	state := func() (private, visible bool) {
+		t.Helper()
+		if err := s.db.QueryRow(`SELECT private, visible FROM videos WHERE id = ?`, id).
+			Scan(&private, &visible); err != nil {
+			t.Fatal(err)
+		}
+		return private, visible
+	}
+	if private, visible := state(); !private || visible {
+		t.Errorf("new video: private %v, visible %v; want only Giulia to see it", private, visible)
+	}
+	if list := decode[[]myVideo](t, s.do(t, giulia, "GET", "/api/uploads/videos", nil)); !list[0].Private {
+		t.Errorf("my videos = %+v", list)
+	}
+
+	// For everybody, keeping the title.
+	rec := s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"private":false}`))
+	expect(t, rec, http.StatusOK)
+	if v := decode[myVideo](t, rec); v.Private || v.Title != "mare" {
+		t.Errorf("changed = %+v", v)
+	}
+	if private, visible := state(); private || !visible {
+		t.Errorf("after the change: private %v, visible %v", private, visible)
+	}
+	expect(t, s.do(t, marco, "PUT", videoPath(id), strings.NewReader(`{"private":true}`)), http.StatusNotFound)
 }
 
 func TestDeleteMyVideo(t *testing.T) {

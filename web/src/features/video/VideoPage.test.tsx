@@ -59,6 +59,24 @@ describe("video page", () => {
     );
   });
 
+  it("keeps a private video to its uploader: no likes, comments or suggestions", async () => {
+    const { server } = renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON({ private: true }) },
+    });
+    expect(await screen.findByText(/Solo tu vedi questo video/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Carica un video" })).toHaveAttribute(
+      "href",
+      "/carica",
+    );
+    expect(screen.queryByRole("button", { name: /Mi piace/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Altri video" })).not.toBeInTheDocument();
+    const asked = server.requests.map((r) => new URL(r.url).pathname);
+    for (const part of ["/like", "/comments", "/similar"]) {
+      expect(asked.some((p) => p.endsWith(part))).toBe(false);
+    }
+  });
+
   it("shows no description box when there is none", async () => {
     renderApp("/video/7", { ...signedIn(), "GET /api/videos/7": { body: videoJSON() } });
     expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();

@@ -74,6 +74,8 @@ type newUpload struct {
 	Name  string `json:"name"`  // the file name on their computer
 	Title string `json:"title"` // "" = from the file name
 	Size  int64  `json:"size"`  // bytes
+	// Private: only the person who uploads it will see the video.
+	Private bool `json:"private"`
 }
 
 // check decides whether a person may start an upload, given their space
@@ -106,7 +108,7 @@ func check(a users.Account, req newUpload, space Space, waiting int) (newUpload,
 	case req.Size > space.Free():
 		return newUpload{}, errNoSpace
 	}
-	return newUpload{Name: name, Title: title, Size: req.Size}, nil
+	return newUpload{Name: name, Title: title, Size: req.Size, Private: req.Private}, nil
 }
 
 // cleanText reports whether s is valid text of 1 to most characters,

@@ -5,6 +5,11 @@
   align-items: start;
 }
 
+/* A private video suggests nothing else: the player takes the whole width. */
+.alone {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .placeholder {
   aspect-ratio: 16 / 9;
   max-width: 816px;
@@ -25,6 +30,19 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+.private {
+  margin: 12px 0 0;
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.private a {
+  color: var(--color-text);
+  text-decoration: underline;
 }
 
 .actions {

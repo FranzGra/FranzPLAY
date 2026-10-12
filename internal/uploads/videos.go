@@ -16,7 +16,7 @@ import (
 )
 
 // This file is about the videos a person uploaded: their list, a new
-// title, and taking one away.
+// title, who sees them, and taking one away.
 
 var errVideoNotFound = errors.New("video not found")
 
@@ -26,18 +26,19 @@ type myVideo struct {
 	Title   string    `json:"title"`
 	Size    int64     `json:"size"` // bytes
 	AddedAt time.Time `json:"addedAt"`
-	Cover   *string   `json:"cover"`  // address of the image; null = none yet
-	Hidden  bool      `json:"hidden"` // hidden by an administrator
+	Cover   *string   `json:"cover"`   // address of the image; null = none yet
+	Hidden  bool      `json:"hidden"`  // hidden by an administrator
+	Private bool      `json:"private"` // only the uploader sees it
 }
 
 // videoRoutes adds the routes of my uploaded videos to mux:
 //
 //	GET    /api/uploads/videos       my uploaded videos, the newest first
-//	PUT    /api/uploads/videos/{id}  a new title {title}
+//	PUT    /api/uploads/videos/{id}  a new title or who sees it {title?, private?}
 //	DELETE /api/uploads/videos/{id}  take it away from FranzPLAY, file included
 func (s *Service) videoRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/uploads/videos", s.handleMyVideos)
-	mux.HandleFunc("PUT /api/uploads/videos/{id}", s.handleRename)
+	mux.HandleFunc("PUT /api/uploads/videos/{id}", s.handleChange)
 	mux.HandleFunc("DELETE /api/uploads/videos/{id}", s.handleDeleteVideo)
 }
 
@@ -55,11 +56,13 @@ func (s *Service) handleMyVideos(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, r, s.logger, http.StatusOK, list)
 }
 
-type renameRequest struct {
-	Title string `json:"title"`
+// changeRequest changes one of my videos; a missing field stays as it is.
+type changeRequest struct {
+	Title   *string `json:"title"`
+	Private *bool   `json:"private"`
 }
 
-func (s *Service) handleRename(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleChange(w http.ResponseWriter, r *http.Request) {
 	a, ok := s.account(r.Context())
 	if !ok {
 		respond.Error(w, r, s.logger, http.StatusUnauthorized, "login required")
@@ -69,19 +72,22 @@ func (s *Service) handleRename(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req renameRequest
+	var req changeRequest
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
 		respond.Error(w, r, s.logger, http.StatusBadRequest, "the request is not valid JSON")
 		return
 	}
-	title := strings.TrimSpace(req.Title)
-	if !cleanText(title, maxTitle) {
-		respond.Error(w, r, s.logger, http.StatusBadRequest, errBadTitle.Error())
-		return
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if !cleanText(title, maxTitle) {
+			respond.Error(w, r, s.logger, http.StatusBadRequest, errBadTitle.Error())
+			return
+		}
+		req.Title = &title
 	}
-	v, err := s.store.rename(r.Context(), a.ID, id, title)
+	v, err := s.store.change(r.Context(), a.ID, id, req)
 	if errors.Is(err, errVideoNotFound) {
 		respond.Error(w, r, s.logger, http.StatusNotFound, err.Error())
 		return
@@ -90,7 +96,7 @@ func (s *Service) handleRename(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, s.logger, err)
 		return
 	}
-	s.changed() // the lists show the new title
+	s.changed() // the lists show the change
 	respond.JSON(w, r, s.logger, http.StatusOK, v)
 }
 
@@ -118,13 +124,13 @@ func (s *Service) handleDeleteVideo(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-const myVideoColumns = `id, shown_title, size, added_at, cover, hidden_at IS NOT NULL`
+const myVideoColumns = `id, shown_title, size, added_at, cover, hidden_at IS NOT NULL, private`
 
 func scanMyVideo(row rowScanner) (myVideo, error) {
 	var v myVideo
 	var added int64
 	var cover sql.NullString
-	if err := row.Scan(&v.ID, &v.Title, &v.Size, &added, &cover, &v.Hidden); err != nil {
+	if err := row.Scan(&v.ID, &v.Title, &v.Size, &added, &cover, &v.Hidden, &v.Private); err != nil {
 		return myVideo{}, err
 	}
 	v.AddedAt = time.Unix(added, 0).UTC()
@@ -157,16 +163,18 @@ func (s store) myVideos(ctx context.Context, user int64) (_ []myVideo, err error
 	return out, rows.Err()
 }
 
-// rename gives one of a person's videos a new title.
-func (s store) rename(ctx context.Context, user, id int64, title string) (myVideo, error) {
-	v, err := scanMyVideo(s.db.QueryRowContext(ctx, `UPDATE videos SET title = ?
+// change gives one of a person's videos a new title, or changes who sees
+// it. The title of req is already clean.
+func (s store) change(ctx context.Context, user, id int64, req changeRequest) (myVideo, error) {
+	v, err := scanMyVideo(s.db.QueryRowContext(ctx, `UPDATE videos
+		SET title = coalesce(?, title), private = coalesce(?, private)
 		WHERE id = ? AND uploaded_by = ? AND missing_since IS NULL
-		RETURNING `+myVideoColumns, title, id, user))
+		RETURNING `+myVideoColumns, req.Title, req.Private, id, user))
 	if errors.Is(err, sql.ErrNoRows) {
 		return myVideo{}, errVideoNotFound
 	}
 	if err != nil {
-		return myVideo{}, fmt.Errorf("rename video %d: %w", id, err)
+		return myVideo{}, fmt.Errorf("change video %d: %w", id, err)
 	}
 	return v, nil
 }

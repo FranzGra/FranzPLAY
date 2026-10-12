@@ -7,6 +7,7 @@ const video = {
   addedAt: "2026-10-12T20:00:00Z",
   cover: null,
   hidden: false,
+  private: false,
 };
 
 describe("parseMyVideo", () => {
@@ -22,6 +23,7 @@ describe("parseMyVideo", () => {
     ["bad date", { ...video, addedAt: "ieri" }],
     ["bad cover", { ...video, cover: 3 }],
     ["no hidden", { ...video, hidden: undefined }],
+    ["no private", { ...video, private: "no" }],
   ])("rejects %s", (_label, data) => {
     expect(() => parseMyVideo(data)).toThrow();
   });

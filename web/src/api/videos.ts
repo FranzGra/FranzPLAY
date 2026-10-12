@@ -16,6 +16,7 @@ export type Video = {
   clip: string | null; // address of the seconds that play on the card; null = none yet
   format: string; // the kind of file, from its name: "MP4", "MKV"; "" = none
   likes: number; // how many people like it
+  private: boolean; // only the person who uploaded it sees it
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
@@ -108,6 +109,9 @@ export function parseVideo(data: unknown): Video {
   if (typeof v.format !== "string" || !/^[A-Z0-9]{0,10}$/.test(v.format)) {
     throw new Error("video format: not a kind of file");
   }
+  if (typeof v.private !== "boolean") {
+    throw new Error("video private: not true or false");
+  }
   if (typeof v.author !== "string") {
     throw new Error("video author: not text");
   }
@@ -132,6 +136,7 @@ export function parseVideo(data: unknown): Video {
     clip: v.clip,
     format: v.format,
     likes: count(v.likes, "video likes"),
+    private: v.private,
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",
