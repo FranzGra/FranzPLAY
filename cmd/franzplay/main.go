@@ -126,6 +126,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	scanner := library.NewScanner(db, cfg.Libraries, logger)
 	scanner.OnNewJobs(worker.Wake)
 	scanner.OnChange(func() { hub.Publish(events.Library) })
+	scanner.OnScanning(func(bool) { hub.Publish(events.Scan) })
 
 	bgCtx, stopBackground := context.WithCancel(ctx)
 	var background sync.WaitGroup
@@ -148,6 +149,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		comments.Routes(db, logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
 		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
+		scanner.Routes(scanInterval, logger),
 		hub.Routes(logger),
 	)
 

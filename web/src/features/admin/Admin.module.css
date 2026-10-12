@@ -325,3 +325,31 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+.path {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
+.bad {
+  margin: 8px 0 0;
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.good {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.lastCheck {
+  margin-top: 24px;
+}
+
+.lastCheck p {
+  margin: 0;
+}
+
+.lastCheck p + p {
+  margin-top: 4px;
+}
