@@ -138,3 +138,9 @@ export async function changePassword(current: string, next: string): Promise<voi
 export async function rename(name: string): Promise<Account> {
   return parseAccount(await request("/api/me/name", { method: "PUT", body: { name } }));
 }
+
+// deleteMe removes my account and everything of mine, after checking my
+// password once more.
+export async function deleteMe(password: string): Promise<void> {
+  await request("/api/me", { method: "DELETE", body: { password } });
+}

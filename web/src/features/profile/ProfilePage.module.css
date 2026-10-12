@@ -175,3 +175,47 @@
   font-size: 13px;
   color: var(--color-text-muted);
 }
+
+.danger {
+  align-self: flex-start;
+  height: var(--touch);
+  padding: 0 20px;
+  border: 1px solid var(--color-danger-bg);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.danger:hover {
+  background: var(--color-danger-bg);
+}
+
+.dangerForm {
+  border-color: var(--color-danger-bg);
+}
+
+.dangerText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dangerSave {
+  height: var(--touch);
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger-strong);
+  color: var(--color-on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dangerSave:disabled {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  cursor: default;
+}

@@ -124,6 +124,46 @@ describe("profile page", () => {
     expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
   });
 
+  it("deletes my account after asking for the password", async () => {
+    const { user, server } = renderApp("/profilo", {
+      ...signedIn({ ...testAccount, role: "user" }),
+      "DELETE /api/me": { status: 204 },
+    });
+    await user.click(await screen.findByRole("button", { name: "Elimina il mio account" }));
+    const form = screen.getByRole("form", { name: "Elimina il mio account" });
+    expect(form).toHaveTextContent("Non si può tornare indietro");
+    const confirm = within(form).getByRole("button", { name: "Elimina per sempre" });
+    expect(confirm).toBeDisabled();
+    await user.type(within(form).getByLabelText(/password per confermare/), "la-mia-password");
+    await user.click(confirm);
+    expect(await screen.findByRole("heading", { name: "Accedi a FranzPLAY" })).toBeInTheDocument();
+    const sent = server.requests.at(-1);
+    expect(sent?.method).toBe("DELETE");
+    expect(await sent?.json()).toEqual({ password: "la-mia-password" });
+  });
+
+  it("keeps the account when the password is wrong or I am the last administrator", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let status = 403;
+    const { user } = renderApp("/profilo", {
+      ...signedIn(),
+      "DELETE /api/me": () =>
+        new Response(JSON.stringify({ error: "no" }), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+    });
+    await user.click(await screen.findByRole("button", { name: "Elimina il mio account" }));
+    await user.type(screen.getByLabelText(/password per confermare/), "sbagliata");
+    await user.click(screen.getByRole("button", { name: "Elimina per sempre" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("La password non è giusta.");
+
+    status = 409;
+    await user.click(screen.getByRole("button", { name: "Elimina per sempre" }));
+    expect(await screen.findByText(/unico amministratore/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+  });
+
   it("shows the server version", async () => {
     renderApp("/profilo", {
       ...signedIn(),
