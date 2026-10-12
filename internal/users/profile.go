@@ -13,7 +13,7 @@ import (
 // rename changes a user's own name. The name is also the one used to log
 // in, so it follows the same rules as a new user's and must be free.
 func (s *Service) rename(ctx context.Context, a Account, name string) (Account, error) {
-	clean, err := cleanName(name)
+	clean, err := CleanName(name)
 	if err != nil {
 		return Account{}, err
 	}
@@ -27,7 +27,7 @@ func (s *Service) rename(ctx context.Context, a Account, name string) (Account, 
 
 // setAccentColor changes the color a user chose for the interface.
 func (s *Service) setAccentColor(ctx context.Context, a Account, color string) (Account, error) {
-	c, err := parseColor(color)
+	c, err := ParseColor(color)
 	if err != nil {
 		return Account{}, err
 	}

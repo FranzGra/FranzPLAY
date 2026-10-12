@@ -12,9 +12,9 @@ type Color string
 // errBadColor means a color is not written as "#rrggbb".
 var errBadColor = errors.New(`the color must be written as "#rrggbb", or be empty for FranzPLAY's own`)
 
-// parseColor checks a color that comes from outside: "#RRGGBB" in big or
+// ParseColor checks a color that comes from outside: "#RRGGBB" in big or
 // small letters, or "" to go back to FranzPLAY's own.
-func parseColor(s string) (Color, error) {
+func ParseColor(s string) (Color, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if s == "" {
 		return "", nil

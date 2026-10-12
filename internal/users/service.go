@@ -134,7 +134,7 @@ func (s *Service) setup(ctx context.Context, code, name, password string) (Accou
 
 // create checks and adds a user.
 func (s *Service) create(ctx context.Context, name, password string, role Role, canUpload, first bool) (Account, error) {
-	clean, err := cleanName(name)
+	clean, err := CleanName(name)
 	if err != nil {
 		return Account{}, err
 	}

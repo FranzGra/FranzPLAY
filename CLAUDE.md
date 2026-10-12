@@ -68,10 +68,11 @@ internal/uploads/   video caricati dal browser, a pezzi, nella cartella dati
 internal/online/    fonti su internet (YouTube, TMDB, ThePornDB) per copertine e titoli, spente se l'admin non le accende
 internal/recommend/ i video consigliati: regole semplici a punti, ognuna col suo perché
 internal/translate/ traduce i sottotitoli con un server LibreTranslate, se l'admin ne indica uno
+internal/oldimport/ porta i dati del vecchio FranzPLAY da una copia .sql del suo database (`franzplay import-old`)
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
 internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)
-docs/               visione, decisioni (docs/decisioni/) e guida per provare sul PC
+docs/               visione, decisioni (docs/decisioni/), guida per provare sul PC e per importare dal vecchio
 ```
 
 - **Cartelle per funzionalità** (`catalog/`, `comments/`, `playlists/`…), non per tipo di file.

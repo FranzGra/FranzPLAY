@@ -115,7 +115,7 @@ func (s *Service) join(ctx context.Context, token, name, password string) (Accou
 	if _, err := s.store.waitingInvite(ctx, s.store.db, hash, s.now()); err != nil {
 		return Account{}, err
 	}
-	clean, err := cleanName(name)
+	clean, err := CleanName(name)
 	if err != nil {
 		return Account{}, err
 	}

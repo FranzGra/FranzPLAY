@@ -19,7 +19,7 @@ type Mark struct {
 	Finished bool  `json:"finished"`
 }
 
-// mark decides what to remember from the position the player sent.
+// Decide decides what to remember from the position the player sent.
 // duration is the video's length in seconds, 0 when not known yet.
 //
 //   - Just started (the first 10 seconds, or the first tenth of a short
@@ -27,7 +27,7 @@ type Mark struct {
 //   - Near the end (the last 30 seconds, or the last tenth of a short
 //     video, or the last 2% of a long one, often credits): finished.
 //   - Otherwise: continue from there.
-func mark(position float64, duration int64) (Mark, error) {
+func Decide(position float64, duration int64) (Mark, error) {
 	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > maxPosition {
 		return Mark{}, errBadPosition
 	}

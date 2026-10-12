@@ -62,7 +62,12 @@ const scanInterval = time.Minute
 func main() {
 	// Stop cleanly on Ctrl+C or when the system asks the program to stop.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	err := run(ctx, os.Getenv, os.Stderr)
+	var err error
+	if len(os.Args) > 1 && os.Args[1] == importOldCommand {
+		err = importOld(ctx, os.Args[2:], os.Getenv, os.Stdout)
+	} else {
+		err = run(ctx, os.Getenv, os.Stderr)
+	}
 	stop()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "franzplay:", err)

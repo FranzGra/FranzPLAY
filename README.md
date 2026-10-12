@@ -31,6 +31,7 @@ On the first start FranzPLAY has no users: it writes a one-time **setup code** i
 needs a login.
 
 Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-pc.md`](docs/provare-sul-pc.md).
+Moving from the old FranzPLAY (in Italian): [`docs/importare-dal-vecchio.md`](docs/importare-dal-vecchio.md).
 
 | Variable | Default | What it does |
 |---|---|---|

@@ -122,7 +122,7 @@ func (s *Service) register(ctx context.Context, addr, name, password string) (Ac
 	}
 	// Mistakes in the form are checked before counting the account, so
 	// they do not use up the tries.
-	if _, err := cleanName(name); err != nil {
+	if _, err := CleanName(name); err != nil {
 		return Account{}, err
 	}
 	if err := checkNewPassword(password); err != nil {

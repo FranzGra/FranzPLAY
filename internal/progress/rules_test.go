@@ -25,7 +25,7 @@ func TestMark(t *testing.T) {
 		{"past the end", 700, 600, Mark{Finished: true}},
 	}
 	for _, tt := range tests {
-		got, err := mark(tt.position, tt.duration)
+		got, err := Decide(tt.position, tt.duration)
 		if err != nil || got != tt.want {
 			t.Errorf("%s: mark(%v, %d) = %+v, %v; want %+v", tt.name, tt.position, tt.duration, got, err, tt.want)
 		}
@@ -34,7 +34,7 @@ func TestMark(t *testing.T) {
 
 func TestMarkRejectsNonsense(t *testing.T) {
 	for _, p := range []float64{-1, math.NaN(), math.Inf(1), maxPosition + 1} {
-		if _, err := mark(p, 600); !errors.Is(err, errBadPosition) {
+		if _, err := Decide(p, 600); !errors.Is(err, errBadPosition) {
 			t.Errorf("mark(%v): err = %v", p, err)
 		}
 	}
