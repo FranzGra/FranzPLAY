@@ -142,6 +142,12 @@ const paths = {
   ),
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  like: (
+    <>
+      <path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z" />
+      <path d="M7 11l4-8a2.5 2.5 0 0 1 2.5 2.5V9h5.2a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.5 20H7" />
+    </>
+  ),
   trash: (
     <>
       <path d="M4 7h16" />

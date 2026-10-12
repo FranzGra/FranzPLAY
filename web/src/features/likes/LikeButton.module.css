@@ -1,0 +1,45 @@
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: var(--touch);
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    color 150ms;
+}
+
+.button:hover {
+  background: var(--glass-bg-strong);
+}
+
+.button[aria-pressed="true"] {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.button[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+.button:disabled {
+  cursor: wait;
+}
+
+.problem {
+  font-size: 13px;
+  color: var(--color-danger);
+}

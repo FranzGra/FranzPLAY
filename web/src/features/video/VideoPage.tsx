@@ -12,6 +12,7 @@ import {
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatAge } from "../../lib/format";
+import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoCard } from "../videos/VideoCard";
@@ -130,6 +131,9 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           )}
           {details.join(" · ")}
         </p>
+        <div className={styles.actions}>
+          <LikeButton videoId={video.id} />
+        </div>
       </div>
       <aside className={styles.side} aria-label="Altri video">
         <UpNext video={video} now={now} />
