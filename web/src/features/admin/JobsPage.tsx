@@ -25,6 +25,7 @@ export const kindNames: Record<JobKind, string> = {
   preview: "Anteprime sulla barra",
   clip: "Anteprima sulla copertina",
   tracks: "Lingue e sottotitoli",
+  transcribe: "Sottotitoli automatici",
   convert: "Copia per i browser",
 };
 
@@ -37,6 +38,7 @@ const missingTool: Record<JobKind, string> = {
   preview: "ffmpeg",
   clip: "ffmpeg",
   tracks: "ffmpeg", // and ffprobe, which "probe" already names
+  transcribe: "", // optional: the Sottotitoli page explains how to turn it on
   convert: "ffmpeg",
 };
 
@@ -77,7 +79,12 @@ export function JobsPage() {
   }
   const { jobs } = state;
   const missing = [
-    ...new Set(jobs.kinds.filter((k) => !k.available).map((k) => missingTool[k.kind])),
+    ...new Set(
+      jobs.kinds
+        .filter((k) => !k.available)
+        .map((k) => missingTool[k.kind])
+        .filter((tool) => tool !== ""),
+    ),
   ];
 
   return (

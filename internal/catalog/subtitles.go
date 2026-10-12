@@ -77,8 +77,13 @@ func insideStream(key string) (int, bool) {
 	return stream, err == nil && stream >= 0 && strconv.Itoa(stream) == n
 }
 
+// autoPrefix starts the key of a subtitle written by whisper, or
+// translated: "auto-it".
+const autoPrefix = "auto-"
+
 // subtitles lists the subtitles next to the video first, since someone
-// put them there on purpose, then the ones inside the file.
+// put them there on purpose, then the ones inside the file, then the
+// ones whisper wrote.
 func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 	videoID, _, subs, ok := h.findSubtitles(w, r)
 	if !ok {
@@ -90,7 +95,12 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	tracks := make([]subtitleTrack, 0, len(subs)+len(inside))
+	auto, err := h.store.auto(r.Context(), videoID)
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	tracks := make([]subtitleTrack, 0, len(subs)+len(inside)+len(auto))
 	for _, s := range subs {
 		tracks = append(tracks, subtitleTrack{
 			Key:   s.Key,
@@ -108,6 +118,15 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 			Src:   "/api/videos/" + id + "/subtitles/" + key,
 		})
 	}
+	for _, a := range auto {
+		key := autoPrefix + a.lang
+		tracks = append(tracks, subtitleTrack{
+			Key:   key,
+			Lang:  a.lang,
+			Label: video.SubtitleLabel(a.lang) + " (automatici)",
+			Src:   "/api/videos/" + id + "/subtitles/" + key,
+		})
+	}
 	respond.JSON(w, r, h.logger, http.StatusOK, tracks)
 }
 
@@ -117,6 +136,10 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 func (h handlers) subtitle(w http.ResponseWriter, r *http.Request) {
 	if stream, ok := insideStream(r.PathValue("key")); ok {
 		h.insideSubtitle(w, r, stream)
+		return
+	}
+	if lang, ok := strings.CutPrefix(r.PathValue("key"), autoPrefix); ok {
+		h.autoSubtitle(w, r, lang)
 		return
 	}
 	_, videoFile, subs, ok := h.findSubtitles(w, r)
@@ -165,6 +188,34 @@ func (h handlers) insideSubtitle(w http.ResponseWriter, r *http.Request, stream 
 		return
 	}
 	data, err := readSmall(filepath.Join(h.subtitlesDir, filepath.Base(name)), maxSubtitleSize)
+	if errors.Is(err, fs.ErrNotExist) {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "subtitle not found")
+		return
+	}
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	h.sendVTT(w, r, string(data))
+}
+
+// autoSubtitle sends a subtitle written by whisper, already WebVTT.
+func (h handlers) autoSubtitle(w http.ResponseWriter, r *http.Request, lang string) {
+	id, valid := parseID(r.PathValue("id"))
+	if !valid {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
+		return
+	}
+	name, err := h.store.autoFile(r.Context(), id, lang)
+	if errors.Is(err, errNotFound) {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "subtitle not found")
+		return
+	}
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	data, err := readSmall(filepath.Join(h.autoSubtitlesDir, filepath.Base(name)), maxSubtitleSize)
 	if errors.Is(err, fs.ErrNotExist) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "subtitle not found")
 		return

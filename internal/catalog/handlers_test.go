@@ -527,6 +527,53 @@ func TestSubtitlesInsideTheVideo(t *testing.T) {
 	}
 }
 
+func TestSubtitlesMadeByWhisper(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "film.mkv", "film", "", 1, true)
+	dir := filepath.Join(s.dataDir, media.AutoSubtitlesDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	heard := "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nCiao\n"
+	if err := os.WriteFile(filepath.Join(dir, "1-it.vtt"), []byte(heard), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var fingerprint string
+	if err := s.db.QueryRow(`SELECT fingerprint FROM videos WHERE id = ?`, id).Scan(&fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO auto_subtitles (video_id, lang, translated_from, model, fingerprint, file, made_at) VALUES
+		(?, 'it', '', 'small', ?, '1-it.vtt', 1), (?, 'en', 'it', 'small', ?, '1-en.vtt', 1),
+		(?, 'de', 'it', 'small', 'old content', '1-de.vtt', 1)`, id, fingerprint, id, fingerprint, id); err != nil {
+		t.Fatal(err)
+	}
+
+	tracks := decode[[]subtitleTrack](t, s.get(t, "/api/videos/1/subtitles"))
+	want := []subtitleTrack{
+		{Key: "auto-en", Lang: "en", Label: "Inglese (automatici)", Src: "/api/videos/1/subtitles/auto-en"},
+		{Key: "auto-it", Lang: "it", Label: "Italiano (automatici)", Src: "/api/videos/1/subtitles/auto-it"},
+	}
+	if !reflect.DeepEqual(tracks, want) {
+		t.Fatalf("tracks = %+v", tracks)
+	}
+	rec := s.get(t, "/api/videos/1/subtitles/auto-it")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "text/vtt; charset=utf-8" || rec.Body.String() != heard {
+		t.Errorf("auto-it: %d %q %q", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
+	}
+	// A file gone, a language not made, one made from older content, odd keys.
+	for _, key := range []string{"auto-en", "auto-fr", "auto-de", "auto-", "auto-../1-it.vtt"} {
+		if rec := s.get(t, "/api/videos/1/subtitles/"+key); rec.Code != http.StatusNotFound {
+			t.Errorf("key %q: status %d, want 404", key, rec.Code)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE videos SET hidden_at = 1 WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if rec := s.get(t, "/api/videos/1/subtitles/auto-it"); rec.Code != http.StatusNotFound {
+		t.Errorf("hidden video: status %d, want 404", rec.Code)
+	}
+}
+
 func TestSubtitlesOfAVideoWithout(t *testing.T) {
 	s := newSite(t)
 	s.addVideo(t, "mare.mp4", "sea", "", 1, true)

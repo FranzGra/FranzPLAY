@@ -31,6 +31,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/progress"
 	"github.com/FranzGra/FranzPLAY/internal/recommend"
 	"github.com/FranzGra/FranzPLAY/internal/server"
+	"github.com/FranzGra/FranzPLAY/internal/translate"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
 )
@@ -128,6 +129,18 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 			handlers[jobs.Tracks] = media.NewTracker(db, ffprobe, ffmpeg, cfg.DataDir).Handle
 			remux = media.NewRemuxer(ffmpeg, remuxPlayers)
 		}
+		// Automatic subtitles are optional: without whisper, they are off.
+		if whisper, err := exec.LookPath(cfg.Whisper); err != nil {
+			logger.Info("whisper not found: automatic subtitles are off", "setting", config.EnvWhisper)
+		} else {
+			var translator media.Translator // stays nil without a translator
+			if cfg.TranslateURL != "" {
+				translator = translate.New(cfg.TranslateURL, cfg.TranslateKey)
+			}
+			transcriber := media.NewTranscriber(db, ffmpeg, whisper, cfg.DataDir, translator)
+			transcriber.OnStage(func() { hub.Publish(events.Jobs) })
+			handlers[jobs.Transcribe] = transcriber.Handle
+		}
 	}
 	// Before the worker starts, so it never sees a file being made.
 	if n, err := media.RemoveOrphanCovers(ctx, db, cfg.DataDir); err != nil {
@@ -149,6 +162,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		logger.Error("remove unused subtitles", "error", err)
 	} else if n > 0 {
 		logger.Info("removed unused subtitles", "count", n)
+	}
+	if n, err := media.RemoveOrphanAutoSubtitles(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused automatic subtitles", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused automatic subtitles", "count", n)
 	}
 	if n, err := online.RemoveOrphans(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused pictures from the internet", "error", err)
