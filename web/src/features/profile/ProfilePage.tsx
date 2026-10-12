@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useAccount, useAuth } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
+import { PasswordForm } from "./PasswordForm";
 import styles from "./ProfilePage.module.css";
 import { type ServerInfoState, useServerInfo } from "./useServerInfo";
 
@@ -26,6 +27,8 @@ export function ProfilePage() {
   const account = useAccount();
   const { signOut } = useAuth();
   const [signOutFailed, setSignOutFailed] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const [changed, setChanged] = useState(false);
 
   function onSignOut() {
     setSignOutFailed(false);
@@ -65,6 +68,32 @@ export function ProfilePage() {
           </Link>
         ))}
       </nav>
+
+      {changing ? (
+        <PasswordForm
+          onDone={() => {
+            setChanging(false);
+            setChanged(true);
+          }}
+          onCancel={() => setChanging(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          className={`glass ${styles.signOut}`}
+          onClick={() => {
+            setChanged(false);
+            setChanging(true);
+          }}
+        >
+          Cambia password
+        </button>
+      )}
+      {changed && (
+        <p className={styles.hint} role="status">
+          Password cambiata. Sugli altri dispositivi dovrai entrare di nuovo.
+        </p>
+      )}
 
       <button type="button" className={`glass ${styles.signOut}`} onClick={onSignOut}>
         Esci

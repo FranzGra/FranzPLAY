@@ -42,6 +42,50 @@ describe("profile page", () => {
     expect(within(pages).queryByRole("link", { name: /Amministrazione/ })).not.toBeInTheDocument();
   });
 
+  it("changes the password", async () => {
+    const { user, server } = renderApp("/profilo", {
+      ...signedIn(),
+      "POST /api/me/password": { status: 204 },
+    });
+    await user.click(await screen.findByRole("button", { name: "Cambia password" }));
+    const form = screen.getByRole("form", { name: "Cambia password" });
+    await user.type(within(form).getByLabelText("Password attuale"), "vecchia-password");
+    await user.type(within(form).getByLabelText("Nuova password"), "nuova-password");
+    await user.type(within(form).getByLabelText("Ripeti la nuova password"), "nuova-passwrod");
+    await user.click(within(form).getByRole("button", { name: "Cambia password" }));
+    expect(within(form).getByRole("alert")).toHaveTextContent("non sono uguali");
+
+    await user.clear(within(form).getByLabelText("Ripeti la nuova password"));
+    await user.type(within(form).getByLabelText("Ripeti la nuova password"), "nuova-password");
+    await user.click(within(form).getByRole("button", { name: "Cambia password" }));
+    expect(await screen.findByText(/Password cambiata/)).toHaveAttribute("role", "status");
+    expect(screen.queryByRole("form", { name: "Cambia password" })).not.toBeInTheDocument();
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      current: "vecchia-password",
+      new: "nuova-password",
+    });
+  });
+
+  it("stays logged in when the current password is wrong", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { user } = renderApp("/profilo", {
+      ...signedIn(),
+      "POST /api/me/password": {
+        status: 403,
+        body: { error: "the current password is not right" },
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Cambia password" }));
+    await user.type(screen.getByLabelText("Password attuale"), "sbagliata");
+    await user.type(screen.getByLabelText("Nuova password"), "nuova-password");
+    await user.type(screen.getByLabelText("Ripeti la nuova password"), "nuova-password");
+    await user.click(
+      within(screen.getByRole("form")).getByRole("button", { name: "Cambia password" }),
+    );
+    expect(await screen.findByText("La password attuale non è giusta.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+  });
+
   it("shows the server version", async () => {
     renderApp("/profilo", {
       ...signedIn(),

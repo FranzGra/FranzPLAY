@@ -281,8 +281,10 @@ func TestChangePassword(t *testing.T) {
 	expect(t, other.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"}),
 		http.StatusOK)
 
+	// A wrong current password is 403, not 401: the person is still logged in.
 	expect(t, b.do("POST", "/api/me/password", map[string]string{"current": "wrong-password", "new": "new-password"}),
-		http.StatusUnauthorized)
+		http.StatusForbidden)
+	expect(t, b.do("GET", "/api/me", nil), http.StatusOK)
 	expect(t, b.do("POST", "/api/me/password", map[string]string{"current": "admin-password", "new": "short"}),
 		http.StatusBadRequest)
 	expect(t, b.do("POST", "/api/me/password", map[string]string{"current": "admin-password", "new": "new-password"}),
@@ -292,6 +294,21 @@ func TestChangePassword(t *testing.T) {
 	expect(t, other.do("GET", "/api/me", nil), http.StatusUnauthorized) // the others are logged out
 	expect(t, s.browser().do("POST", "/api/login", map[string]string{"name": "Admin", "password": "new-password"}),
 		http.StatusOK)
+}
+
+func TestChangePasswordCannotBeGuessed(t *testing.T) {
+	s := newSite(t)
+	b := s.setUp()
+	wrong := map[string]string{"current": "wrong-password", "new": "new-password"}
+	for range 20 {
+		if rec := b.do("POST", "/api/me/password", wrong); rec.Code == http.StatusTooManyRequests {
+			// Even the right password waits now.
+			expect(t, b.do("POST", "/api/me/password",
+				map[string]string{"current": "admin-password", "new": "new-password"}), http.StatusTooManyRequests)
+			return
+		}
+	}
+	t.Fatal("20 wrong current passwords and no pause")
 }
 
 func TestAdministratorManagesUsers(t *testing.T) {

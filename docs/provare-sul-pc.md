@@ -164,7 +164,8 @@ terminale può farlo. Da quel momento tutto FranzPLAY chiede nome e password.
 
 Apri <http://localhost:8090>: compare la pagina **Benvenuto in FranzPLAY**. Scrivi il codice,
 il tuo nome e una password (almeno 8 caratteri) e premi **Crea e entra**. Le volte successive
-basta nome e password. Per uscire: pagina **Profilo**, tasto **Esci**.
+basta nome e password. Per uscire: pagina **Profilo**, tasto **Esci**. Sempre dal Profilo, con
+**Cambia password** scegli una password nuova: sugli altri dispositivi dovrai entrare di nuovo.
 
 **Aggiungere persone.** Solo tu, come amministratore, vedi la voce **Amministrazione** nel menu (sul
 telefono è nella pagina Profilo). Nella sezione **Persone** aggiungi familiari e amici con un nome e
