@@ -28,6 +28,7 @@ type handlers struct {
 //	GET    /api/videos/{id}/comments  the conversations, newest first
 //	POST   /api/videos/{id}/comments  {body, parentId?}: write, or answer a comment
 //	DELETE /api/comments/{id}         delete (author or administrator), with its replies
+//	GET    /api/comments              every comment, newest first (administrators; ?limit=&offset=)
 func Routes(db *sql.DB, logger *slog.Logger) func(mux *http.ServeMux) {
 	return handlers{store: store{db: db}, logger: logger, now: time.Now, account: users.FromContext}.routes
 }
@@ -36,6 +37,7 @@ func (h handlers) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/videos/{id}/comments", h.list)
 	mux.HandleFunc("POST /api/videos/{id}/comments", h.add)
 	mux.HandleFunc("DELETE /api/comments/{id}", h.remove)
+	mux.HandleFunc("GET /api/comments", h.recent)
 }
 
 // who returns the person asking and the id in the address.

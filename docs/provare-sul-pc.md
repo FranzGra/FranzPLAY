@@ -176,6 +176,9 @@ trova più, con il nome del file. **Nascondi** fa sparire un video per tutti (re
 piace e commenti, e con **Mostra** torna com'era); **Rifai copertina** rilegge il video e ne prepara
 di nuovo copertina e anteprime.
 
+Nella sezione **Commenti** trovi tutti i commenti, dai più nuovi, con il video sotto cui sono
+scritti: puoi eliminare quelli che non vanno bene (con le loro risposte).
+
 Nella sezione **Cartelle** vedi le cartelle dei video, quanti video ha ognuna e com'è andato
 l'ultimo controllo. Se una cartella non si legge, o è vuota ma prima aveva dei video (disco
 staccato?), te lo dice in rosso. Con **Controlla adesso** non aspetti il minuto.
