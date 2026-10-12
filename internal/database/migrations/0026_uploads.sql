@@ -9,8 +9,10 @@ CREATE INDEX videos_uploaded_by ON videos (uploaded_by) WHERE uploaded_by IS NOT
 -- piece in the data folder's incoming/ folder: if the connection drops,
 -- the upload goes on from received. When the last piece arrives the file
 -- becomes a video and its row here goes away.
+-- AUTOINCREMENT: a number is never used twice, so the file of a finished
+-- upload (named after it) can never be overwritten by a later one.
 CREATE TABLE uploads (
-    id         INTEGER PRIMARY KEY,
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     name       TEXT    NOT NULL CHECK (length(name) BETWEEN 1 AND 255), -- on the person's computer
     title      TEXT    NOT NULL CHECK (length(title) BETWEEN 1 AND 200),

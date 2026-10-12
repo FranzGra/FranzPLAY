@@ -268,6 +268,55 @@ func TestUploadRefusals(t *testing.T) {
 	}
 }
 
+func TestUploadsNeverShareAFile(t *testing.T) {
+	s := newSite(t)
+	first := decode[upload](t, s.start(t, giulia, "a.mp4", "", 5))
+	expect(t, s.piece(t, giulia, first.ID, 0, "first"), http.StatusOK)
+	// The table of uploads is empty again: the next number must still be new.
+	second := decode[upload](t, s.start(t, giulia, "b.mp4", "", 6))
+	if second.ID == first.ID {
+		t.Fatalf("second upload got number %d again", first.ID)
+	}
+	expect(t, s.piece(t, giulia, second.ID, 0, "second"), http.StatusOK)
+
+	folder, err := Folder(s.data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[int64]string{first.ID: "first", second.ID: "second"} {
+		got, err := os.ReadFile(filepath.Join(folder, "1", strconv.FormatInt(id, 10)+".mp4"))
+		if err != nil || string(got) != want {
+			t.Errorf("upload %d: file %q, %v; want %q", id, got, err, want)
+		}
+	}
+}
+
+func TestUploadNeverReplacesAFile(t *testing.T) {
+	s := newSite(t)
+	u := decode[upload](t, s.start(t, giulia, "a.mp4", "", 3))
+	folder, err := Folder(s.data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Something is already where the upload would go.
+	there := filepath.Join(folder, "1", strconv.FormatInt(u.ID, 10)+".mp4")
+	if err := os.MkdirAll(filepath.Dir(there), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(there, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, s.piece(t, giulia, u.ID, 0, "new"), http.StatusInternalServerError)
+	if got, _ := os.ReadFile(there); string(got) != "old" {
+		t.Errorf("the file there is now %q", got)
+	}
+	// What arrived is kept: the upload can be finished once the place is free.
+	if list := decode[mine](t, s.do(t, giulia, "GET", "/api/uploads", nil)); len(list.Uploads) != 1 ||
+		list.Uploads[0].Received != 3 {
+		t.Errorf("after the refusal: %+v", list.Uploads)
+	}
+}
+
 func TestUploadOfAVideoAlreadyThere(t *testing.T) {
 	s := newSite(t)
 	first := decode[upload](t, s.start(t, giulia, "a.mp4", "", 5))

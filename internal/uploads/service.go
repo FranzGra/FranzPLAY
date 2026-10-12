@@ -199,6 +199,12 @@ func (s *Service) finish(ctx context.Context, u upload) (int64, error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 		return 0, fmt.Errorf("create folder for upload %d: %w", u.ID, err)
 	}
+	// Never replace a video: if a file is already there, something is wrong.
+	if _, err := os.Lstat(dst); err == nil {
+		return 0, fmt.Errorf("place upload %d: %s already exists", u.ID, dst)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return 0, fmt.Errorf("place upload %d: %w", u.ID, err)
+	}
 	info, err := os.Stat(part)
 	if err != nil {
 		return 0, fmt.Errorf("read upload %d: %w", u.ID, err)
