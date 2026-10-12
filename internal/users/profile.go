@@ -111,6 +111,7 @@ func (s *Service) deleteMyself(ctx context.Context, a Account, password string) 
 	if err := s.store.deleteUser(ctx, a.ID); err != nil {
 		return err
 	}
+	s.forgetAvatar(ctx, a.ID)
 	s.logger.InfoContext(ctx, "user deleted their own account", "id", a.ID, "name", a.Name)
 	return nil
 }

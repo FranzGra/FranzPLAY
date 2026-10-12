@@ -1,0 +1,112 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 360px;
+  padding: 24px 20px;
+  border-radius: var(--radius-l);
+  background: var(--glass-bg-bar);
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.window {
+  position: relative;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 2px var(--color-border);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.window:active {
+  cursor: grabbing;
+}
+
+.window:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+
+.image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  pointer-events: none;
+}
+
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.zoom input {
+  flex: 1;
+  accent-color: var(--color-accent);
+}
+
+.problem {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 14px;
+  text-align: center;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.cancel,
+.save {
+  flex: 1;
+  height: var(--touch);
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.save {
+  border: 0;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+}
+
+.save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

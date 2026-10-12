@@ -10,6 +10,7 @@ export const testAccount: Account = {
   role: "admin",
   canUpload: true,
   accentColor: "",
+  avatar: 0,
 };
 
 // A route of the fake server: what it answers to "METHOD /path".

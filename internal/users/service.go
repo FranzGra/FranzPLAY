@@ -29,6 +29,7 @@ const maxHashing = 2
 // Service holds everything about users and sessions.
 type Service struct {
 	store   store
+	dataDir string // FranzPLAY's data folder, where profile photos live
 	logger  *slog.Logger
 	now     func() time.Time
 	limiter *limiter
@@ -49,13 +50,14 @@ type Service struct {
 // makes a one-time setup code and writes it in the log: only someone who
 // can read the log (the person who installed FranzPLAY) can create the
 // administrator, not just anyone on the network who opens the page first.
-func NewService(ctx context.Context, db *sql.DB, logger *slog.Logger) (*Service, error) {
+func NewService(ctx context.Context, db *sql.DB, dataDir string, logger *slog.Logger) (*Service, error) {
 	dummy, err := hashPassword("not a real password")
 	if err != nil {
 		return nil, err
 	}
 	s := &Service{
 		store:         store{db: db},
+		dataDir:       dataDir,
 		logger:        logger,
 		now:           time.Now,
 		limiter:       newLimiter(),

@@ -15,3 +15,14 @@
   font-weight: 650;
   line-height: 1;
 }
+
+.photo {
+  display: block;
+  flex: none;
+  width: var(--avatar-size, 40px);
+  height: var(--avatar-size, 40px);
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-surface-raised);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.35);
+}

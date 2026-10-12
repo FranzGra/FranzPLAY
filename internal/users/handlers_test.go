@@ -26,11 +26,13 @@ type site struct {
 	handler http.Handler
 	now     time.Time
 	logs    *bytes.Buffer
+	dataDir string
 }
 
 func newSite(t *testing.T) *site {
 	t.Helper()
-	db, err := database.Open(context.Background(), t.TempDir())
+	dataDir := t.TempDir()
+	db, err := database.Open(context.Background(), dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,9 +41,9 @@ func newSite(t *testing.T) *site {
 			t.Error(err)
 		}
 	})
-	s := &site{t: t, db: db, now: time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC), logs: &bytes.Buffer{}}
+	s := &site{t: t, db: db, now: time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC), logs: &bytes.Buffer{}, dataDir: dataDir}
 	logger := slog.New(slog.NewTextHandler(s.logs, nil))
-	s.svc, err = NewService(context.Background(), db, logger)
+	s.svc, err = NewService(context.Background(), db, s.dataDir, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +158,7 @@ func TestSetupNeedsTheCodeFromTheLog(t *testing.T) {
 func TestNoSetupCodeWhenUsersExist(t *testing.T) {
 	s := newSite(t)
 	s.setUp()
-	again, err := NewService(context.Background(), s.db, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	again, err := NewService(context.Background(), s.db, s.dataDir, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

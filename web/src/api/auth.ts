@@ -33,6 +33,7 @@ export type Account = {
   role: Role;
   canUpload: boolean;
   accentColor: string; // "#rrggbb", or "" for FranzPLAY's own
+  avatar: number; // version of the profile photo, 0 = none (the initial shows)
 };
 
 // parseAccount checks a user sent by the server, once, at the edge.
@@ -40,7 +41,7 @@ export function parseAccount(data: unknown): Account {
   if (typeof data !== "object" || data === null) {
     throw new Error("account: response is not an object");
   }
-  const { id, name, role, canUpload, accentColor } = data as Record<string, unknown>;
+  const { id, name, role, canUpload, accentColor, avatar } = data as Record<string, unknown>;
   if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
     throw new Error("account: bad id");
   }
@@ -56,7 +57,10 @@ export function parseAccount(data: unknown): Account {
   if (typeof accentColor !== "string" || (accentColor !== "" && !isAccentColor(accentColor))) {
     throw new Error("account: bad accentColor");
   }
-  return { id, name, role, canUpload, accentColor };
+  if (typeof avatar !== "number" || !Number.isInteger(avatar) || avatar < 0) {
+    throw new Error("account: bad avatar");
+  }
+  return { id, name, role, canUpload, accentColor, avatar };
 }
 
 // fetchMe returns the logged-in user, or null when nobody is logged in.
@@ -154,4 +158,20 @@ export async function deleteMe(password: string): Promise<void> {
 // FranzPLAY's own).
 export async function setAccentColor(color: string): Promise<Account> {
   return parseAccount(await request("/api/me/color", { method: "PUT", body: { color } }));
+}
+
+// avatarUrl is the address of someone's profile photo, or "" when they
+// have none. The version in it changes with each new photo.
+export function avatarUrl(id: number, version: number): string {
+  return version > 0 ? `/api/users/${id}/avatar?v=${version}` : "";
+}
+
+// setAvatar saves a square picture as my profile photo.
+export async function setAvatar(photo: Blob): Promise<Account> {
+  return parseAccount(await request("/api/me/avatar", { method: "PUT", body: photo }));
+}
+
+// removeAvatar takes my profile photo away: my initial shows again.
+export async function removeAvatar(): Promise<Account> {
+  return parseAccount(await request("/api/me/avatar", { method: "DELETE" }));
 }
