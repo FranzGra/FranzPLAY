@@ -70,3 +70,27 @@
   font-size: 13px;
   color: var(--color-text-muted);
 }
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Row: small cover on the left, text on the right. */
+.root[data-layout="row"] {
+  flex-direction: row;
+  gap: 12px;
+}
+
+.root[data-layout="row"] .cover {
+  flex: none;
+  width: 168px;
+  margin: 0;
+  border-radius: var(--radius-s);
+}
+
+.root[data-layout="row"] .title {
+  font-size: 14px;
+}
