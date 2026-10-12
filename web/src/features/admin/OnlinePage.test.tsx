@@ -1,7 +1,7 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { renderApp, signedIn } from "../../test/render";
 
-const allOff = { youtube: false, tmdb: false, tmdbKey: false };
+const allOff = { youtube: false, tmdb: false, tpdb: false, tmdbKey: false, tpdbKey: false };
 
 describe("online sources page", () => {
   it("turns YouTube on", async () => {
@@ -18,7 +18,11 @@ describe("online sources page", () => {
     await user.click(youtube);
     expect(await screen.findByRole("status")).toHaveTextContent("un video alla volta");
     expect(youtube).toBeChecked();
-    expect(await server.requests.at(-1)?.json()).toEqual({ youtube: true, tmdb: false });
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      youtube: true,
+      tmdb: false,
+      tpdb: false,
+    });
   });
 
   it("says when saving did not work", async () => {
@@ -43,19 +47,25 @@ describe("online sources page", () => {
     const tmdb = await screen.findByRole("checkbox", { name: "TMDB accesa" });
     expect(tmdb).toBeDisabled();
     expect(screen.getByText(/non è approvato né certificato da TMDB/)).toBeInTheDocument();
-    expect(screen.getByText(/Nessuna chiave salvata/)).toBeInTheDocument();
+    const card = tmdb.closest("li") as HTMLElement;
+    expect(card).toHaveTextContent("Nessuna chiave salvata");
 
-    await user.type(screen.getByLabelText("Chiave di TMDB"), ` ${key} `);
-    await user.click(screen.getByRole("button", { name: "Prova e salva" }));
+    const form = screen.getByRole("form", { name: "Salva la chiave di TMDB" });
+    await user.type(within(form).getByLabelText("Chiave di TMDB"), ` ${key} `);
+    await user.click(within(form).getByRole("button", { name: "Prova e salva" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Ora puoi accendere TMDB");
     expect(await server.requests.at(-1)?.json()).toEqual({ key });
-    expect(screen.getByText(/La chiave è salvata/)).toBeInTheDocument();
+    expect(card).toHaveTextContent("La chiave è salvata");
     expect(screen.getByLabelText("Nuova chiave di TMDB")).toHaveValue("");
 
     await user.click(tmdb);
     expect(await screen.findByRole("status")).toHaveTextContent("un video alla volta");
     expect(tmdb).toBeChecked();
-    expect(await server.requests.at(-1)?.json()).toEqual({ youtube: false, tmdb: true });
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      youtube: false,
+      tmdb: true,
+      tpdb: false,
+    });
   });
 
   it("says when TMDB refuses the key", async () => {
@@ -68,8 +78,42 @@ describe("online sources page", () => {
       await screen.findByLabelText("Chiave di TMDB"),
       "0123456789abcdef0123456789abcdef",
     );
-    await user.click(screen.getByRole("button", { name: "Prova e salva" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("non è valida");
+    await user.click(
+      within(screen.getByRole("form", { name: "Salva la chiave di TMDB" })).getByRole("button", {
+        name: "Prova e salva",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "TMDB dice che questa chiave non è valida",
+    );
     expect(screen.getByRole("checkbox", { name: "TMDB accesa" })).toBeDisabled();
+  });
+
+  it("saves ThePornDB's key, then turns it on", async () => {
+    const key = "123|AbCdEfGhIjKlMnOpQrStUv";
+    const { user, server } = renderApp("/admin/internet", {
+      ...signedIn(),
+      "GET /api/online": { body: allOff },
+      "PUT /api/online/tpdb-key": { body: { ...allOff, tpdbKey: true } },
+      "PUT /api/online": { body: { ...allOff, tpdb: true, tpdbKey: true } },
+    });
+    const tpdb = await screen.findByRole("checkbox", { name: "ThePornDB accesa" });
+    expect(tpdb).toBeDisabled();
+    expect(tpdb.closest("li")).toHaveTextContent("calcola un'impronta del file");
+
+    const form = screen.getByRole("form", { name: "Salva la chiave di ThePornDB" });
+    await user.type(within(form).getByLabelText("Chiave di ThePornDB"), key);
+    await user.click(within(form).getByRole("button", { name: "Prova e salva" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Ora puoi accendere ThePornDB");
+    expect(server.requests.at(-1)?.url).toContain("/api/online/tpdb-key");
+    expect(await server.requests.at(-1)?.json()).toEqual({ key });
+
+    await user.click(tpdb);
+    expect(await screen.findByRole("status")).toHaveTextContent("un video alla volta");
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      youtube: false,
+      tmdb: false,
+      tpdb: true,
+    });
   });
 });

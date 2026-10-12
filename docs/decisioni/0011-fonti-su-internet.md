@@ -1,6 +1,6 @@
 # 0011 · Copertine e informazioni da internet
 
-**Data:** 12 ottobre 2026 · **Stato:** decisa (fatte: YouTube, TMDB)
+**Data:** 12 ottobre 2026 · **Stato:** decisa (fatte tutte e tre)
 
 ## Il problema
 
@@ -13,14 +13,14 @@ chiedere a YouTube copertina, titolo e canale.
 Francesco ha scelto (12/10/2026) tre fonti, da fare **una alla volta**:
 1. **YouTube**.
 2. **TMDB**, per i film.
-3. **ThePornDB**.
+3. **ThePornDB**, per tutti gli altri video.
 
 Per tutte vale:
 
 - Sono **spente** finché l'amministratore non le accende, in **Amministrazione › Internet**.
   FranzPLAY funziona uguale senza nessuna fonte e senza internet.
 - Si manda **solo quello che il nome del file dice del video** (il codice YouTube, o titolo e anno
-  del film), mai niente su chi usa FranzPLAY.
+  del film) o un'impronta del file, mai niente su chi usa FranzPLAY.
 - Un lavoro nuovo della coda, **«Informazioni da internet»** (`online`), chiede un video alla
   volta: per ogni video nuovo, e per tutti quando si accende una fonte.
 - Quello che arriva da internet sta in **colonne a parte** (`online_title`, `online_author`…). Le
@@ -56,6 +56,21 @@ Se YouTube non conosce più il video (tolto o privato), le sue informazioni si d
 - Nella pagina c'è la frase che TMDB chiede: «Questo prodotto usa l'API di TMDB ma non è approvato
   né certificato da TMDB».
 
+**ThePornDB** (theporndb.net), per tutti gli altri video:
+- Un video che non ha il codice YouTube e non ha il nome di un film va a ThePornDB.
+- Il nome del file **non** si manda: un nome qualsiasi direbbe troppo e troverebbe scene a caso.
+  Si manda solo l'**OSHash** del file, l'impronta che usano anche Stash e Plex: la grandezza del
+  file più la somma dei suoi primi e ultimi 64 KB. FranzPLAY legge quei 128 KB in sola lettura.
+- La ricerca è `GET https://api.theporndb.net/scenes?hash=…&hash_type=OSHASH`, con la chiave in
+  `Authorization: Bearer`. Si usa una scena **solo se ne torna una sola** e, quando la scena elenca
+  le sue impronte, c'è proprio quella del file.
+- L'autore è lo **studio** (il sito che l'ha fatta). L'immagine si scarica solo da indirizzi
+  `https` dei server di ThePornDB (`theporndb.net`, `metadataapi.net`), e senza la chiave.
+- La chiave si prova prima di salvarla, cercando un'impronta che nessun file ha. Per il resto vale
+  tutto quello che vale per TMDB: non esce dal server, una chiave rifiutata ferma il lavoro, una
+  chiave nuova con la fonte accesa richiede di nuovo tutti i video.
+- Se il video manca (disco staccato), il lavoro si riprova più tardi.
+
 ## Perché così
 
 Le risposte di internet si **controllano all'ingresso** (regola 8):
@@ -69,4 +84,4 @@ Spegnere una fonte non cancella quello che ha già trovato: smette solo di chied
 
 ## Cosa resta per dopo
 
-- ThePornDB, con la sua chiave gratuita inserita dall'amministratore.
+- Per ThePornDB, se servirà: limitarla a cartelle scelte dall'amministratore.

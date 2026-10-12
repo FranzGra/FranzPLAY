@@ -31,11 +31,9 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	a := api{db: fx.db, newJobs: func() { fx.woken++ }, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		now:     func() time.Time { return time.Unix(1000, 0) },
 		account: func(context.Context) (users.Account, bool) { return fx.who, true },
-		tmdb:    fx.f.tmdb}
+		tmdb:    fx.f.tmdb, tpdb: fx.f.tpdb}
 	fx.mux = http.NewServeMux()
-	fx.mux.HandleFunc("GET /api/online", a.only(a.handleGet))
-	fx.mux.HandleFunc("PUT /api/online", a.only(a.handlePut))
-	fx.mux.HandleFunc("PUT /api/online/tmdb-key", a.only(a.handleTMDBKey))
+	a.routes(fx.mux)
 	return fx
 }
 
@@ -65,7 +63,7 @@ func TestAdministratorTurnsSourcesOn(t *testing.T) {
 	fx := newAdminFixture(t)
 
 	if rec := fx.do("GET", "/api/online", ""); rec.Code != http.StatusOK ||
-		strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tmdbKey":false}` {
+		strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":false,"tpdbKey":false}` {
 		t.Fatalf("GET = %d %s", rec.Code, rec.Body)
 	}
 	if rec := fx.do("PUT", "/api/online", `{"youtube": true, "tmdb": false}`); rec.Code != http.StatusOK {
@@ -95,7 +93,7 @@ func TestAdministratorTurnsSourcesOn(t *testing.T) {
 		t.Errorf("unknown field: %d", rec.Code)
 	}
 	fx.who.Role = users.User
-	for _, path := range []string{"/api/online", "/api/online/tmdb-key"} {
+	for _, path := range []string{"/api/online", "/api/online/tmdb-key", "/api/online/tpdb-key"} {
 		if rec := fx.do("PUT", path, `{}`); rec.Code != http.StatusForbidden {
 			t.Errorf("normal user on %s: %d", path, rec.Code)
 		}
@@ -111,7 +109,7 @@ func TestAdministratorSavesTheTMDBKey(t *testing.T) {
 	}
 
 	rec := fx.do("PUT", "/api/online/tmdb-key", `{"key": " `+testKey+` "}`)
-	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tmdbKey":true}` {
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":true,"tpdbKey":false}` {
 		t.Fatalf("save key = %d %s", rec.Code, rec.Body)
 	}
 	if got := fx.tm.asked[0]; got.URL.Path != "/3/authentication" || got.URL.Query().Get("api_key") != testKey {
@@ -178,5 +176,41 @@ func TestAWrongTMDBKeyIsNotSaved(t *testing.T) {
 				t.Errorf("key saved: %q, %v", s.tmdbKey, err)
 			}
 		})
+	}
+}
+
+func TestAdministratorSavesTheTPDBKey(t *testing.T) {
+	fx := newAdminFixture(t)
+	if rec := fx.do("PUT", "/api/online", `{"tpdb": true}`); rec.Code != http.StatusConflict {
+		t.Errorf("ThePornDB on without a key = %d %s", rec.Code, rec.Body)
+	}
+	for body, want := range map[string]int{
+		`{"key": "short"}`:                   http.StatusBadRequest,
+		`{"key": "123|abc def ghi jkl mno"}`: http.StatusBadRequest,
+	} {
+		if rec := fx.do("PUT", "/api/online/tpdb-key", body); rec.Code != want {
+			t.Errorf("save %s = %d, want %d", body, rec.Code, want)
+		}
+	}
+	if len(fx.tp.asked) != 0 {
+		t.Errorf("a key with the wrong shape was sent: %v", fx.tp.addresses())
+	}
+
+	fx.tp.answers["api.theporndb.net/scenes"] = answer(http.StatusUnauthorized, `{}`)
+	if rec := fx.do("PUT", "/api/online/tpdb-key", `{"key": "`+testTPDBKey+`"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("refused key = %d %s", rec.Code, rec.Body)
+	}
+
+	fx.tp.answers["api.theporndb.net/scenes"] = answer(http.StatusOK, `{"data": []}`)
+	rec := fx.do("PUT", "/api/online/tpdb-key", `{"key": "`+testTPDBKey+`"}`)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"tpdbKey":true`) || strings.Contains(rec.Body.String(), testTPDBKey) {
+		t.Fatalf("save key = %d %s", rec.Code, rec.Body)
+	}
+	// The key was tried with a fingerprint no file has.
+	if got := fx.tp.asked[len(fx.tp.asked)-1]; got.URL.Query().Get("hash") != noHash {
+		t.Errorf("key tried with %s", got.URL)
+	}
+	if rec := fx.do("PUT", "/api/online", `{"tpdb": true}`); rec.Code != http.StatusOK || fx.onlineJobs(t) != 1 {
+		t.Errorf("ThePornDB on = %d %s, %d jobs", rec.Code, rec.Body, fx.onlineJobs(t))
 	}
 }

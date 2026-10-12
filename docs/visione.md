@@ -268,7 +268,7 @@ descrizione, autore, giorno), e i file `.nfo` di Kodi e Jellyfin. Decisione in
 `docs/decisioni/0009-informazioni-dai-file.md`.
 
 ✅ **Deciso (12/10/2026)**: le fonti su internet sono YouTube, TMDB (film) e ThePornDB, tutte spente
-finché l'amministratore non le accende. ✅ **Fatto**: YouTube e TMDB (`docs/decisioni/0011-fonti-su-internet.md`).
+finché l'amministratore non le accende. ✅ **Fatto**: YouTube, TMDB e ThePornDB (`docs/decisioni/0011-fonti-su-internet.md`).
 
 ---
 

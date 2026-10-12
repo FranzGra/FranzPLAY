@@ -12,9 +12,9 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
-// maxTMDBAnswer is the biggest answer read from TMDB: a film with all its
-// cast and crew can be a few hundred KB.
-const maxTMDBAnswer = 1 << 20
+// maxLongAnswer is the biggest answer read from TMDB or ThePornDB: a film
+// with all its cast and crew can be a few hundred KB.
+const maxLongAnswer = 1 << 20
 
 // tmdb asks The Movie Database (themoviedb.org) about films, with the key
 // the administrator entered.
@@ -104,7 +104,7 @@ func (t tmdb) ask(ctx context.Context, key, path string, q url.Values) (_ []byte
 		q.Set("api_key", key)
 	}
 	header.Set("Accept", "application/json")
-	data, status, err := get(ctx, t.client, t.api+path+"?"+q.Encode(), header, maxTMDBAnswer, "application/json")
+	data, status, err := get(ctx, t.client, t.api+path+"?"+q.Encode(), header, maxLongAnswer, "application/json")
 	if err != nil {
 		return nil, false, fmt.Errorf("tmdb %s: %w", path, err)
 	}

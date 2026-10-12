@@ -54,6 +54,8 @@ type fixture struct {
 	dataDir string
 	yt      *fakeYouTube
 	tm      *fakeTMDB
+	tp      *fakeTPDB
+	library string
 	f       *Fetcher
 }
 
@@ -68,7 +70,8 @@ func newFixture(t *testing.T, file string, youtubeOn bool) *fixture {
 			t.Error(err)
 		}
 	})
-	if _, err := db.Exec(`INSERT INTO libraries (id, path) VALUES (1, ?)`, t.TempDir()); err != nil {
+	library := t.TempDir()
+	if _, err := db.Exec(`INSERT INTO libraries (id, path) VALUES (1, ?)`, library); err != nil {
 		t.Fatal(err)
 	}
 	res, err := db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, added_at)
@@ -98,7 +101,9 @@ func newFixture(t *testing.T, file string, youtubeOn bool) *fixture {
 	t.Cleanup(tmServer.Close)
 	f.tmdb.api = tmServer.URL + "/3"
 	f.tmdb.images = tmServer.URL + "/t/p/w1280"
-	return &fixture{db: db, id: id, dataDir: dataDir, yt: yt, tm: tm, f: f}
+	tp := newFakeTPDB()
+	f.tpdb.client = tp.start(t)
+	return &fixture{db: db, id: id, dataDir: dataDir, library: library, yt: yt, tm: tm, tp: tp, f: f}
 }
 
 type shown struct {
