@@ -135,6 +135,26 @@ func TestScanKeepsTheSameVideoWhenMoved(t *testing.T) {
 	}
 }
 
+func TestScanKeepsTheTitleOfAnUploadedVideo(t *testing.T) {
+	uploads := t.TempDir()
+	writeFile(t, uploads, "7/12.mp4", "sea")
+	ts := newTestScanner(t, uploads)
+	ts.scan(t, Report{Added: 1})
+	if _, err := ts.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at) VALUES (7, 'Giulia', 'x', 'user', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.db.Exec(`UPDATE videos SET uploaded_by = 7, title = 'Al mare', category = ''`); err != nil {
+		t.Fatal(err)
+	}
+
+	move(t, uploads, "7/12.mp4", "7/old/12.mp4")
+	ts.scan(t, Report{Moved: 1})
+
+	if v := ts.videos(t)["7/old/12.mp4"]; v.title != "Al mare" || v.category != "" {
+		t.Errorf("moved uploaded video = %+v, want the title its person gave and no category", v)
+	}
+}
+
 func TestScanSwappedNames(t *testing.T) {
 	lib := t.TempDir()
 	writeFile(t, lib, "a.mp4", "first")

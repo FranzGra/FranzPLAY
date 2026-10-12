@@ -16,7 +16,7 @@ const fingerprintVersion = "v1:"
 // sampleSize is how much is read from the start, middle and end of a file.
 const sampleSize = 64 << 10 // 64 KiB
 
-// fingerprint identifies a file by its content.
+// Fingerprint identifies a file by its content.
 //
 // Reading a whole video would take minutes on a Raspberry Pi, so only three
 // samples are read (start, middle, end) together with the exact size: at
@@ -25,7 +25,7 @@ const sampleSize = 64 << 10 // 64 KiB
 //
 // The file is read through an fs.FS, which has no way to write: the video
 // folder cannot be changed from here even by mistake.
-func fingerprint(fsys fs.FS, name string) (string, error) {
+func Fingerprint(fsys fs.FS, name string) (string, error) {
 	file, err := fsys.Open(name)
 	if err != nil {
 		return "", fmt.Errorf("fingerprint: %w", err)
@@ -43,7 +43,7 @@ func fingerprint(fsys fs.FS, name string) (string, error) {
 	return fingerprintReader(r, info.Size())
 }
 
-// fingerprintReader does the work of fingerprint on any readable content.
+// fingerprintReader does the work of Fingerprint on any readable content.
 func fingerprintReader(r io.ReaderAt, size int64) (string, error) {
 	h := sha256.New()
 	var sizeBytes [8]byte

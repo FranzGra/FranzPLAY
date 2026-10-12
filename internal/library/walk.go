@@ -40,7 +40,7 @@ func list(fsys fs.FS, library int64) listing {
 			}
 			return nil
 		}
-		if !d.Type().IsRegular() || !isVideo(d.Name()) {
+		if !d.Type().IsRegular() || !IsVideo(d.Name()) {
 			return nil
 		}
 		info, err := d.Info()

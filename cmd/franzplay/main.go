@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/site"
 	"github.com/FranzGra/FranzPLAY/internal/translate"
+	"github.com/FranzGra/FranzPLAY/internal/uploads"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
 )
@@ -48,6 +50,9 @@ const remuxPlayers = 3
 
 // shutdownTimeout is how long open requests get to finish when FranzPLAY stops.
 const shutdownTimeout = 10 * time.Second
+
+// cleanInterval is how often unfinished uploads nobody continues are looked for.
+const cleanInterval = time.Hour
 
 // scanInterval is how often the video folders are checked for changes.
 // A check of an unchanged folder only reads names, sizes and dates, so it is cheap.
@@ -194,16 +199,28 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	for k := range handlers {
 		available[k] = true
 	}
-	scanner := library.NewScanner(db, cfg.Libraries, logger)
+	// Videos uploaded from the browser live in the data folder, which the
+	// scanner reads like the video folders.
+	uploader, err := uploads.NewService(db, cfg.DataDir, logger)
+	if err != nil {
+		return err
+	}
+	uploadsFolder, err := uploads.Folder(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	scanner := library.NewScanner(db, append(slices.Clone(cfg.Libraries), uploadsFolder), logger)
 	scanner.OnNewJobs(worker.Wake)
 	scanner.OnChange(func() { hub.Publish(events.Library) })
 	scanner.OnScanning(func(bool) { hub.Publish(events.Scan) })
+	uploader.OnAdded(func() { worker.Wake(); hub.Publish(events.Library) })
 
 	bgCtx, stopBackground := context.WithCancel(ctx)
 	var background sync.WaitGroup
 	background.Go(func() { worker.Run(bgCtx) })
 	background.Go(func() { scanner.Run(bgCtx, scanInterval) })
 	background.Go(func() { downloader.Run(bgCtx) })
+	background.Go(func() { cleanUploads(bgCtx, uploader, logger) })
 	defer func() {
 		stopBackground()
 		background.Wait()
@@ -231,6 +248,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
 		autosubs.Routes(db, subtitles, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),
+		uploader.Routes,
 		online.Routes(db, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		site.Routes(db, logger),
 		hub.Routes(logger),
@@ -270,4 +288,23 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	}
 	logger.Info("FranzPLAY stopped")
 	return nil
+}
+
+// cleanUploads removes the uploads nobody continues, now and then every
+// cleanInterval, until ctx is cancelled.
+func cleanUploads(ctx context.Context, uploader *uploads.Service, logger *slog.Logger) {
+	ticker := time.NewTicker(cleanInterval)
+	defer ticker.Stop()
+	for {
+		if n, err := uploader.Clean(ctx); err != nil {
+			logger.ErrorContext(ctx, "clean unfinished uploads", "error", err)
+		} else if n > 0 {
+			logger.InfoContext(ctx, "removed unfinished uploads", "count", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

@@ -18,8 +18,8 @@ func TestIsVideo(t *testing.T) {
 		"":              false,
 	}
 	for name, want := range tests {
-		if got := isVideo(name); got != want {
-			t.Errorf("isVideo(%q) = %v, want %v", name, got, want)
+		if got := IsVideo(name); got != want {
+			t.Errorf("IsVideo(%q) = %v, want %v", name, got, want)
 		}
 	}
 }
