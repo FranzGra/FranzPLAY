@@ -167,6 +167,9 @@ export function parseCategories(data: unknown): Category[] {
 export type ListOptions = {
   category?: string;
   q?: string; // search words
+  // seed mixes the videos instead of showing the newest first; the same
+  // seed gives the same order, so pages follow on without repeats.
+  seed?: number;
   limit?: number;
   offset?: number;
 };
@@ -175,6 +178,10 @@ export async function fetchVideos(options: ListOptions, signal?: AbortSignal): P
   const params = new URLSearchParams();
   if (options.category) params.set("category", options.category);
   if (options.q) params.set("q", options.q);
+  if (options.seed) {
+    params.set("order", "random");
+    params.set("seed", String(options.seed));
+  }
   if (options.limit !== undefined) params.set("limit", String(options.limit));
   if (options.offset) params.set("offset", String(options.offset));
   const query = params.toString();

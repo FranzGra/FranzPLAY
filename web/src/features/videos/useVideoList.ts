@@ -15,8 +15,9 @@ export type VideoListState =
   | { kind: "error" }
   | { kind: "ready"; videos: Video[]; total: number; more: "idle" | "loading" | "error" };
 
-// Filter chooses which videos: of one category, matching a search, or all.
-export type Filter = { category?: string; q?: string };
+// Filter chooses which videos: of one category, matching a search, or
+// all; with seed, mixed instead of newest first.
+export type Filter = { category?: string; q?: string; seed?: number };
 
 // LoadPage asks the server for one page of a list of videos.
 export type LoadPage = (
@@ -24,11 +25,11 @@ export type LoadPage = (
   signal?: AbortSignal,
 ) => Promise<VideoList>;
 
-// useVideoList loads the newest videos matching filter a page at a time.
-export function useVideoList({ category = "", q = "" }: Filter = {}) {
+// useVideoList loads the videos matching filter a page at a time.
+export function useVideoList({ category = "", q = "", seed }: Filter = {}) {
   const load = useCallback<LoadPage>(
-    (page, signal) => fetchVideos({ category, q, ...page }, signal),
-    [category, q],
+    (page, signal) => fetchVideos({ category, q, seed, ...page }, signal),
+    [category, q, seed],
   );
   return usePagedVideos(load);
 }

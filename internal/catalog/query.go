@@ -5,7 +5,9 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -32,10 +34,19 @@ type listQuery struct {
 	words    []string // search: every word must be in the title or the category
 	limit    int
 	offset   int
+	// shuffle, when not 0, mixes the videos instead of showing the newest
+	// first: the same number gives the same order, so the pages of one
+	// visit follow on without repeats.
+	shuffle uint64
 }
 
+// maxSeed is the biggest shuffle number accepted: the biggest whole
+// number a browser counts exactly.
+const maxSeed = 1<<53 - 1
+
 // parseListQuery checks the parameters of GET /api/videos once, here.
-// Accepted: category, q (search), limit (1 to 200), offset (0 or more).
+// Accepted: category, q (search), limit (1 to 200), offset (0 or more),
+// order=random with seed (1 to 2^53-1) for a mixed order.
 func parseListQuery(values url.Values) (listQuery, error) {
 	q := listQuery{category: strings.TrimSpace(values.Get("category")), limit: defaultLimit}
 	search := values.Get("q")
@@ -57,7 +68,29 @@ func parseListQuery(values url.Values) (listQuery, error) {
 		}
 		q.offset = n
 	}
+	switch values.Get("order") {
+	case "", "newest":
+		if values.Has("seed") {
+			return listQuery{}, fmt.Errorf("%w: seed goes only with order=random", errBadQuery)
+		}
+	case "random":
+		n, err := strconv.ParseUint(values.Get("seed"), 10, 64)
+		if err != nil || n < 1 || n > maxSeed {
+			return listQuery{}, fmt.Errorf("%w: order=random needs a seed from 1 to %d", errBadQuery, uint64(maxSeed))
+		}
+		q.shuffle = n
+	default:
+		return listQuery{}, fmt.Errorf("%w: order must be newest or random", errBadQuery)
+	}
 	return q, nil
+}
+
+// shuffled returns ids mixed in an order decided by seed alone.
+func shuffled(ids []int64, seed uint64) []int64 {
+	out := slices.Clone(ids)
+	r := rand.New(rand.NewPCG(seed, 0))
+	r.Shuffle(len(out), func(i, j int) { out[i], out[j] = out[j], out[i] })
+	return out
 }
 
 // searchWords splits a search into its words, without repeats and at most

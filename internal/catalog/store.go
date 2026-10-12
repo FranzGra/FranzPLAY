@@ -135,6 +135,9 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		p := likePattern(w)
 		args = append(args, p, p)
 	}
+	if q.shuffle != 0 {
+		return s.listShuffled(ctx, where, args, q)
+	}
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM videos v WHERE `+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count videos: %w", err)
 	}
@@ -157,6 +160,36 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		return nil, 0, fmt.Errorf("list videos: %w", err)
 	}
 	return videos, total, nil
+}
+
+// listShuffled is list in a mixed order: it reads the ids of all the
+// matching videos (a few kilobytes even for thousands of videos), mixes
+// them, and reads the videos of the page asked.
+func (s store) listShuffled(ctx context.Context, where string, args []any, q listQuery) (_ []Video, total int, err error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT v.id FROM videos v WHERE `+where+` ORDER BY v.id`, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list videos: %w", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, 0, fmt.Errorf("list videos: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("list videos: %w", err)
+	}
+	mixed := shuffled(ids, q.shuffle)
+	from := min(q.offset, len(mixed))
+	to := min(from+q.limit, len(mixed))
+	videos, err := s.byIDs(ctx, mixed[from:to])
+	if err != nil {
+		return nil, 0, err
+	}
+	return videos, len(ids), nil
 }
 
 // get returns one visible video, with its description.
