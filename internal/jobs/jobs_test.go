@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,7 +74,7 @@ func newFixture(t *testing.T, videos int) *fixture {
 	return fx
 }
 
-func mustExec(t *testing.T, db *sql.DB, query string, args ...any) sql.Result {
+func mustExec(t testing.TB, db *sql.DB, query string, args ...any) sql.Result {
 	t.Helper()
 	res, err := db.Exec(query, args...)
 	if err != nil {
@@ -395,5 +396,69 @@ func TestJobsGoAwayWithTheirVideo(t *testing.T) {
 	}
 	if n != 0 {
 		t.Errorf("%d jobs left for a deleted video", n)
+	}
+}
+
+// fillQueue gives each of n new videos a waiting job of every kind, the
+// way a first scan of a big library does.
+func fillQueue(tb testing.TB, db *sql.DB, n int) {
+	tb.Helper()
+	mustExec(tb, db, `INSERT INTO libraries (id, path) VALUES (2, '/big')`)
+	mustExec(tb, db, `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+		INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, added_at)
+		SELECT 'big' || i, 2, 'v' || i || '.mp4', 1, 1, 't', 1 FROM n`, n)
+	mustExec(tb, db, `INSERT INTO jobs (video_id, kind, state, updated_at)
+		SELECT v.id, k.kind, 'pending', 1 FROM videos v
+		CROSS JOIN (SELECT 'probe' AS kind UNION ALL SELECT 'cover' UNION ALL SELECT 'preview'
+			UNION ALL SELECT 'clip' UNION ALL SELECT 'convert') k
+		WHERE v.library_id = 2`)
+}
+
+// Picking the next job must not sort the whole queue: it runs before
+// every job, while people are watching videos.
+func TestClaimDoesNotSortTheQueue(t *testing.T) {
+	fx := newFixture(t, 0)
+	fillQueue(t, fx.db, 2000)
+	query := claimQuery("?, ?, ?")
+	rows, err := fx.db.QueryContext(context.Background(), `EXPLAIN QUERY PLAN `+query,
+		t0.Unix(), string(Probe), string(Cover), string(Convert))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close() //nolint:errcheck // read-only query
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	all := strings.Join(plan, "; ")
+	if !strings.Contains(all, "jobs_next") || strings.Contains(all, "TEMP B-TREE") {
+		t.Errorf("plan = %q, want the jobs_next index and no sorting", all)
+	}
+}
+
+// BenchmarkClaim measures picking the next job with 50,000 waiting.
+func BenchmarkClaim(b *testing.B) {
+	db, err := database.Open(context.Background(), b.TempDir())
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = db.Close() })
+	fillQueue(b, db, 10000)
+	query := claimQuery("?, ?, ?, ?, ?")
+	for b.Loop() {
+		var id, video, attempts int64
+		var kind string
+		if err := db.QueryRow(query, t0.Unix(), "probe", "cover", "preview", "clip", "convert").
+			Scan(&id, &video, &kind, &attempts); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
