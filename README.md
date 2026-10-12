@@ -18,7 +18,7 @@ The full vision (in Italian) is in [`docs/visione.md`](docs/visione.md).
 
 ## Try it
 
-You need [Go](https://go.dev/dl/) 1.24 or newer and [Node.js](https://nodejs.org/) 22.
+You need [Go](https://go.dev/dl/) 1.26 or newer and [Node.js](https://nodejs.org/) 22.
 
 ```sh
 make web     # build the web interface

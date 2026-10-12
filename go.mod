@@ -1,3 +1,5 @@
 module github.com/FranzGra/FranzPLAY
 
-go 1.24
+go 1.26.0
+
+toolchain go1.26.9

@@ -8,7 +8,7 @@ Serve circa un quarto d'ora la prima volta, poi bastano pochi secondi.
 Servono tre programmi:
 
 - **Git**: scarica il progetto da GitHub e tiene traccia delle modifiche.
-- **Go** (versione 1.24 o più nuova): il linguaggio di FranzPLAY. Compila e avvia il programma.
+- **Go** (versione 1.26 o più nuova): il linguaggio di FranzPLAY. Compila e avvia il programma.
 - **Node.js** (versione 22): serve solo per preparare l'interfaccia web. Chi installerà
   FranzPLAY a casa non ne avrà bisogno: l'interfaccia sarà già dentro il programma.
 
