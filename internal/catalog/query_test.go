@@ -72,8 +72,8 @@ func TestValidCoverName(t *testing.T) {
 		"12-0a/../../x.jpg": false,
 	}
 	for name, want := range tests {
-		if got := validCoverName(name); got != want {
-			t.Errorf("validCoverName(%q) = %v, want %v", name, got, want)
+		if got := validImageName(name); got != want {
+			t.Errorf("validImageName(%q) = %v, want %v", name, got, want)
 		}
 	}
 }

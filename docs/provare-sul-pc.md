@@ -180,6 +180,10 @@ spesso i titoli di coda, valgono come «finito» e il video esce dalla riga.
 divisi per giorno. Con la **X** togli un video (la prossima volta riparte dall'inizio); con
 **Cancella cronologia** la svuoti tutta. Ognuno vede solo la sua.
 
+**Anteprime.** Passando il mouse (o il dito) sulla barra del player compare una piccola immagine
+del punto del video. FranzPLAY le prepara da solo con ffmpeg, dopo la copertina, e le salva nella
+cartella dati (`previews/`): per i video appena aggiunti arrivano dopo qualche secondo.
+
 **Mi piace e commenti.** Sotto ogni video c'è il pollice **Mi piace** con quante persone lo
 apprezzano, e più in basso i **commenti**: scrivi nel riquadro e premi **Commenta** (o Ctrl+Invio).
 Con **Rispondi** si risponde a un commento, e la risposta finisce sotto di lui. Ognuno può

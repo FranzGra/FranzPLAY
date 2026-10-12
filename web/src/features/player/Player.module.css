@@ -236,6 +236,36 @@
   transform: translateX(-50%);
 }
 
+/* A small frame of the video above the timeline, with its time. */
+.frame {
+  position: absolute;
+  bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.frameImage {
+  box-sizing: content-box; /* the border goes around the whole frame */
+  border: 2px solid rgb(255 255 255 / 0.9);
+  border-radius: 8px;
+  background-color: #000;
+  background-repeat: no-repeat;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
+}
+
+.frameTime {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.8);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .bar {
   display: flex;
   align-items: center;

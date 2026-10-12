@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { SubtitleTrack } from "../../api/videos";
+import type { Preview, SubtitleTrack } from "../../api/videos";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
 import { loadSetting, saveSetting } from "../../lib/storage";
@@ -38,6 +38,8 @@ type PlayerProps = {
   // while it plays, on pause, after a jump, at the end, and when the player
   // closes. Only once the video has been played.
   onPosition?: (seconds: number) => void;
+  // preview holds small frames of the video, shown over the timeline.
+  preview?: Preview | null;
 };
 
 // reportEvery is how often, in seconds of video, onPosition hears the
@@ -93,6 +95,7 @@ export function Player({
   subtitles = noTracks,
   startAt = 0,
   onPosition,
+  preview,
 }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -494,7 +497,13 @@ export function Player({
       )}
 
       <div className={styles.controls}>
-        <Timeline time={time} duration={duration} buffered={buffered} onSeek={seekTo} />
+        <Timeline
+          time={time}
+          duration={duration}
+          buffered={buffered}
+          onSeek={seekTo}
+          preview={preview}
+        />
         <div className={styles.bar}>
           <button
             type="button"

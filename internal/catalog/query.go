@@ -93,10 +93,10 @@ func parseID(s string) (int64, bool) {
 	return id, err == nil && id > 0
 }
 
-// validCoverName reports whether name looks like a cover FranzPLAY made
-// ("12-0a1b2c3d.jpg"). Anything else, such as "../franzplay.db", is refused
+// validImageName reports whether name looks like a cover or a preview
+// FranzPLAY made ("12-0a1b2c3d.jpg"). Anything else, such as "../franzplay.db", is refused
 // before the disk is touched.
-func validCoverName(name string) bool {
+func validImageName(name string) bool {
 	id, rest, ok := strings.Cut(name, "-")
 	if !ok || !strings.HasSuffix(rest, ".jpg") {
 		return false

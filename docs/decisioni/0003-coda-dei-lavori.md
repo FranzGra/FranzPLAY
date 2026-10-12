@@ -49,3 +49,17 @@ com'è.
   non mostra mai la copertina vecchia.
 - La copertina si scrive in un file temporaneo e si rinomina solo a lavoro finito (regola 6).
 - All'avvio FranzPLAY cancella le copertine che nessun video usa più (video dimenticati).
+
+## Le anteprime della barra del player
+
+- Dopo la copertina, ogni video lungo almeno 4 secondi riceve le **anteprime**: piccoli
+  fotogrammi (160×90) presi ogni 2 secondi, o più distanti nei video lunghi, mai più di 100.
+  Stanno tutti in **un'unica immagine** a griglia (10 per riga) in `data/previews/`: il browser
+  la scarica una volta sola e mostra il pezzo giusto mentre il mouse scorre sulla barra.
+- Per essere veloci anche su un Raspberry Pi, ffmpeg legge solo i **fotogrammi chiave** del video
+  invece di guardarlo tutto: l'anteprima è un po' meno precisa, ma pronta in pochi secondi.
+  Se un video ha un solo fotogramma chiave (capita nelle clip corte), si leggono tutti.
+- Prima si scrivono i fotogrammi uno per uno in una cartella temporanea, così si sa quanti sono
+  davvero; poi si uniscono. Solo l'immagine finita esce dalla cartella temporanea (regola 6).
+- L'ordine dei lavori: prima le letture con ffprobe, poi le copertine (servono a ogni pagina),
+  poi le anteprime.

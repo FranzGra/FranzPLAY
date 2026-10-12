@@ -122,10 +122,10 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 	}
 	if n == 0 {
 		// The file changed meanwhile: this cover belongs to nobody.
-		return removeCover(dir, name)
+		return removeFile(dir, name)
 	}
 	if oldCover.Valid && oldCover.String != name {
-		return removeCover(dir, oldCover.String)
+		return removeFile(dir, oldCover.String)
 	}
 	return nil
 }
@@ -161,10 +161,11 @@ func findSidecar(video string) (string, bool) {
 	return "", false
 }
 
-// removeCover deletes a cover file. A file already gone is fine.
-func removeCover(dir, name string) error {
+// removeFile deletes a file of the data folder, like a cover. A file
+// already gone is fine.
+func removeFile(dir, name string) error {
 	if err := os.Remove(filepath.Join(dir, filepath.Base(name))); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("remove old cover: %w", err)
+		return fmt.Errorf("remove old %s: %w", name, err)
 	}
 	return nil
 }
@@ -174,23 +175,36 @@ func removeCover(dir, name string) error {
 // It only ever looks inside the covers folder of the data folder. It must
 // run before the job worker starts, so it never sees a cover being made.
 func RemoveOrphanCovers(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	dir := filepath.Join(dataDir, CoversDir)
+	return removeOrphans(ctx, db, filepath.Join(dataDir, CoversDir), "cover")
+}
+
+// removeOrphans deletes what is in dir and not named in the given column
+// of the videos: old files, and work left half done by a crash.
+func removeOrphans(ctx context.Context, db *sql.DB, dir, column string) (removed int, err error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
 	}
 	if err != nil {
-		return 0, fmt.Errorf("read covers folder: %w", err)
+		return 0, fmt.Errorf("read %s folder: %w", column, err)
 	}
-	used, err := usedCovers(ctx, db)
+	used, err := usedFiles(ctx, db, column)
 	if err != nil {
 		return 0, err
 	}
 	for _, e := range entries {
-		if e.IsDir() || used[e.Name()] {
+		if used[e.Name()] {
 			continue
 		}
-		if err := removeCover(dir, e.Name()); err != nil {
+		if e.IsDir() {
+			// Only FranzPLAY's own unfinished work: anything else is left alone.
+			if !strings.HasPrefix(e.Name(), ".new-") {
+				continue
+			}
+			if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
+				return removed, fmt.Errorf("remove unfinished %s: %w", column, err)
+			}
+		} else if err := removeFile(dir, e.Name()); err != nil {
 			return removed, err
 		}
 		removed++
@@ -198,17 +212,19 @@ func RemoveOrphanCovers(ctx context.Context, db *sql.DB, dataDir string) (remove
 	return removed, nil
 }
 
-func usedCovers(ctx context.Context, db *sql.DB) (_ map[string]bool, err error) {
-	rows, err := db.QueryContext(ctx, `SELECT cover FROM videos WHERE cover IS NOT NULL`)
+// usedFiles returns the file names in a column of the videos: "cover" or
+// "preview", never anything a request chose.
+func usedFiles(ctx context.Context, db *sql.DB, column string) (_ map[string]bool, err error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+column+` FROM videos WHERE `+column+` IS NOT NULL`)
 	if err != nil {
-		return nil, fmt.Errorf("read covers: %w", err)
+		return nil, fmt.Errorf("read %s files: %w", column, err)
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	used := map[string]bool{}
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("read covers: %w", err)
+			return nil, fmt.Errorf("read %s files: %w", column, err)
 		}
 		used[name] = true
 	}
