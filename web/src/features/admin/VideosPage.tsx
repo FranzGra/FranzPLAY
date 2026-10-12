@@ -13,6 +13,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
 import styles from "./Admin.module.css";
+import { CoverForm } from "./CoverForm";
 import { DetailsForm } from "./DetailsForm";
 
 export const adminPageSize = 50;
@@ -179,6 +180,7 @@ function VideoRow({
 }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [choosingCover, setChoosingCover] = useState(false);
   const [problem, setProblem] = useState("");
   const [done, setDone] = useState("");
 
@@ -245,6 +247,7 @@ function VideoRow({
             {video.duration !== null && !video.cover && (
               <span className={styles.badge}>Senza copertina</span>
             )}
+            {video.coverChoice !== "" && <span className={styles.badgeOk}>Copertina scelta</span>}
           </p>
           {problem && (
             <p role="alert" className={styles.problem}>
@@ -273,6 +276,18 @@ function VideoRow({
         <button
           type="button"
           className={`glass ${styles.action}`}
+          aria-expanded={choosingCover}
+          disabled={video.missing}
+          onClick={() => {
+            setDone("");
+            setChoosingCover(!choosingCover);
+          }}
+        >
+          Copertina
+        </button>
+        <button
+          type="button"
+          className={`glass ${styles.action}`}
           disabled={busy || video.missing}
           onClick={() =>
             run(() => refreshVideo(video.id), "In coda: copertina e anteprime arrivano tra poco.")
@@ -293,6 +308,17 @@ function VideoRow({
             setDone("Salvato. Tutti vedono titolo e categoria nuovi.");
           }}
           onCancel={() => setEditing(false)}
+        />
+      )}
+      {choosingCover && (
+        <CoverForm
+          video={video}
+          onChosen={(changed) => {
+            onChanged(changed);
+            setChoosingCover(false);
+            setDone("In coda: la nuova copertina arriva tra poco.");
+          }}
+          onClose={() => setChoosingCover(false)}
         />
       )}
     </div>

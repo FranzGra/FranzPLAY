@@ -40,14 +40,14 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 	video := filepath.Join(dir, "mare.mp4")
 	c := &Coverer{}
 
-	args := c.coverArgs(video, 300, "", "out.jpg")
+	args := c.coverArgs(video, 300, coverChoice{}, "out.jpg")
 	if !slices.Contains(args, "file:"+video) || !slices.Contains(args, "30") {
 		t.Errorf("without an image: %q, want a frame at second 30 of the video", args)
 	}
 
 	// A picture found on the internet comes before a frame of the video.
 	downloaded := filepath.Join(dir, "data", "online", "7-1234.img")
-	args = c.coverArgs(video, 300, downloaded, "out.jpg")
+	args = c.coverArgs(video, 300, coverChoice{downloaded: downloaded}, "out.jpg")
 	if !slices.Contains(args, "file:"+downloaded) || slices.Contains(args, "file:"+video) {
 		t.Errorf("with a picture from the internet: %q", args)
 	}
@@ -57,7 +57,7 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An image next to the video comes before the internet's.
-	args = c.coverArgs(video, 300, downloaded, "out.jpg")
+	args = c.coverArgs(video, 300, coverChoice{downloaded: downloaded}, "out.jpg")
 	if !slices.Contains(args, "file:"+poster) || slices.Contains(args, "file:"+video) {
 		t.Errorf("with mare-poster.jpg: %q", args)
 	}
@@ -67,8 +67,56 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 	if err := os.WriteFile(plain, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if args = c.coverArgs(video, 300, "", "out.jpg"); !slices.Contains(args, "file:"+plain) {
+	if args = c.coverArgs(video, 300, coverChoice{}, "out.jpg"); !slices.Contains(args, "file:"+plain) {
 		t.Errorf("with mare.jpg: %q", args)
+	}
+}
+
+func TestCoverArgsPrefersTheAdministratorsChoice(t *testing.T) {
+	dir := t.TempDir()
+	video := filepath.Join(dir, "mare.mp4")
+	if err := os.WriteFile(filepath.Join(dir, "mare.jpg"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	downloaded := filepath.Join(dir, "data", "online", "7-1234.img")
+	c := &Coverer{}
+
+	// A moment chosen by the administrator beats the image next to the video.
+	choice := coverChoice{second: sql.NullInt64{Int64: 125, Valid: true}, downloaded: downloaded}
+	args := c.coverArgs(video, 300, choice, "out.jpg")
+	if !slices.Contains(args, "file:"+video) || !slices.Contains(args, "125") {
+		t.Errorf("with a chosen moment: %q", args)
+	}
+
+	// An uploaded image beats everything, and is cut to 16:9.
+	choice.own = filepath.Join(dir, "data", "own-covers", "7-abcdef0123456789.png")
+	args = c.coverArgs(video, 300, choice, "out.jpg")
+	if !slices.Contains(args, "file:"+choice.own) || slices.Contains(args, "file:"+video) {
+		t.Errorf("with an uploaded image: %q", args)
+	}
+	if i := slices.Index(args, "-vf"); i < 0 || !strings.HasPrefix(args[i+1], "crop=") {
+		t.Errorf("the uploaded image is not cut to 16:9: %q", args)
+	}
+}
+
+func TestChosenCoverNameChangesWithTheChoice(t *testing.T) {
+	const fp = "v1:aaaaaaaa11111111"
+	auto := chosenCoverName(7, fp, coverChoice{downloaded: "/data/online/7.img"})
+	if auto != coverName(7, fp) {
+		t.Errorf("FranzPLAY's own cover = %q, want %q", auto, coverName(7, fp))
+	}
+	names := map[string]bool{auto: true}
+	for _, choice := range []coverChoice{
+		{second: sql.NullInt64{Int64: 10, Valid: true}},
+		{second: sql.NullInt64{Int64: 20, Valid: true}},
+		{own: "/data/own-covers/7-0000000011111111.jpg"},
+		{own: "/data/own-covers/7-0000000022222222.jpg"},
+	} {
+		name := chosenCoverName(7, fp, choice)
+		if names[name] {
+			t.Errorf("name %q used twice", name)
+		}
+		names[name] = true
 	}
 }
 
@@ -287,6 +335,29 @@ func TestCoverWithRealFFmpeg(t *testing.T) {
 
 	if after := listDir(t, root); !slices.Equal(after, libraryBefore) {
 		t.Errorf("video folder changed: %q, before %q", after, libraryBefore)
+	}
+	if files := fx.files(t); len(files) != 1 {
+		t.Errorf("covers folder = %q, want just one cover", files)
+	}
+
+	// An image uploaded by the administrator wins, cut to 16:9.
+	own := filepath.Join(fx.dataDir, OwnCoversDir, "1-0123456789abcdef.png")
+	if err := os.MkdirAll(filepath.Dir(own), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(context.Background(), ffmpeg, "-v", "error",
+		"-f", "lavfi", "-i", "color=c=blue:size=300x400", "-frames:v", "1", "file:"+own); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fx.db.Exec(`UPDATE videos SET own_cover = ? WHERE id = ?`, filepath.Base(own), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	// 300 wide, and 9/16 of it tall (168.75), rounded to an even number.
+	if w, h := jpegSize(t, filepath.Join(fx.dataDir, CoversDir, fx.cover(t).String)); w != 300 || h < 168 || h > 170 {
+		t.Errorf("cover from the uploaded image is %dx%d, want 300x170 or so", w, h)
 	}
 	if files := fx.files(t); len(files) != 1 {
 		t.Errorf("covers folder = %q, want just one cover", files)
