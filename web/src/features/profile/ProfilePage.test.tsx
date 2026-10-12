@@ -16,9 +16,18 @@ describe("profile page", () => {
     expect(screen.getByText("Utente")).toBeInTheDocument();
   });
 
-  it("has the upload button, disabled until uploading exists", async () => {
+  it("leads who may upload to the upload page", async () => {
     renderApp("/profilo");
+    expect(await screen.findByRole("link", { name: /Carica un video/ })).toHaveAttribute(
+      "href",
+      "/carica",
+    );
+  });
+
+  it("tells who may not upload whom to ask", async () => {
+    renderApp("/profilo", signedIn({ ...testAccount, role: "user", canUpload: false }));
     expect(await screen.findByRole("button", { name: /Carica un video/ })).toBeDisabled();
+    expect(screen.getByText(/serve il permesso dell'amministratore/)).toBeInTheDocument();
   });
 
   it("links only to pages the menus do not already show", async () => {
