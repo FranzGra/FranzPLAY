@@ -190,7 +190,9 @@ messaggio d'errore. Con **Riprova** (o **Riprova tutti**) li rimetti in coda. La
 da sola mentre i lavori vanno avanti. Se manca ffmpeg o ffprobe, te lo dice in rosso.
 
 Nella **Home** compaiono i video più recenti, con le categorie in alto per filtrarli. Clicca su un
-video per guardarlo con il player di FranzPLAY:
+video per guardarlo con il player di FranzPLAY: **parte da solo**. Se apri il video da un link
+incollato, il browser può farlo partire solo senza audio: in alto a sinistra compare **Attiva
+l'audio**.
 
 - **barra del tempo** grande: cliccala o trascinala per spostarti;
 - **±10 secondi** con i tasti accanto a Play, con le frecce o J e L della tastiera, oppure con un
