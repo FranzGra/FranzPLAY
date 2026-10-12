@@ -38,12 +38,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// emptyLibrary are the routes of a FranzPLAY with no videos yet.
+export const emptyLibrary: Routes = {
+  "GET /api/videos": { body: { videos: [], total: 0 } },
+  "GET /api/categories": { body: [] },
+  "GET /api/health": { body: { status: "ok", version: "test" } },
+};
+
 // signedIn are the routes of a server where Francesco is logged in.
 export function signedIn(account: Account = testAccount): Routes {
-  return {
-    "GET /api/me": { body: account },
-    "GET /api/health": { body: { status: "ok", version: "test" } },
-  };
+  return { ...emptyLibrary, "GET /api/me": { body: account } };
 }
 
 // renderApp shows the whole interface at the given address, without a
