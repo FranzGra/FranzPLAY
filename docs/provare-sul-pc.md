@@ -263,6 +263,14 @@ player usa quella, senza che tu debba fare niente. La vedi in Amministrazione �
 Finché la copia non è pronta, un video così può restare nero o mostrare «Questo video non si riesce
 a riprodurre»: riprova più tardi.
 
+**Video consigliati.** Accanto al player, in **Da guardare dopo**, FranzPLAY propone i video più
+simili a quello che stai guardando, e sotto ognuno dice perché: «Visto da chi ha visto questo»
+(qualcun altro ha guardato tutti e due), «Anche questo in Vacanze» (stessa categoria) o «Titolo
+simile» (parole in comune nel titolo). I video che hai già finito vanno in fondo. Nella Home, dopo
+che hai guardato o messo «Mi piace» a qualcosa, compare la riga **Potrebbe piacerti**: video delle
+categorie che guardi di più e video guardati dagli altri, che tu non hai ancora aperto. Tutto si
+calcola sul tuo computer, con poche regole semplici: nessun dato esce di casa.
+
 ### Cambiare porta
 
 Se la porta 8090 è occupata, puoi sceglierne un'altra.

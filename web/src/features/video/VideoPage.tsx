@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
 import { ApiError } from "../../api/client";
 import { fetchProgress, saveProgress } from "../../api/progress";
+import { fetchSimilar, reasonText } from "../../api/recommend";
 import {
   fetchSubtitles,
   fetchVideo,
@@ -17,7 +18,7 @@ import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
 import { SaveButton } from "../playlists/SaveButton";
-import { useVideoList } from "../videos/useVideoList";
+import { useSuggestions } from "../recommend/useSuggestions";
 import { VideoCard } from "../videos/VideoCard";
 import styles from "./VideoPage.module.css";
 
@@ -28,7 +29,7 @@ type State =
   | { kind: "ready"; video: Video; startAt: number };
 
 // VideoPage is where a video is watched: the player, its details, and
-// other videos of the same category next to it.
+// the videos to watch after it next to it.
 export function VideoPage() {
   const param = useParams().id ?? "";
   const id = /^\d+$/.test(param) ? Number(param) : 0;
@@ -158,21 +159,18 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
   );
 }
 
-// UpNext lists other videos of the same category (or the newest ones).
+// UpNext lists the videos to watch after this one, each saying why.
 function UpNext({ video, now }: { video: Video; now: Date }) {
-  const { state } = useVideoList({ category: video.category });
-  if (state.kind !== "ready") return null;
-  const others = state.videos.filter((v) => v.id !== video.id);
-  if (others.length === 0) return null;
+  const load = useCallback((signal: AbortSignal) => fetchSimilar(video.id, signal), [video.id]);
+  const similar = useSuggestions(load);
+  if (similar.length === 0) return null;
   return (
     <>
-      <h2 className={styles.sideTitle}>
-        {video.category ? `Altri video di ${video.category}` : "Altri video"}
-      </h2>
+      <h2 className={styles.sideTitle}>Da guardare dopo</h2>
       <ul className={styles.list}>
-        {others.map((v) => (
-          <li key={v.id}>
-            <VideoCard video={v} now={now} layout="row" />
+        {similar.map((s) => (
+          <li key={s.video.id}>
+            <VideoCard video={s.video} now={now} layout="row" note={reasonText(s)} />
           </li>
         ))}
       </ul>

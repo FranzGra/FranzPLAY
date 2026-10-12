@@ -64,6 +64,7 @@ internal/respond/   risposte dell'API, tutte in JSON e tutte uguali
 internal/catalog/   l'API dei video: elenco, un video, categorie, copertine, streaming
 internal/users/     utenti, accesso e sessioni; protegge tutta l'API
 internal/channels/  il canale di ogni persona: nome e playlist pubbliche
+internal/recommend/ i video consigliati: regole semplici a punti, ognuna col suo perché
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
 internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)

@@ -180,4 +180,28 @@ describe("home page", () => {
     await screen.findByRole("list", { name: "Ultimi video" });
     expect(screen.queryByRole("heading", { name: "Continua a guardare" })).not.toBeInTheDocument();
   });
+
+  it("shows the videos the person may like, each saying why", async () => {
+    renderApp("/", {
+      ...signedIn(),
+      "GET /api/recommended": {
+        body: [{ video: videoJSON({ id: 4, title: "Montagna" }), reason: "yourCategory" }],
+      },
+      "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
+    });
+    const row = await screen.findByRole("region", { name: "Potrebbe piacerti" });
+    const card = within(row).getByRole("link");
+    expect(card).toHaveAttribute("href", "/video/4");
+    expect(within(card).getByText("Perché guardi Vacanze")).toBeInTheDocument();
+  });
+
+  it("shows no suggestions while there is nothing to go by", async () => {
+    renderApp("/", {
+      ...signedIn(),
+      "GET /api/recommended": { body: [] },
+      "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
+    });
+    await screen.findByRole("list", { name: "Ultimi video" });
+    expect(screen.queryByRole("heading", { name: "Potrebbe piacerti" })).not.toBeInTheDocument();
+  });
 });
