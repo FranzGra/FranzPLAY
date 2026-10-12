@@ -53,6 +53,51 @@
   color: var(--color-text-muted);
 }
 
+.side {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Two small round buttons that move the row, for those with a mouse. */
+.arrows {
+  display: flex;
+  gap: 6px;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.06);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    opacity 150ms;
+}
+
+.arrow:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* On touch screens the finger scrolls the row: no buttons. */
+@media (hover: none) {
+  .arrows {
+    display: none;
+  }
+}
+
 .more {
   font-size: 14px;
   font-weight: 600;
