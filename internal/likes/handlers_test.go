@@ -258,3 +258,31 @@ func TestLikedList(t *testing.T) {
 		}
 	}
 }
+
+func TestLikesOnASharedVideo(t *testing.T) {
+	s := newSite(t)
+	if _, err := s.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at) VALUES (3, 'Anna', 'x', 'user', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	const anna int64 = 3
+	video := s.addVideo(t, "compleanno.mp4")
+	for _, q := range []string{
+		`UPDATE videos SET private = 1, uploaded_by = 1 WHERE id = ?`,
+		`INSERT INTO video_shares (video_id, user_id) VALUES (?, 2)`,
+	} {
+		if _, err := s.db.Exec(q, video); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Giulia uploaded it and shared it with Marco: both like it.
+	s.like(t, giulia, http.MethodPut, video)
+	if got := s.like(t, marco, http.MethodPut, video); got != (Like{Liked: true, Count: 2}) {
+		t.Errorf("Marco likes it: %+v", got)
+	}
+	// Anna does not even learn it is there.
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		if rec := s.do(t, anna, method, video); rec.Code != http.StatusNotFound {
+			t.Errorf("Anna %s: %d, want 404", method, rec.Code)
+		}
+	}
+}

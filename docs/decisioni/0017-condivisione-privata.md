@@ -34,6 +34,9 @@ playlist privata di sempre, «Alcune persone» usa la tabella `playlist_shares`.
 condivisa mostra solo i video che tutti possono vedere: un video privato non entra mai in una
 playlist. «Guarda più tardi» non si condivide.
 
-## Cosa resta per dopo
-
-- Mi piace e commenti sui video condivisi.
+**Mi piace e commenti.** Chi può aprire un video privato (chi l'ha caricato e le persone scelte)
+può anche mettere mi piace e commentare: una famiglia che si condivide un video ne vuole parlare.
+Il controllo è uno solo, `catalog.Lookup.CanOpen`, lo stesso della pagina del video. Restano spenti
+per i video privati: salvare in una playlist, il tasto Condividi, i consigliati e «Continua a
+guardare», perché porterebbero altri verso una pagina che per loro non si apre. Questo cambia la
+regola scritta nella decisione 0014, dove mi piace e commenti erano spenti.
