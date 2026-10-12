@@ -1,6 +1,6 @@
-import { videoJSON } from "../test/fixtures";
+import { watchedJSON } from "../test/fixtures";
 import { fakeServer } from "../test/render";
-import { parseContinue, parseProgress, saveProgress } from "./progress";
+import { parseContinue, parseHistory, parseProgress, saveProgress } from "./progress";
 
 describe("parseProgress", () => {
   it("accepts a valid mark", () => {
@@ -23,17 +23,36 @@ describe("parseProgress", () => {
 
 describe("parseContinue", () => {
   it("accepts the videos in progress", () => {
-    const [first] = parseContinue([{ video: videoJSON(), position: 60 }]);
+    const [first] = parseContinue([watchedJSON()]);
     expect(first?.video.title).toBe("Mare 2024");
     expect(first?.position).toBe(60);
+    expect(first?.watchedAt).toEqual(new Date("2026-10-11T20:30:00Z"));
   });
 
   it.each([
     ["not a list", {}],
-    ["bad video", [{ video: { id: 0 }, position: 1 }]],
-    ["bad position", [{ video: videoJSON(), position: null }]],
+    ["bad video", [watchedJSON({ video: { id: 0 } })]],
+    ["bad position", [watchedJSON({ position: null })]],
+    ["no finished", [watchedJSON({ finished: undefined })]],
+    ["bad date", [watchedJSON({ watchedAt: "ieri" })]],
   ])("refuses %s", (_, data) => {
     expect(() => parseContinue(data)).toThrow();
+  });
+});
+
+describe("parseHistory", () => {
+  it("accepts a page of the history", () => {
+    const h = parseHistory({ items: [watchedJSON({ finished: true })], total: 5 });
+    expect(h.total).toBe(5);
+    expect(h.items[0]?.finished).toBe(true);
+  });
+
+  it.each([
+    ["no items", { total: 0 }],
+    ["bad total", { items: [], total: -1 }],
+    ["bad item", { items: [{}], total: 1 }],
+  ])("refuses %s", (_, data) => {
+    expect(() => parseHistory(data)).toThrow();
   });
 });
 

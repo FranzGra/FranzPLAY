@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchContinue, type Started } from "../../api/progress";
+import { fetchContinue, type Watched } from "../../api/progress";
 import { VideoCard } from "../videos/VideoCard";
 import styles from "./ContinueRow.module.css";
 
@@ -28,8 +28,8 @@ export function ContinueRow() {
 
 // useStarted loads the videos in progress. If they do not load the row
 // simply does not appear, so a failure only goes to the console.
-function useStarted(): Started[] {
-  const [started, setStarted] = useState<Started[]>([]);
+function useStarted(): Watched[] {
+  const [started, setStarted] = useState<Watched[]>([]);
   useEffect(() => {
     const controller = new AbortController();
     fetchContinue(controller.signal)

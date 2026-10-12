@@ -54,29 +54,60 @@ func (s store) get(ctx context.Context, userID, videoID int64) (Mark, error) {
 	return m, nil
 }
 
-// started is a video someone is in the middle of.
-type started struct {
+// watched is one video in someone's history.
+type watched struct {
 	videoID  int64
 	position int64
+	finished bool
+	at       time.Time // the last time it was watched
 }
 
-// inProgress returns the videos started and not finished, most recent first.
-func (s store) inProgress(ctx context.Context, userID int64, limit int) (_ []started, err error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT p.video_id, p.position FROM watch_progress p JOIN videos v ON v.id = p.video_id
-		WHERE p.user_id = ? AND p.finished = 0 AND p.position > 0 AND v.missing_since IS NULL
-		ORDER BY p.updated_at DESC, p.video_id DESC LIMIT ?`, userID, limit)
+// list returns the videos watched by a person, most recent first, and how
+// many there are in all. Only present videos count. With onlyStarted,
+// only those left in the middle: for "Continua a guardare".
+func (s store) list(ctx context.Context, userID int64, onlyStarted bool, limit, offset int) (_ []watched, total int, err error) {
+	where := `p.user_id = ? AND v.missing_since IS NULL`
+	if onlyStarted {
+		where += ` AND p.finished = 0 AND p.position > 0`
+	}
+	from := ` FROM watch_progress p JOIN videos v ON v.id = p.video_id WHERE ` + where
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*)`+from, userID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count progress: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT p.video_id, p.position, p.finished, p.updated_at`+from+`
+		ORDER BY p.updated_at DESC, p.video_id DESC LIMIT ? OFFSET ?`, userID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list progress: %w", err)
+		return nil, 0, fmt.Errorf("list progress: %w", err)
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
-	var out []started
+	var out []watched
 	for rows.Next() {
-		var st started
-		if err := rows.Scan(&st.videoID, &st.position); err != nil {
-			return nil, fmt.Errorf("list progress: %w", err)
+		var w watched
+		var at int64
+		if err := rows.Scan(&w.videoID, &w.position, &w.finished, &at); err != nil {
+			return nil, 0, fmt.Errorf("list progress: %w", err)
 		}
-		out = append(out, st)
+		w.at = time.Unix(at, 0).UTC()
+		out = append(out, w)
 	}
-	return out, rows.Err()
+	return out, total, rows.Err()
+}
+
+// forget removes one video from a person's history; with videoID 0, all
+// of them. It reports how many were removed.
+func (s store) forget(ctx context.Context, userID, videoID int64) (int64, error) {
+	query, args := `DELETE FROM watch_progress WHERE user_id = ?`, []any{userID}
+	if videoID != 0 {
+		query += ` AND video_id = ?`
+		args = append(args, videoID)
+	}
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("forget progress: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("forget progress: %w", err)
+	}
+	return n, nil
 }

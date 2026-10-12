@@ -243,3 +243,112 @@ func TestProgressGoesWithTheVideo(t *testing.T) {
 		t.Errorf("rows left = %d (%v), want 0", n, err)
 	}
 }
+
+type historyAnswer struct {
+	Items []struct {
+		Video     catalog.Video `json:"video"`
+		Position  int64         `json:"position"`
+		Finished  bool          `json:"finished"`
+		WatchedAt time.Time     `json:"watchedAt"`
+	} `json:"items"`
+	Total int `json:"total"`
+}
+
+func TestHistory(t *testing.T) {
+	s := newSite(t)
+	first := s.addVideo(t, "primo.mp4", 600)
+	finished := s.addVideo(t, "finito.mp4", 600)
+	gone := s.addVideo(t, "sparito.mp4", 600)
+	last := s.addVideo(t, "ultimo.mp4", 600)
+	for _, step := range []struct {
+		video    int64
+		position string
+	}{{first, "100"}, {finished, "599"}, {gone, "50"}, {last, "3"}} {
+		s.now = s.now.Add(time.Minute)
+		s.save(t, giulia, step.video, step.position)
+	}
+	s.save(t, marco, first, "50")
+	if _, err := s.db.Exec(`UPDATE videos SET missing_since = 1 WHERE id = ?`, gone); err != nil {
+		t.Fatal(err)
+	}
+
+	got := decode[historyAnswer](t, s.do(t, giulia, http.MethodGet, "/api/history", ""))
+	// Everything watched, finished or barely started, most recent first;
+	// missing videos are left out.
+	if got.Total != 3 || len(got.Items) != 3 {
+		t.Fatalf("history = %+v, want 3 videos", got)
+	}
+	want := []struct {
+		id       int64
+		position int64
+		finished bool
+		minute   int64
+	}{{last, 0, false, 4}, {finished, 0, true, 2}, {first, 100, false, 1}}
+	for i, w := range want {
+		it := got.Items[i]
+		if it.Video.ID != w.id || it.Position != w.position || it.Finished != w.finished ||
+			!it.WatchedAt.Equal(time.Unix(1_000_000+60*w.minute, 0)) {
+			t.Errorf("item %d = %+v, want %+v", i, it, w)
+		}
+	}
+
+	page := decode[historyAnswer](t, s.do(t, giulia, http.MethodGet, "/api/history?limit=1&offset=1", ""))
+	if page.Total != 3 || len(page.Items) != 1 || page.Items[0].Video.ID != finished {
+		t.Errorf("second page = %+v", page)
+	}
+
+	for _, target := range []string{"/api/history?limit=0", "/api/history?limit=201", "/api/history?offset=-1", "/api/history?offset=x"} {
+		if rec := s.do(t, giulia, http.MethodGet, target, ""); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", target, rec.Code)
+		}
+	}
+	if rec := s.do(t, 0, http.MethodGet, "/api/history", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("nobody logged in: %d", rec.Code)
+	}
+}
+
+func TestHistoryEmpty(t *testing.T) {
+	s := newSite(t)
+	rec := s.do(t, giulia, http.MethodGet, "/api/history", "")
+	if body := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || body != `{"items":[],"total":0}` {
+		t.Errorf("got %d %s", rec.Code, body)
+	}
+}
+
+func TestForgetHistory(t *testing.T) {
+	s := newSite(t)
+	a := s.addVideo(t, "a.mp4", 600)
+	b := s.addVideo(t, "b.mp4", 600)
+	for _, v := range []int64{a, b} {
+		s.save(t, giulia, v, "100")
+		s.save(t, marco, v, "100")
+	}
+	count := func(user int64) int {
+		return decode[historyAnswer](t, s.do(t, user, http.MethodGet, "/api/history", "")).Total
+	}
+
+	if rec := s.do(t, giulia, http.MethodDelete, "/api/history/"+strconv.FormatInt(a, 10), ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("forget one: %d %s", rec.Code, rec.Body)
+	}
+	if count(giulia) != 1 || count(marco) != 2 {
+		t.Errorf("after forgetting one: Giulia %d, Marco %d", count(giulia), count(marco))
+	}
+	// The video starts again from the beginning.
+	target := "/api/videos/" + strconv.FormatInt(a, 10) + "/progress"
+	if got := decode[Mark](t, s.do(t, giulia, http.MethodGet, target, "")); got != (Mark{}) {
+		t.Errorf("forgotten video: %+v", got)
+	}
+	if rec := s.do(t, giulia, http.MethodDelete, "/api/history/"+strconv.FormatInt(a, 10), ""); rec.Code != http.StatusNotFound {
+		t.Errorf("forget again: %d, want 404", rec.Code)
+	}
+
+	if rec := s.do(t, giulia, http.MethodDelete, "/api/history", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("forget all: %d %s", rec.Code, rec.Body)
+	}
+	if count(giulia) != 0 || count(marco) != 2 {
+		t.Errorf("after forgetting all: Giulia %d, Marco %d", count(giulia), count(marco))
+	}
+	if rec := s.do(t, 0, http.MethodDelete, "/api/history", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("nobody logged in: %d", rec.Code)
+	}
+}

@@ -36,9 +36,12 @@ type handlers struct {
 // Routes adds the progress API to mux. Every route works for the
 // logged-in person only:
 //
-//	GET  /api/videos/{id}/progress  where I stopped: {position, finished}
-//	POST /api/videos/{id}/progress  {position}: sent by the player while watching
-//	GET  /api/continue              the videos I am in the middle of
+//	GET    /api/videos/{id}/progress where I stopped: {position, finished}
+//	POST   /api/videos/{id}/progress {position}: sent by the player while watching
+//	GET    /api/continue             the videos I am in the middle of
+//	GET    /api/history              what I watched, most recent first (limit, offset)
+//	DELETE /api/history              forget everything I watched
+//	DELETE /api/history/{id}         forget one video
 func Routes(db *sql.DB, lookup videos, logger *slog.Logger) func(mux *http.ServeMux) {
 	return handlers{store: store{db: db}, videos: lookup, logger: logger, now: time.Now, account: users.FromContext}.routes
 }
@@ -47,6 +50,9 @@ func (h handlers) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/videos/{id}/progress", h.get)
 	mux.HandleFunc("POST /api/videos/{id}/progress", h.save)
 	mux.HandleFunc("GET /api/continue", h.list)
+	mux.HandleFunc("GET /api/history", h.history)
+	mux.HandleFunc("DELETE /api/history", h.forgetAll)
+	mux.HandleFunc("DELETE /api/history/{id}", h.forgetOne)
 }
 
 // request returns the logged-in person and the video id of the address.
@@ -114,10 +120,32 @@ func (h handlers) save(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, r, h.logger, http.StatusOK, m)
 }
 
-// continueItem is one video of GET /api/continue.
-type continueItem struct {
-	Video    catalog.Video `json:"video"`
-	Position int64         `json:"position"`
+// item is one video of the history or of "Continua a guardare".
+type item struct {
+	Video     catalog.Video `json:"video"`
+	Position  int64         `json:"position"`
+	Finished  bool          `json:"finished"`
+	WatchedAt time.Time     `json:"watchedAt"`
+}
+
+// items adds each video's details to what was watched, in the same order.
+func (h handlers) items(ctx context.Context, list []watched) ([]item, error) {
+	ids := make([]int64, len(list))
+	byID := make(map[int64]watched, len(list))
+	for i, w := range list {
+		ids[i] = w.videoID
+		byID[w.videoID] = w
+	}
+	found, err := h.videos.ByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]item, 0, len(found))
+	for _, v := range found {
+		w := byID[v.ID]
+		out = append(out, item{Video: v, Position: w.position, Finished: w.finished, WatchedAt: w.at})
+	}
+	return out, nil
 }
 
 func (h handlers) list(w http.ResponseWriter, r *http.Request) {
@@ -126,25 +154,78 @@ func (h handlers) list(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, h.logger, http.StatusUnauthorized, "login required")
 		return
 	}
-	marks, err := h.store.inProgress(r.Context(), a.ID, continueLimit)
+	started, _, err := h.store.list(r.Context(), a.ID, true, continueLimit, 0)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	ids := make([]int64, len(marks))
-	position := make(map[int64]int64, len(marks))
-	for i, m := range marks {
-		ids[i] = m.videoID
-		position[m.videoID] = m.position
-	}
-	found, err := h.videos.ByIDs(r.Context(), ids)
+	items, err := h.items(r.Context(), started)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
 		return
-	}
-	items := make([]continueItem, 0, len(found))
-	for _, v := range found {
-		items = append(items, continueItem{Video: v, Position: position[v.ID]})
 	}
 	respond.JSON(w, r, h.logger, http.StatusOK, items)
+}
+
+// historyPage is the answer of GET /api/history.
+type historyPage struct {
+	Items []item `json:"items"`
+	Total int    `json:"total"` // all the videos in the history, not just this page
+}
+
+func (h handlers) history(w http.ResponseWriter, r *http.Request) {
+	a, logged := h.account(r.Context())
+	if !logged {
+		respond.Error(w, r, h.logger, http.StatusUnauthorized, "login required")
+		return
+	}
+	limit, offset, err := parsePage(r.URL.Query())
+	if err != nil {
+		respond.Error(w, r, h.logger, http.StatusBadRequest, err.Error())
+		return
+	}
+	list, total, err := h.store.list(r.Context(), a.ID, false, limit, offset)
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	items, err := h.items(r.Context(), list)
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	respond.JSON(w, r, h.logger, http.StatusOK, historyPage{Items: items, Total: total})
+}
+
+// forgetOne removes one video from the history (and so from "Continua a
+// guardare"): the next time it starts from the beginning.
+func (h handlers) forgetOne(w http.ResponseWriter, r *http.Request) {
+	userID, videoID, ok := h.request(w, r)
+	if !ok {
+		return
+	}
+	n, err := h.store.forget(r.Context(), userID, videoID)
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	if n == 0 {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "this video is not in the history")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// forgetAll empties the history of the logged-in person.
+func (h handlers) forgetAll(w http.ResponseWriter, r *http.Request) {
+	a, logged := h.account(r.Context())
+	if !logged {
+		respond.Error(w, r, h.logger, http.StatusUnauthorized, "login required")
+		return
+	}
+	if _, err := h.store.forget(r.Context(), a.ID, 0); err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

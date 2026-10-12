@@ -14,3 +14,13 @@ export function videoJSON(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+export function watchedJSON(overrides: Record<string, unknown> = {}) {
+  return {
+    video: videoJSON(),
+    position: 60,
+    finished: false,
+    watchedAt: "2026-10-11T20:30:00Z",
+    ...overrides,
+  };
+}

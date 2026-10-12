@@ -1,5 +1,5 @@
 import { screen, within } from "@testing-library/react";
-import { videoJSON } from "../../test/fixtures";
+import { videoJSON, watchedJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 import { pageSize } from "../videos/useVideoList";
 
@@ -137,7 +137,12 @@ describe("home page", () => {
       ...signedIn(),
       "GET /api/categories": { body: [{ name: "Vacanze", videos: 1 }] },
       "GET /api/continue": {
-        body: [{ video: videoJSON({ id: 3, title: "A metà", duration: 200 }), position: 50 }],
+        body: [
+          watchedJSON({
+            video: videoJSON({ id: 3, title: "A metà", duration: 200 }),
+            position: 50,
+          }),
+        ],
       },
       "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
     });

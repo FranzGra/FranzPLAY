@@ -166,6 +166,10 @@ riapri riparte da lì, e nella Home compare la riga **Continua a guardare** con 
 quanto ne hai visto. I primi secondi non contano (hai solo aperto il video); gli ultimi secondi,
 spesso i titoli di coda, valgono come «finito» e il video esce dalla riga.
 
+**Cronologia.** Nel menu (o dalla pagina Profilo sul telefono) trovi tutti i video che hai guardato,
+divisi per giorno. Con la **X** togli un video (la prossima volta riparte dall'inizio); con
+**Cancella cronologia** la svuoti tutta. Ognuno vede solo la sua.
+
 **Sottotitoli.** FranzPLAY usa i file `.srt` e `.vtt` che stanno accanto al video con lo stesso
 nome, per esempio `mare.srt`, oppure `mare.it.srt` e `mare.en.srt` se ci sono più lingue. Non li
 modifica: li legge e li converte al volo.

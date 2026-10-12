@@ -9,9 +9,17 @@ export type Progress = {
   finished: boolean;
 };
 
-export type Started = {
+// Watched is a video of the history (or of "Continua a guardare").
+export type Watched = {
   video: Video;
-  position: number; // seconds
+  position: number; // seconds where it was left; 0 = from the start
+  finished: boolean;
+  watchedAt: Date;
+};
+
+export type History = {
+  items: Watched[];
+  total: number; // all the videos in the history, not just this page
 };
 
 function seconds(value: unknown, what: string): number {
@@ -28,13 +36,33 @@ export function parseProgress(data: unknown): Progress {
   return { position: seconds(d.position, "progress position"), finished: d.finished };
 }
 
-export function parseContinue(data: unknown): Started[] {
+export function parseWatched(data: unknown): Watched {
+  if (typeof data !== "object" || data === null) throw new Error("watched: not an object");
+  const d = data as Record<string, unknown>;
+  if (typeof d.finished !== "boolean") throw new Error("watched finished: not true or false");
+  const watchedAt = typeof d.watchedAt === "string" ? new Date(d.watchedAt) : new Date(Number.NaN);
+  if (Number.isNaN(watchedAt.getTime())) throw new Error("watched watchedAt: not a date");
+  return {
+    video: parseVideo(d.video),
+    position: seconds(d.position, "watched position"),
+    finished: d.finished,
+    watchedAt,
+  };
+}
+
+export function parseContinue(data: unknown): Watched[] {
   if (!Array.isArray(data)) throw new Error("continue: not a list");
-  return data.map((item: unknown) => {
-    if (typeof item !== "object" || item === null) throw new Error("continue item: not an object");
-    const d = item as Record<string, unknown>;
-    return { video: parseVideo(d.video), position: seconds(d.position, "continue position") };
-  });
+  return data.map(parseWatched);
+}
+
+export function parseHistory(data: unknown): History {
+  if (typeof data !== "object" || data === null) throw new Error("history: not an object");
+  const d = data as Record<string, unknown>;
+  if (!Array.isArray(d.items)) throw new Error("history items: not a list");
+  if (typeof d.total !== "number" || !Number.isInteger(d.total) || d.total < 0) {
+    throw new Error("history total: not a count");
+  }
+  return { items: d.items.map(parseWatched), total: d.total };
 }
 
 export async function fetchProgress(id: number, signal?: AbortSignal): Promise<Progress> {
@@ -51,6 +79,25 @@ export async function saveProgress(id: number, position: number): Promise<void> 
   });
 }
 
-export async function fetchContinue(signal?: AbortSignal): Promise<Started[]> {
+export async function fetchContinue(signal?: AbortSignal): Promise<Watched[]> {
   return parseContinue(await request("/api/continue", { signal }));
+}
+
+export async function fetchHistory(
+  { limit, offset = 0 }: { limit: number; offset?: number },
+  signal?: AbortSignal,
+): Promise<History> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return parseHistory(await request(`/api/history?${params}`, { signal }));
+}
+
+// forgetVideo removes one video from the history: it will start again
+// from the beginning.
+export async function forgetVideo(id: number): Promise<void> {
+  await request(`/api/history/${id}`, { method: "DELETE" });
+}
+
+// forgetHistory empties the whole history.
+export async function forgetHistory(): Promise<void> {
+  await request("/api/history", { method: "DELETE" });
 }

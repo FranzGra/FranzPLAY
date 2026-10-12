@@ -23,6 +23,23 @@ export function formatAge(date: Date, now: Date): string {
   return plural(Math.floor(days / 365), "anno", "anni");
 }
 
+// formatDay names a day for a list grouped by day, like the history:
+// "Oggi", "Ieri", "Lunedì" within a week, then "12 ottobre", and
+// "12 ottobre 2025" for another year.
+export function formatDay(date: Date, now: Date): string {
+  const days = Math.floor((startOfDay(now) - startOfDay(date)) / day);
+  if (days <= 0) return "Oggi";
+  if (days === 1) return "Ieri";
+  const options: Intl.DateTimeFormatOptions =
+    days < 7
+      ? { weekday: "long" }
+      : date.getFullYear() === now.getFullYear()
+        ? { day: "numeric", month: "long" }
+        : { day: "numeric", month: "long", year: "numeric" };
+  const text = date.toLocaleDateString("it-IT", options);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many} fa`;
 }
