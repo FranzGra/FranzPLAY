@@ -26,9 +26,10 @@ const (
 	Saved       Row = "saved"       // "I tuoi salvati"
 	Liked       Row = "liked"       // "Ti piacciono"
 	Recommended Row = "recommended" // "Potrebbe piacerti"
+	Latest      Row = "latest"      // "Ultimi arrivati"
 )
 
-var rows = []Row{Continue, Saved, Liked, Recommended}
+var rows = []Row{Continue, Saved, Liked, Recommended, Latest}
 
 // parseRow checks a row named in an address, once, at the edge.
 func parseRow(s string) (Row, bool) {

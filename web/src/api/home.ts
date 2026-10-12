@@ -3,7 +3,7 @@
 
 import { request } from "./client";
 
-export const homeRows = ["continue", "saved", "liked", "recommended"] as const;
+export const homeRows = ["continue", "saved", "liked", "recommended", "latest"] as const;
 export type HomeRow = (typeof homeRows)[number];
 
 export type HomeLayout = { closed: HomeRow[] };

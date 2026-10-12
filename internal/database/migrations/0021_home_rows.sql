@@ -3,6 +3,6 @@
 -- listed is open.
 CREATE TABLE closed_home_rows (
     user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    row     TEXT    NOT NULL CHECK (row IN ('continue', 'saved', 'liked', 'recommended')),
+    row     TEXT    NOT NULL CHECK (row IN ('continue', 'saved', 'liked', 'recommended', 'latest')),
     PRIMARY KEY (user_id, row)
 ) STRICT;
