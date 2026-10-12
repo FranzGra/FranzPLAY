@@ -65,6 +65,18 @@
   background: var(--glass-bg-strong);
 }
 
+/* A button that is switched on. */
+.on {
+  border-color: transparent;
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.on:hover {
+  background: var(--color-text);
+  opacity: 0.9;
+}
+
 .danger {
   border-color: transparent;
   background: var(--color-danger-bg);

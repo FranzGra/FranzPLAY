@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/catalog"
+	"github.com/FranzGra/FranzPLAY/internal/channels"
 	"github.com/FranzGra/FranzPLAY/internal/comments"
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/database"
@@ -152,6 +153,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		likes.Routes(db, logger),
 		comments.Routes(db, logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
+		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),
 		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),
 		hub.Routes(logger),

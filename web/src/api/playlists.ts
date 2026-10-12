@@ -10,6 +10,9 @@ export type Playlist = {
   // own and cannot be renamed or deleted.
   kind: "playlist" | "later";
   name: string;
+  owner: { id: number; name: string };
+  // public says the list shows on its owner's channel, for everyone.
+  public: boolean;
   videos: number;
   cover: string | null; // the first video's cover
   updatedAt: Date;
@@ -40,6 +43,16 @@ export function parsePlaylist(data: unknown): Playlist {
   if (typeof d.name !== "string" || (d.kind === "playlist" && d.name === "")) {
     throw new Error("playlist name: not a name");
   }
+  const o = (d.owner ?? {}) as Record<string, unknown>;
+  if (
+    typeof o.id !== "number" ||
+    !Number.isInteger(o.id) ||
+    o.id <= 0 ||
+    typeof o.name !== "string"
+  ) {
+    throw new Error("playlist owner: not a person");
+  }
+  if (typeof d.public !== "boolean") throw new Error("playlist public: not true or false");
   if (typeof d.videos !== "number" || !Number.isInteger(d.videos) || d.videos < 0) {
     throw new Error("playlist videos: not a count");
   }
@@ -55,6 +68,8 @@ export function parsePlaylist(data: unknown): Playlist {
     id: d.id,
     kind: d.kind,
     name: d.name,
+    owner: { id: o.id, name: o.name },
+    public: d.public,
     videos: d.videos,
     cover: d.cover,
     updatedAt,
@@ -91,6 +106,11 @@ export async function createPlaylist(name: string): Promise<Playlist> {
 
 export async function renamePlaylist(id: number, name: string): Promise<void> {
   await request(`/api/playlists/${id}`, { method: "PUT", body: { name } });
+}
+
+// publishPlaylist puts one of my lists on my channel (true) or takes it off.
+export async function publishPlaylist(id: number, shown: boolean): Promise<void> {
+  await request(`/api/playlists/${id}`, { method: "PUT", body: { public: shown } });
 }
 
 export async function deletePlaylist(id: number): Promise<void> {

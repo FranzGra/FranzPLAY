@@ -4,12 +4,15 @@ import { Icon } from "../components/Icon";
 import { useAccount } from "./auth";
 import styles from "./Layout.module.css";
 
-const sideLinks = [
-  { to: "/", label: "Home", icon: "home" },
-  { to: "/cronologia", label: "Cronologia", icon: "history" },
-  { to: "/categorie", label: "Categorie", icon: "categories" },
-  { to: "/profilo", label: "Il mio canale", icon: "channel" },
-] as const;
+// sideLinks are the first links of the side menu; the channel is mine.
+function sideLinks(me: number) {
+  return [
+    { to: "/", label: "Home", icon: "home" },
+    { to: "/cronologia", label: "Cronologia", icon: "history" },
+    { to: "/categorie", label: "Categorie", icon: "categories" },
+    { to: `/canale/${me}`, label: "Il mio canale", icon: "channel" },
+  ] as const;
+}
 
 const tabs = [
   { to: "/", label: "Home", icon: "home" },
@@ -68,7 +71,7 @@ export function Layout() {
 
       <div className={styles.body}>
         <nav className={styles.sidebar} aria-label="Menu principale">
-          {sideLinks.map((link) => (
+          {sideLinks(account.id).map((link) => (
             <NavLink key={link.to} to={link.to} end className={styles.sideLink}>
               <Icon name={link.icon} size={20} />
               {link.label}

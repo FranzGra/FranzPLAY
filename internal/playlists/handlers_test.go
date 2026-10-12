@@ -231,6 +231,64 @@ func TestOnlyMine(t *testing.T) {
 	}
 }
 
+func TestPublicLists(t *testing.T) {
+	s := newSite(t)
+	video := s.addVideo(t, "mare")
+	hers := s.create(t, giulia, "Gite")
+	private := s.create(t, giulia, "Segreta")
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID, video), ""), http.StatusNoContent)
+	if hers.Public || hers.Owner != (Owner{ID: giulia, Name: "Giulia"}) {
+		t.Errorf("new list = %+v, want private and Giulia's", hers)
+	}
+	before := decode[Page](t, s.must(t, s.do(t, giulia, http.MethodGet, path(hers.ID), ""), http.StatusOK))
+
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID), `{"public":true}`), http.StatusNoContent)
+
+	// Marco now sees it, with its videos, but cannot change it.
+	page := decode[Page](t, s.must(t, s.do(t, marco, http.MethodGet, path(hers.ID), ""), http.StatusOK))
+	if !page.Playlist.Public || page.Playlist.Name != "Gite" || page.Playlist.Owner.Name != "Giulia" || len(page.Videos) != 1 {
+		t.Errorf("Marco sees %+v %+v", page.Playlist, page.Videos)
+	}
+	if !page.Playlist.UpdatedAt.Equal(before.Playlist.UpdatedAt) {
+		t.Errorf("publishing changed updatedAt: %v, was %v", page.Playlist.UpdatedAt, before.Playlist.UpdatedAt)
+	}
+	for _, r := range []struct{ method, target, body string }{
+		{http.MethodPut, path(hers.ID), `{"name":"Mia"}`},
+		{http.MethodPut, path(hers.ID), `{"public":false}`},
+		{http.MethodDelete, path(hers.ID), ""},
+		{http.MethodPut, path(hers.ID, video), ""},
+		{http.MethodDelete, path(hers.ID, video), ""},
+	} {
+		if rec := s.do(t, marco, r.method, r.target, r.body); rec.Code != http.StatusForbidden {
+			t.Errorf("Marco %s %s: %d, want 403", r.method, r.target, rec.Code)
+		}
+	}
+	// Her private list stays out of reach, and her lists not in his.
+	s.must(t, s.do(t, marco, http.MethodGet, path(private.ID), ""), http.StatusNotFound)
+	if lists := s.list(t, marco, ""); len(lists) != 1 {
+		t.Errorf("Marco's own lists = %+v", lists)
+	}
+
+	public := PublicLists(s.db, catalog.NewLookup(s.db))
+	got, err := public(context.Background(), giulia)
+	if err != nil || len(got) != 1 || got[0].ID != hers.ID || got[0].Videos != 1 || got[0].Cover == nil {
+		t.Errorf("public lists = %+v (%v), want only Gite", got, err)
+	}
+
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID), `{"public":false}`), http.StatusNoContent)
+	s.must(t, s.do(t, marco, http.MethodGet, path(hers.ID), ""), http.StatusNotFound)
+	if got, err := public(context.Background(), giulia); err != nil || len(got) != 0 || got == nil {
+		t.Errorf("after hiding = %#v (%v), want an empty list", got, err)
+	}
+
+	// "Guarda più tardi" is always private.
+	later := s.list(t, giulia, "")[0]
+	s.must(t, s.do(t, giulia, http.MethodPut, path(later.ID), `{"public":true}`), http.StatusConflict)
+	if _, err := s.db.Exec(`UPDATE playlists SET public = 1 WHERE id = ?`, later.ID); err == nil {
+		t.Error("the database let watch later become public")
+	}
+}
+
 func TestRefused(t *testing.T) {
 	s := newSite(t)
 	gone := s.addVideo(t, "via")
@@ -256,6 +314,8 @@ func TestRefused(t *testing.T) {
 		{"missing video", http.MethodPut, path(list.ID, gone), "", giulia, http.StatusNotFound},
 		{"bad video id", http.MethodPut, path(list.ID) + "/videos/x", "", giulia, http.StatusNotFound},
 		{"rename empty", http.MethodPut, path(list.ID), `{"name":""}`, giulia, http.StatusBadRequest},
+		{"change nothing", http.MethodPut, path(list.ID), `{}`, giulia, http.StatusBadRequest},
+		{"public not true or false", http.MethodPut, path(list.ID), `{"public":"yes"}`, giulia, http.StatusBadRequest},
 	}
 	for _, tt := range tests {
 		if rec := s.do(t, tt.user, tt.method, tt.target, tt.body); rec.Code != tt.want {

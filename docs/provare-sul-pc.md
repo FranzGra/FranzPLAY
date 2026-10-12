@@ -220,7 +220,14 @@ eliminare i propri commenti; l'amministratore può eliminare tutti, per tenere p
 **Playlist.** Sotto ogni video il tasto **Salva** apre le tue playlist: spunta **Guarda più tardi**
 o una tua playlist, oppure creane una nuova al volo. Nella pagina **Playlist** le trovi tutte; dentro
 una playlist puoi togliere un video con la **X**, rinominarla o eliminarla (i video restano nella
-libreria). «Guarda più tardi» c'è sempre e non si elimina. Ognuno vede solo le sue.
+libreria). «Guarda più tardi» c'è sempre e non si elimina. Le playlist sono tue e nessun altro le
+vede, finché non premi **Sul mio canale**.
+
+**Il canale.** Ognuno ha un canale: dal menu a sinistra **Il mio canale**, oppure dalla pagina
+Profilo. Mostra il tuo nome, da quando sei su FranzPLAY e le playlist che hai messo sul canale.
+Gli altri possono aprirle e guardarle, ma non cambiarle. Per vedere il canale di qualcuno basta
+premere il suo nome sotto un commento. Premi di nuovo **Sul mio canale** e la playlist torna solo
+tua. «Guarda più tardi» resta sempre privata.
 
 **Sottotitoli.** FranzPLAY usa i file `.srt` e `.vtt` che stanno accanto al video con lo stesso
 nome, per esempio `mare.srt`, oppure `mare.it.srt` e `mare.en.srt` se ci sono più lingue. Non li
