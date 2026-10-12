@@ -3,6 +3,7 @@ import { AdminPage } from "../features/admin/AdminPage";
 import { FoldersPage } from "../features/admin/FoldersPage";
 import { JobsPage } from "../features/admin/JobsPage";
 import { PeoplePage } from "../features/admin/PeoplePage";
+import { VideosPage } from "../features/admin/VideosPage";
 import { AuthPage } from "../features/auth/AuthPage";
 import { ComingSoonPage } from "../features/ComingSoonPage";
 import { CategoriesPage } from "../features/categories/CategoriesPage";
@@ -58,6 +59,7 @@ function Pages() {
         <Route path="admin" element={<AdminPage />}>
           <Route index element={<Navigate to="persone" replace />} />
           <Route path="persone" element={<PeoplePage />} />
+          <Route path="video" element={<VideosPage />} />
           <Route path="cartelle" element={<FoldersPage />} />
           <Route path="lavori" element={<JobsPage />} />
         </Route>

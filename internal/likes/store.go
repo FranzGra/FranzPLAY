@@ -26,7 +26,7 @@ type store struct {
 // present checks that a video exists and is not missing.
 func (s store) present(ctx context.Context, videoID int64) error {
 	var one int
-	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM videos WHERE id = ? AND missing_since IS NULL`, videoID).Scan(&one)
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM videos WHERE id = ? AND visible`, videoID).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
 		return errVideoNotFound
 	}
