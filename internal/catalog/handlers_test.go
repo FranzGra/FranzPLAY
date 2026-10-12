@@ -151,6 +151,34 @@ func TestListVideosByCategoryAndPage(t *testing.T) {
 	}
 }
 
+func TestVideoFormatAndLikes(t *testing.T) {
+	s := newSite(t)
+	mare := s.addVideo(t, "Viaggi/mare.mp4", "sea", "Viaggi", 100, true)
+	s.addVideo(t, "prova.mkv", "test", "", 200, false)
+	s.addVideo(t, "senza", "none", "", 300, false)
+	for _, q := range []string{
+		`INSERT INTO users (id, name, password_hash, role, created_at) VALUES (1, 'Giulia', 'x', 'admin', 1), (2, 'Marco', 'x', 'user', 1)`,
+		fmt.Sprintf(`INSERT INTO likes (user_id, video_id, created_at) VALUES (1, %d, 1), (2, %d, 1)`, mare, mare),
+	} {
+		if _, err := s.db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := decode[listResponse](t, s.get(t, "/api/videos"))
+	want := map[string]struct {
+		format string
+		likes  int64
+	}{"mare.mp4": {"MP4", 2}, "prova.mkv": {"MKV", 0}, "senza": {"", 0}}
+	for _, v := range got.Videos {
+		if w := want[v.Title]; v.Format != w.format || v.Likes != w.likes {
+			t.Errorf("%s: format %q, likes %d; want %q, %d", v.Title, v.Format, v.Likes, w.format, w.likes)
+		}
+	}
+	if one := decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(mare, 10))); one.Likes != 2 || one.Format != "MP4" {
+		t.Errorf("one video: %+v", one)
+	}
+}
+
 func TestListVideosMixed(t *testing.T) {
 	s := newSite(t)
 	for i := range 30 {

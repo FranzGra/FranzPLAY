@@ -29,6 +29,8 @@ type Video struct {
 	Playable bool      `json:"playable"` // every browser can play it: as it is, or its copy
 	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
 	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
+	Format   string    `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
+	Likes    int64     `json:"likes"`    // how many people like it
 	// From a details file next to the video, like yt-dlp's .info.json:
 	Author      string  `json:"author"`                // who published it; "" = not known
 	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
@@ -62,7 +64,8 @@ type store struct {
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
-	v.shown_author, v.shown_published_on, v.clip`
+	v.shown_author, v.shown_published_on, v.clip,
+	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
 
 // rowScanner is a *sql.Row or *sql.Rows.
 type rowScanner interface{ Scan(dest ...any) error }
@@ -84,7 +87,7 @@ func scanVideo(row rowScanner) (Video, error) {
 	var relPath string
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
-		&author, &published, &clip); err != nil {
+		&author, &published, &clip, &v.Likes); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -111,6 +114,7 @@ func scanVideo(row rowScanner) (Video, error) {
 		v.Clip = &address
 	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
+	v.Format = fileFormat(relPath)
 	v.Author = author.String
 	if published.Valid {
 		v.PublishedOn = &published.String

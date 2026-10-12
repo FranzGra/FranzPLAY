@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/url"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -147,6 +148,21 @@ func validMadeName(name, ext string) bool {
 		}
 	}
 	return true
+}
+
+// fileFormat is the kind of a video file as people know it, from its
+// name: "MP4" for "mare.mp4". "" when the name has no plain extension.
+func fileFormat(name string) string {
+	ext := strings.TrimPrefix(path.Ext(name), ".")
+	if ext == "" || len(ext) > 10 {
+		return ""
+	}
+	for _, c := range ext {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
+			return ""
+		}
+	}
+	return strings.ToUpper(ext)
 }
 
 // contentTypes are the types sent with the video file, by extension.

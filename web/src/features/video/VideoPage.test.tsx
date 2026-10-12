@@ -23,8 +23,9 @@ describe("video page", () => {
       "href",
       "/categorie/Vacanze",
     );
-    expect(screen.getByText(/1080p/)).toBeInTheDocument();
+    expect(screen.getByText(/1080p · MP4/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Sottotitoli (c)" })).toBeEnabled();
+    expect(screen.getByText(/1080p · MP4 · Sottotitoli IT$/)).toBeInTheDocument();
     expect(document.querySelector("track")).toHaveAttribute(
       "src",
       "/api/videos/7/subtitles/it.srt",

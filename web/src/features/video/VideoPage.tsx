@@ -22,6 +22,7 @@ import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
 import { VideoCard } from "../videos/VideoCard";
 import { Description } from "./Description";
+import { subtitleLabel } from "./subtitleLabel";
 import styles from "./VideoPage.module.css";
 
 type State =
@@ -115,6 +116,8 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
     video.author,
     video.publishedOn ? formatDate(video.publishedOn) : formatAge(video.addedAt, now),
     video.height !== null && video.width !== null ? `${Math.min(video.width, video.height)}p` : "",
+    video.format,
+    subtitleLabel(subtitles),
   ].filter(Boolean);
 
   return (
