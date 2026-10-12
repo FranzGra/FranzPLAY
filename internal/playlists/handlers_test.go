@@ -289,6 +289,89 @@ func TestPublicLists(t *testing.T) {
 	}
 }
 
+func TestSharedLists(t *testing.T) {
+	s := newSite(t)
+	const anna int64 = 3
+	if _, err := s.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at) VALUES (3, 'Anna', 'x', 'user', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	video := s.addVideo(t, "mare")
+	hers := s.create(t, giulia, "Compleanno")
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID, video), ""), http.StatusNoContent)
+	shared := func(user int64) []Playlist {
+		t.Helper()
+		return decode[[]Playlist](t, s.must(t, s.do(t, user, http.MethodGet, "/api/playlists/shared", ""), http.StatusOK))
+	}
+	if got := shared(marco); len(got) != 0 || got == nil {
+		t.Fatalf("shared with Marco before = %#v, want an empty list", got)
+	}
+
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID), `{"sharedWith":[2]}`), http.StatusNoContent)
+
+	// Marco opens it and finds it among the lists shared with him, without
+	// learning who else sees it; Anna does not know it is there.
+	page := decode[Page](t, s.must(t, s.do(t, marco, http.MethodGet, path(hers.ID), ""), http.StatusOK))
+	if page.Playlist.Name != "Compleanno" || len(page.Videos) != 1 || len(page.Playlist.SharedWith) != 0 {
+		t.Errorf("Marco sees %+v %+v", page.Playlist, page.Videos)
+	}
+	if got := shared(marco); len(got) != 1 || got[0].ID != hers.ID || got[0].Videos != 1 {
+		t.Errorf("shared with Marco = %+v", got)
+	}
+	s.must(t, s.do(t, anna, http.MethodGet, path(hers.ID), ""), http.StatusNotFound)
+	if got := shared(anna); len(got) != 0 {
+		t.Errorf("shared with Anna = %+v", got)
+	}
+	s.must(t, s.do(t, marco, http.MethodPut, path(hers.ID), `{"name":"Mia"}`), http.StatusForbidden)
+	s.must(t, s.do(t, marco, http.MethodPut, path(hers.ID), `{"sharedWith":[3]}`), http.StatusForbidden)
+
+	// Not on her channel, and in none of Marco's own lists.
+	public := PublicLists(s.db, catalog.NewLookup(s.db))
+	if got, err := public(context.Background(), giulia); err != nil || len(got) != 0 {
+		t.Errorf("channel = %+v (%v), want nothing", got, err)
+	}
+	if lists := s.list(t, marco, ""); len(lists) != 1 {
+		t.Errorf("Marco's own lists = %+v", lists)
+	}
+
+	// Giulia sees who, by name, in her lists and on the page.
+	if got := s.list(t, giulia, "")[1].SharedWith; len(got) != 1 || got[0].Name != "Marco" {
+		t.Errorf("Giulia's list shared with %+v", got)
+	}
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID), `{"sharedWith":[3,2]}`), http.StatusNoContent)
+	page = decode[Page](t, s.must(t, s.do(t, giulia, http.MethodGet, path(hers.ID), ""), http.StatusOK))
+	if got := page.Playlist.SharedWith; len(got) != 2 || got[0].Name != "Anna" || got[1].Name != "Marco" {
+		t.Errorf("shared with %+v, want Anna and Marco", got)
+	}
+
+	// Refusals change nothing, the name included.
+	for name, body := range map[string]string{
+		"herself":         `{"sharedWith":[1]}`,
+		"someone unknown": `{"name":"Altro","sharedWith":[9]}`,
+		"and public":      `{"public":true,"sharedWith":[2]}`,
+		"not ids":         `{"sharedWith":"Marco"}`,
+	} {
+		if rec := s.do(t, giulia, http.MethodPut, path(hers.ID), body); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", name, rec.Code)
+		}
+	}
+	if page := decode[Page](t, s.must(t, s.do(t, giulia, http.MethodGet, path(hers.ID), ""), http.StatusOK)); page.Playlist.Name != "Compleanno" ||
+		len(page.Playlist.SharedWith) != 2 {
+		t.Errorf("after refusals: %+v", page.Playlist)
+	}
+
+	// On the channel, everybody sees it: nobody is chosen any more.
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID), `{"public":true}`), http.StatusNoContent)
+	if got := shared(marco); len(got) != 0 {
+		t.Errorf("public: shared with Marco = %+v", got)
+	}
+	s.must(t, s.do(t, giulia, http.MethodPut, path(hers.ID), `{"public":false}`), http.StatusNoContent)
+	s.must(t, s.do(t, marco, http.MethodGet, path(hers.ID), ""), http.StatusNotFound)
+
+	// "Guarda più tardi" is never shared.
+	later := s.list(t, giulia, "")[0]
+	s.must(t, s.do(t, giulia, http.MethodPut, path(later.ID), `{"sharedWith":[2]}`), http.StatusConflict)
+}
+
 func TestRefused(t *testing.T) {
 	s := newSite(t)
 	gone := s.addVideo(t, "via")

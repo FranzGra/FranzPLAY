@@ -21,6 +21,9 @@ const trips = {
   cover: "/api/covers/a.jpg",
 };
 
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
+
 async function bodyOf(request: Request | undefined): Promise<unknown> {
   return request ? JSON.parse(await request.clone().text()) : undefined;
 }
@@ -141,21 +144,65 @@ describe("playlist page", () => {
   });
 
   it("puts a list on my channel and takes it off", async () => {
+    let shown = false;
     const { user, server } = renderApp("/playlist/2", {
       ...signedIn(),
-      "GET /api/playlists/2": { body: page },
-      "PUT /api/playlists/2": { status: 204 },
+      "GET /api/playlists/2": () => json({ ...page, playlist: { ...trips, public: shown } }),
+      "PUT /api/playlists/2": async (request: Request) => {
+        shown = (await request.clone().json()).public;
+        return new Response(null, { status: 204 });
+      },
     });
-    const button = await screen.findByRole("button", { name: "Sul mio canale" });
-    expect(button).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByText(/solo per te/)).toBeInTheDocument();
-    await user.click(button);
+    expect(await screen.findByText(/solo per te/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Chi la vede" }));
+    await user.click(screen.getByRole("radio", { name: "Tutti" }));
+    await user.click(screen.getByRole("button", { name: "Salva" }));
     expect(await screen.findByText(/sul tuo canale, la vedono tutti/)).toBeInTheDocument();
-    expect(button).toHaveAttribute("aria-pressed", "true");
-    await user.click(button);
+    await user.click(screen.getByRole("button", { name: "Chi la vede" }));
+    await user.click(screen.getByRole("radio", { name: "Solo io" }));
+    await user.click(screen.getByRole("button", { name: "Salva" }));
     expect(await screen.findByText(/solo per te/)).toBeInTheDocument();
     const puts = server.requests.filter((r) => r.method === "PUT");
-    expect(await Promise.all(puts.map(bodyOf))).toEqual([{ public: true }, { public: false }]);
+    expect(await Promise.all(puts.map(bodyOf))).toEqual([
+      { public: true },
+      { public: false, sharedWith: [] },
+    ]);
+  });
+
+  it("shares a list with some people", async () => {
+    const anna = { id: 3, name: "Anna", avatar: 0 };
+    let sharedWith: unknown[] = [];
+    const { user, server } = renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/people": { body: [anna] },
+      "GET /api/playlists/2": () => json({ ...page, playlist: { ...trips, sharedWith } }),
+      "PUT /api/playlists/2": () => {
+        sharedWith = [anna];
+        return new Response(null, { status: 204 });
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Chi la vede" }));
+    await user.click(screen.getByRole("radio", { name: "Alcune persone" }));
+    await user.click(screen.getByRole("button", { name: "Salva" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Scegli almeno una persona");
+    await user.click(await screen.findByRole("checkbox", { name: "Anna" }));
+    await user.click(screen.getByRole("button", { name: "Salva" }));
+    expect(await screen.findByText(/la vedono anche Anna/)).toBeInTheDocument();
+    const put = server.requests.find((r) => r.method === "PUT");
+    expect(await put?.json()).toEqual({ public: false, sharedWith: [3] });
+  });
+
+  it("shows a list shared with me, with the way back to what is shared", async () => {
+    const giulias = { ...trips, owner: { id: 5, name: "Giulia" } };
+    renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/playlists/2": { body: { ...page, playlist: giulias } },
+    });
+    expect(await screen.findByRole("link", { name: /Condivisi con te/ })).toHaveAttribute(
+      "href",
+      "/condivisi",
+    );
+    expect(screen.queryByRole("button", { name: "Chi la vede" })).not.toBeInTheDocument();
   });
 
   it("shows someone else's public list without changing it", async () => {
@@ -170,7 +217,7 @@ describe("playlist page", () => {
       "href",
       "/canale/5",
     );
-    for (const name of ["Rinomina", "Elimina", "Sul mio canale", /^Togli/]) {
+    for (const name of ["Rinomina", "Elimina", "Chi la vede", /^Togli/]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
     expect(within(screen.getByRole("list")).getAllByRole("heading")).toHaveLength(2);
