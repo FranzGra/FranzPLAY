@@ -19,19 +19,24 @@ import (
 // Routes adds the API of the sources on the internet, for administrators:
 //
 //	GET /api/online            which sources are on, and which keys are saved
-//	PUT /api/online            turn them on or off {youtube, tmdb}
+//	PUT /api/online            turn them on or off {youtube, tmdb, tpdb}
 //	PUT /api/online/tmdb-key   save TMDB's key {key}, after TMDB said it is valid
+//	PUT /api/online/tpdb-key   the same for ThePornDB
 //
 // A key is never sent back: the answers only say if there is one.
 // newJobs is called when the change put work in the queue.
 func Routes(db *sql.DB, newJobs func(), logger *slog.Logger) func(mux *http.ServeMux) {
+	client := &http.Client{Timeout: askTimeout}
 	a := api{db: db, newJobs: newJobs, logger: logger, now: time.Now, account: users.FromContext,
-		tmdb: newTMDB(&http.Client{Timeout: askTimeout})}
-	return func(mux *http.ServeMux) {
-		mux.HandleFunc("GET /api/online", a.only(a.handleGet))
-		mux.HandleFunc("PUT /api/online", a.only(a.handlePut))
-		mux.HandleFunc("PUT /api/online/tmdb-key", a.only(a.handleTMDBKey))
-	}
+		tmdb: newTMDB(client), tpdb: newTPDB(client)}
+	return a.routes
+}
+
+func (a api) routes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/online", a.only(a.handleGet))
+	mux.HandleFunc("PUT /api/online", a.only(a.handlePut))
+	mux.HandleFunc("PUT /api/online/tmdb-key", a.only(a.handleKey(keyTMDBKey)))
+	mux.HandleFunc("PUT /api/online/tpdb-key", a.only(a.handleKey(keyTPDBKey)))
 }
 
 type api struct {
@@ -41,16 +46,18 @@ type api struct {
 	now     func() time.Time
 	account func(context.Context) (users.Account, bool)
 	tmdb    tmdb
+	tpdb    tpdb
 }
 
 // status is what the administrator sees of the settings.
 type status struct {
 	Sources
 	TMDBKey bool `json:"tmdbKey"` // a key for TMDB is saved
+	TPDBKey bool `json:"tpdbKey"` // a key for ThePornDB is saved
 }
 
 func statusOf(s settings) status {
-	return status{Sources: s.Sources, TMDBKey: s.tmdbKey != ""}
+	return status{Sources: s.Sources, TMDBKey: s.tmdbKey != "", TPDBKey: s.tpdbKey != ""}
 }
 
 // only lets only administrators through.
@@ -88,11 +95,11 @@ func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	if next.TMDB && s.tmdbKey == "" {
-		respond.Error(w, r, a.logger, http.StatusConflict, "TMDB needs its key first")
+	if (next.TMDB && s.tmdbKey == "") || (next.TPDB && s.tpdbKey == "") {
+		respond.Error(w, r, a.logger, http.StatusConflict, "this source needs its key first")
 		return
 	}
-	turnedOn := (next.YouTube && !s.YouTube) || (next.TMDB && !s.TMDB)
+	turnedOn := (next.YouTube && !s.YouTube) || (next.TMDB && !s.TMDB) || (next.TPDB && !s.TPDB)
 	if err := a.change(r.Context(), turnedOn, func(tx *sql.Tx) error {
 		return saveSources(r.Context(), tx, next)
 	}); err != nil {
@@ -100,50 +107,75 @@ func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	who, _ := a.account(r.Context())
-	a.logger.InfoContext(r.Context(), "online sources changed", "youtube", next.YouTube, "tmdb", next.TMDB, "by", who.Name)
+	a.logger.InfoContext(r.Context(), "online sources changed", "youtube", next.YouTube, "tmdb", next.TMDB,
+		"tpdb", next.TPDB, "by", who.Name)
 	s.Sources = next
 	respond.JSON(w, r, a.logger, http.StatusOK, statusOf(s))
 }
 
-func (a api) handleTMDBKey(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Key string `json:"key"`
+// keySource is a source with a key: how its keys look, and how to ask
+// it if one is valid.
+type keySource struct {
+	name  string // for the messages
+	on    func(settings) bool
+	key   func(*settings) *string
+	valid func(key string) bool
+	check func(ctx context.Context, key string) error
+}
+
+func (a api) keySources() map[string]keySource {
+	return map[string]keySource{
+		keyTMDBKey: {name: "TMDB", on: func(s settings) bool { return s.TMDB },
+			key: func(s *settings) *string { return &s.tmdbKey }, valid: validTMDBKey, check: a.tmdb.checkKey},
+		keyTPDBKey: {name: "ThePornDB", on: func(s settings) bool { return s.TPDB },
+			key: func(s *settings) *string { return &s.tpdbKey }, valid: validTPDBKey, check: a.tpdb.checkKey},
 	}
-	if !decode(w, r, &in) {
-		respond.Error(w, r, a.logger, http.StatusBadRequest, "the request is not valid JSON with the expected fields")
-		return
+}
+
+// handleKey saves the key of a source, after the source said it is valid.
+func (a api) handleKey(setting string) http.HandlerFunc {
+	source := a.keySources()[setting]
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Key string `json:"key"`
+		}
+		if !decode(w, r, &in) {
+			respond.Error(w, r, a.logger, http.StatusBadRequest, "the request is not valid JSON with the expected fields")
+			return
+		}
+		key := strings.TrimSpace(in.Key)
+		if !source.valid(key) {
+			respond.Error(w, r, a.logger, http.StatusBadRequest, "this is not a "+source.name+" key")
+			return
+		}
+		switch err := source.check(r.Context(), key); {
+		case errors.Is(err, errKeyRefused):
+			respond.Error(w, r, a.logger, http.StatusUnprocessableEntity, source.name+" refused the key")
+			return
+		case err != nil:
+			a.logger.WarnContext(r.Context(), "key not checked", "source", source.name, "err", err)
+			respond.Error(w, r, a.logger, http.StatusBadGateway, source.name+" did not answer")
+			return
+		}
+		s, err := loadSettings(r.Context(), a.db)
+		if err != nil {
+			respond.InternalError(w, r, a.logger, err)
+			return
+		}
+		// With the source on, a new key asks again about every video: the
+		// ones the old key could not ask about.
+		saved := source.key(&s)
+		if err := a.change(r.Context(), source.on(s) && key != *saved, func(tx *sql.Tx) error {
+			return saveSetting(r.Context(), tx, setting, key)
+		}); err != nil {
+			respond.InternalError(w, r, a.logger, err)
+			return
+		}
+		who, _ := a.account(r.Context())
+		a.logger.InfoContext(r.Context(), "key saved", "source", source.name, "by", who.Name)
+		*saved = key
+		respond.JSON(w, r, a.logger, http.StatusOK, statusOf(s))
 	}
-	key := strings.TrimSpace(in.Key)
-	if !validTMDBKey(key) {
-		respond.Error(w, r, a.logger, http.StatusBadRequest, "this is not a TMDB key")
-		return
-	}
-	switch err := a.tmdb.checkKey(r.Context(), key); {
-	case errors.Is(err, errKeyRefused):
-		respond.Error(w, r, a.logger, http.StatusUnprocessableEntity, "TMDB refused the key")
-		return
-	case err != nil:
-		a.logger.WarnContext(r.Context(), "tmdb key not checked", "err", err)
-		respond.Error(w, r, a.logger, http.StatusBadGateway, "TMDB did not answer")
-		return
-	}
-	s, err := loadSettings(r.Context(), a.db)
-	if err != nil {
-		respond.InternalError(w, r, a.logger, err)
-		return
-	}
-	// With TMDB on, a new key asks again about every video: the films the
-	// old key could not ask about.
-	if err := a.change(r.Context(), s.TMDB && key != s.tmdbKey, func(tx *sql.Tx) error {
-		return saveSetting(r.Context(), tx, keyTMDBKey, key)
-	}); err != nil {
-		respond.InternalError(w, r, a.logger, err)
-		return
-	}
-	who, _ := a.account(r.Context())
-	a.logger.InfoContext(r.Context(), "tmdb key saved", "by", who.Name)
-	s.tmdbKey = key
-	respond.JSON(w, r, a.logger, http.StatusOK, statusOf(s))
 }
 
 // decode reads a small JSON request with only the expected fields.

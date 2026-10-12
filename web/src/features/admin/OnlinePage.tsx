@@ -2,10 +2,11 @@ import { type FormEvent, useEffect, useState } from "react";
 import { ApiError } from "../../api/client";
 import {
   fetchSources,
+  type KeySource,
   type OnlineSources,
   type OnlineStatus,
+  saveKey,
   saveSources,
-  saveTMDBKey,
 } from "../../api/online";
 import { EmptyState } from "../../components/EmptyState";
 import styles from "./Admin.module.css";
@@ -50,7 +51,10 @@ export function OnlinePage() {
     saveSources(next)
       .then((status) => {
         setState({ kind: "ready", status });
-        const turnedOn = (status.youtube && !before.youtube) || (status.tmdb && !before.tmdb);
+        const turnedOn =
+          (status.youtube && !before.youtube) ||
+          (status.tmdb && !before.tmdb) ||
+          (status.tpdb && !before.tpdb);
         setDone(
           turnedOn
             ? "Acceso. FranzPLAY chiede un video alla volta: lo vedi in Lavori."
@@ -64,13 +68,23 @@ export function OnlinePage() {
       .finally(() => setBusy(false));
   };
 
+  const keySaved = (status: OnlineStatus, source: KeySource, name: string) => {
+    setState({ kind: "ready", status });
+    setProblem("");
+    setDone(
+      status[source]
+        ? "Chiave salvata. FranzPLAY chiede di nuovo un video alla volta: lo vedi in Lavori."
+        : `Chiave salvata. Ora puoi accendere ${name}.`,
+    );
+  };
+
   return (
     <>
       <div className={styles.top}>
         <p className={styles.lead}>
           FranzPLAY funziona anche senza internet. Se accendi una fonte, chiede copertine e
-          informazioni dei video che riconosce dal nome del file. Manda solo quello che serve a
-          trovarli (il codice del video, o titolo e anno del film), niente su di te o su chi usa
+          informazioni dei video che riconosce. Manda solo quello che serve a trovarli (il codice
+          del video, titolo e anno del film, o un'impronta del file), niente su di te o su chi usa
           FranzPLAY. Quello che c'è nei file accanto ai video conta sempre di più.
         </p>
       </div>
@@ -126,18 +140,37 @@ export function OnlinePage() {
             />
             Accesa
           </label>
-          <KeyForm
-            hasKey={before.tmdbKey}
-            onSaved={(status) => {
-              setState({ kind: "ready", status });
-              setProblem("");
-              setDone(
-                status.tmdb
-                  ? "Chiave salvata. FranzPLAY chiede di nuovo un video alla volta: lo vedi in Lavori."
-                  : "Chiave salvata. Ora puoi accendere TMDB.",
-              );
-            }}
-          />
+          <KeyForm source="tmdb" name="TMDB" hasKey={before.tmdbKey} onSaved={keySaved} />
+        </li>
+        <li className={`glass ${styles.person}`}>
+          <div>
+            <p className={styles.name}>ThePornDB</p>
+            <p className={styles.role}>
+              Per tutti gli altri video, né da YouTube né film. FranzPLAY calcola un'impronta del
+              file (un numero che dipende solo dal suo contenuto) e manda solo quella. Si usa una
+              scena solo se ThePornDB conosce proprio quel file. Dà immagine, titolo, descrizione,
+              studio e data.
+            </p>
+            <p className={styles.role}>
+              Serve una chiave gratuita: crea un account su{" "}
+              <a href="https://theporndb.net/user/api-tokens" target="_blank" rel="noreferrer">
+                theporndb.net
+              </a>{" "}
+              e crea un «API token».{" "}
+              {before.tpdbKey ? "La chiave è salvata." : "Nessuna chiave salvata."}
+            </p>
+          </div>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              aria-label="ThePornDB accesa"
+              checked={before.tpdb}
+              disabled={busy || !before.tpdbKey}
+              onChange={(e) => change({ ...before, tpdb: e.target.checked })}
+            />
+            Accesa
+          </label>
+          <KeyForm source="tpdb" name="ThePornDB" hasKey={before.tpdbKey} onSaved={keySaved} />
         </li>
       </ul>
       {problem && (
@@ -154,14 +187,18 @@ export function OnlinePage() {
   );
 }
 
-// KeyForm saves TMDB's key. The key is never shown again: the server
-// only says if there is one.
+// KeyForm saves the key of a source. The key is never shown again: the
+// server only says if there is one.
 function KeyForm({
+  source,
+  name,
   hasKey,
   onSaved,
 }: {
+  source: KeySource;
+  name: string;
   hasKey: boolean;
-  onSaved: (status: OnlineStatus) => void;
+  onSaved: (status: OnlineStatus, source: KeySource, name: string) => void;
 }) {
   const [key, setKey] = useState("");
   const [sending, setSending] = useState(false);
@@ -171,22 +208,22 @@ function KeyForm({
     event.preventDefault();
     setSending(true);
     setProblem("");
-    saveTMDBKey(key.trim())
+    saveKey(source, key.trim())
       .then((status) => {
         setKey("");
-        onSaved(status);
+        onSaved(status, source, name);
       })
       .catch((error: unknown) => {
         console.error(error);
-        setProblem(explainKeyError(error));
+        setProblem(explainKeyError(error, name));
       })
       .finally(() => setSending(false));
   };
 
   return (
-    <form className={styles.inline} onSubmit={send} aria-label="Salva la chiave di TMDB">
+    <form className={styles.inline} onSubmit={send} aria-label={`Salva la chiave di ${name}`}>
       <label className={styles.field}>
-        {hasKey ? "Nuova chiave di TMDB" : "Chiave di TMDB"}
+        {hasKey ? `Nuova chiave di ${name}` : `Chiave di ${name}`}
         <input
           type="password"
           value={key}
@@ -207,15 +244,15 @@ function KeyForm({
   );
 }
 
-function explainKeyError(error: unknown): string {
+function explainKeyError(error: unknown, name: string): string {
   if (error instanceof ApiError) {
     switch (error.status) {
       case 400:
-        return "Questa non sembra una chiave di TMDB. Copia la «Chiave API» o il «Token di accesso in lettura».";
+        return `Questa non sembra una chiave di ${name}. Controlla di averla copiata tutta.`;
       case 422:
-        return "TMDB dice che questa chiave non è valida. Controlla di averla copiata tutta.";
+        return `${name} dice che questa chiave non è valida. Controlla di averla copiata tutta.`;
       case 502:
-        return "TMDB non ha risposto: forse manca internet. Riprova tra poco.";
+        return `${name} non ha risposto: forse manca internet. Riprova tra poco.`;
     }
   }
   return "Non si è riusciti a salvare. Riprova tra poco.";

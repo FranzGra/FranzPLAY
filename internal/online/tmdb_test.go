@@ -205,6 +205,8 @@ func TestEachVideoGoesToItsOwnSource(t *testing.T) {
 		{"a YouTube video, YouTube off", "Gita 1999 [dQw4w9WgXcQ].mp4", Sources{TMDB: true}, testKey},
 		{"a film, TMDB off", "Il sorpasso (1962).mkv", Sources{YouTube: true}, testKey},
 		{"a film, TMDB on without a key", "Il sorpasso (1962).mkv", Sources{TMDB: true}, ""},
+		{"another video, ThePornDB off", "clip.mp4", Sources{YouTube: true, TMDB: true}, testKey},
+		{"another video, ThePornDB on without a key", "clip.mp4", Sources{TPDB: true}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -221,8 +223,8 @@ func TestEachVideoGoesToItsOwnSource(t *testing.T) {
 			if err := fx.f.Handle(context.Background(), fx.id); err != nil {
 				t.Fatal(err)
 			}
-			if len(fx.yt.asked)+len(fx.tm.asked) != 0 {
-				t.Errorf("asked YouTube %v and TMDB %v", fx.yt.asked, fx.tm.paths())
+			if len(fx.yt.asked)+len(fx.tm.asked)+len(fx.tp.asked) != 0 {
+				t.Errorf("asked YouTube %v, TMDB %v, ThePornDB %v", fx.yt.asked, fx.tm.paths(), fx.tp.addresses())
 			}
 			// Its source is off: what it found before is kept.
 			if got := fx.read(t); got.onlineTitle.String != "trovato prima" {

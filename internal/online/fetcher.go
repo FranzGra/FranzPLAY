@@ -29,6 +29,7 @@ type Fetcher struct {
 	dataDir string
 	youtube youTube
 	tmdb    tmdb
+	tpdb    tpdb
 	now     func() time.Time
 }
 
@@ -40,6 +41,7 @@ func NewFetcher(db *sql.DB, dataDir string) *Fetcher {
 		dataDir: dataDir,
 		youtube: youTube{client: client, oEmbed: "https://www.youtube.com/oembed", images: "https://i.ytimg.com/vi"},
 		tmdb:    newTMDB(client),
+		tpdb:    newTPDB(client),
 		now:     time.Now,
 	}
 }
@@ -49,22 +51,25 @@ var errVideoGone = errors.New("video no longer in the catalog")
 
 // Handle is the job handler for jobs.Online. The name of the file says
 // which source knows the video: a YouTube code goes to YouTube, a film's
-// title and year to TMDB. With that source off nothing is asked, and
+// title and year to TMDB, every other video to ThePornDB, by a
+// fingerprint of the file. With that source off nothing is asked, and
 // what was found before is kept. With it on, what it finds replaces what
-// was there; finding nothing clears it, and so does a name no source
-// knows.
+// was there; finding nothing clears it.
 func (f *Fetcher) Handle(ctx context.Context, videoID int64) error {
 	s, err := loadSettings(ctx, f.db)
 	if err != nil {
 		return err
 	}
-	if !s.YouTube && !s.TMDB {
+	if !s.YouTube && !s.TMDB && !s.TPDB {
 		return nil
 	}
-	var rel, fingerprint string
+	var root, rel, fingerprint string
 	var oldImage sql.NullString
-	err = f.db.QueryRowContext(ctx, `SELECT path, fingerprint, online_cover FROM videos WHERE id = ?`, videoID).
-		Scan(&rel, &fingerprint, &oldImage)
+	var missing bool
+	err = f.db.QueryRowContext(ctx, `
+		SELECT l.path, v.path, v.fingerprint, v.online_cover, v.missing_since IS NOT NULL
+		FROM videos v JOIN libraries l ON l.id = v.library_id
+		WHERE v.id = ?`, videoID).Scan(&root, &rel, &fingerprint, &oldImage, &missing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("video %d: %w: %w", videoID, errVideoGone, jobs.ErrPermanent)
 	}
@@ -77,23 +82,51 @@ func (f *Fetcher) Handle(ctx context.Context, videoID int64) error {
 		if !s.YouTube {
 			return nil
 		}
-		if what, _, err = f.youtube.lookup(ctx, id); err != nil {
-			return err
-		}
+		what, _, err = f.youtube.lookup(ctx, id)
 	} else if film, ok := video.FilmInName(rel); ok {
 		if !s.TMDB || s.tmdbKey == "" {
 			return nil
 		}
 		what, _, err = f.tmdb.lookup(ctx, s.tmdbKey, film)
-		if errors.Is(err, errKeyRefused) {
-			// Trying again cannot help: saving a new key asks again.
-			return fmt.Errorf("video %d: %w: %w", videoID, err, jobs.ErrPermanent)
+	} else {
+		if !s.TPDB || s.tpdbKey == "" {
+			return nil
 		}
-		if err != nil {
-			return err
+		if missing {
+			// Not permanent: if the disk comes back, so does the video.
+			return fmt.Errorf("video %d: %w", videoID, errVideoMissing)
 		}
+		var hash string
+		if hash, err = osHash(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+			return fmt.Errorf("video %d: %w", videoID, err)
+		}
+		what, _, err = f.tpdb.lookup(ctx, s.tpdbKey, hash)
+	}
+	if errors.Is(err, errKeyRefused) {
+		// Trying again cannot help: saving a new key asks again.
+		return fmt.Errorf("video %d: %w: %w", videoID, err, jobs.ErrPermanent)
+	}
+	if err != nil {
+		return err
 	}
 	return f.save(ctx, videoID, fingerprint, oldImage.String, what)
+}
+
+// errVideoMissing means the video's file is not where it was last seen.
+var errVideoMissing = errors.New("video file currently missing")
+
+// osHash computes the OSHash of a video file, opened only to read.
+func osHash(file string) (_ string, err error) {
+	r, err := os.Open(file)
+	if err != nil {
+		return "", fmt.Errorf("fingerprint for ThePornDB: %w", err)
+	}
+	defer func() { err = errors.Join(err, r.Close()) }()
+	info, err := r.Stat()
+	if err != nil {
+		return "", fmt.Errorf("fingerprint for ThePornDB: %w", err)
+	}
+	return video.OSHash(r, info.Size())
 }
 
 // save writes what was found: the picture in the data folder, the rest in

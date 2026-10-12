@@ -294,6 +294,13 @@ chiede a TMDB se è buona e solo allora la salva. Poi accendi **TMDB**. Manda so
 letti dal nome del file, e usa un film solo se titolo e anno sono proprio quelli: così
 `Gita al mare 2019.mp4` resta il tuo video.
 
+**Informazioni da ThePornDB.** Per tutti gli altri video (né da YouTube né film) puoi accendere
+**ThePornDB**. Crea un account gratuito su [theporndb.net](https://theporndb.net/user/api-tokens),
+crea un «API token», incollalo nel riquadro di ThePornDB in **Amministrazione › Internet** e premi
+**Prova e salva**, poi accendi **ThePornDB**. FranzPLAY legge l'inizio e la fine di ogni video (solo
+lettura), ne calcola un'impronta e manda solo quella: se ThePornDB conosce proprio quel file, dà
+immagine, titolo, descrizione, studio e data.
+
 **Invitare familiari e amici.** In **Amministrazione › Inviti** premi **Crea un invito**. Se vuoi,
 scrivi per chi è e se potrà caricare video, poi premi **Crea il link** e copialo: FranzPLAY lo mostra
 una volta sola. Mandalo con un messaggio. Chi lo apre sceglie nome e password ed entra subito. Ogni

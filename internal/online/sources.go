@@ -1,9 +1,9 @@
 // Package online asks sources on the internet about the videos: covers,
 // titles and who made them. Every source is off until the administrator
 // turns it on, and FranzPLAY works the same without any (no internet
-// needed). Only what the file name says about a video is sent (a YouTube
-// code, a film's title and year), never anything about the people who use
-// FranzPLAY.
+// needed). Only what finds a video is sent (a YouTube code or a film's
+// title and year from the file name, or a fingerprint of the file), never
+// anything about the people who use FranzPLAY.
 package online
 
 import (
@@ -18,6 +18,7 @@ import (
 type Sources struct {
 	YouTube bool `json:"youtube"` // videos saved from YouTube, by the code in their file name
 	TMDB    bool `json:"tmdb"`    // films, by the title and year in their file name
+	TPDB    bool `json:"tpdb"`    // ThePornDB: every other video, by a fingerprint of the file
 }
 
 // settings is everything saved about the sources. The keys are secrets:
@@ -25,6 +26,7 @@ type Sources struct {
 type settings struct {
 	Sources
 	tmdbKey string
+	tpdbKey string
 }
 
 // The keys of the settings table.
@@ -32,6 +34,8 @@ const (
 	keyYouTube = "online.youtube"
 	keyTMDB    = "online.tmdb"
 	keyTMDBKey = "online.tmdb.key"
+	keyTPDB    = "online.tpdb"
+	keyTPDBKey = "online.tpdb.key"
 )
 
 // querier is what the settings need: a database or a transaction.
@@ -43,8 +47,8 @@ type querier interface {
 // loadSettings reads the sources and their keys. A source never set is
 // off; a key never set is "".
 func loadSettings(ctx context.Context, db querier) (s settings, err error) {
-	rows, err := db.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (?, ?, ?)`,
-		keyYouTube, keyTMDB, keyTMDBKey)
+	rows, err := db.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?)`,
+		keyYouTube, keyTMDB, keyTMDBKey, keyTPDB, keyTPDBKey)
 	if err != nil {
 		return settings{}, fmt.Errorf("read online sources: %w", err)
 	}
@@ -61,6 +65,10 @@ func loadSettings(ctx context.Context, db querier) (s settings, err error) {
 			s.TMDB = value == "on"
 		case keyTMDBKey:
 			s.tmdbKey = value
+		case keyTPDB:
+			s.TPDB = value == "on"
+		case keyTPDBKey:
+			s.tpdbKey = value
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -71,7 +79,7 @@ func loadSettings(ctx context.Context, db querier) (s settings, err error) {
 
 // saveSources writes which sources are on.
 func saveSources(ctx context.Context, db querier, s Sources) error {
-	for key, on := range map[string]bool{keyYouTube: s.YouTube, keyTMDB: s.TMDB} {
+	for key, on := range map[string]bool{keyYouTube: s.YouTube, keyTMDB: s.TMDB, keyTPDB: s.TPDB} {
 		value := "off"
 		if on {
 			value = "on"
@@ -98,4 +106,13 @@ var tmdbKeyShape = regexp.MustCompile(`^(?:[0-9a-f]{32}|eyJ[A-Za-z0-9_-]+\.[A-Za
 // validTMDBKey says if a key has the shape of one of TMDB's.
 func validTMDBKey(key string) bool {
 	return len(key) <= 1024 && tmdbKeyShape.MatchString(key)
+}
+
+// tpdbKeyShape is what ThePornDB's keys look like: letters, digits and a
+// few signs, like "123|AbC…". Nothing that could break a header.
+var tpdbKeyShape = regexp.MustCompile(`^[A-Za-z0-9|._-]{20,200}$`)
+
+// validTPDBKey says if a key has the shape of one of ThePornDB's.
+func validTPDBKey(key string) bool {
+	return tpdbKeyShape.MatchString(key)
 }
