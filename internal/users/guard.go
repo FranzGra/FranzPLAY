@@ -21,6 +21,7 @@ var publicAPI = map[string]bool{
 	"/api/join":       true, // with an invite code, instead of a login
 	"/api/join/check": true,
 	"/api/register":   true, // refused by itself unless the administrator allows it
+	"/api/site":       true, // name and color, for the login page; changing them checks the role itself
 	"/api/me":         true, // answers 401 itself, so the interface knows to show the login
 }
 

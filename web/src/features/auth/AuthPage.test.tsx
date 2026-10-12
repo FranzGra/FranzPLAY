@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { emptyLibrary, type Routes, renderApp, testAccount } from "../../test/render";
 import { checkSetup } from "./AuthPage";
 
@@ -91,6 +91,30 @@ describe("first setup", () => {
       name: "Francesco",
       password: "una-password",
     });
+  });
+
+  it("names the site too, if the administrator wants", async () => {
+    const chosen = { nameFirst: "Casa", nameSecond: "Rossi", color: "#dc2626" };
+    const { user, server } = renderApp("/", {
+      ...newFranzPLAY,
+      "POST /api/setup": { status: 201, body: testAccount },
+      "PUT /api/site": { body: chosen },
+    });
+    await user.type(await screen.findByLabelText("Codice di installazione"), "ABCD-EFGH-JKMN");
+    await user.type(screen.getByLabelText("Nome"), "Francesco");
+    await user.type(screen.getByLabelText("Password"), "una-password");
+    await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
+    const site = screen.getByRole("region", { name: "Il tuo sito" });
+    await user.clear(within(site).getByLabelText("Prima parte del nome"));
+    await user.type(within(site).getByLabelText("Prima parte del nome"), "Casa");
+    await user.clear(within(site).getByLabelText("Seconda parte (nel colore)"));
+    await user.type(within(site).getByLabelText("Seconda parte (nel colore)"), "Rossi");
+    await user.click(within(site).getByRole("button", { name: "Rosso" }));
+    await user.click(screen.getByRole("button", { name: "Crea e entra" }));
+
+    expect(await screen.findByRole("link", { name: "CasaRossi" })).toBeInTheDocument();
+    const sent = server.requests.find((r) => r.url.endsWith("/api/site") && r.method === "PUT");
+    expect(await sent?.json()).toEqual(chosen);
   });
 
   it("does not ask the server when the passwords differ", async () => {

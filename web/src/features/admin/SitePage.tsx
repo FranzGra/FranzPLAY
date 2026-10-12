@@ -1,13 +1,104 @@
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { fetchRegistration, saveRegistration } from "../../api/auth";
+import { ApiError } from "../../api/client";
+import { type Look, lookProblem, saveLook } from "../../api/site";
+import { useSite } from "../../app/site";
 import { EmptyState } from "../../components/EmptyState";
 import styles from "./Admin.module.css";
+import { LookFields } from "./LookFields";
+
+// SitePage holds the settings of the whole site: its name and color, and
+// whether anyone may create an account by themselves.
+export function SitePage() {
+  return (
+    <>
+      <LookSettings />
+      <RegistrationSettings />
+    </>
+  );
+}
+
+// LookSettings changes the name and color everybody sees. The form opens
+// once the site's look has arrived, so it starts from the saved one.
+function LookSettings() {
+  const { ready } = useSite();
+  if (!ready) return <div className={styles.placeholder} aria-busy="true" />;
+  return <LookForm />;
+}
+
+function LookForm() {
+  const site = useSite();
+  const [look, setLook] = useState<Look>(site.look);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  const [done, setDone] = useState("");
+
+  const send = (event: FormEvent) => {
+    event.preventDefault();
+    const mistake = lookProblem(look);
+    if (mistake) {
+      setProblem(mistake);
+      return;
+    }
+    setBusy(true);
+    setProblem("");
+    setDone("");
+    saveLook(look)
+      .then((saved) => {
+        site.changed(saved);
+        setDone("Salvato. Tutti vedono il nome e il colore nuovi.");
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+        setProblem(
+          error instanceof ApiError && error.status === 400
+            ? "Il nome o il colore non vanno bene: controlla e riprova."
+            : "Non si è riusciti a salvare. Riprova tra poco.",
+        );
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const unchanged =
+    look.nameFirst === site.look.nameFirst &&
+    look.nameSecond === site.look.nameSecond &&
+    look.color.toLowerCase() === site.look.color;
+  return (
+    <>
+      <h2 className={styles.groupTitle}>Nome e colore</h2>
+      <form
+        className={`glass ${styles.person}`}
+        onSubmit={send}
+        aria-label="Nome e colore del sito"
+      >
+        <p className={styles.role}>
+          Il nome compare in alto, nella pagina di accesso e nel titolo della scheda del browser. Il
+          colore è quello di pulsanti e collegamenti.
+        </p>
+        <LookFields look={look} onChange={setLook} />
+        <button type="submit" className={styles.primary} disabled={busy || unchanged}>
+          Salva nome e colore
+        </button>
+        {problem && (
+          <p role="alert" className={styles.problem}>
+            {problem}
+          </p>
+        )}
+        {done && (
+          <p role="status" className={styles.done}>
+            {done}
+          </p>
+        )}
+      </form>
+    </>
+  );
+}
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; open: boolean };
 
-// SitePage holds the settings of the whole site. For now: whether anyone
-// may create an account by themselves.
-export function SitePage() {
+// RegistrationSettings decides whether anyone may create an account by
+// themselves.
+function RegistrationSettings() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");

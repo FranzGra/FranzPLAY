@@ -4,6 +4,7 @@ import { avatarUrl } from "../api/auth";
 import { fetchPlaylists, onPlaylistsChanged, type Playlist, playlistName } from "../api/playlists";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
+import { SiteName } from "../components/SiteName";
 import { useAccount } from "./auth";
 import styles from "./Layout.module.css";
 
@@ -47,7 +48,7 @@ export function Layout() {
           <span className={styles.logoMark}>
             <Icon name="play" size={14} />
           </span>
-          FranzPLAY
+          <SiteName accentClass={styles.logoAccent} />
         </Link>
 
         <search className={styles.search}>

@@ -11,3 +11,6 @@ afterEach(() => {
 // nothing, while every browser returns a promise. Tests that need it to
 // play replace it with their own stand-in.
 HTMLMediaElement.prototype.play = () => Promise.resolve();
+
+// The site's color is painted on the whole page: each test starts clean.
+afterEach(() => document.documentElement.removeAttribute("style"));

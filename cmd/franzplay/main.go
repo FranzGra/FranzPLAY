@@ -31,6 +31,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/progress"
 	"github.com/FranzGra/FranzPLAY/internal/recommend"
 	"github.com/FranzGra/FranzPLAY/internal/server"
+	"github.com/FranzGra/FranzPLAY/internal/site"
 	"github.com/FranzGra/FranzPLAY/internal/translate"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
@@ -220,6 +221,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),
 		online.Routes(db, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
+		site.Routes(db, logger),
 		hub.Routes(logger),
 	)
 

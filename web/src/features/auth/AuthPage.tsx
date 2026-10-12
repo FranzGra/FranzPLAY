@@ -1,18 +1,26 @@
 import { type FormEvent, useId, useState } from "react";
 import { login, nameProblem, passwordProblem, register, setup } from "../../api/auth";
 import { ApiError } from "../../api/client";
+import { type Look, lookProblem, saveLook, siteName } from "../../api/site";
 import { useAuth } from "../../app/auth";
+import { useSite } from "../../app/site";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
+import { LookFields } from "../admin/LookFields";
 import styles from "./AuthPage.module.css";
 
 type Mode = "login" | "setup" | "register";
 
-const titles: Record<Mode, string> = {
-  login: "Accedi a FranzPLAY",
-  setup: "Benvenuto in FranzPLAY",
-  register: "Crea il tuo account",
-};
+function title(mode: Mode, name: string): string {
+  switch (mode) {
+    case "login":
+      return `Accedi a ${name}`;
+    case "setup":
+      return "Benvenuto in FranzPLAY";
+    case "register":
+      return "Crea il tuo account";
+  }
+}
 
 // AuthPage is what people see before logging in: the login form, or, on a
 // brand new FranzPLAY, the form that creates the administrator. When the
@@ -28,6 +36,10 @@ export function AuthPage({
   const [mode, setMode] = useState<Mode>(startMode);
   usePageTitle({ login: "Accedi", setup: "Benvenuto", register: "Registrati" }[mode]);
   const { signedIn } = useAuth();
+  const site = useSite();
+  const look = site.look;
+  // At the first setup the administrator can also name the site.
+  const [newLook, setNewLook] = useState<Look>(look);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -38,7 +50,10 @@ export function AuthPage({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const problem = mode === "login" ? "" : checkSetup(name, password, confirm);
+    const problem =
+      mode === "login"
+        ? ""
+        : checkSetup(name, password, confirm) || (mode === "setup" ? lookProblem(newLook) : "");
     if (problem) {
       setError(problem);
       return;
@@ -52,10 +67,29 @@ export function AuthPage({
           : mode === "register"
             ? await register(name, password)
             : await login(name, password);
+      if (mode === "setup") {
+        await keepLook(newLook);
+      }
       signedIn(account);
     } catch (err) {
       setError(explain(err, mode));
       setBusy(false);
+    }
+  }
+
+  // keepLook saves the name and color chosen at the first setup. The
+  // administrator is already created: if this fails, FranzPLAY keeps its
+  // own name, which can be changed later in Amministrazione › Sito.
+  async function keepLook(chosen: Look) {
+    const same =
+      chosen.nameFirst === look.nameFirst &&
+      chosen.nameSecond === look.nameSecond &&
+      chosen.color.toLowerCase() === look.color;
+    if (same) return;
+    try {
+      site.changed(await saveLook(chosen));
+    } catch (err) {
+      console.error(err);
     }
   }
 
@@ -66,7 +100,7 @@ export function AuthPage({
         <span className={styles.logoMark} aria-hidden="true">
           <Icon name="play" size={22} />
         </span>
-        <h1 className={styles.title}>{titles[mode]}</h1>
+        <h1 className={styles.title}>{title(mode, siteName(look))}</h1>
         {mode === "setup" && (
           <p className={styles.intro}>
             Crea l'amministratore, cioè il tuo utente. Il codice di installazione è scritto nel
@@ -114,6 +148,15 @@ export function AuthPage({
             autoComplete="new-password"
             describedBy={describedBy}
           />
+        )}
+        {mode === "setup" && (
+          <section className={styles.siteLook} aria-label="Il tuo sito">
+            <p className={styles.intro}>
+              Come si chiama il tuo sito? Puoi lasciarlo così e cambiarlo quando vuoi in
+              Amministrazione.
+            </p>
+            <LookFields look={newLook} onChange={setNewLook} />
+          </section>
         )}
 
         {error && (

@@ -32,6 +32,10 @@
   color: var(--color-text);
 }
 
+.logoAccent {
+  color: var(--color-accent);
+}
+
 .logoMark {
   display: flex;
   align-items: center;

@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useS
 import { type Account, fetchMe, fetchSetup, logout } from "../api/auth";
 import { onUnauthorized } from "../api/client";
 import { applyAccent } from "./accent";
+import { useSite } from "./site";
 
 // AuthState is where the interface stands with the login.
 export type AuthState =
@@ -49,9 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, [attempt]);
 
-  // Each person sees FranzPLAY in the color they chose; the login page in
-  // FranzPLAY's own.
-  const accent = state.kind === "signed-in" ? state.account.accentColor : "";
+  // Each person sees FranzPLAY in the color they chose; the login page, and
+  // whoever did not choose, in the site's color set by the administrator.
+  const siteColor = useSite().look.color;
+  const accent = (state.kind === "signed-in" && state.account.accentColor) || siteColor;
   useEffect(() => {
     applyAccent(accent);
     return () => applyAccent("");
