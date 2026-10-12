@@ -8,14 +8,17 @@ import { RecommendedRow } from "../recommend/RecommendedRow";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
 import styles from "./HomePage.module.css";
+import { useHomeLayout } from "./useHomeLayout";
 
 // HomePage shows the newest videos, with a row of categories on top to
 // see only one of them, the videos to continue and the ones the person
-// may like, like on YouTube.
+// may like, like on YouTube. Each row can be closed by its title, and
+// stays closed for the person on every device.
 export function HomePage() {
   usePageTitle("");
   const [category, setCategory] = useState("");
   const categories = useCategories();
+  const layout = useHomeLayout();
   const { state, loadMore } = useVideoList({ category });
 
   return (
@@ -37,12 +40,12 @@ export function HomePage() {
           ))}
         </ul>
       )}
-      {category === "" && (
+      {category === "" && layout.ready && (
         <>
-          <ContinueRow />
-          <SavedRow />
-          <LikedRow />
-          <RecommendedRow />
+          <ContinueRow fold={layout.fold("continue")} />
+          <SavedRow fold={layout.fold("saved")} />
+          <LikedRow fold={layout.fold("liked")} />
+          <RecommendedRow fold={layout.fold("recommended")} />
         </>
       )}
       <VideoGrid

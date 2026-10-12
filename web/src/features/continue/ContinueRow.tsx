@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchContinue, leaveContinue, type Watched } from "../../api/progress";
 import { Icon } from "../../components/Icon";
+import type { Fold } from "../home/useHomeLayout";
 import { VideoCard } from "../videos/VideoCard";
 import { VideoRow } from "../videos/VideoRow";
 import styles from "./ContinueRow.module.css";
@@ -9,7 +10,7 @@ import styles from "./ContinueRow.module.css";
 // first, each with how much was watched. Each can be taken out of the
 // row: the history keeps it. With none it shows nothing: the Home already
 // has plenty to look at.
-export function ContinueRow() {
+export function ContinueRow({ fold }: { fold?: Fold }) {
   const [now] = useState(() => new Date());
   const [started, setStarted] = useState<Watched[]>([]);
   const [problem, setProblem] = useState("");
@@ -48,7 +49,7 @@ export function ContinueRow() {
           {problem}
         </p>
       )}
-      <VideoRow title="Continua a guardare">
+      <VideoRow title="Continua a guardare" fold={fold}>
         {started.map((w) => (
           <li key={w.video.id} className={styles.item}>
             <VideoCard video={w.video} now={now} position={w.position} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchLiked } from "../../api/likes";
 import type { Video } from "../../api/videos";
+import type { Fold } from "../home/useHomeLayout";
 import { VideoCard } from "../videos/VideoCard";
 import { VideoRow } from "../videos/VideoRow";
 
@@ -9,7 +10,7 @@ const rowSize = 12;
 
 // LikedRow shows on the Home the last videos I liked. With none it shows
 // nothing.
-export function LikedRow() {
+export function LikedRow({ fold }: { fold?: Fold }) {
   const [now] = useState(() => new Date());
   const [videos, setVideos] = useState<Video[]>([]);
   useEffect(() => {
@@ -24,7 +25,7 @@ export function LikedRow() {
   }, []);
   if (videos.length === 0) return null;
   return (
-    <VideoRow title="Ti piacciono" more="/mi-piace">
+    <VideoRow title="Ti piacciono" fold={fold} more="/mi-piace">
       {videos.map((video) => (
         <li key={video.id}>
           <VideoCard video={video} now={now} />
