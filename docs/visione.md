@@ -263,6 +263,9 @@ Ordine proposto, dalla più semplice:
 Ogni fonte è un **"fornitore"** intercambiabile: aggiungerne una nuova non deve toccare il resto del
 programma. ❓ Quali fonti e in che ordine lo decidiamo quando arriviamo alla tappa 3.
 
+✅ **Fatto (12/10/2026)**: la fonte 1, il file `.info.json` di yt-dlp accanto al video (titolo,
+descrizione, autore, giorno). Decisione in `docs/decisioni/0009-informazioni-dai-file.md`.
+
 ---
 
 ## 8. Com'è fatto, in grande

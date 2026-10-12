@@ -223,9 +223,10 @@ func (w *Worker) giveBack(ctx context.Context, j job) error {
 
 // claim takes the oldest due job of a kind this worker can do and marks it
 // running. Probes go first, since covers and previews need the duration
-// they find; then covers, which every page shows, then previews, then the
-// subtitles inside the files, which mean reading the whole file, and last
-// the conversions, which can take hours.
+// they find; then the details files, read in an instant, then covers,
+// which every page shows, then previews, then the subtitles inside the
+// files, which mean reading the whole file, and last the conversions,
+// which can take hours.
 func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	kinds := make([]any, 0, len(w.handlers))
 	placeholders := ""
@@ -247,8 +248,8 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	err := w.db.QueryRowContext(ctx, `
 		SELECT id, video_id, kind, attempts FROM jobs
 		WHERE state = 'pending' AND run_after <= ? AND kind IN (`+placeholders+`)
-		ORDER BY CASE kind WHEN 'probe' THEN 0 WHEN 'cover' THEN 1 WHEN 'preview' THEN 2
-			WHEN 'convert' THEN 4 ELSE 3 END, id
+		ORDER BY CASE kind WHEN 'probe' THEN 0 WHEN 'details' THEN 1 WHEN 'cover' THEN 2
+			WHEN 'preview' THEN 3 WHEN 'convert' THEN 5 ELSE 4 END, id
 		LIMIT 1`, args...).Scan(&j.id, &j.videoID, &kind, &j.attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return job{}, false, nil

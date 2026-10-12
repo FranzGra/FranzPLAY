@@ -55,7 +55,7 @@ type JobView struct {
 }
 
 // allKinds is every kind of job, in the order they run.
-var allKinds = []Kind{Probe, Cover, Preview, Tracks, Convert}
+var allKinds = []Kind{Probe, Details, Cover, Preview, Tracks, Convert}
 
 // Routes adds the queue's API for administrators to mux:
 //
@@ -178,7 +178,7 @@ func (a admin) overview(ctx context.Context) (_ Overview, err error) {
 // list reads the jobs matching where (which also orders and limits).
 func (a admin) list(ctx context.Context, where string, args ...any) (_ []JobView, err error) {
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT j.id, j.kind, j.video_id, v.title, j.attempts, j.last_error, j.updated_at
+		SELECT j.id, j.kind, j.video_id, v.shown_title, j.attempts, j.last_error, j.updated_at
 		FROM jobs j JOIN videos v ON v.id = j.video_id
 		WHERE `+where, args...)
 	if err != nil {

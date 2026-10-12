@@ -189,8 +189,9 @@ func TestWorkerPermanentFailure(t *testing.T) {
 	}
 }
 
-func TestWorkerRunsProbesThenCoversThenPreviewsThenTracksThenConversions(t *testing.T) {
-	fx := newFixture(t, 5)
+func TestWorkerRunsTheKindsInOrder(t *testing.T) {
+	fx := newFixture(t, 6)
+	fx.enqueue(t, fx.videos[5], Details)
 	fx.enqueue(t, fx.videos[4], Convert)
 	fx.enqueue(t, fx.videos[3], Tracks)
 	fx.enqueue(t, fx.videos[0], Preview)
@@ -200,11 +201,11 @@ func TestWorkerRunsProbesThenCoversThenPreviewsThenTracksThenConversions(t *test
 	record := func(k Kind) Handler {
 		return func(context.Context, int64) error { order = append(order, k); return nil }
 	}
-	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Cover: record(Cover), Preview: record(Preview),
-		Tracks: record(Tracks), Convert: record(Convert)})
+	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Details: record(Details), Cover: record(Cover),
+		Preview: record(Preview), Tracks: record(Tracks), Convert: record(Convert)})
 	for runNext(t, w) {
 	}
-	if want := []Kind{Probe, Cover, Preview, Tracks, Convert}; !slices.Equal(order, want) {
+	if want := []Kind{Probe, Details, Cover, Preview, Tracks, Convert}; !slices.Equal(order, want) {
 		t.Errorf("order = %v, want %v", order, want)
 	}
 }

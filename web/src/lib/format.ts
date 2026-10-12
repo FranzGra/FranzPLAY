@@ -64,3 +64,8 @@ function startOfDay(date: Date): number {
 export function formatVideos(n: number): string {
   return `${n.toLocaleString("it-IT")} video`;
 }
+
+// formatDate writes a day in full, like "15 marzo 2019".
+export function formatDate(date: Date): string {
+  return date.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+}

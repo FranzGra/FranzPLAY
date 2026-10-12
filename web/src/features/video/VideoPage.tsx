@@ -13,13 +13,14 @@ import {
 } from "../../api/videos";
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
-import { formatAge } from "../../lib/format";
+import { formatAge, formatDate } from "../../lib/format";
 import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
 import { SaveButton } from "../playlists/SaveButton";
 import { useSuggestions } from "../recommend/useSuggestions";
 import { VideoCard } from "../videos/VideoCard";
+import { Description } from "./Description";
 import styles from "./VideoPage.module.css";
 
 type State =
@@ -110,7 +111,8 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
     [video.id],
   );
   const details = [
-    formatAge(video.addedAt, now),
+    video.author,
+    video.publishedOn ? formatDate(video.publishedOn) : formatAge(video.addedAt, now),
     video.height !== null && video.width !== null ? `${Math.min(video.width, video.height)}p` : "",
   ].filter(Boolean);
 
@@ -148,6 +150,11 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           <LikeButton videoId={video.id} />
           <SaveButton videoId={video.id} />
         </div>
+        {video.description && (
+          <div className={styles.below}>
+            <Description text={video.description} />
+          </div>
+        )}
         <div className={styles.below}>
           <Comments key={video.id} videoId={video.id} />
         </div>

@@ -35,8 +35,25 @@ describe("parseVideo", () => {
     expect(parseVideo({ ...sampleVideo, preview }).preview).toEqual(preview);
   });
 
+  it("accepts what a file next to the video says", () => {
+    const v = parseVideo({
+      ...sampleVideo,
+      author: "Famiglia Rossi",
+      publishedOn: "2019-03-15",
+      description: "Che giornata!",
+    });
+    expect(v.author).toBe("Famiglia Rossi");
+    expect(v.publishedOn).toEqual(new Date(2019, 2, 15));
+    expect(v.description).toBe("Che giornata!");
+    expect(parseVideo(sampleVideo).description).toBe("");
+  });
+
   it.each([
     ["no id", { ...sampleVideo, id: undefined }],
+    ["no author", { ...sampleVideo, author: undefined }],
+    ["published on a time", { ...sampleVideo, publishedOn: "2019-03-15T10:00:00Z" }],
+    ["published on no real day", { ...sampleVideo, publishedOn: "2019-02-30" }],
+    ["numeric description", { ...sampleVideo, description: 5 }],
     ["zero id", { ...sampleVideo, id: 0 }],
     ["numeric title", { ...sampleVideo, title: 3 }],
     ["negative duration", { ...sampleVideo, duration: -1 }],

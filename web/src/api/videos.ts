@@ -13,6 +13,10 @@ export type Video = {
   addedAt: Date;
   playable: boolean; // every browser can play it as it is
   preview: Preview | null; // frames for the player's timeline; null = none yet
+  // From a file next to the video, like the .info.json of yt-dlp:
+  author: string; // who published it; "" = not known
+  publishedOn: Date | null; // the day it was published; null = not known
+  description: string; // only when asking for one video; "" = none
 };
 
 // Preview is one image holding small frames of the video, count frames of
@@ -93,6 +97,12 @@ export function parseVideo(data: unknown): Video {
   if (typeof v.playable !== "boolean") {
     throw new Error("video playable: not true or false");
   }
+  if (typeof v.author !== "string") {
+    throw new Error("video author: not text");
+  }
+  if (v.description !== undefined && v.description !== null && typeof v.description !== "string") {
+    throw new Error("video description: not text");
+  }
   const addedAt = typeof v.addedAt === "string" ? new Date(v.addedAt) : new Date(Number.NaN);
   if (Number.isNaN(addedAt.getTime())) {
     throw new Error("video addedAt: not a date");
@@ -108,7 +118,24 @@ export function parseVideo(data: unknown): Video {
     addedAt,
     playable: v.playable,
     preview: parsePreview(v.preview),
+    author: v.author,
+    publishedOn: parseDay(v.publishedOn),
+    description: typeof v.description === "string" ? v.description : "",
   };
+}
+
+// parseDay reads a day like "2019-03-15", as midnight of that day where
+// the person is, so it shows as the same day everywhere.
+function parseDay(value: unknown): Date | null {
+  if (value === null || value === undefined) return null;
+  const match = typeof value === "string" ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+  if (!match) throw new Error("video publishedOn: not a day");
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(year, month - 1, day);
+  if (date.getMonth() !== month - 1 || date.getDate() !== day) {
+    throw new Error("video publishedOn: not a real day");
+  }
+  return date;
 }
 
 export function parseVideoList(data: unknown): VideoList {

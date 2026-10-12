@@ -15,7 +15,7 @@ type store struct {
 // videos returns every visible video. Only the few columns the rules use
 // are read: even ten thousand videos take little memory.
 func (s store) videos(ctx context.Context) (_ []Video, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, title, category, added_at FROM videos WHERE visible`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, shown_title, category, added_at FROM videos WHERE visible`)
 	if err != nil {
 		return nil, fmt.Errorf("read videos: %w", err)
 	}

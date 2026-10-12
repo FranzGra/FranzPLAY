@@ -86,7 +86,7 @@ func (s store) recent(ctx context.Context, limit, offset int) (_ recentList, err
 		return recentList{}, fmt.Errorf("count comments: %w", err)
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.user_id, u.name, c.body, c.created_at, v.id, v.title, v.visible,
+		SELECT c.id, c.user_id, u.name, c.body, c.created_at, v.id, v.shown_title, v.visible,
 			c.parent_id IS NOT NULL, (SELECT count(*) FROM comments r WHERE r.parent_id = c.id)
 		FROM comments c
 		JOIN users u ON u.id = c.user_id

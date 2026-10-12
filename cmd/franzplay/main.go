@@ -99,7 +99,8 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 			return nil
 		}
 	}
-	handlers := map[jobs.Kind]jobs.Handler{}
+	// Reading the details files next to the videos needs no other program.
+	handlers := map[jobs.Kind]jobs.Handler{jobs.Details: tell(media.NewDetailer(db).Handle)}
 	var remux catalog.Remuxer // stays nil without ffmpeg and ffprobe
 	if ffprobe, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe not found: videos will have no duration until it is installed",

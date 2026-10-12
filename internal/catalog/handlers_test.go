@@ -201,6 +201,33 @@ func TestGetVideo(t *testing.T) {
 	}
 }
 
+func TestVideoDetailsFromAFileNextToIt(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "gita [abc].mp4", "trip", "", 1, true)
+	s.addVideo(t, "altro.mp4", "other", "", 2, true)
+	if _, err := s.db.Exec(`UPDATE videos SET details_title = 'Gita in montagna', description = 'Che giornata!',
+		author = 'Famiglia Rossi', published_on = '2019-03-15' WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+
+	v := decode[Video](t, s.get(t, "/api/videos/1"))
+	if v.Title != "Gita in montagna" || v.Author != "Famiglia Rossi" ||
+		v.PublishedOn == nil || *v.PublishedOn != "2019-03-15" ||
+		v.Description == nil || *v.Description != "Che giornata!" {
+		t.Errorf("video = %+v", v)
+	}
+
+	// The list has the title, and is searched by it, but not the description.
+	list := decode[listResponse](t, s.get(t, "/api/videos?q=montagna"))
+	if len(list.Videos) != 1 || list.Videos[0].Title != "Gita in montagna" || list.Videos[0].Description != nil {
+		t.Errorf("search = %+v", list.Videos)
+	}
+	other := decode[Video](t, s.get(t, "/api/videos/2"))
+	if other.Title != "altro.mp4" || other.Author != "" || other.PublishedOn != nil || other.Description != nil {
+		t.Errorf("video without details = %+v", other)
+	}
+}
+
 func TestCategories(t *testing.T) {
 	s := newSite(t)
 	s.addVideo(t, "viaggi/a.mp4", "a", "viaggi", 1, false)
