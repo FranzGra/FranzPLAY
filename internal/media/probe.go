@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/video"
@@ -42,11 +43,12 @@ type Prober struct {
 	db      *sql.DB
 	ffprobe string // program to run
 	run     runFunc
+	now     func() time.Time
 }
 
 // NewProber returns a prober that runs the given ffprobe program.
 func NewProber(db *sql.DB, ffprobe string) *Prober {
-	return &Prober{db: db, ffprobe: ffprobe, run: run}
+	return &Prober{db: db, ffprobe: ffprobe, run: run, now: time.Now}
 }
 
 // Handle is the job handler for jobs.Probe.
@@ -69,9 +71,21 @@ func (p *Prober) Handle(ctx context.Context, videoID int64) error {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
 
-	// Saved only if the content is still the one we read: if the file was
-	// replaced meanwhile, the scan has already asked for a new reading.
-	_, err = p.db.ExecContext(ctx, `
+	return p.save(ctx, videoID, fingerprint, info)
+}
+
+// save stores what ffprobe found and asks for the cover, which needs the
+// duration. Both happen together or not at all. Nothing is saved if the
+// content changed while ffprobe read it: the scan has already asked for a
+// new reading.
+func (p *Prober) save(ctx context.Context, videoID int64, fingerprint string, info video.Info) (err error) {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("save info of video %d: %w", videoID, err)
+	}
+	defer func() { err = finish(tx, err) }()
+
+	res, err := tx.ExecContext(ctx, `
 		UPDATE videos
 		SET duration = ?, width = ?, height = ?, video_codec = ?, audio_codec = ?, container = ?
 		WHERE id = ? AND fingerprint = ?`,
@@ -79,6 +93,23 @@ func (p *Prober) Handle(ctx context.Context, videoID int64) error {
 		videoID, fingerprint)
 	if err != nil {
 		return fmt.Errorf("save info of video %d: %w", videoID, err)
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return err // content changed meanwhile: nothing to do
+	}
+	return jobs.Enqueue(ctx, tx, videoID, jobs.Cover, false, p.now())
+}
+
+// finish commits the transaction when err is nil, and rolls it back otherwise.
+func finish(tx *sql.Tx, err error) error {
+	if err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return errors.Join(err, fmt.Errorf("rollback: %w", rbErr))
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
 }
