@@ -130,8 +130,14 @@ FRANZPLAY_LIBRARIES="$HOME/Video:/media/disco/Famiglia" go run ./cmd/franzplay
 All'avvio e poi ogni minuto FranzPLAY controlla le cartelle e scrive nel terminale cosa ha trovato,
 per esempio `library scan finished ... added=12`. Subito dopo legge durata e risoluzione di ogni
 video nuovo e ne prepara la copertina, un lavoro alla volta (`job done kind=probe ...`,
-`job done kind=cover ...`). Le copertine finiscono in `data/covers`. I video non si vedono ancora
-nell'interfaccia: arriveranno nei prossimi passi.
+`job done kind=cover ...`). Le copertine finiscono in `data/covers`.
+
+I video non si vedono ancora nell'interfaccia, ma puoi già curiosare con il browser:
+
+- <http://localhost:8090/api/videos>: l'elenco dei video, con durata e copertina;
+- <http://localhost:8090/api/categories>: le categorie;
+- <http://localhost:8090/api/videos/1/stream>: il primo video, che il browser riproduce
+  (se è un `.mp4` o un `.webm`), con la possibilità di andare avanti e indietro.
 
 **Copertina tua.** Se accanto a un video c'è un'immagine con lo stesso nome (per esempio
 `mare.jpg` accanto a `mare.mp4`, oppure `mare-poster.jpg`), FranzPLAY usa quella. Altrimenti prende

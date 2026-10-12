@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/catalog"
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
@@ -106,8 +107,9 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	}()
 
 	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           server.New(version, logger, webui.Handler(webui.Files(), logger)),
+		Addr: cfg.Addr,
+		Handler: server.New(version, logger, webui.Handler(webui.Files(), logger),
+			catalog.Routes(db, cfg.DataDir, logger)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		// No WriteTimeout: streaming a long video must not be cut off.
