@@ -1,9 +1,9 @@
 // Live changes from the server (Server-Sent Events). The server only says
 // what changed; each page asks again for what it shows.
 
-export type EventKind = "library";
+export type EventKind = "library" | "jobs";
 
-const kinds: readonly EventKind[] = ["library"];
+const kinds: readonly EventKind[] = ["library", "jobs"];
 
 type Listener = () => void;
 const listeners = new Map<EventKind, Set<Listener>>();

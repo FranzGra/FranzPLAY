@@ -6,7 +6,10 @@ import { usePageTitle } from "../../components/PageTitle";
 import styles from "./Admin.module.css";
 
 // sections are the pages of the administration, in the order shown.
-const sections = [{ to: "persone", label: "Persone" }] as const;
+const sections = [
+  { to: "persone", label: "Persone" },
+  { to: "lavori", label: "Lavori" },
+] as const;
 
 // AdminPage is the frame of the administration pages: only the
 // administrator sees them.

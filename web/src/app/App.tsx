@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router";
 import { AdminPage } from "../features/admin/AdminPage";
+import { JobsPage } from "../features/admin/JobsPage";
 import { PeoplePage } from "../features/admin/PeoplePage";
 import { AuthPage } from "../features/auth/AuthPage";
 import { ComingSoonPage } from "../features/ComingSoonPage";
@@ -56,6 +57,7 @@ function Pages() {
         <Route path="admin" element={<AdminPage />}>
           <Route index element={<Navigate to="persone" replace />} />
           <Route path="persone" element={<PeoplePage />} />
+          <Route path="lavori" element={<JobsPage />} />
         </Route>
         <Route
           path="*"

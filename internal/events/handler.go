@@ -23,7 +23,7 @@ const (
 
 // Routes adds the event stream to mux, for logged-in people:
 //
-//	GET /api/events  text/event-stream: "event: library" and so on
+//	GET /api/events  text/event-stream: "event: library", "event: jobs"
 func (h *Hub) Routes(logger *slog.Logger) func(mux *http.ServeMux) {
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/events", func(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +33,7 @@ func (h *Hub) Routes(logger *slog.Logger) func(mux *http.ServeMux) {
 }
 
 func (h *Hub) serve(w http.ResponseWriter, r *http.Request, logger *slog.Logger) {
-	events, stop, ok := h.listen()
+	l, stop, ok := h.listen()
 	if !ok {
 		respond.Error(w, r, logger, http.StatusServiceUnavailable, "too many open pages, try again later")
 		return
@@ -67,12 +67,18 @@ func (h *Hub) serve(w http.ResponseWriter, r *http.Request, logger *slog.Logger)
 			if !send(": ping\n\n") {
 				return
 			}
-		case k := <-events:
-			if !send("event: " + string(k) + "\ndata: {}\n\n") {
-				return
+		case <-l.ready:
+			kinds := h.take(l)
+			if len(kinds) == 0 {
+				continue // already sent with an earlier signal
 			}
-			// Let the page breathe: further events wait in the channel
-			// (one per kind) and go out together after the pause.
+			for _, k := range kinds {
+				if !send("event: " + string(k) + "\ndata: {}\n\n") {
+					return
+				}
+			}
+			// Let the page breathe: further events wait (one per kind)
+			// and go out together after the pause.
 			select {
 			case <-r.Context().Done():
 				return

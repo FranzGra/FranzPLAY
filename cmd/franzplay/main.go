@@ -118,6 +118,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		logger.Info("removed unused previews", "count", n)
 	}
 	worker := jobs.NewWorker(db, handlers, logger)
+	worker.OnChange(func() { hub.Publish(events.Jobs) })
+	available := map[jobs.Kind]bool{}
+	for k := range handlers {
+		available[k] = true
+	}
 	scanner := library.NewScanner(db, cfg.Libraries, logger)
 	scanner.OnNewJobs(worker.Wake)
 	scanner.OnChange(func() { hub.Publish(events.Library) })
@@ -142,6 +147,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		likes.Routes(db, logger),
 		comments.Routes(db, logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
+		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
 		hub.Routes(logger),
 	)
 

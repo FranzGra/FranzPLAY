@@ -131,6 +131,26 @@ func TestManyChangesBecomeOneEvent(t *testing.T) {
 	}
 }
 
+func TestDifferentChangesAreAllTold(t *testing.T) {
+	h, srv := newTestHub(t)
+	_, lines := stream(t, srv)
+	next(t, lines) // retry
+	waitListeners(t, h, 1)
+
+	h.Publish(Library)
+	next(t, lines) // event: library
+	next(t, lines) // data
+	// During the pause, both kinds change: neither may be lost.
+	h.Publish(Jobs)
+	h.Publish(Library)
+	h.Publish(Jobs)
+	got := []string{next(t, lines), next(t, lines), next(t, lines), next(t, lines)}
+	want := []string{"event: jobs", "data: {}", "event: library", "data: {}"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("after the pause = %q, want %q", got, want)
+	}
+}
+
 func TestClosingEndsTheStreams(t *testing.T) {
 	h, srv := newTestHub(t)
 	_, lines := stream(t, srv)
