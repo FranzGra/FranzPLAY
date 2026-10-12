@@ -53,6 +53,7 @@ type fixture struct {
 	id      int64
 	dataDir string
 	yt      *fakeYouTube
+	tm      *fakeTMDB
 	f       *Fetcher
 }
 
@@ -92,7 +93,12 @@ func newFixture(t *testing.T, file string, youtubeOn bool) *fixture {
 	f := NewFetcher(db, dataDir)
 	f.youtube.oEmbed = server.URL + "/oembed"
 	f.youtube.images = server.URL + "/vi"
-	return &fixture{db: db, id: id, dataDir: dataDir, yt: yt, f: f}
+	tm := newFakeTMDB()
+	tmServer := httptest.NewServer(tm)
+	t.Cleanup(tmServer.Close)
+	f.tmdb.api = tmServer.URL + "/3"
+	f.tmdb.images = tmServer.URL + "/t/p/w1280"
+	return &fixture{db: db, id: id, dataDir: dataDir, yt: yt, tm: tm, f: f}
 }
 
 type shown struct {

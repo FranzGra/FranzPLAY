@@ -1,6 +1,6 @@
 # 0011 · Copertine e informazioni da internet
 
-**Data:** 12 ottobre 2026 · **Stato:** decisa (prima fonte: YouTube)
+**Data:** 12 ottobre 2026 · **Stato:** decisa (fatte: YouTube, TMDB)
 
 ## Il problema
 
@@ -11,7 +11,7 @@ chiedere a YouTube copertina, titolo e canale.
 ## Cosa abbiamo deciso
 
 Francesco ha scelto (12/10/2026) tre fonti, da fare **una alla volta**:
-1. **YouTube**: questa.
+1. **YouTube**.
 2. **TMDB**, per i film.
 3. **ThePornDB**.
 
@@ -19,7 +19,8 @@ Per tutte vale:
 
 - Sono **spente** finché l'amministratore non le accende, in **Amministrazione › Internet**.
   FranzPLAY funziona uguale senza nessuna fonte e senza internet.
-- Si manda **solo il codice del video**, mai niente su chi usa FranzPLAY.
+- Si manda **solo quello che il nome del file dice del video** (il codice YouTube, o titolo e anno
+  del film), mai niente su chi usa FranzPLAY.
 - Un lavoro nuovo della coda, **«Informazioni da internet»** (`online`), chiede un video alla
   volta: per ogni video nuovo, e per tutti quando si accende una fonte.
 - Quello che arriva da internet sta in **colonne a parte** (`online_title`, `online_author`…). Le
@@ -37,6 +38,24 @@ Per tutte vale:
 
 Se YouTube non conosce più il video (tolto o privato), le sue informazioni si dimenticano.
 
+**TMDB** (The Movie Database), per i film:
+- Il **nome del file** dice titolo e anno: `Il sorpasso (1962).mkv`, `The.Matrix.1999.1080p.mkv`.
+  Si prende l'ultimo anno; un nome con il codice YouTube va a YouTube, non a TMDB.
+- Si cerca in italiano e, se non si trova, in inglese. Un risultato si usa **solo se titolo
+  (italiano o originale) e anno sono proprio quelli**, a parte maiuscole e punteggiatura. Così
+  `Gita al mare 2019.mp4` non diventa mai un film a caso.
+- L'autore è il **regista**; l'immagine è quella larga del film, se manca il poster.
+- Serve una **chiave gratuita**, che l'amministratore incolla in Amministrazione › Internet. Va bene
+  sia la «Chiave API» corta sia il «Token di accesso in lettura» lungo. Prima di salvarla,
+  FranzPLAY chiede a TMDB se è buona. La chiave sta nella tabella `settings` e **non esce mai dal
+  server**: l'API dice solo se c'è. Non compare neanche negli errori.
+- Se TMDB rifiuta la chiave, il lavoro si ferma senza riprovare; salvare una chiave nuova con TMDB
+  acceso richiede di nuovo tutti i video.
+- Ogni video va alla sua fonte: se quella fonte è spenta, non si chiede niente e si tiene quello
+  che si era trovato.
+- Nella pagina c'è la frase che TMDB chiede: «Questo prodotto usa l'API di TMDB ma non è approvato
+  né certificato da TMDB».
+
 ## Perché così
 
 Le risposte di internet si **controllano all'ingresso** (regola 8):
@@ -50,4 +69,4 @@ Spegnere una fonte non cancella quello che ha già trovato: smette solo di chied
 
 ## Cosa resta per dopo
 
-- TMDB e ThePornDB, ognuna con la sua chiave gratuita inserita dall'amministratore.
+- ThePornDB, con la sua chiave gratuita inserita dall'amministratore.
