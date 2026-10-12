@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/autosubs"
 	"github.com/FranzGra/FranzPLAY/internal/catalog"
 	"github.com/FranzGra/FranzPLAY/internal/channels"
 	"github.com/FranzGra/FranzPLAY/internal/comments"
@@ -110,6 +111,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		jobs.Online: tell(online.NewFetcher(db, cfg.DataDir).Handle),
 	}
 	var remux catalog.Remuxer // stays nil without ffmpeg and ffprobe
+	subtitles := autosubs.Options{DataDir: cfg.DataDir}
+	translatorClient := translate.New(cfg.TranslateURL, cfg.TranslateKey)
+	if cfg.TranslateURL != "" {
+		subtitles.Translator = translatorClient
+	}
 	if ffprobe, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe not found: videos will have no duration until it is installed",
 			"setting", config.EnvFFprobe, "error", err)
@@ -134,9 +140,10 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		if whisper, err := exec.LookPath(cfg.Whisper); err != nil {
 			logger.Info("whisper not found: automatic subtitles are off", "setting", config.EnvWhisper)
 		} else {
+			subtitles.Whisper = true
 			var translator media.Translator // stays nil without a translator
 			if cfg.TranslateURL != "" {
-				translator = translate.New(cfg.TranslateURL, cfg.TranslateKey)
+				translator = translatorClient
 			}
 			transcriber := media.NewTranscriber(db, ffmpeg, whisper, cfg.DataDir, translator)
 			transcriber.OnStage(func() { hub.Publish(events.Jobs) })
@@ -219,6 +226,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		playlists.Routes(db, catalog.NewLookup(db), logger),
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),
 		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
+		autosubs.Routes(db, subtitles, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),
 		online.Routes(db, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		site.Routes(db, logger),

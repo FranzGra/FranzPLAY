@@ -315,6 +315,25 @@ func TestTranscribeFailures(t *testing.T) {
 	}
 }
 
+func TestTranscribeTakenBackMeanwhile(t *testing.T) {
+	fx := newTranscribeFixture(t)
+	fx.ask(t, "", "small", "it,en")
+	fx.during = func() {
+		if _, err := fx.db.Exec(`DELETE FROM subtitle_requests`); err != nil {
+			t.Error(err)
+		}
+	}
+	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := fx.made(t); got != nil {
+		t.Errorf("made %v, want nothing", got)
+	}
+	if files := fx.files(t); len(files) != 0 {
+		t.Errorf("files %v", files)
+	}
+}
+
 func TestTranscribeNothingAsked(t *testing.T) {
 	fx := newTranscribeFixture(t)
 	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {

@@ -7,6 +7,7 @@ import { JobsPage } from "../features/admin/JobsPage";
 import { OnlinePage } from "../features/admin/OnlinePage";
 import { PeoplePage } from "../features/admin/PeoplePage";
 import { SitePage } from "../features/admin/SitePage";
+import { SubtitlesPage } from "../features/admin/SubtitlesPage";
 import { VideosPage } from "../features/admin/VideosPage";
 import { AuthPage } from "../features/auth/AuthPage";
 import { JoinPage } from "../features/auth/JoinPage";
@@ -83,6 +84,7 @@ function Pages() {
           <Route path="persone" element={<PeoplePage />} />
           <Route path="inviti" element={<InvitesPage />} />
           <Route path="video" element={<VideosPage />} />
+          <Route path="sottotitoli" element={<SubtitlesPage />} />
           <Route path="commenti" element={<CommentsPage />} />
           <Route path="cartelle" element={<FoldersPage />} />
           <Route path="internet" element={<OnlinePage />} />
