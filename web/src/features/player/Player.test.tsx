@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Player } from "./Player";
+import type { SubtitleTrack } from "../../api/videos";
+import { Player, pickTrack } from "./Player";
 
 // jsdom has no real video: these stand-ins make play() and pause() behave.
 function fakeMedia() {
@@ -137,5 +138,101 @@ describe("player", () => {
     const { video } = setup({ unsupportedHint: "Formato non adatto." });
     fireEvent.error(video);
     expect(screen.getByRole("alert")).toHaveTextContent("Formato non adatto.");
+  });
+});
+
+const italian: SubtitleTrack = {
+  key: "it.srt",
+  lang: "it",
+  label: "Italiano",
+  src: "/api/videos/7/subtitles/it.srt",
+};
+const english: SubtitleTrack = {
+  key: "en.vtt",
+  lang: "en",
+  label: "Inglese",
+  src: "/api/videos/7/subtitles/en.vtt",
+};
+
+describe("subtitles", () => {
+  it("has a subtitles button only usable when there are subtitles", () => {
+    setup();
+    expect(
+      screen.getByRole("button", { name: "Nessun sottotitolo per questo video" }),
+    ).toBeDisabled();
+  });
+
+  it("turns subtitles on and off, and remembers it", async () => {
+    const { user } = setup({ subtitles: [english, italian] });
+    expect(document.querySelectorAll("track")).toHaveLength(2);
+    const cc = screen.getByRole("button", { name: "Sottotitoli (c)" });
+    expect(cc).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(cc);
+    expect(cc).toHaveAttribute("aria-pressed", "true");
+    expect(JSON.parse(window.localStorage.getItem("franzplay.subtitles") ?? "")).toEqual({
+      on: true,
+      lang: "en",
+    });
+
+    await user.keyboard("c");
+    expect(cc).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("chooses the language in the settings", async () => {
+    const { user } = setup({ subtitles: [english, italian] });
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^Sottotitoli/ }),
+    );
+    await user.click(screen.getByRole("button", { name: "Italiano" }));
+    expect(JSON.parse(window.localStorage.getItem("franzplay.subtitles") ?? "")).toEqual({
+      on: true,
+      lang: "it",
+    });
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^Sottotitoli/ }),
+    ).toHaveTextContent("Italiano");
+  });
+
+  it("explains how to add subtitles to a video without", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^Sottotitoli/ }),
+    );
+    expect(screen.getByText(/mare\.it\.srt/)).toBeInTheDocument();
+  });
+
+  it("changes and remembers the subtitle style", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    await user.click(screen.getByRole("button", { name: /Stile dei sottotitoli/ }));
+    await user.click(screen.getByRole("button", { name: /Colore/ }));
+    await user.click(screen.getByRole("button", { name: "Giallo" }));
+    await user.click(screen.getByRole("button", { name: /Dimensione/ }));
+    await user.click(screen.getByRole("button", { name: "Molto grande" }));
+    expect(screen.getByRole("button", { name: /Colore/ })).toHaveTextContent("Giallo");
+    expect(screen.getByText("Così appariranno i sottotitoli")).toHaveStyle({ color: "#ffe14d" });
+    expect(JSON.parse(window.localStorage.getItem("franzplay.subtitleStyle") ?? "")).toMatchObject({
+      color: "yellow",
+      size: "huge",
+    });
+  });
+});
+
+describe("pickTrack", () => {
+  it.each([
+    [{ on: false, lang: "it" }, null],
+    [{ on: true, lang: "it" }, "it.srt"],
+    [{ on: true, lang: "de" }, "en.vtt"], // the language is not there: the first one
+    [{ on: true, lang: "it-IT" }, "it.srt"], // the browser's language, by its first part
+  ])("%j", (choice, want) => {
+    expect(pickTrack([english, italian], choice)).toBe(want);
+  });
+
+  it("shows nothing without subtitles", () => {
+    expect(pickTrack([], { on: true, lang: "it" })).toBeNull();
   });
 });

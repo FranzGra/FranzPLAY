@@ -8,6 +8,8 @@
   color: #fff;
   user-select: none;
   -webkit-user-select: none;
+  /* Lets subtitles size themselves on the player's height (cqh). */
+  container-type: size;
 }
 
 .root:fullscreen {
@@ -390,4 +392,81 @@
   .volume {
     display: none;
   }
+}
+
+.menuNote {
+  margin: 6px 12px 8px;
+  color: rgb(255 255 255 / 0.65);
+  font-size: 12px;
+}
+
+.preview {
+  display: flex;
+  justify-content: center;
+  margin: 8px 4px 4px;
+  padding: 16px 8px;
+  border-radius: var(--radius-s);
+  background: linear-gradient(135deg, #3a4a5a, #6a5a4a);
+  container-type: size;
+  height: 72px;
+}
+
+.previewText {
+  align-self: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+/* Subtitles: above the controls when they show, lower when they hide. */
+.captions {
+  position: absolute;
+  right: 5%;
+  left: 5%;
+  bottom: 6%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  transition: bottom 200ms;
+}
+
+.root[data-controls="visible"] .captions[data-position="bottom"] {
+  bottom: max(6%, 96px);
+}
+
+.captions[data-position="top"] {
+  top: 6%;
+  bottom: auto;
+}
+
+.captionLine {
+  padding: 0.05em 0.35em;
+  border-radius: 0.15em;
+  line-height: 1.3;
+  text-align: center;
+  white-space: pre-wrap;
+}
+
+/* A pressed button (subtitles on) gets a small line under its icon. */
+.button[aria-pressed="true"] {
+  position: relative;
+}
+
+.button[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  width: 20px;
+  height: 3px;
+  margin-left: -10px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

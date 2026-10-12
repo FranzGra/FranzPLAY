@@ -15,17 +15,21 @@ import (
 
 // Routes adds the catalog's API to mux:
 //
-//	GET /api/videos              list, newest first (?category=&limit=&offset=)
-//	GET /api/videos/{id}         one video
-//	GET /api/videos/{id}/stream  the video file, with jumps forward and back
-//	GET /api/categories          categories with their number of videos
-//	GET /api/covers/{name}       a cover image
+//	GET /api/videos                       list, newest first (?category=&q=&limit=&offset=)
+//	GET /api/videos/{id}                  one video
+//	GET /api/videos/{id}/stream           the video file, with jumps forward and back
+//	GET /api/videos/{id}/subtitles        the subtitles next to the video file
+//	GET /api/videos/{id}/subtitles/{key}  one subtitle, as WebVTT
+//	GET /api/categories                   categories with their number of videos
+//	GET /api/covers/{name}                a cover image
 func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
 	h := handlers{store: store{db: db}, coversDir: filepath.Join(dataDir, media.CoversDir), logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos", h.list)
 		mux.HandleFunc("GET /api/videos/{id}", h.get)
 		mux.HandleFunc("GET /api/videos/{id}/stream", h.stream)
+		mux.HandleFunc("GET /api/videos/{id}/subtitles", h.subtitles)
+		mux.HandleFunc("GET /api/videos/{id}/subtitles/{key}", h.subtitle)
 		mux.HandleFunc("GET /api/categories", h.categories)
 		mux.HandleFunc("GET /api/covers/{name}", h.cover)
 	}

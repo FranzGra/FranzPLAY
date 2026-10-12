@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ApiError } from "../../api/client";
-import { fetchVideo, streamURL, type Video } from "../../api/videos";
+import {
+  fetchSubtitles,
+  fetchVideo,
+  type SubtitleTrack,
+  streamURL,
+  type Video,
+} from "../../api/videos";
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatAge } from "../../lib/format";
@@ -73,6 +79,7 @@ export function VideoPage() {
 
 function Watch({ video }: { video: Video }) {
   const [now] = useState(() => new Date());
+  const subtitles = useSubtitles(video.id);
   const details = [
     formatAge(video.addedAt, now),
     video.height !== null && video.width !== null ? `${Math.min(video.width, video.height)}p` : "",
@@ -85,6 +92,7 @@ function Watch({ video }: { video: Video }) {
           key={video.id}
           src={streamURL(video.id)}
           poster={video.cover}
+          subtitles={subtitles}
           unsupportedHint={
             video.playable
               ? undefined
@@ -129,4 +137,23 @@ function UpNext({ video, now }: { video: Video; now: Date }) {
       </ul>
     </>
   );
+}
+
+const none: SubtitleTrack[] = [];
+
+// useSubtitles loads the subtitles of a video. Without them the video
+// still plays, so a failure only goes to the console.
+function useSubtitles(id: number): SubtitleTrack[] {
+  const [tracks, setTracks] = useState<SubtitleTrack[]>(none);
+  useEffect(() => {
+    const controller = new AbortController();
+    setTracks(none);
+    fetchSubtitles(id, controller.signal)
+      .then(setTracks)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
+    return () => controller.abort();
+  }, [id]);
+  return tracks;
 }
