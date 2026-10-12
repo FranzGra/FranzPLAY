@@ -30,10 +30,10 @@ var ignoredDirs = map[string]bool{
 	"lost+found":                true, // Linux
 }
 
-// isVideo reports whether a file name looks like a video FranzPLAY should show.
+// IsVideo reports whether a file name looks like a video FranzPLAY should show.
 // Hidden files (starting with ".") are skipped: on macOS "._name.mp4" files
 // are metadata, not videos.
-func isVideo(name string) bool {
+func IsVideo(name string) bool {
 	if strings.HasPrefix(name, ".") {
 		return false
 	}

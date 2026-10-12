@@ -1,16 +1,23 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { type Account, nameProblem, passwordProblem } from "../../api/auth";
 import { ApiError } from "../../api/client";
-import { createUser, deleteUser, fetchUsers, resetPassword, updateUser } from "../../api/users";
+import {
+  createUser,
+  deleteUser,
+  fetchUsers,
+  type Person,
+  resetPassword,
+  updateUser,
+} from "../../api/users";
 import { useAccount } from "../../app/auth";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
-import { formatBytes } from "../../lib/format";
+import { formatBytes, formatSince } from "../../lib/format";
 import styles from "./Admin.module.css";
 
-type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; people: Account[] };
+type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; people: Person[] };
 
-const byName = (a: Account, b: Account) => a.name.localeCompare(b.name, "it");
+const byName = (a: Person, b: Person) => a.name.localeCompare(b.name, "it");
 
 const gigabyte = 1024 ** 3;
 
@@ -41,12 +48,17 @@ export function PeoplePage() {
   const replace = (person: Account) =>
     setState((s) =>
       s.kind === "ready"
-        ? { kind: "ready", people: s.people.map((p) => (p.id === person.id ? person : p)) }
+        ? {
+            kind: "ready",
+            people: s.people.map((p) => (p.id === person.id ? { ...p, ...person } : p)),
+          }
         : s,
     );
   const add = (person: Account) => {
     setState((s) =>
-      s.kind === "ready" ? { kind: "ready", people: [...s.people, person].sort(byName) } : s,
+      s.kind === "ready"
+        ? { kind: "ready", people: [...s.people, { ...person, lastLogin: null }].sort(byName) }
+        : s,
     );
     setAdding(false);
   };
@@ -178,7 +190,7 @@ function PersonRow({
   onChanged,
   onRemoved,
 }: {
-  person: Account;
+  person: Person;
   onChanged: (person: Account) => void;
   onRemoved: () => void;
 }) {
@@ -218,6 +230,11 @@ function PersonRow({
           <p className={styles.role}>
             {person.role === "admin" ? "Amministratore" : "Utente"}
             {person.canUpload && ` · carica video, fino a ${formatBytes(person.uploadQuota)}`}
+          </p>
+          <p className={styles.role}>
+            {person.lastLogin
+              ? `Ultimo accesso ${formatSince(person.lastLogin, new Date())}`
+              : "Non è ancora entrato con nome e password"}
           </p>
         </div>
       </div>

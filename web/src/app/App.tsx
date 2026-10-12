@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from "react-router";
+import { AccessPage } from "../features/admin/AccessPage";
 import { AdminPage } from "../features/admin/AdminPage";
 import { CommentsPage } from "../features/admin/CommentsPage";
 import { FoldersPage } from "../features/admin/FoldersPage";
@@ -83,6 +84,7 @@ function Pages() {
           <Route index element={<Navigate to="persone" replace />} />
           <Route path="persone" element={<PeoplePage />} />
           <Route path="inviti" element={<InvitesPage />} />
+          <Route path="accessi" element={<AccessPage />} />
           <Route path="video" element={<VideosPage />} />
           <Route path="sottotitoli" element={<SubtitlesPage />} />
           <Route path="commenti" element={<CommentsPage />} />

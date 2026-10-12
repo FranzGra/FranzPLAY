@@ -178,14 +178,21 @@ func (s *Service) acquire(ctx context.Context) error {
 func (s *Service) release() { <-s.hashing }
 
 // login checks name and password and opens a session. It returns the
-// cookie token.
-func (s *Service) login(ctx context.Context, name, password string) (Account, string, error) {
+// cookie token. Every try is written in the access log, with the address
+// it came from.
+func (s *Service) login(ctx context.Context, address, name, password string) (Account, string, error) {
 	name = strings.TrimSpace(name)
 	now := s.now()
 	if !s.limiter.allowed(name, now) {
+		if err := s.store.recordLogin(ctx, now, name, 0, address, Locked); err != nil {
+			return Account{}, "", err
+		}
 		return Account{}, "", errTooManyTries
 	}
 	if len(password) > 4*maxPasswordLen {
+		if err := s.store.recordLogin(ctx, now, name, 0, address, WrongPassword); err != nil {
+			return Account{}, "", err
+		}
 		return Account{}, "", errBadCredentials
 	}
 
@@ -202,7 +209,10 @@ func (s *Service) login(ctx context.Context, name, password string) (Account, st
 	}
 	if !ok || a.ID == 0 {
 		s.limiter.failed(name, now)
-		s.logger.WarnContext(ctx, "login failed", "name", name)
+		s.logger.WarnContext(ctx, "login failed", "name", name, "address", address)
+		if err := s.store.recordLogin(ctx, now, name, a.ID, address, WrongPassword); err != nil {
+			return Account{}, "", err
+		}
 		return Account{}, "", errBadCredentials
 	}
 	s.limiter.succeeded(name)
@@ -215,6 +225,9 @@ func (s *Service) login(ctx context.Context, name, password string) (Account, st
 		return Account{}, "", err
 	}
 	if err := s.store.createSession(ctx, a.ID, hash, now); err != nil {
+		return Account{}, "", err
+	}
+	if err := s.store.recordLogin(ctx, now, name, a.ID, address, Entered); err != nil {
 		return Account{}, "", err
 	}
 	return a, token, nil

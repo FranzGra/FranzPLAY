@@ -9,12 +9,14 @@ const giulia = {
   uploadQuota: 10737418240,
   accentColor: "",
   avatar: 0,
+  lastLogin: null,
 };
+const me = { ...testAccount, lastLogin: new Date(Date.now() - 3 * 3600_000).toISOString() };
 
 function people(extra: Record<string, unknown> = {}) {
   return {
     ...signedIn(),
-    "GET /api/users": { body: [testAccount, giulia] },
+    "GET /api/users": { body: [me, giulia] },
     ...extra,
   };
 }
@@ -29,6 +31,12 @@ async function rowOf(name: string) {
 }
 
 describe("people page", () => {
+  it("says when each person last entered", async () => {
+    renderApp("/admin/persone", people());
+    expect(await rowOf("Francesco")).toHaveTextContent("Ultimo accesso 3 ore fa");
+    expect(await rowOf("Giulia")).toHaveTextContent("Non è ancora entrato con nome e password");
+  });
+
   it("opens from the administration address", async () => {
     renderApp("/admin", people());
     expect(await screen.findByRole("heading", { name: "Amministrazione" })).toBeInTheDocument();
@@ -127,7 +135,7 @@ describe("people page", () => {
     const uploader = { ...giulia, canUpload: true };
     const { user, server } = renderApp("/admin/persone", {
       ...people(),
-      "GET /api/users": { body: [testAccount, uploader] },
+      "GET /api/users": { body: [me, uploader] },
       "PUT /api/users/2": { body: { ...uploader, uploadQuota: 50 * 1024 ** 3 } },
     });
     const row = await rowOf("Giulia");
@@ -151,7 +159,7 @@ describe("people page", () => {
     const { user } = renderApp(
       "/admin/persone",
       people({
-        "GET /api/users": { body: [testAccount, { ...giulia, role: "admin" }] },
+        "GET /api/users": { body: [me, { ...giulia, role: "admin" }] },
         "PUT /api/users/2": {
           status: 409,
           body: { error: "the last administrator cannot be removed" },

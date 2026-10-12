@@ -37,6 +37,8 @@ const maxBody = 4 << 10
 //	DELETE /api/invites/{id}  administrators only
 //	POST   /api/join/check    does an invite code still work? {code}
 //	POST   /api/join          create an account with an invite {code, name, password}
+//	GET    /api/logins        administrators only: the access log, 100 at a time,
+//	                          newest first; ?q= part of name or address, ?failed=1, ?before=id
 //	GET    /api/registration  administrators only: may anyone create an account? {open}
 //	PUT    /api/registration  administrators only {open}
 //	POST   /api/register      create an account without an invite, when allowed {name, password}
@@ -63,6 +65,7 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/invites/{id}", s.adminOnly(s.handleDeleteInvite))
 	mux.HandleFunc("POST /api/join/check", s.handleCheckInvite)
 	mux.HandleFunc("POST /api/join", s.handleJoin)
+	mux.HandleFunc("GET /api/logins", s.adminOnly(s.handleLogins))
 	mux.HandleFunc("GET /api/registration", s.adminOnly(s.handleRegistration))
 	mux.HandleFunc("PUT /api/registration", s.adminOnly(s.handleSetRegistration))
 	mux.HandleFunc("POST /api/register", s.handleRegister)
@@ -160,7 +163,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r)
 		return
 	}
-	a, token, err := s.login(r.Context(), req.Name, req.Password)
+	a, token, err := s.login(r.Context(), clientAddr(r), req.Name, req.Password)
 	if err != nil {
 		s.fail(w, r, err)
 		return

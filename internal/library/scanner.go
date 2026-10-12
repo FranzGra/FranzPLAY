@@ -204,7 +204,7 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 		if err := ctx.Err(); err != nil {
 			return report, err
 		}
-		fp, err := fingerprint(folders[f.loc.library], f.loc.path)
+		fp, err := Fingerprint(folders[f.loc.library], f.loc.path)
 		if err != nil {
 			report.Problems++
 			trusted[f.loc.library] = false

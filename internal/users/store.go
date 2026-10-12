@@ -131,25 +131,36 @@ func (s store) passwordHash(ctx context.Context, id int64) (string, error) {
 	return hash, nil
 }
 
-func (s store) list(ctx context.Context) (_ []Account, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, upload_quota, coalesce(accent_color, ''), avatar FROM users ORDER BY name`)
+// Person is a user as the administrator sees them in the list of people.
+type Person struct {
+	Account
+	LastLogin *time.Time `json:"lastLogin"` // nil if they never logged in with name and password
+}
+
+func (s store) list(ctx context.Context) (_ []Person, err error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, upload_quota, coalesce(accent_color, ''), avatar, last_login FROM users ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
-	out := []Account{}
+	out := []Person{}
 	for rows.Next() {
-		var a Account
+		var p Person
 		var role string
-		if err := rows.Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.UploadQuota, &a.AccentColor, &a.Avatar); err != nil {
+		var last sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Name, &role, &p.CanUpload, &p.UploadQuota, &p.AccentColor, &p.Avatar, &last); err != nil {
 			return nil, fmt.Errorf("list users: %w", err)
 		}
 		r, ok := parseRole(role)
 		if !ok {
-			return nil, fmt.Errorf("user %d has unknown role %q", a.ID, role)
+			return nil, fmt.Errorf("user %d has unknown role %q", p.ID, role)
 		}
-		a.Role = r
-		out = append(out, a)
+		p.Role = r
+		if last.Valid {
+			t := time.Unix(last.Int64, 0).UTC()
+			p.LastLogin = &t
+		}
+		out = append(out, p)
 	}
 	return out, rows.Err()
 }

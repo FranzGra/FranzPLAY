@@ -10,10 +10,24 @@ export type NewPerson = {
   canUpload: boolean;
 };
 
-export async function fetchUsers(signal?: AbortSignal): Promise<Account[]> {
+// Person is someone in the list of people: an account, and when they last
+// entered with name and password (null if never).
+export type Person = Account & { lastLogin: Date | null };
+
+function parsePerson(data: unknown): Person {
+  const account = parseAccount(data);
+  const { lastLogin } = data as Record<string, unknown>;
+  if (lastLogin === null) return { ...account, lastLogin: null };
+  if (typeof lastLogin !== "string" || Number.isNaN(Date.parse(lastLogin))) {
+    throw new Error("person: bad lastLogin");
+  }
+  return { ...account, lastLogin: new Date(lastLogin) };
+}
+
+export async function fetchUsers(signal?: AbortSignal): Promise<Person[]> {
   const data = await request("/api/users", { signal });
   if (!Array.isArray(data)) throw new Error("users: not a list");
-  return data.map(parseAccount);
+  return data.map(parsePerson);
 }
 
 export async function createUser(person: NewPerson): Promise<Account> {
