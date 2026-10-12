@@ -13,7 +13,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
-// errNotFound means there is no present video with that id.
+// errNotFound means there is no visible video with that id.
 var errNotFound = errors.New("video not found")
 
 // Video is one video as the interface sees it.
@@ -96,10 +96,10 @@ func scanVideo(row rowScanner) (Video, error) {
 	return v, nil
 }
 
-// list returns a page of present videos, newest first, and how many there
+// list returns a page of visible videos, newest first, and how many there
 // are in total for that query.
 func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err error) {
-	where := `v.missing_since IS NULL`
+	where := `v.visible`
 	args := []any{}
 	if q.category != "" {
 		where += ` AND v.category = ?`
@@ -135,10 +135,10 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 	return videos, total, nil
 }
 
-// get returns one present video.
+// get returns one visible video.
 func (s store) get(ctx context.Context, id int64) (Video, error) {
 	v, err := scanVideo(s.db.QueryRowContext(ctx,
-		`SELECT `+videoColumns+` FROM videos v WHERE v.id = ? AND v.missing_since IS NULL`, id))
+		`SELECT `+videoColumns+` FROM videos v WHERE v.id = ? AND v.visible`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, errNotFound
 	}
@@ -148,7 +148,7 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 	return v, nil
 }
 
-// byIDs returns the present videos among ids, in the order of ids.
+// byIDs returns the visible videos among ids, in the order of ids.
 func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 	if len(ids) == 0 {
 		return []Video{}, nil
@@ -159,7 +159,7 @@ func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 		args[i] = id
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT `+videoColumns+` FROM videos v
-		WHERE v.missing_since IS NULL AND v.id IN (`+marks+`)`, args...)
+		WHERE v.visible AND v.id IN (`+marks+`)`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read videos: %w", err)
 	}
@@ -184,11 +184,11 @@ func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 	return out, nil
 }
 
-// categories returns the categories that have present videos, by name.
+// categories returns the categories that have visible videos, by name.
 func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT category, count(*) FROM videos
-		WHERE missing_since IS NULL AND category != ''
+		WHERE visible AND category != ''
 		GROUP BY category ORDER BY category COLLATE NOCASE`)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
@@ -205,12 +205,12 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	return out, rows.Err()
 }
 
-// file returns the full path of a present video's file.
+// file returns the full path of a visible video's file.
 func (s store) file(ctx context.Context, id int64) (string, error) {
 	var root, rel string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT l.path, v.path FROM videos v JOIN libraries l ON l.id = v.library_id
-		WHERE v.id = ? AND v.missing_since IS NULL`, id).Scan(&root, &rel)
+		WHERE v.id = ? AND v.visible`, id).Scan(&root, &rel)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}

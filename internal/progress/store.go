@@ -18,7 +18,7 @@ type store struct {
 // duration returns the length of a present video, 0 when not read yet.
 func (s store) duration(ctx context.Context, videoID int64) (int64, error) {
 	var d sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `SELECT duration FROM videos WHERE id = ? AND missing_since IS NULL`, videoID).Scan(&d)
+	err := s.db.QueryRowContext(ctx, `SELECT duration FROM videos WHERE id = ? AND visible`, videoID).Scan(&d)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, errVideoNotFound
 	}
@@ -66,7 +66,7 @@ type watched struct {
 // many there are in all. Only present videos count. With onlyStarted,
 // only those left in the middle: for "Continua a guardare".
 func (s store) list(ctx context.Context, userID int64, onlyStarted bool, limit, offset int) (_ []watched, total int, err error) {
-	where := `p.user_id = ? AND v.missing_since IS NULL`
+	where := `p.user_id = ? AND v.visible`
 	if onlyStarted {
 		where += ` AND p.finished = 0 AND p.position > 0`
 	}

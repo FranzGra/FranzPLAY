@@ -327,6 +327,7 @@
 }
 
 .path {
+  overflow-wrap: anywhere;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 14px;
 }
@@ -352,4 +353,129 @@
 
 .lastCheck p + p {
   margin-top: 4px;
+}
+
+.section[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+button.section {
+  background: transparent;
+  cursor: pointer;
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin: 20px 0;
+}
+
+.tools .sections {
+  margin: 0;
+}
+
+.searchForm {
+  flex: 1 1 280px;
+  max-width: 480px;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+}
+
+.searchBox input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.searchBox input:focus {
+  outline: none;
+}
+
+.count {
+  margin: 0 0 12px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.videoInfo {
+  display: flex;
+  flex: 1 1 320px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.thumb {
+  display: flex;
+  flex: none;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-s);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 600px) {
+  .thumb {
+    width: 88px;
+  }
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.more {
+  margin: 20px auto 0;
+}
+
+fieldset.sections {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.action:disabled:hover {
+  background: inherit;
 }

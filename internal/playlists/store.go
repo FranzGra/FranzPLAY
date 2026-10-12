@@ -25,7 +25,7 @@ type store struct {
 
 // present means a video that is in the library now: a missing video stays
 // in its lists, hidden, and comes back if its disk does (rule 3).
-const present = `JOIN videos v ON v.id = i.video_id AND v.missing_since IS NULL`
+const present = `JOIN videos v ON v.id = i.video_id AND v.visible`
 
 const selectRow = `SELECT p.id, p.kind, p.name, p.updated_at,
 	(SELECT count(*) FROM playlist_items i ` + present + ` WHERE i.playlist_id = p.id),
@@ -160,7 +160,7 @@ func (s store) add(ctx context.Context, id, videoID int64, now time.Time) error 
 	}
 	defer func() { _ = tx.Rollback() }() // after Commit it does nothing
 	var one int
-	err = tx.QueryRowContext(ctx, `SELECT 1 FROM videos WHERE id = ? AND missing_since IS NULL`, videoID).Scan(&one)
+	err = tx.QueryRowContext(ctx, `SELECT 1 FROM videos WHERE id = ? AND visible`, videoID).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
 		return errVideoNotFound
 	}

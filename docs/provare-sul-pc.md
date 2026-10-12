@@ -171,6 +171,11 @@ telefono è nella pagina Profilo). Nella sezione **Persone** aggiungi familiari 
 una password, decidi chi può caricare video e chi è amministratore, dai una password nuova a chi
 l'ha dimenticata o togli una persona. Deve restare sempre almeno un amministratore.
 
+Nella sezione **Video** trovi tutti i video, anche quelli nascosti e quelli il cui file non si
+trova più, con il nome del file. **Nascondi** fa sparire un video per tutti (resta con i suoi mi
+piace e commenti, e con **Mostra** torna com'era); **Rifai copertina** rilegge il video e ne prepara
+di nuovo copertina e anteprime.
+
 Nella sezione **Cartelle** vedi le cartelle dei video, quanti video ha ognuna e com'è andato
 l'ultimo controllo. Se una cartella non si legge, o è vuota ma prima aveva dei video (disco
 staccato?), te lo dice in rosso. Con **Controlla adesso** non aspetti il minuto.
