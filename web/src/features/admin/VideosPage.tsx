@@ -13,6 +13,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
 import styles from "./Admin.module.css";
+import { ClipForm } from "./ClipForm";
 import { CoverForm } from "./CoverForm";
 import { DetailsForm } from "./DetailsForm";
 
@@ -181,6 +182,7 @@ function VideoRow({
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [choosingCover, setChoosingCover] = useState(false);
+  const [choosingClip, setChoosingClip] = useState(false);
   const [problem, setProblem] = useState("");
   const [done, setDone] = useState("");
 
@@ -248,6 +250,10 @@ function VideoRow({
               <span className={styles.badge}>Senza copertina</span>
             )}
             {video.coverChoice !== "" && <span className={styles.badgeOk}>Copertina scelta</span>}
+            {video.clipChoice === "video" && (
+              <span className={styles.badgeOk}>Anteprima caricata</span>
+            )}
+            {video.clipChoice === "none" && <span className={styles.badgeOk}>Senza anteprima</span>}
           </p>
           {problem && (
             <p role="alert" className={styles.problem}>
@@ -288,6 +294,18 @@ function VideoRow({
         <button
           type="button"
           className={`glass ${styles.action}`}
+          aria-expanded={choosingClip}
+          disabled={video.missing}
+          onClick={() => {
+            setDone("");
+            setChoosingClip(!choosingClip);
+          }}
+        >
+          Anteprima
+        </button>
+        <button
+          type="button"
+          className={`glass ${styles.action}`}
           disabled={busy || video.missing}
           onClick={() =>
             run(() => refreshVideo(video.id), "In coda: copertina e anteprime arrivano tra poco.")
@@ -319,6 +337,17 @@ function VideoRow({
             setDone("In coda: la nuova copertina arriva tra poco.");
           }}
           onClose={() => setChoosingCover(false)}
+        />
+      )}
+      {choosingClip && (
+        <ClipForm
+          video={video}
+          onChosen={(changed, message) => {
+            onChanged(changed);
+            setChoosingClip(false);
+            setDone(message);
+          }}
+          onClose={() => setChoosingClip(false)}
         />
       )}
     </div>

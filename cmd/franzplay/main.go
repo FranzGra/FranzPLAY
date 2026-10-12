@@ -175,6 +175,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	} else if n > 0 {
 		logger.Info("removed unused uploaded covers", "count", n)
 	}
+	if n, err := media.RemoveOrphanOwnClips(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused uploaded clips", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused uploaded clips", "count", n)
+	}
 	if n, err := media.RemoveOrphanPreviews(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused previews", "error", err)
 	} else if n > 0 {

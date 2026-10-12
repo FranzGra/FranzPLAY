@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -81,7 +82,7 @@ func (a admin) handleOwnCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := filepath.Join(a.dataDir, media.OwnCoversDir)
-	name, err := saveOwnCover(dir, id, ext, data)
+	name, err := saveOwnFile(dir, id, ext, bytes.NewReader(data))
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
@@ -89,11 +90,11 @@ func (a admin) handleOwnCover(w http.ResponseWriter, r *http.Request) {
 	old, err := a.store.setCover(r.Context(), id, &name, nil, a.now())
 	if err != nil {
 		// Nobody uses the new image: it goes.
-		err = errors.Join(err, removeOwnCover(dir, name))
-		a.coverFailed(w, r, err)
+		err = errors.Join(err, removeOwnFile(dir, name))
+		a.choiceFailed(w, r, err)
 		return
 	}
-	a.coverChosen(w, r, id, "image", dir, old)
+	a.chosen(w, r, id, "cover", "image", dir, old)
 }
 
 func (a admin) handleCoverSecond(w http.ResponseWriter, r *http.Request) {
@@ -111,10 +112,10 @@ func (a admin) handleCoverSecond(w http.ResponseWriter, r *http.Request) {
 	}
 	old, err := a.store.setCover(r.Context(), id, nil, req.Second, a.now())
 	if err != nil {
-		a.coverFailed(w, r, err)
+		a.choiceFailed(w, r, err)
 		return
 	}
-	a.coverChosen(w, r, id, "moment", filepath.Join(a.dataDir, media.OwnCoversDir), old)
+	a.chosen(w, r, id, "cover", "moment", filepath.Join(a.dataDir, media.OwnCoversDir), old)
 }
 
 func (a admin) handleResetCover(w http.ResponseWriter, r *http.Request) {
@@ -125,29 +126,29 @@ func (a admin) handleResetCover(w http.ResponseWriter, r *http.Request) {
 	}
 	old, err := a.store.setCover(r.Context(), id, nil, nil, a.now())
 	if err != nil {
-		a.coverFailed(w, r, err)
+		a.choiceFailed(w, r, err)
 		return
 	}
-	a.coverChosen(w, r, id, "automatic", filepath.Join(a.dataDir, media.OwnCoversDir), old)
+	a.chosen(w, r, id, "cover", "automatic", filepath.Join(a.dataDir, media.OwnCoversDir), old)
 }
 
-// coverChosen finishes a change of cover: the image used before goes, the
-// job worker and the pages are told.
-func (a admin) coverChosen(w http.ResponseWriter, r *http.Request, id int64, choice, dir, old string) {
+// chosen finishes a change of cover or clip: the file uploaded before
+// goes, the job worker and the pages are told. what is "cover" or "clip".
+func (a admin) chosen(w http.ResponseWriter, r *http.Request, id int64, what, choice, dir, old string) {
 	if old != "" {
-		if err := removeOwnCover(dir, old); err != nil {
-			// The choice is saved; the old image is removed at the next start.
-			a.logger.WarnContext(r.Context(), "remove old uploaded cover", "video", id, "error", err)
+		if err := removeOwnFile(dir, old); err != nil {
+			// The choice is saved; the old file is removed at the next start.
+			a.logger.WarnContext(r.Context(), "remove old uploaded file", "video", id, "what", what, "error", err)
 		}
 	}
 	who, _ := a.account(r.Context())
-	a.logger.InfoContext(r.Context(), "cover chosen", "video", id, "choice", choice, "by", who.Name)
+	a.logger.InfoContext(r.Context(), what+" chosen", "video", id, "choice", choice, "by", who.Name)
 	a.queued()
 	a.changed()
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a admin) coverFailed(w http.ResponseWriter, r *http.Request, err error) {
+func (a admin) choiceFailed(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errNotFound):
 		respond.Error(w, r, a.logger, http.StatusNotFound, errNotFound.Error())
@@ -162,20 +163,20 @@ func (a admin) coverFailed(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-// saveOwnCover writes an uploaded image in dir, all or nothing (rule 6),
-// with a new name each time, and returns the name.
-func saveOwnCover(dir string, id int64, ext string, data []byte) (name string, err error) {
+// saveOwnFile writes a file uploaded by the administrator in dir, all or
+// nothing (rule 6), with a new name each time, and returns the name.
+func saveOwnFile(dir string, id int64, ext string, body io.Reader) (name string, err error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return "", fmt.Errorf("create uploaded covers folder: %w", err)
+		return "", fmt.Errorf("create %s folder: %w", filepath.Base(dir), err)
 	}
 	random := make([]byte, 8)
 	if _, err := rand.Read(random); err != nil {
-		return "", fmt.Errorf("name uploaded cover: %w", err)
+		return "", fmt.Errorf("name uploaded file: %w", err)
 	}
 	name = strconv.FormatInt(id, 10) + "-" + hex.EncodeToString(random) + ext
 	tmp, err := os.CreateTemp(dir, ".new-*")
 	if err != nil {
-		return "", fmt.Errorf("save uploaded cover: %w", err)
+		return "", fmt.Errorf("save uploaded file: %w", err)
 	}
 	defer func() {
 		// Left over only when something failed; after success it was renamed.
@@ -183,23 +184,23 @@ func saveOwnCover(dir string, id int64, ext string, data []byte) (name string, e
 			err = errors.Join(err, rmErr)
 		}
 	}()
-	if _, err := tmp.Write(data); err != nil {
-		return "", errors.Join(fmt.Errorf("save uploaded cover: %w", err), tmp.Close())
+	if _, err := io.Copy(tmp, body); err != nil {
+		return "", errors.Join(fmt.Errorf("save uploaded file: %w", err), tmp.Close())
 	}
 	if err := tmp.Close(); err != nil {
-		return "", fmt.Errorf("save uploaded cover: %w", err)
+		return "", fmt.Errorf("save uploaded file: %w", err)
 	}
 	if err := os.Rename(tmp.Name(), filepath.Join(dir, name)); err != nil {
-		return "", fmt.Errorf("save uploaded cover: %w", err)
+		return "", fmt.Errorf("save uploaded file: %w", err)
 	}
 	return name, nil
 }
 
-// removeOwnCover deletes an uploaded image of the data folder. One already
-// gone is fine.
-func removeOwnCover(dir, name string) error {
+// removeOwnFile deletes a file uploaded by the administrator, from the
+// data folder. One already gone is fine.
+func removeOwnFile(dir, name string) error {
 	if err := os.Remove(filepath.Join(dir, filepath.Base(name))); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("remove uploaded cover: %w", err)
+		return fmt.Errorf("remove uploaded file: %w", err)
 	}
 	return nil
 }
