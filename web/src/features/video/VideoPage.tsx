@@ -15,6 +15,7 @@ import { formatAge } from "../../lib/format";
 import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
+import { SaveButton } from "../playlists/SaveButton";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoCard } from "../videos/VideoCard";
 import styles from "./VideoPage.module.css";
@@ -134,6 +135,7 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
         </p>
         <div className={styles.actions}>
           <LikeButton videoId={video.id} />
+          <SaveButton videoId={video.id} />
         </div>
         <div className={styles.below}>
           <Comments key={video.id} videoId={video.id} />

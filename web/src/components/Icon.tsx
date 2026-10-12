@@ -156,6 +156,27 @@ const paths = {
       <path d="M9 7V4h6v3" />
     </>
   ),
+  save: (
+    <>
+      <path d="M4 6h12" />
+      <path d="M4 12h8" />
+      <path d="M4 18h8" />
+      <path d="M18 13v8M14 17h8" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  edit: (
+    <>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="M13 7l4 4" />
+    </>
+  ),
   chevronLeft: <path d="M15 5l-7 7 7 7" />,
   chevronRight: <path d="M9 5l7 7-7 7" />,
 } as const;
