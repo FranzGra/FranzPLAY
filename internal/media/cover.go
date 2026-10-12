@@ -17,6 +17,11 @@ import (
 // CoversDir is the folder, inside the data folder, that holds the covers.
 const CoversDir = "covers"
 
+// OwnCoversDir is the folder, inside the data folder, that holds the
+// images the administrator uploaded as covers, as they were sent. The
+// cover job turns them into covers like any other picture.
+const OwnCoversDir = "own-covers"
+
 // coverWidth is the width of every cover. 640 pixels look sharp on a phone
 // and in the grid on a computer, and weigh about 30-60 KB.
 const coverWidth = 640
@@ -47,6 +52,37 @@ func coverName(videoID int64, fingerprint string) string {
 	return strconv.FormatInt(videoID, 10) + "-" + tail + ".jpg"
 }
 
+// coverChoice is where a cover comes from, besides the video itself.
+type coverChoice struct {
+	own        string        // image uploaded by the administrator (full path), "" if none
+	second     sql.NullInt64 // moment of the video chosen by the administrator
+	downloaded string        // picture found on the internet (full path), "" if none
+}
+
+// tag tells apart the covers the administrator chose, so the name of the
+// cover changes with the choice and browsers never show the old one.
+// It is "" for the cover FranzPLAY picks by itself.
+func (c coverChoice) tag() string {
+	switch {
+	case c.own != "":
+		base := strings.TrimSuffix(filepath.Base(c.own), filepath.Ext(c.own))
+		return "o" + base[max(0, len(base)-8):]
+	case c.second.Valid:
+		return "s" + strconv.FormatInt(c.second.Int64, 10)
+	default:
+		return ""
+	}
+}
+
+// chosenCoverName is coverName, plus the tag of the administrator's choice.
+func chosenCoverName(videoID int64, fingerprint string, choice coverChoice) string {
+	name := coverName(videoID, fingerprint)
+	if tag := choice.tag(); tag != "" {
+		name = strings.TrimSuffix(name, ".jpg") + "-" + tag + ".jpg"
+	}
+	return name
+}
+
 // Coverer makes the covers with ffmpeg.
 type Coverer struct {
 	db      *sql.DB
@@ -67,10 +103,11 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 	if err != nil {
 		return err
 	}
-	var duration sql.NullInt64
-	var oldCover, onlineImage sql.NullString
-	if err := c.db.QueryRowContext(ctx, `SELECT duration, cover, online_cover FROM videos WHERE id = ?`, videoID).
-		Scan(&duration, &oldCover, &onlineImage); err != nil {
+	var duration, chosenSecond sql.NullInt64
+	var oldCover, onlineImage, ownImage sql.NullString
+	if err := c.db.QueryRowContext(ctx, `
+		SELECT duration, cover, online_cover, own_cover, cover_second FROM videos WHERE id = ?`, videoID).
+		Scan(&duration, &oldCover, &onlineImage, &ownImage, &chosenSecond); err != nil {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
 
@@ -95,11 +132,14 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 		}
 	}()
 
-	downloaded := ""
-	if onlineImage.Valid {
-		downloaded = filepath.Join(c.dataDir, online.Dir, filepath.Base(onlineImage.String))
+	choice := coverChoice{second: chosenSecond}
+	if ownImage.Valid {
+		choice.own = filepath.Join(c.dataDir, OwnCoversDir, filepath.Base(ownImage.String))
 	}
-	args := c.coverArgs(file, duration.Int64, downloaded, tmpName)
+	if onlineImage.Valid {
+		choice.downloaded = filepath.Join(c.dataDir, online.Dir, filepath.Base(onlineImage.String))
+	}
+	args := c.coverArgs(file, duration.Int64, choice, tmpName)
 	if _, err := c.run(ctx, c.ffmpeg, args...); err != nil {
 		return fmt.Errorf("cover of video %d: %w", videoID, err)
 	}
@@ -111,7 +151,7 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 		return fmt.Errorf("cover of video %d: ffmpeg wrote no image", videoID)
 	}
 
-	name := coverName(videoID, fingerprint)
+	name := chosenCoverName(videoID, fingerprint, choice)
 	if err := os.Rename(tmpName, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("cover of video %d: %w", videoID, err)
 	}
@@ -136,24 +176,34 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 	return nil
 }
 
-// coverArgs builds the ffmpeg command: from an image next to the video if
-// there is one, else from the picture found on the internet (downloaded,
-// "" if none), otherwise from a frame of the video. All end as a JPEG
-// coverWidth wide (or smaller, never enlarged). Going through ffmpeg also
-// means a downloaded file that is not really a picture never becomes a cover.
-func (c *Coverer) coverArgs(video string, duration int64, downloaded, out string) []string {
+// coverArgs builds the ffmpeg command. The administrator's choice comes
+// first: an image they uploaded, cut to 16:9 like the covers of the grid,
+// or a moment of the video. Then an image next to the video if there is
+// one, the picture found on the internet, and last a frame of the video
+// picked by FranzPLAY. All end as a JPEG coverWidth wide (or smaller, never
+// enlarged). Going through ffmpeg also means a file that is not really a
+// picture never becomes a cover.
+func (c *Coverer) coverArgs(video string, duration int64, choice coverChoice, out string) []string {
 	args := []string{"-v", "error", "-y"}
-	if image, ok := findSidecar(video); ok {
-		args = append(args, "-i", "file:"+image)
-	} else if downloaded != "" {
-		args = append(args, "-i", "file:"+downloaded)
-	} else {
+	scale := "scale='min(" + strconv.Itoa(coverWidth) + ",iw)':-2"
+	switch image, found := findSidecar(video); {
+	case choice.own != "":
+		args = append(args, "-i", "file:"+choice.own)
+		// The largest 16:9 rectangle in the middle of the image.
+		scale = "crop='min(iw,ih*16/9)':'min(ih,iw*9/16)'," + scale
+	case choice.second.Valid:
 		// -ss before -i jumps straight to the moment instead of decoding up to it.
+		args = append(args, "-ss", strconv.FormatInt(choice.second.Int64, 10), "-i", "file:"+video)
+	case found:
+		args = append(args, "-i", "file:"+image)
+	case choice.downloaded != "":
+		args = append(args, "-i", "file:"+choice.downloaded)
+	default:
 		args = append(args, "-ss", strconv.FormatInt(coverSecond(duration), 10), "-i", "file:"+video)
 	}
 	return append(args,
 		"-frames:v", "1",
-		"-vf", "scale='min("+strconv.Itoa(coverWidth)+",iw)':-2",
+		"-vf", scale,
 		"-q:v", "3",
 		"-f", "image2", "file:"+out)
 }
@@ -186,6 +236,13 @@ func removeFile(dir, name string) error {
 // run before the job worker starts, so it never sees a cover being made.
 func RemoveOrphanCovers(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
 	return removeOrphans(ctx, db, filepath.Join(dataDir, CoversDir), "videos", "cover")
+}
+
+// RemoveOrphanOwnCovers deletes the images uploaded as covers that no
+// video uses any more. Like RemoveOrphanCovers, it must run before the
+// job worker and the web server start.
+func RemoveOrphanOwnCovers(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
+	return removeOrphans(ctx, db, filepath.Join(dataDir, OwnCoversDir), "videos", "own_cover")
 }
 
 // removeOrphans deletes what is in dir and not named in the given column

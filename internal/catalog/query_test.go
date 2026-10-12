@@ -80,6 +80,19 @@ func TestValidMadeName(t *testing.T) {
 		"12-.jpg":           false,
 		".new-123.jpg":      false,
 		"12-0a/../../x.jpg": false,
+		// The administrator's choices.
+		"12-0a1b2c3d-s30.jpg":          true,
+		"12-0a1b2c3d-o89abcdef.jpg":    true,
+		"12-0123456789abcdef.jpg":      true,
+		"12-0a1b2c3d-s.jpg":            false,
+		"12-0a1b2c3d-sx1.jpg":          false,
+		"12-0a1b2c3d-x30.jpg":          false,
+		"12-0a1b2c3d-oXYZ.jpg":         false,
+		"12-0a1b2c3d-o0123456789.jpg":  false,
+		"12-0123456789abcdef-s30.jpg":  false,
+		"12-0a1b2c3d-s30-s30.jpg":      false,
+		"12-0a1b2c3d-s30/../../x.jpg":  false,
+		"12-0a1b2c3d-s12345678901.jpg": false,
 	}
 	for name, want := range tests {
 		if got := validMadeName(name, ".jpg"); got != want {
@@ -87,10 +100,11 @@ func TestValidMadeName(t *testing.T) {
 		}
 	}
 	clips := map[string]bool{
-		"12-0a1b2c3d.mp4":   true,
-		"12-0a1b2c3d.jpg":   false,
-		".new-123.mp4":      false,
-		"12-0a/../../x.mp4": false,
+		"12-0a1b2c3d.mp4":           true,
+		"12-0a1b2c3d.jpg":           false,
+		".new-123.mp4":              false,
+		"12-0a/../../x.mp4":         false,
+		"12-0a1b2c3d-o89abcdef.mp4": true,
 	}
 	for name, want := range clips {
 		if got := validMadeName(name, ".mp4"); got != want {

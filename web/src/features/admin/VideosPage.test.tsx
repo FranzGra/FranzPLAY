@@ -14,6 +14,8 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
     foundCategory: "Vacanze",
     titleSet: false,
     categorySet: false,
+    coverChoice: "",
+    coverSecond: null,
     ...overrides,
   };
 }

@@ -148,8 +148,11 @@ func parseID(s string) (int64, bool) {
 }
 
 // validMadeName reports whether name looks like a file FranzPLAY made, a
-// cover, a preview or a clip, ending in ext ("12-0a1b2c3d.jpg"). Anything
-// else, such as "../franzplay.db", is refused before the disk is touched.
+// cover, a preview or a clip, ending in ext: "12-0a1b2c3d.jpg"; with the
+// tag of the administrator's choice, "12-0a1b2c3d-s30.jpg" (a moment) or
+// "12-0a1b2c3d-o89abcdef.jpg" (an uploaded file); or an image the
+// administrator uploaded, "12-0123456789abcdef.jpg". Anything else, such
+// as "../franzplay.db", is refused before the disk is touched.
 func validMadeName(name, ext string) bool {
 	id, rest, ok := strings.Cut(name, "-")
 	if !ok || !strings.HasSuffix(rest, ext) {
@@ -158,11 +161,38 @@ func validMadeName(name, ext string) bool {
 	if _, ok := parseID(id); !ok {
 		return false
 	}
-	hex := strings.TrimSuffix(rest, ext)
-	if hex == "" || len(hex) > 8 {
+	content, tag, tagged := strings.Cut(strings.TrimSuffix(rest, ext), "-")
+	if !isHex(content) || (len(content) > 8 && (len(content) != 16 || tagged)) {
 		return false
 	}
-	for _, c := range hex {
+	if !tagged {
+		return true
+	}
+	if len(tag) < 2 {
+		return false
+	}
+	switch tag[0] {
+	case 's': // a moment, in seconds
+		for _, c := range tag[1:] {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return len(tag) <= 11
+	case 'o': // an uploaded file
+		return isHex(tag[1:]) && len(tag) <= 9
+	default:
+		return false
+	}
+}
+
+// isHex reports whether s is made of lowercase hexadecimal digits, and is
+// not empty.
+func isHex(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
 		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
