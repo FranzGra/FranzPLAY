@@ -161,6 +161,11 @@ video per guardarlo con il player di FranzPLAY:
 - l'**ingranaggio** apre le impostazioni: velocità, sottotitoli e il loro stile (dimensione,
   colore, sfondo, posizione).
 
+**Continua a guardare.** FranzPLAY ricorda dove hai fermato ogni video, per ogni persona. Quando lo
+riapri riparte da lì, e nella Home compare la riga **Continua a guardare** con una barra che mostra
+quanto ne hai visto. I primi secondi non contano (hai solo aperto il video); gli ultimi secondi,
+spesso i titoli di coda, valgono come «finito» e il video esce dalla riga.
+
 **Sottotitoli.** FranzPLAY usa i file `.srt` e `.vtt` che stanno accanto al video con lo stesso
 nome, per esempio `mare.srt`, oppure `mare.it.srt` e `mare.en.srt` se ci sono più lingue. Non li
 modifica: li legge e li converte al volo.

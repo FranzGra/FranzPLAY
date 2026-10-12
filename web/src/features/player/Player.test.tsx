@@ -28,7 +28,7 @@ function setup(props: Partial<Parameters<typeof Player>[0]> = {}) {
   const video = result.container.querySelector("video") as HTMLVideoElement;
   Object.defineProperty(video, "duration", { value: 245, configurable: true });
   fireEvent.durationChange(video);
-  return { user, video, ...media };
+  return { user, video, unmount: result.unmount, ...media };
 }
 
 afterEach(() => window.localStorage.clear());
@@ -234,5 +234,67 @@ describe("pickTrack", () => {
 
   it("shows nothing without subtitles", () => {
     expect(pickTrack([], { on: true, lang: "it" })).toBeNull();
+  });
+});
+
+describe("where the video was left", () => {
+  it("starts from the position given", () => {
+    const { video } = setup({ startAt: 100 });
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(100);
+  });
+
+  it("starts from the beginning when the position is past the end", () => {
+    const { video } = setup({ startAt: 300 });
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(0);
+  });
+
+  it("tells the position on pause, while playing and when closing", async () => {
+    const onPosition = vi.fn();
+    const { user, video } = setup({ onPosition });
+
+    await user.click(screen.getByRole("button", { name: "Guarda" }));
+    video.currentTime = 4;
+    fireEvent.timeUpdate(video);
+    expect(onPosition).not.toHaveBeenCalled(); // not yet 10 seconds
+
+    video.currentTime = 12;
+    fireEvent.timeUpdate(video);
+    expect(onPosition).toHaveBeenLastCalledWith(12);
+
+    video.currentTime = 15;
+    fireEvent.timeUpdate(video);
+    await user.click(screen.getByRole("button", { name: "Pausa (k)" }));
+    expect(onPosition).toHaveBeenLastCalledWith(15);
+    expect(onPosition).toHaveBeenCalledTimes(2);
+
+    video.currentTime = 50;
+    fireEvent.seeked(video);
+    expect(onPosition).toHaveBeenLastCalledWith(50);
+
+    video.currentTime = 60;
+    fireEvent.timeUpdate(video);
+    window.dispatchEvent(new Event("pagehide"));
+    expect(onPosition).toHaveBeenLastCalledWith(60);
+    expect(onPosition).toHaveBeenCalledTimes(4);
+  });
+
+  it("tells nothing when the video was only opened", () => {
+    const onPosition = vi.fn();
+    const { video, unmount } = setup({ onPosition, startAt: 100 });
+    fireEvent.loadedMetadata(video);
+    unmount();
+    expect(onPosition).not.toHaveBeenCalled();
+  });
+
+  it("tells the position when the player closes", async () => {
+    const onPosition = vi.fn();
+    const { user, video, unmount } = setup({ onPosition });
+    await user.click(screen.getByRole("button", { name: "Guarda" }));
+    video.currentTime = 7;
+    fireEvent.timeUpdate(video);
+    unmount();
+    expect(onPosition).toHaveBeenCalledWith(7);
   });
 });

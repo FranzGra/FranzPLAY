@@ -358,3 +358,23 @@ func TestReadSmallRefusesBigFiles(t *testing.T) {
 		t.Errorf("at the limit: %d bytes, %v", len(data), err)
 	}
 }
+
+func TestLookupByIDs(t *testing.T) {
+	s := newSite(t)
+	a := s.addVideo(t, "a.mp4", "a", "", 1, false)
+	b := s.addVideo(t, "b.mp4", "b", "", 2, false)
+	gone := s.addVideo(t, "c.mp4", "c", "", 3, false)
+	if _, err := s.db.Exec(`UPDATE videos SET missing_since = 1 WHERE id = ?`, gone); err != nil {
+		t.Fatal(err)
+	}
+	videos, err := NewLookup(s.db).ByIDs(context.Background(), []int64{b, 999, gone, a})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(videos) != 2 || videos[0].ID != b || videos[1].ID != a {
+		t.Errorf("videos = %+v, want b then a", videos)
+	}
+	if none, err := NewLookup(s.db).ByIDs(context.Background(), nil); err != nil || none == nil || len(none) != 0 {
+		t.Errorf("no ids: %v, %v", none, err)
+	}
+}

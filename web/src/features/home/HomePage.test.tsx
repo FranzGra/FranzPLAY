@@ -131,4 +131,32 @@ describe("home page", () => {
       await screen.findByRole("heading", { name: "Video non disponibili" }),
     ).toBeInTheDocument();
   });
+
+  it("shows the videos to continue, with how much was watched", async () => {
+    const { user } = renderApp("/", {
+      ...signedIn(),
+      "GET /api/categories": { body: [{ name: "Vacanze", videos: 1 }] },
+      "GET /api/continue": {
+        body: [{ video: videoJSON({ id: 3, title: "A metà", duration: 200 }), position: 50 }],
+      },
+      "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
+    });
+    const row = await screen.findByRole("region", { name: "Continua a guardare" });
+    const card = within(row).getByRole("link");
+    expect(card).toHaveAttribute("href", "/video/3");
+    expect(within(card).getByText("Visto al 25%")).toBeInTheDocument();
+
+    // Only on "Tutti": a category shows just its videos.
+    await user.click(screen.getByRole("button", { name: "Vacanze" }));
+    expect(screen.queryByRole("region", { name: "Continua a guardare" })).not.toBeInTheDocument();
+  });
+
+  it("shows no continue row when nothing was started", async () => {
+    renderApp("/", {
+      ...signedIn(),
+      "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
+    });
+    await screen.findByRole("list", { name: "Ultimi video" });
+    expect(screen.queryByRole("heading", { name: "Continua a guardare" })).not.toBeInTheDocument();
+  });
 });

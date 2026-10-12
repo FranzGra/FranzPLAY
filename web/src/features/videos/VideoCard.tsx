@@ -9,12 +9,17 @@ type VideoCardProps = {
   now: Date;
   // row puts the cover beside the text, for the list next to the player.
   layout?: "grid" | "row";
+  // position is where the person stopped, in seconds: a bar on the cover
+  // shows how much was watched.
+  position?: number;
 };
 
 // VideoCard is a video in a grid: cover with its duration, title, and
 // category with how long ago it arrived.
-export function VideoCard({ video, now, layout = "grid" }: VideoCardProps) {
+export function VideoCard({ video, now, layout = "grid", position }: VideoCardProps) {
   const details = [video.category, formatAge(video.addedAt, now)].filter(Boolean).join(" · ");
+  const watched =
+    position !== undefined && video.duration ? Math.min(1, position / video.duration) : null;
   return (
     <Link to={`/video/${video.id}`} className={styles.root} data-layout={layout}>
       <div className={styles.cover}>
@@ -27,6 +32,12 @@ export function VideoCard({ video, now, layout = "grid" }: VideoCardProps) {
         )}
         {video.duration !== null && (
           <span className={styles.duration}>{formatDuration(video.duration)}</span>
+        )}
+        {watched !== null && (
+          <span className={styles.watched}>
+            <span style={{ width: `${watched * 100}%` }} />
+            <span className="visually-hidden">Visto al {Math.round(watched * 100)}%</span>
+          </span>
         )}
       </div>
       <div className={styles.text}>

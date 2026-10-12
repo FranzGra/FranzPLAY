@@ -42,6 +42,7 @@ function json(body: unknown, status = 200): Response {
 export const emptyLibrary: Routes = {
   "GET /api/videos": { body: { videos: [], total: 0 } },
   "GET /api/categories": { body: [] },
+  "GET /api/continue": { body: [] },
   "GET /api/health": { body: { status: "ok", version: "test" } },
 };
 

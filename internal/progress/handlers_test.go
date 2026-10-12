@@ -1,0 +1,245 @@
+package progress
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/catalog"
+	"github.com/FranzGra/FranzPLAY/internal/database"
+	"github.com/FranzGra/FranzPLAY/internal/users"
+)
+
+// site is the progress API on a fresh database, with two people.
+type site struct {
+	db  *sql.DB
+	h   handlers
+	mux *http.ServeMux
+	now time.Time
+}
+
+const (
+	giulia int64 = 1
+	marco  int64 = 2
+)
+
+func newSite(t *testing.T) *site {
+	t.Helper()
+	db, err := database.Open(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, q := range []string{
+		`INSERT INTO libraries (id, path) VALUES (1, '/video')`,
+		`INSERT INTO users (id, name, password_hash, role, created_at) VALUES (1, 'Giulia', 'x', 'admin', 1), (2, 'Marco', 'x', 'user', 1)`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := &site{db: db, mux: http.NewServeMux(), now: time.Unix(1_000_000, 0)}
+	s.h = handlers{
+		store:  store{db: db},
+		videos: catalog.NewLookup(db),
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		now:    func() time.Time { return s.now },
+		account: func(ctx context.Context) (users.Account, bool) {
+			id, ok := ctx.Value(userKey{}).(int64)
+			return users.Account{ID: id}, ok
+		},
+	}
+	s.h.routes(s.mux)
+	return s
+}
+
+type userKey struct{}
+
+// addVideo adds a present video; duration 0 means not read yet.
+func (s *site) addVideo(t *testing.T, name string, duration int64) int64 {
+	t.Helper()
+	var d any
+	if duration > 0 {
+		d = duration
+	}
+	res, err := s.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, category, added_at, duration)
+		VALUES (?, 1, ?, 1, 1, ?, '', 1, ?)`, "fp-"+name, name, name, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// do sends a request as user (0 = nobody logged in).
+func (s *site) do(t *testing.T, user int64, method, target, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if user != 0 {
+		req = req.WithContext(context.WithValue(req.Context(), userKey{}, user))
+	}
+	rec := httptest.NewRecorder()
+	s.mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func (s *site) save(t *testing.T, user, video int64, position string) *httptest.ResponseRecorder {
+	t.Helper()
+	return s.do(t, user, http.MethodPost, "/api/videos/"+strconv.FormatInt(video, 10)+"/progress", `{"position":`+position+`}`)
+}
+
+func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
+	t.Helper()
+	var v T
+	if err := json.NewDecoder(rec.Body).Decode(&v); err != nil {
+		t.Fatalf("decode %q: %v", rec.Body.String(), err)
+	}
+	return v
+}
+
+func TestSaveAndGetProgress(t *testing.T) {
+	s := newSite(t)
+	video := s.addVideo(t, "mare.mp4", 600)
+	target := "/api/videos/" + strconv.FormatInt(video, 10) + "/progress"
+
+	if got := decode[Mark](t, s.do(t, giulia, http.MethodGet, target, "")); got != (Mark{}) {
+		t.Errorf("never watched: %+v, want zero", got)
+	}
+	if rec := s.save(t, giulia, video, "125.7"); rec.Code != http.StatusOK {
+		t.Fatalf("save: %d %s", rec.Code, rec.Body)
+	}
+	if got := decode[Mark](t, s.do(t, giulia, http.MethodGet, target, "")); got != (Mark{Position: 125}) {
+		t.Errorf("after saving: %+v", got)
+	}
+	// Saving again replaces the mark.
+	s.save(t, giulia, video, "300")
+	if got := decode[Mark](t, s.do(t, giulia, http.MethodGet, target, "")); got != (Mark{Position: 300}) {
+		t.Errorf("after saving again: %+v", got)
+	}
+	// Each person has their own.
+	if got := decode[Mark](t, s.do(t, marco, http.MethodGet, target, "")); got != (Mark{}) {
+		t.Errorf("Marco sees %+v, want zero", got)
+	}
+	// Near the end the video is finished.
+	if got := decode[Mark](t, s.save(t, giulia, video, "590")); got != (Mark{Finished: true}) {
+		t.Errorf("near the end: %+v", got)
+	}
+}
+
+func TestSaveProgressRejects(t *testing.T) {
+	s := newSite(t)
+	video := s.addVideo(t, "mare.mp4", 600)
+	gone := s.addVideo(t, "via.mp4", 600)
+	if _, err := s.db.Exec(`UPDATE videos SET missing_since = 1 WHERE id = ?`, gone); err != nil {
+		t.Fatal(err)
+	}
+	path := func(id int64) string { return "/api/videos/" + strconv.FormatInt(id, 10) + "/progress" }
+	tests := []struct {
+		name   string
+		user   int64
+		target string
+		body   string
+		want   int
+	}{
+		{"nobody logged in", 0, path(video), `{"position":5}`, http.StatusUnauthorized},
+		{"unknown video", giulia, path(999), `{"position":50}`, http.StatusNotFound},
+		{"missing video", giulia, path(gone), `{"position":50}`, http.StatusNotFound},
+		{"bad id", giulia, "/api/videos/abc/progress", `{"position":50}`, http.StatusNotFound},
+		{"negative", giulia, path(video), `{"position":-1}`, http.StatusBadRequest},
+		{"too far", giulia, path(video), `{"position":1e9}`, http.StatusBadRequest},
+		{"text", giulia, path(video), `{"position":"50"}`, http.StatusBadRequest},
+		{"other fields", giulia, path(video), `{"position":50,"finished":true}`, http.StatusBadRequest},
+		{"not json", giulia, path(video), `50`, http.StatusBadRequest},
+		{"too big", giulia, path(video), `{"position":50` + strings.Repeat(" ", 2000) + `}`, http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		if rec := s.do(t, tt.user, http.MethodPost, tt.target, tt.body); rec.Code != tt.want {
+			t.Errorf("%s: %d %s, want %d", tt.name, rec.Code, rec.Body, tt.want)
+		}
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM watch_progress`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("rows saved = %d (%v), want 0", n, err)
+	}
+}
+
+func TestSaveProgressOfVideoNotReadYet(t *testing.T) {
+	s := newSite(t)
+	video := s.addVideo(t, "nuovo.mkv", 0)
+	if got := decode[Mark](t, s.save(t, giulia, video, "42")); got != (Mark{Position: 42}) {
+		t.Errorf("mark = %+v, want position 42", got)
+	}
+}
+
+func TestContinueWatching(t *testing.T) {
+	s := newSite(t)
+	first := s.addVideo(t, "primo.mp4", 600)
+	second := s.addVideo(t, "secondo.mp4", 600)
+	finished := s.addVideo(t, "finito.mp4", 600)
+	barely := s.addVideo(t, "appena.mp4", 600)
+	gone := s.addVideo(t, "sparito.mp4", 600)
+
+	for _, step := range []struct {
+		video    int64
+		position string
+	}{{first, "100"}, {gone, "100"}, {second, "200"}, {finished, "599"}, {barely, "3"}} {
+		s.now = s.now.Add(time.Minute)
+		if rec := s.save(t, giulia, step.video, step.position); rec.Code != http.StatusOK {
+			t.Fatalf("save: %d %s", rec.Code, rec.Body)
+		}
+	}
+	s.save(t, marco, first, "50")
+	if _, err := s.db.Exec(`UPDATE videos SET missing_since = 1 WHERE id = ?`, gone); err != nil {
+		t.Fatal(err)
+	}
+
+	items := decode[[]struct {
+		Video    catalog.Video `json:"video"`
+		Position int64         `json:"position"`
+	}](t, s.do(t, giulia, http.MethodGet, "/api/continue", ""))
+	// Most recent first; finished, just started and missing videos left out.
+	if len(items) != 2 || items[0].Video.ID != second || items[0].Position != 200 ||
+		items[1].Video.ID != first || items[1].Position != 100 {
+		t.Errorf("items = %+v", items)
+	}
+
+	if rec := s.do(t, 0, http.MethodGet, "/api/continue", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("nobody logged in: %d", rec.Code)
+	}
+}
+
+func TestContinueWatchingEmpty(t *testing.T) {
+	s := newSite(t)
+	rec := s.do(t, giulia, http.MethodGet, "/api/continue", "")
+	if body := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || body != "[]" {
+		t.Errorf("got %d %s, want 200 []", rec.Code, body)
+	}
+}
+
+func TestProgressGoesWithTheVideo(t *testing.T) {
+	s := newSite(t)
+	video := s.addVideo(t, "mare.mp4", 600)
+	s.save(t, giulia, video, "100")
+	if _, err := s.db.Exec(`DELETE FROM videos WHERE id = ?`, video); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM watch_progress`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("rows left = %d (%v), want 0", n, err)
+	}
+}
