@@ -16,6 +16,9 @@ export type AdminVideo = Video & {
   coverChoice: CoverChoice;
   coverSecond: number | null; // the moment chosen as cover, in seconds
   clipChoice: ClipChoice;
+  videoCodec: string; // the format of the picture inside the file: "h264"; "" if not read yet
+  audioCodec: string; // the format of the sound: "aac"; "" if none or not read yet
+  hasCopy: boolean; // FranzPLAY made a copy every browser plays
 };
 
 // ClipChoice is where the clip on the card comes from: a "video" the
@@ -51,6 +54,13 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   if (d.clipChoice !== "" && d.clipChoice !== "video" && d.clipChoice !== "none") {
     throw new Error("admin video: bad clipChoice");
   }
+  if (
+    typeof d.videoCodec !== "string" ||
+    typeof d.audioCodec !== "string" ||
+    typeof d.hasCopy !== "boolean"
+  ) {
+    throw new Error("admin video: bad format");
+  }
   const second = d.coverSecond;
   if (
     second !== null &&
@@ -71,6 +81,9 @@ export function parseAdminVideo(data: unknown): AdminVideo {
     coverChoice: d.coverChoice,
     coverSecond: second,
     clipChoice: d.clipChoice,
+    videoCodec: d.videoCodec,
+    audioCodec: d.audioCodec,
+    hasCopy: d.hasCopy,
   };
 }
 

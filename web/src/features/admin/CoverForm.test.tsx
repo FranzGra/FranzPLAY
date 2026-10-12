@@ -25,6 +25,9 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
     coverChoice: "",
     coverSecond: null,
     clipChoice: "",
+    videoCodec: "h264",
+    audioCodec: "aac",
+    hasCopy: false,
     ...overrides,
   };
 }

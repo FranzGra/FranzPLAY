@@ -46,6 +46,12 @@ type AdminVideo struct {
 	// The clip the administrator chose: a "video" uploaded, "none", or ""
 	// for the one FranzPLAY makes.
 	ClipChoice string `json:"clipChoice"`
+	// The format inside the file, for the administrator's table: "h264",
+	// "aac"; "" if not read yet. HasCopy tells that FranzPLAY made a copy
+	// every browser plays.
+	VideoCodec string `json:"videoCodec"`
+	AudioCodec string `json:"audioCodec"`
+	HasCopy    bool   `json:"hasCopy"`
 }
 
 // adminFilter narrows the administrator's list.
@@ -224,7 +230,8 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL,
 		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
 		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL,
-		       v.own_cover IS NOT NULL, v.cover_second, v.own_clip IS NOT NULL, v.no_clip
+		       v.own_cover IS NOT NULL, v.cover_second, v.own_clip IS NOT NULL, v.no_clip,
+		       coalesce(v.video_codec, ''), coalesce(v.audio_codec, ''), v.converted IS NOT NULL
 		FROM videos v JOIN libraries l ON l.id = v.library_id
 		WHERE `+where+`
 		ORDER BY v.added_at DESC, v.id DESC LIMIT ? OFFSET ?`, append(args, q.limit, q.offset)...)
@@ -238,7 +245,8 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		var ownCover, ownClip, noClip bool
 		var second sql.NullInt64
 		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing,
-			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second, &ownClip, &noClip}})
+			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second, &ownClip, &noClip,
+			&av.VideoCodec, &av.AudioCodec, &av.HasCopy}})
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
 		}

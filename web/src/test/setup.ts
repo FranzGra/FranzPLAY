@@ -14,3 +14,6 @@ HTMLMediaElement.prototype.play = () => Promise.resolve();
 
 // The site's color is painted on the whole page: each test starts clean.
 afterEach(() => document.documentElement.removeAttribute("style"));
+
+// Settings remembered by the browser do not pass from one test to the next.
+afterEach(() => window.localStorage.clear());

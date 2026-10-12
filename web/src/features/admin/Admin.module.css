@@ -691,3 +691,51 @@ label.action:focus-within {
   align-items: flex-end;
   gap: 12px;
 }
+
+/* The compact table of videos. It scrolls sideways on a phone. */
+.tableBox {
+  overflow-x: auto;
+  border-radius: var(--radius-l);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th,
+.table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.table .tableTitle {
+  min-width: 220px;
+  max-width: 360px;
+  font-weight: 600;
+  white-space: normal;
+}
+
+.tableTitle .path {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.tableBad {
+  color: var(--color-danger);
+}
