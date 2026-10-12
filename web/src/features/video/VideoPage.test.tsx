@@ -59,22 +59,24 @@ describe("video page", () => {
     );
   });
 
-  it("keeps a private video to its uploader: no likes, comments or suggestions", async () => {
+  it("keeps a private video to its few people: likes and comments, no playlists, link or suggestions", async () => {
     const { server } = renderApp("/video/7", {
       ...signedIn(),
       "GET /api/videos/7": { body: videoJSON({ private: true }) },
+      "GET /api/videos/7/like": { body: { liked: false, count: 0 } },
+      "GET /api/videos/7/comments": { body: [] },
     });
     expect(await screen.findByText(/Solo tu vedi questo video/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Carica un video" })).toHaveAttribute(
       "href",
       "/carica",
     );
-    expect(screen.queryByRole("button", { name: /Mi piace/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Mi piace/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Salva/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Condividi/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Altri video" })).not.toBeInTheDocument();
     const asked = server.requests.map((r) => new URL(r.url).pathname);
-    for (const part of ["/like", "/comments", "/similar"]) {
-      expect(asked.some((p) => p.endsWith(part))).toBe(false);
-    }
+    expect(asked.some((p) => p.endsWith("/similar"))).toBe(false);
   });
 
   it("tells the uploader who else sees a shared video", async () => {
@@ -107,7 +109,6 @@ describe("video page", () => {
       await screen.findByText(/Giulia ha condiviso questo video solo con alcune persone/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Carica un video" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Mi piace/ })).not.toBeInTheDocument();
   });
 
   it("says who uploaded the video, with a link to their channel", async () => {

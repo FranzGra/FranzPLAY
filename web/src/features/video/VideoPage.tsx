@@ -159,27 +159,26 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
             </>
           )}
         </p>
-        {video.private ? (
-          // Nobody else sees it: likes, playlists, sharing and comments
-          // would only lead others to a page that does not open.
-          <PrivateNote video={video} />
-        ) : (
-          <div className={styles.actions}>
-            <LikeButton videoId={video.id} />
-            <SaveButton videoId={video.id} />
-            <ShareButton title={video.title} path={`/video/${video.id}`} />
-          </div>
-        )}
+        {video.private && <PrivateNote video={video} />}
+        <div className={styles.actions}>
+          <LikeButton videoId={video.id} />
+          {/* A private video opens only for its few people: a playlist or
+              a link would lead the others to a page that does not open. */}
+          {!video.private && (
+            <>
+              <SaveButton videoId={video.id} />
+              <ShareButton title={video.title} path={`/video/${video.id}`} />
+            </>
+          )}
+        </div>
         {video.description && (
           <div className={styles.below}>
             <Description text={video.description} />
           </div>
         )}
-        {!video.private && (
-          <div className={styles.below}>
-            <Comments key={video.id} videoId={video.id} />
-          </div>
-        )}
+        <div className={styles.below}>
+          <Comments key={video.id} videoId={video.id} />
+        </div>
       </div>
       {!video.private && (
         <aside className={styles.side} aria-label="Altri video">

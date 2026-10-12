@@ -249,7 +249,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		recommend.Routes(db, catalog.NewLookup(db), logger),
 		likes.Routes(db, catalog.NewLookup(db), logger),
 		home.Routes(db, logger),
-		comments.Routes(db, logger),
+		comments.Routes(db, catalog.NewLookup(db), logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),
 		sharing.Routes(db, logger),

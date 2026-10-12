@@ -32,19 +32,6 @@ type store struct {
 	db *sql.DB
 }
 
-// present checks that a video exists and is not missing.
-func (s store) present(ctx context.Context, videoID int64) error {
-	var one int
-	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM videos WHERE id = ? AND visible`, videoID).Scan(&one)
-	if errors.Is(err, sql.ErrNoRows) {
-		return errVideoNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("read video %d: %w", videoID, err)
-	}
-	return nil
-}
-
 const selectRow = `SELECT c.id, c.video_id, c.user_id, coalesce(c.parent_id, 0), u.name, u.avatar, c.body, c.created_at
 	FROM comments c JOIN users u ON u.id = c.user_id`
 

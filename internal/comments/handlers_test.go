@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/catalog"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
@@ -55,6 +56,7 @@ func newSite(t *testing.T) *site {
 	s := &site{db: db, mux: http.NewServeMux(), now: time.Unix(1_000_000, 0)}
 	handlers{
 		store:  store{db: db},
+		videos: catalog.NewLookup(db),
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		now:    func() time.Time { return s.now },
 		account: func(ctx context.Context) (users.Account, bool) {
@@ -221,5 +223,31 @@ func TestDelete(t *testing.T) {
 	var n int
 	if err := s.db.QueryRow(`SELECT count(*) FROM comments`).Scan(&n); err != nil || n != 0 {
 		t.Errorf("comments left = %d (%v), want 0", n, err)
+	}
+}
+
+func TestCommentsOnASharedVideo(t *testing.T) {
+	s := newSite(t)
+	video := s.addVideo(t, "compleanno.mp4")
+	for _, q := range []string{
+		`UPDATE videos SET private = 1, uploaded_by = 2 WHERE id = ?`,
+		`INSERT INTO video_shares (video_id, user_id) VALUES (?, 3)`,
+	} {
+		if _, err := s.db.Exec(q, video); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Giulia uploaded it and shared it with Marco: they talk about it.
+	first := s.write(t, giulia, video, "Che bella festa!", 0)
+	s.write(t, marco, video, "Bellissima!", first.ID)
+	if got := decode[[]Comment](t, s.do(t, marco, http.MethodGet, commentsOf(video), "")); len(got) != 1 ||
+		len(got[0].Replies) != 1 {
+		t.Errorf("Marco reads %+v", got)
+	}
+	// Anna was not chosen: for her the video is not there.
+	for _, r := range []struct{ method, body string }{{http.MethodGet, ""}, {http.MethodPost, `{"body":"Ciao"}`}} {
+		if rec := s.do(t, anna, r.method, commentsOf(video), r.body); rec.Code != http.StatusNotFound {
+			t.Errorf("Anna %s: %d, want 404", r.method, rec.Code)
+		}
 	}
 }
