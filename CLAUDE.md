@@ -11,7 +11,8 @@ video in una cartella e si guardano, commentano e condividono con familiari e am
 Deve girare bene su un **Raspberry Pi 4 con 2 GB** di RAM.
 
 - Server: **un solo programma in Go**, con database **SQLite**.
-- Interfaccia: **React + TypeScript**, inclusa dentro il programma (arriverà più avanti).
+- Interfaccia: **React + TypeScript** in `web/`, inclusa dentro il programma. **Tema scuro**
+  come tema principale, stile minimale alla Apple.
 - Tempo reale: **SSE** (il server avvisa il browser), niente WebSocket.
 - Video: **ffmpeg / ffprobe**, lanciati solo dal programma.
 
@@ -55,6 +56,8 @@ cmd/franzplay/      avvio del programma: collega i pezzi, nient'altro
 internal/config/    impostazioni lette dalle variabili d'ambiente
 internal/server/    le rotte HTTP dell'API
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
+internal/webui/     serve l'interfaccia web inclusa nel programma
+web/                l'interfaccia: React + TypeScript (vedi sotto)
 docs/               visione, decisioni e guida per provare sul PC
 ```
 
@@ -64,6 +67,25 @@ docs/               visione, decisioni e guida per provare sul PC
   e si provano con test velocissimi. Il guscio legge e scrive, e chiede al nucleo cosa fare.
 - **Interfacce piccole** al posto dell'ereditarietà, definite da chi le usa.
 - Tutto in `internal/`: nessun pacchetto è pensato per essere importato da fuori.
+
+### L'interfaccia (`web/`)
+
+```
+web/src/app/          cornice (barra in alto, menu, barra del telefono) e indirizzi delle pagine
+web/src/features/     una cartella per funzionalità: home/, playlists/, profile/, video/…
+web/src/components/   pezzi riusabili (icone, stato vuoto…)
+web/src/api/          chiamate al server; ogni risposta si controlla all'ingresso
+web/src/styles/       colori, misure e caratteri, tutti in un posto solo (variabili CSS)
+```
+
+- **Niente dati finti** nell'interfaccia: una pagina senza dati mostra uno stato vuoto che spiega
+  cosa comparirà.
+- Sul telefono la barra in basso ha **solo tre tasti**: Home, Playlist, Profilo.
+  "Carica un video" sta nella pagina Profilo. Non esistono iscrizioni ai canali.
+- Stili con **CSS Modules** (`Nome.module.css` accanto al componente) e i colori solo da
+  `styles/global.css`.
+- Test con Vitest e Testing Library, accanto al codice (`Nome.test.tsx`).
+- Formattazione e lint con **Biome**, tipi stretti con TypeScript.
 
 ## Convenzioni
 
@@ -88,6 +110,9 @@ make test    # tutti i test
 make lint    # controlli automatici
 make fmt     # formatta il codice
 make check   # tutto quello che controlla la CI: lancialo prima di ogni push
+make web     # prepara l'interfaccia (serve Node.js 22)
+make web-dev # interfaccia in modalità sviluppo su http://localhost:5173 (insieme a make run)
+make build   # il programma completo, interfaccia compresa, in bin/franzplay
 ```
 
 Impostazioni:

@@ -18,12 +18,12 @@ The full vision (in Italian) is in [`docs/visione.md`](docs/visione.md).
 
 ## Try it
 
-You need [Go](https://go.dev/dl/) 1.24 or newer.
+You need [Go](https://go.dev/dl/) 1.24 or newer and [Node.js](https://nodejs.org/) 22.
 
 ```sh
-go test ./...
-go run ./cmd/franzplay
-# then open http://localhost:8090/api/health
+make web     # build the web interface
+make run     # start FranzPLAY
+# then open http://localhost:8090
 ```
 
 Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-pc.md`](docs/provare-sul-pc.md).
