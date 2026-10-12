@@ -1,0 +1,55 @@
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 8px 0 32px;
+}
+
+.avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #4aa8ff, var(--color-accent));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 8px 28px rgb(41 151 255 / 0.25);
+  color: var(--color-on-accent);
+  font-size: 36px;
+  font-weight: 650;
+}
+
+.name {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.since {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.section {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 26px;
+  }
+
+  .name {
+    font-size: 22px;
+  }
+}

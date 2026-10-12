@@ -11,8 +11,11 @@ import (
 // row is a list as stored, with what the lists page shows about it.
 type row struct {
 	id        int64
+	owner     int64
+	ownerName string
 	kind      Kind
 	name      string // "" for WatchLater
+	public    bool   // on the owner's channel
 	updatedAt time.Time
 	videos    int   // present videos
 	first     int64 // first present video, for the cover; 0 = none
@@ -27,17 +30,17 @@ type store struct {
 // in its lists, hidden, and comes back if its disk does (rule 3).
 const present = `JOIN videos v ON v.id = i.video_id AND v.visible`
 
-const selectRow = `SELECT p.id, p.kind, p.name, p.updated_at,
+const selectRow = `SELECT p.id, p.user_id, u.name, p.kind, p.name, p.public, p.updated_at,
 	(SELECT count(*) FROM playlist_items i ` + present + ` WHERE i.playlist_id = p.id),
 	coalesce((SELECT i.video_id FROM playlist_items i ` + present + `
 		WHERE i.playlist_id = p.id ORDER BY i.position LIMIT 1), 0),
 	EXISTS (SELECT 1 FROM playlist_items i WHERE i.playlist_id = p.id AND i.video_id = ?)
-	FROM playlists p`
+	FROM playlists p JOIN users u ON u.id = p.user_id`
 
 func scanRow(sc interface{ Scan(...any) error }) (row, error) {
 	var r row
 	var updated int64
-	if err := sc.Scan(&r.id, &r.kind, &r.name, &updated, &r.videos, &r.first, &r.contains); err != nil {
+	if err := sc.Scan(&r.id, &r.owner, &r.ownerName, &r.kind, &r.name, &r.public, &updated, &r.videos, &r.first, &r.contains); err != nil {
 		return row{}, err
 	}
 	r.updatedAt = time.Unix(updated, 0).UTC()
@@ -71,10 +74,10 @@ func (s store) list(ctx context.Context, userID, videoID int64, now time.Time) (
 	return list, nil
 }
 
-// get returns a list of the person; someone else's list is not found, so
-// nobody learns it exists.
+// get returns a list the person may see: one of theirs, or a public one.
+// Someone else's private list is not found, so nobody learns it exists.
 func (s store) get(ctx context.Context, userID, id int64) (row, error) {
-	r, err := scanRow(s.db.QueryRowContext(ctx, selectRow+` WHERE p.id = ? AND p.user_id = ?`, 0, id, userID))
+	r, err := scanRow(s.db.QueryRowContext(ctx, selectRow+` WHERE p.id = ? AND (p.user_id = ? OR p.public)`, 0, id, userID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return row{}, errNotFound
 	}
@@ -82,6 +85,28 @@ func (s store) get(ctx context.Context, userID, id int64) (row, error) {
 		return row{}, fmt.Errorf("read playlist %d: %w", id, err)
 	}
 	return r, nil
+}
+
+// publicOf returns the public lists of a person, the most recently
+// changed first.
+func (s store) publicOf(ctx context.Context, owner int64) (list []row, err error) {
+	rows, err := s.db.QueryContext(ctx, selectRow+` WHERE p.user_id = ? AND p.public
+		ORDER BY p.updated_at DESC, p.id DESC`, 0, owner)
+	if err != nil {
+		return nil, fmt.Errorf("list public playlists of user %d: %w", owner, err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		r, err := scanRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("read playlist: %w", err)
+		}
+		list = append(list, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list public playlists of user %d: %w", owner, err)
+	}
+	return list, nil
 }
 
 // create makes a new list.
@@ -110,7 +135,7 @@ func (s store) create(ctx context.Context, userID int64, name string, now time.T
 	if err := tx.Commit(); err != nil {
 		return row{}, fmt.Errorf("create playlist: %w", err)
 	}
-	return row{id: id, kind: Ordinary, name: name, updatedAt: time.Unix(now.Unix(), 0).UTC()}, nil
+	return s.get(ctx, userID, id)
 }
 
 // rename gives an ordinary list a new name.
@@ -118,6 +143,16 @@ func (s store) rename(ctx context.Context, id int64, name string, now time.Time)
 	if _, err := s.db.ExecContext(ctx, `UPDATE playlists SET name = ?, updated_at = ? WHERE id = ? AND kind = 'playlist'`,
 		name, now.Unix(), id); err != nil {
 		return fmt.Errorf("rename playlist %d: %w", id, err)
+	}
+	return nil
+}
+
+// publish puts an ordinary list on its owner's channel (true) or takes
+// it off. It does not count as a change to the list.
+func (s store) publish(ctx context.Context, id int64, public bool) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE playlists SET public = ? WHERE id = ? AND kind = 'playlist'`,
+		public, id); err != nil {
+		return fmt.Errorf("publish playlist %d: %w", id, err)
 	}
 	return nil
 }

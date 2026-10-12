@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
-import { createPlaylist, fetchPlaylists, type Playlist, playlistName } from "../../api/playlists";
+import { createPlaylist, fetchPlaylists, type Playlist } from "../../api/playlists";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
-import { formatVideos } from "../../lib/format";
 import { NameForm } from "./NameForm";
+import { PlaylistCard } from "./PlaylistCard";
 import styles from "./Playlists.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; lists: Playlist[] };
@@ -75,7 +74,7 @@ export function PlaylistsPage() {
         <ul className={styles.grid}>
           {state.lists.map((list) => (
             <li key={list.id}>
-              <PlaylistCard list={list} />
+              <PlaylistCard list={list} markPublic />
             </li>
           ))}
         </ul>
@@ -87,25 +86,5 @@ export function PlaylistsPage() {
         </p>
       )}
     </>
-  );
-}
-
-function PlaylistCard({ list }: { list: Playlist }) {
-  return (
-    <Link to={`/playlist/${list.id}`} className={styles.card}>
-      <span className={styles.cover}>
-        {list.cover ? (
-          <img src={list.cover} alt="" loading="lazy" decoding="async" />
-        ) : (
-          <Icon name={list.kind === "later" ? "clock" : "playlist"} size={32} />
-        )}
-        <span className={styles.badge}>
-          <Icon name={list.kind === "later" ? "clock" : "playlist"} size={14} />
-          {list.videos}
-        </span>
-      </span>
-      <span className={styles.cardName}>{playlistName(list)}</span>
-      <span className={styles.cardCount}>{formatVideos(list.videos)}</span>
-    </Link>
   );
 }

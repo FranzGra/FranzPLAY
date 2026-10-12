@@ -71,6 +71,11 @@
   font-weight: 600;
 }
 
+.author:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
 .body {
   margin: 0;
   font-size: 15px;

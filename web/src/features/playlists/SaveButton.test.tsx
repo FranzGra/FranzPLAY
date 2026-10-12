@@ -7,6 +7,8 @@ const later = {
   id: 1,
   kind: "later",
   name: "",
+  owner: { id: 1, name: "Francesco" },
+  public: false,
   videos: 0,
   cover: null,
   updatedAt: "2026-10-12T09:00:00Z",

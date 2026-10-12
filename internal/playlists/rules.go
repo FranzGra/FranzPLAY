@@ -28,7 +28,8 @@ const (
 // Refusals.
 var (
 	errBadName       = errors.New("a playlist name must have from 1 to 100 characters")
-	errFixed         = errors.New("watch later cannot be renamed or deleted")
+	errFixed         = errors.New("watch later cannot be renamed, deleted or made public")
+	errNotYours      = errors.New("only the owner can change this playlist")
 	errTooMany       = errors.New("too many playlists: delete one first")
 	errFull          = errors.New("the playlist is full: remove a video first")
 	errNotFound      = errors.New("playlist not found")

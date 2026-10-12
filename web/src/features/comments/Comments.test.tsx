@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { fakeServer, type Routes } from "../../test/render";
 import { Comments } from "./Comments";
 
@@ -16,7 +17,11 @@ const comment = (over: Record<string, unknown> = {}) => ({
 function setup(routes: Routes) {
   const server = fakeServer(routes);
   const user = userEvent.setup();
-  render(<Comments videoId={7} />);
+  render(
+    <MemoryRouter>
+      <Comments videoId={7} />
+    </MemoryRouter>,
+  );
   return { user, server };
 }
 
@@ -40,6 +45,10 @@ describe("comments", () => {
     const giulia = screen.getByRole("article", { name: "Commento di Giulia" });
     expect(within(giulia).getByText(/Il mare era perfetto/)).toBeInTheDocument();
     expect(within(giulia).getByText("adesso")).toBeInTheDocument();
+    expect(within(giulia).getAllByRole("link", { name: "Giulia" })[0]).toHaveAttribute(
+      "href",
+      "/canale/2",
+    );
     expect(within(giulia).queryByRole("button", { name: "Elimina" })).not.toBeInTheDocument();
     const replies = screen.getByRole("list", { name: "Risposte a Giulia" });
     expect(within(replies).getByText("Vero!")).toBeInTheDocument();

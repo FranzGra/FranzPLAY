@@ -6,9 +6,11 @@ import {
   fetchPlaylist,
   type PlaylistPage as Page,
   playlistName,
+  publishPlaylist,
   putInPlaylist,
   renamePlaylist,
 } from "../../api/playlists";
+import { useAccount } from "../../app/auth";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
@@ -23,9 +25,12 @@ type State =
   | { kind: "error" }
   | ({ kind: "ready" } & Page);
 
-// PlaylistPage shows one of my lists with its videos, in order. An
-// ordinary list can be renamed or deleted; any video can be taken out.
+// PlaylistPage shows a list with its videos, in order. On one of my
+// lists any video can be taken out, and an ordinary list can be renamed,
+// deleted or shown on my channel. Someone else's public list can only be
+// watched.
 export function PlaylistPage() {
+  const account = useAccount();
   const param = useParams().id ?? "";
   const id = /^\d+$/.test(param) ? Number(param) : 0;
   const navigate = useNavigate();
@@ -80,6 +85,26 @@ export function PlaylistPage() {
 
   const { playlist, videos } = state;
   const later = playlist.kind === "later";
+  const mine = playlist.owner.id === account.id;
+
+  const publish = () => {
+    const shown = !playlist.public;
+    setProblem("");
+    publishPlaylist(playlist.id, shown)
+      .then(() =>
+        setState((s) =>
+          s.kind === "ready" ? { ...s, playlist: { ...s.playlist, public: shown } } : s,
+        ),
+      )
+      .catch((error: unknown) => {
+        console.error(error);
+        setProblem(
+          shown
+            ? "Non sono riuscito a mettere la playlist sul canale. Riprova."
+            : "Non sono riuscito a togliere la playlist dal canale. Riprova.",
+        );
+      });
+  };
 
   const rename = async (name: string) => {
     await renamePlaylist(playlist.id, name);
@@ -121,10 +146,17 @@ export function PlaylistPage() {
   return (
     <>
       <p className={styles.back}>
-        <Link to="/playlist">
-          <Icon name="chevronLeft" size={16} />
-          Tutte le playlist
-        </Link>
+        {mine ? (
+          <Link to="/playlist">
+            <Icon name="chevronLeft" size={16} />
+            Tutte le playlist
+          </Link>
+        ) : (
+          <Link to={`/canale/${playlist.owner.id}`}>
+            <Icon name="chevronLeft" size={16} />
+            Canale di {playlist.owner.name}
+          </Link>
+        )}
       </p>
       {mode === "rename" ? (
         <NameForm
@@ -141,10 +173,30 @@ export function PlaylistPage() {
               {later && <Icon name="clock" size={26} />}
               {playlistName(playlist)}
             </h1>
-            <p className={styles.subtitle}>{formatVideos(playlist.videos)}</p>
+            <p className={styles.subtitle}>
+              {formatVideos(playlist.videos)}
+              {mine ? (
+                !later &&
+                (playlist.public ? " · sul tuo canale, la vedono tutti" : " · solo per te")
+              ) : (
+                <>
+                  {" · di "}
+                  <Link to={`/canale/${playlist.owner.id}`}>{playlist.owner.name}</Link>
+                </>
+              )}
+            </p>
           </div>
-          {!later && mode === "view" && (
+          {mine && !later && mode === "view" && (
             <div className={styles.buttons}>
+              <button
+                type="button"
+                className={`glass ${styles.action} ${playlist.public ? styles.on : ""}`}
+                aria-pressed={playlist.public}
+                onClick={publish}
+              >
+                <Icon name="channel" size={18} />
+                Sul mio canale
+              </button>
               <button
                 type="button"
                 className={`glass ${styles.action}`}
@@ -191,23 +243,31 @@ export function PlaylistPage() {
       )}
       {videos.length === 0 ? (
         <EmptyState title={later ? "Niente da guardare più tardi" : "Playlist vuota"}>
-          Sotto ogni video premi <strong>Salva</strong> e scegli{" "}
-          {later ? "«Guarda più tardi»" : "questa playlist"}: il video comparirà qui.
+          {mine ? (
+            <>
+              Sotto ogni video premi <strong>Salva</strong> e scegli{" "}
+              {later ? "«Guarda più tardi»" : "questa playlist"}: il video comparirà qui.
+            </>
+          ) : (
+            `Quando ${playlist.owner.name} aggiungerà dei video, li vedrai qui.`
+          )}
         </EmptyState>
       ) : (
         <ol className={styles.videos}>
           {videos.map((video) => (
             <li key={video.id} className={styles.item}>
               <VideoCard video={video} now={now} layout="row" />
-              <button
-                type="button"
-                className={styles.remove}
-                aria-label={`Togli «${video.title}» dalla playlist`}
-                title="Togli dalla playlist"
-                onClick={() => takeOut(video.id)}
-              >
-                <Icon name="close" size={20} />
-              </button>
+              {mine && (
+                <button
+                  type="button"
+                  className={styles.remove}
+                  aria-label={`Togli «${video.title}» dalla playlist`}
+                  title="Togli dalla playlist"
+                  onClick={() => takeOut(video.id)}
+                >
+                  <Icon name="close" size={20} />
+                </button>
+              )}
             </li>
           ))}
         </ol>

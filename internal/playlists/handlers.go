@@ -20,11 +20,19 @@ type videos interface {
 	ByIDs(ctx context.Context, ids []int64) ([]catalog.Video, error)
 }
 
+// Owner is the person a list belongs to.
+type Owner struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 // Playlist is a list as the API shows it.
 type Playlist struct {
 	ID        int64     `json:"id"`
 	Kind      Kind      `json:"kind"`
-	Name      string    `json:"name"`   // "" for WatchLater: the interface names it
+	Name      string    `json:"name"` // "" for WatchLater: the interface names it
+	Owner     Owner     `json:"owner"`
+	Public    bool      `json:"public"` // on the owner's channel
 	Videos    int       `json:"videos"` // how many, missing ones left out
 	Cover     *string   `json:"cover"`  // the first video's cover; null = none
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -47,13 +55,13 @@ type handlers struct {
 	account func(context.Context) (users.Account, bool)
 }
 
-// Routes adds the playlists API to mux. Everyone sees and changes only
-// their own lists:
+// Routes adds the playlists API to mux. Everyone changes only their own
+// lists, and sees their own and the public ones of the others:
 //
 //	GET    /api/playlists                       my lists; ?video=ID also says which have it
 //	POST   /api/playlists                       {name}: a new list
 //	GET    /api/playlists/{id}                  a list with its videos
-//	PUT    /api/playlists/{id}                  {name}: rename
+//	PUT    /api/playlists/{id}                  {name?, public?}: rename, put on my channel
 //	DELETE /api/playlists/{id}                  delete the list (not its videos)
 //	PUT    /api/playlists/{id}/videos/{video}   add a video at the end
 //	DELETE /api/playlists/{id}/videos/{video}   take a video out
@@ -65,7 +73,7 @@ func (h handlers) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/playlists", h.list)
 	mux.HandleFunc("POST /api/playlists", h.create)
 	mux.HandleFunc("GET /api/playlists/{id}", h.page)
-	mux.HandleFunc("PUT /api/playlists/{id}", h.rename)
+	mux.HandleFunc("PUT /api/playlists/{id}", h.change)
 	mux.HandleFunc("DELETE /api/playlists/{id}", h.remove)
 	mux.HandleFunc("PUT /api/playlists/{id}/videos/{video}", h.add)
 	mux.HandleFunc("DELETE /api/playlists/{id}/videos/{video}", h.take)
@@ -90,9 +98,9 @@ func parseID(s string) (int64, bool) {
 // pathID reads a positive id from the address.
 func pathID(r *http.Request, name string) (int64, bool) { return parseID(r.PathValue(name)) }
 
-// mine returns the list of the address if it belongs to the person; it
-// answers itself otherwise.
-func (h handlers) mine(w http.ResponseWriter, r *http.Request) (row, bool) {
+// visible returns the list of the address if the person may see it: one
+// of theirs, or a public one. It answers itself otherwise.
+func (h handlers) visible(w http.ResponseWriter, r *http.Request) (row, bool) {
 	userID, ok := h.user(w, r)
 	if !ok {
 		return row{}, false
@@ -110,6 +118,20 @@ func (h handlers) mine(w http.ResponseWriter, r *http.Request) (row, bool) {
 	return p, true
 }
 
+// mine returns the list of the address if it belongs to the person; it
+// answers itself otherwise.
+func (h handlers) mine(w http.ResponseWriter, r *http.Request) (row, bool) {
+	p, ok := h.visible(w, r)
+	if !ok {
+		return row{}, false
+	}
+	if a, _ := h.account(r.Context()); p.owner != a.ID {
+		h.fail(w, r, errNotYours)
+		return row{}, false
+	}
+	return p, true
+}
+
 // fail answers an error: a refusal the person can understand, or an
 // internal error.
 func (h handlers) fail(w http.ResponseWriter, r *http.Request, err error) {
@@ -119,6 +141,8 @@ func (h handlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, errBadName):
 		status = http.StatusBadRequest
+	case errors.Is(err, errNotYours):
+		status = http.StatusForbidden
 	case errors.Is(err, errFixed), errors.Is(err, errTooMany), errors.Is(err, errFull):
 		status = http.StatusConflict
 	default:
@@ -146,7 +170,10 @@ func (h handlers) playlists(ctx context.Context, rows []row, asked bool) ([]Play
 	}
 	list := make([]Playlist, 0, len(rows))
 	for _, p := range rows {
-		pl := Playlist{ID: p.id, Kind: p.kind, Name: p.name, Videos: p.videos, Cover: covers[p.first], UpdatedAt: p.updatedAt}
+		pl := Playlist{
+			ID: p.id, Kind: p.kind, Name: p.name, Owner: Owner{ID: p.owner, Name: p.ownerName}, Public: p.public,
+			Videos: p.videos, Cover: covers[p.first], UpdatedAt: p.updatedAt,
+		}
 		if asked {
 			pl.Contains = new(p.contains)
 		}
@@ -178,6 +205,14 @@ func (h handlers) list(w http.ResponseWriter, r *http.Request) {
 	respond.InternalError(w, r, h.logger, err)
 }
 
+// readJSON reads a small JSON body into v. Unknown fields are refused, so
+// a typo in the interface is caught at once.
+func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	dec.DisallowUnknownFields()
+	return dec.Decode(v)
+}
+
 type nameRequest struct {
 	Name string `json:"name"`
 }
@@ -185,9 +220,7 @@ type nameRequest struct {
 // readName reads {name} from the request; it answers itself when it is wrong.
 func (h handlers) readName(w http.ResponseWriter, r *http.Request) (string, bool) {
 	var req nameRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
+	if err := readJSON(w, r, &req); err != nil {
 		respond.Error(w, r, h.logger, http.StatusBadRequest, `the request must be {"name": text}`)
 		return "", false
 	}
@@ -222,7 +255,7 @@ func (h handlers) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handlers) page(w http.ResponseWriter, r *http.Request) {
-	p, ok := h.mine(w, r)
+	p, ok := h.visible(w, r)
 	if !ok {
 		return
 	}
@@ -247,22 +280,41 @@ func (h handlers) page(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, r, h.logger, http.StatusOK, Page{Playlist: list[0], Videos: found})
 }
 
-func (h handlers) rename(w http.ResponseWriter, r *http.Request) {
+// changeRequest says what to change of a list; what is left out stays.
+type changeRequest struct {
+	Name   *string `json:"name"`
+	Public *bool   `json:"public"`
+}
+
+func (h handlers) change(w http.ResponseWriter, r *http.Request) {
 	p, ok := h.mine(w, r)
 	if !ok {
+		return
+	}
+	var req changeRequest
+	if err := readJSON(w, r, &req); err != nil || (req.Name == nil && req.Public == nil) {
+		respond.Error(w, r, h.logger, http.StatusBadRequest, `the request must be {"name": text, "public": true or false}`)
 		return
 	}
 	if p.kind == WatchLater {
 		h.fail(w, r, errFixed)
 		return
 	}
-	name, ok := h.readName(w, r)
-	if !ok {
-		return
+	if req.Name != nil {
+		name, err := cleanName(*req.Name)
+		if err == nil {
+			err = h.store.rename(r.Context(), p.id, name, h.now())
+		}
+		if err != nil {
+			h.fail(w, r, err)
+			return
+		}
 	}
-	if err := h.store.rename(r.Context(), p.id, name, h.now()); err != nil {
-		h.fail(w, r, err)
-		return
+	if req.Public != nil {
+		if err := h.store.publish(r.Context(), p.id, *req.Public); err != nil {
+			h.fail(w, r, err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -320,4 +372,17 @@ func (h handlers) take(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// PublicLists returns what a channel shows of a person: their public
+// lists, the most recently changed first.
+func PublicLists(db *sql.DB, lookup videos) func(ctx context.Context, owner int64) ([]Playlist, error) {
+	h := handlers{store: store{db: db}, videos: lookup}
+	return func(ctx context.Context, owner int64) ([]Playlist, error) {
+		rows, err := h.store.publicOf(ctx, owner)
+		if err != nil {
+			return nil, err
+		}
+		return h.playlists(ctx, rows, false)
+	}
 }

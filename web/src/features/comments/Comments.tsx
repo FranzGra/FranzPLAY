@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { Link } from "react-router";
 import { type Comment, maxCommentLength } from "../../api/comments";
 import { formatSince } from "../../lib/format";
 import styles from "./Comments.module.css";
@@ -113,7 +114,9 @@ function CommentView({
       </span>
       <div className={styles.content}>
         <p className={styles.meta}>
-          <span className={styles.author}>{comment.author.name}</span>
+          <Link to={`/canale/${comment.author.id}`} className={styles.author}>
+            {comment.author.name}
+          </Link>
           <time dateTime={comment.createdAt.toISOString()}>
             {formatSince(comment.createdAt, now)}
           </time>

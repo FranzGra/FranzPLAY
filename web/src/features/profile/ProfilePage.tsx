@@ -7,7 +7,10 @@ import { PasswordForm } from "./PasswordForm";
 import styles from "./ProfilePage.module.css";
 import { type ServerInfoState, useServerInfo } from "./useServerInfo";
 
-const rows = [{ to: "/cronologia", label: "Cronologia" }];
+const rows = (me: number) => [
+  { to: `/canale/${me}`, label: "Il mio canale" },
+  { to: "/cronologia", label: "Cronologia" },
+];
 const adminRows = [{ to: "/admin", label: "Amministrazione" }];
 
 function versionText(state: ServerInfoState): string {
@@ -59,7 +62,7 @@ export function ProfilePage() {
       </p>
 
       <nav className={`glass ${styles.rows}`} aria-label="Le tue pagine">
-        {[...rows, ...(account.role === "admin" ? adminRows : [])].map((row) => (
+        {[...rows(account.id), ...(account.role === "admin" ? adminRows : [])].map((row) => (
           <Link key={row.to} to={row.to} className={styles.row}>
             {row.label}
             <span className={styles.chevron} aria-hidden="true">
