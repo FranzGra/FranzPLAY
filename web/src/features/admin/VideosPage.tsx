@@ -12,12 +12,21 @@ import { fetchCategories } from "../../api/videos";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
+import { loadSetting, saveSetting } from "../../lib/storage";
 import styles from "./Admin.module.css";
 import { ClipForm } from "./ClipForm";
 import { CoverForm } from "./CoverForm";
 import { DetailsForm } from "./DetailsForm";
+import { compatibility, qualityLabel } from "./quality";
+import { VideoTable } from "./VideoTable";
 
 export const adminPageSize = 50;
+
+// How the list looks: "cards" with the buttons to change each video, or a
+// compact "table". This browser remembers the choice.
+type View = "cards" | "table";
+const viewKey = "admin.videos.view";
+const parseView = (data: unknown): View => (data === "table" ? "table" : "cards");
 
 type State =
   | { kind: "loading" }
@@ -39,6 +48,11 @@ export function VideosPage() {
   const [show, setShow] = useState<AdminShow>("");
   const [state, setState] = useState<State>({ kind: "loading" });
   const [categories, setCategories] = useState<string[]>([]);
+  const [view, setView] = useState<View>(() => loadSetting(viewKey, parseView, "cards"));
+  const changeView = (next: View) => {
+    setView(next);
+    saveSetting(viewKey, next);
+  };
   const shown = useRef(adminPageSize);
 
   // The categories in use, offered while typing a new one.
@@ -128,6 +142,25 @@ export function VideosPage() {
             </button>
           ))}
         </fieldset>
+        <fieldset className={styles.sections}>
+          <legend className="visually-hidden">Come mostrarli</legend>
+          <button
+            type="button"
+            className={styles.section}
+            aria-pressed={view === "cards"}
+            onClick={() => changeView("cards")}
+          >
+            Schede
+          </button>
+          <button
+            type="button"
+            className={styles.section}
+            aria-pressed={view === "table"}
+            onClick={() => changeView("table")}
+          >
+            Tabella
+          </button>
+        </fieldset>
       </div>
 
       {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
@@ -147,13 +180,17 @@ export function VideosPage() {
               <option key={c} value={c} />
             ))}
           </datalist>
-          <ul className={styles.list} aria-label="Video">
-            {state.videos.map((video) => (
-              <li key={video.id}>
-                <VideoRow video={video} onChanged={replace} />
-              </li>
-            ))}
-          </ul>
+          {view === "table" ? (
+            <VideoTable videos={state.videos} />
+          ) : (
+            <ul className={styles.list} aria-label="Video">
+              {state.videos.map((video) => (
+                <li key={video.id}>
+                  <VideoRow video={video} onChanged={replace} />
+                </li>
+              ))}
+            </ul>
+          )}
           {state.videos.length < state.total && state.videos.length < 200 && (
             <button
               type="button"
@@ -198,6 +235,9 @@ function VideoRow({
       })
       .finally(() => setBusy(false));
   };
+
+  const quality = qualityLabel(video.height);
+  const compat = compatibility(video);
 
   const toggle = () =>
     run(
@@ -245,6 +285,10 @@ function VideoRow({
               <span className={styles.badge}>Non ancora letto</span>
             ) : (
               <span className={styles.role}>{formatDuration(video.duration)}</span>
+            )}
+            {quality && <span className={styles.badgeOk}>{quality}</span>}
+            {compat && (
+              <span className={compat.ok ? styles.badgeOk : styles.badge}>{compat.label}</span>
             )}
             {video.duration !== null && !video.cover && (
               <span className={styles.badge}>Senza copertina</span>

@@ -17,6 +17,9 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
     coverChoice: "",
     coverSecond: null,
     clipChoice: "",
+    videoCodec: "h264",
+    audioCodec: "aac",
+    hasCopy: false,
     ...overrides,
   };
 }
@@ -31,6 +34,55 @@ function rowOf(name: string) {
 }
 
 describe("videos page", () => {
+  it("shows how sharp each video is and whether every browser plays it", async () => {
+    renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": {
+        body: {
+          videos: [
+            adminVideo(),
+            adminVideo({ id: 8, title: "Film", height: 2160, playable: false, format: "MKV" }),
+          ],
+          total: 2,
+        },
+      },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    expect(rowOf("Mare 2024")).toHaveTextContent("1080p");
+    expect(rowOf("Mare 2024")).toHaveTextContent("Va su tutti i browser");
+    expect(rowOf("Film")).toHaveTextContent("4K");
+    expect(rowOf("Film")).toHaveTextContent("Non va su tutti i browser");
+  });
+
+  it("shows the videos as a table, and remembers it", async () => {
+    const routes = {
+      ...signedIn(),
+      "GET /api/admin/videos": {
+        body: {
+          videos: [adminVideo(), adminVideo({ id: 8, title: "Film", hidden: true, hasCopy: true })],
+          total: 2,
+        },
+      },
+    };
+    const { user, unmount } = renderApp("/admin/video", routes);
+    await screen.findByRole("list", { name: "Video" });
+    await user.click(screen.getByRole("button", { name: "Tabella" }));
+    const table = screen.getByRole("table", { name: "Video" });
+    const film = within(table).getByRole("row", { name: /Film/ });
+    expect(film).toHaveTextContent("Nascosto");
+    expect(film).toHaveTextContent("Copia per tutti i browser");
+    expect(film).toHaveTextContent("MP4 · h264 · aac");
+    expect(within(table).getByRole("link", { name: "Mare 2024" })).toHaveAttribute(
+      "href",
+      "/video/7",
+    );
+    unmount();
+
+    renderApp("/admin/video", routes);
+    expect(await screen.findByRole("table", { name: "Video" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tabella" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("changes the title and category of a video", async () => {
     const { user, server } = renderApp("/admin/video", {
       ...signedIn(),

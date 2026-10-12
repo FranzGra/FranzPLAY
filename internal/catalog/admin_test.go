@@ -132,6 +132,19 @@ func TestAdminList(t *testing.T) {
 	if v := byID[mare]; v.Hidden || v.Missing || v.Folder != s.library || v.Path != "Viaggi/mare.mp4" || v.Cover == nil {
 		t.Errorf("normal video = %+v", v)
 	}
+	// The format inside the file, for the table.
+	if v := byID[mare]; v.VideoCodec != "h264" || v.AudioCodec != "aac" || v.HasCopy {
+		t.Errorf("format of the normal video = %+v", v)
+	}
+	if v := byID[gone]; v.VideoCodec != "" || v.AudioCodec != "" {
+		t.Errorf("format of a video not read = %+v", v)
+	}
+	if _, err := s.db.Exec(`UPDATE videos SET converted = 'copy.mp4' WHERE id = ?`, mare); err != nil {
+		t.Fatal(err)
+	}
+	if v := decode[adminList](t, s.do(t, "GET", "/api/admin/videos?q=mare", "", http.StatusOK)).Videos[0]; !v.HasCopy {
+		t.Errorf("video with a copy = %+v", v)
+	}
 
 	for show, want := range map[string]int64{"hidden": secret, "missing": gone} {
 		got := decode[adminList](t, s.do(t, "GET", "/api/admin/videos?show="+show, "", http.StatusOK))
