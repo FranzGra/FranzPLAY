@@ -99,6 +99,19 @@ func TestRunStartsAndStopsCleanly(t *testing.T) {
 	if !strings.Contains(logs.String(), "added=1") {
 		t.Errorf("the video folder was not scanned at start; log:\n%s", logs.String())
 	}
+	if !strings.Contains(logs.String(), "setup_code=") {
+		t.Errorf("no setup code in the log of a new FranzPLAY; log:\n%s", logs.String())
+	}
+	resp, err := http.Get("http://" + addr + "/api/videos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET /api/videos without login = %d, want 401", resp.StatusCode)
+	}
 
 	cancel()
 	select {

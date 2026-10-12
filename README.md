@@ -26,6 +26,10 @@ make run     # start FranzPLAY
 # then open http://localhost:8090
 ```
 
+On the first start FranzPLAY has no users: it writes a one-time **setup code** in its log
+(`setup_code=XXXX-XXXX-XXXX`), which is needed to create the administrator. Everything else
+needs a login.
+
 Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-pc.md`](docs/provare-sul-pc.md).
 
 | Variable | Default | What it does |
