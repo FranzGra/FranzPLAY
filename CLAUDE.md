@@ -66,6 +66,7 @@ internal/users/     utenti, accesso e sessioni; protegge tutta l'API
 internal/channels/  il canale di ogni persona: nome e playlist pubbliche
 internal/online/    fonti su internet (YouTube, TMDB, ThePornDB) per copertine e titoli, spente se l'admin non le accende
 internal/recommend/ i video consigliati: regole semplici a punti, ognuna col suo perché
+internal/translate/ traduce i sottotitoli con un server LibreTranslate, se l'admin ne indica uno
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
 internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)
@@ -137,6 +138,9 @@ Impostazioni:
 | `FRANZPLAY_LIBRARIES` | nessuna | Cartelle dei video, in sola lettura (separate da `;` su Windows, `:` altrove) |
 | `FRANZPLAY_FFPROBE` | `ffprobe` | Programma ffprobe (nome nel PATH o percorso completo) |
 | `FRANZPLAY_FFMPEG` | `ffmpeg` | Programma ffmpeg (nome nel PATH o percorso completo) |
+| `FRANZPLAY_WHISPER` | `whisper-cli` | Programma di whisper.cpp per i sottotitoli automatici; se manca, la funzione è spenta |
+| `FRANZPLAY_TRANSLATE_URL` | nessuno | Indirizzo di un server LibreTranslate per tradurre i sottotitoli (es. `http://localhost:5000`) |
+| `FRANZPLAY_TRANSLATE_KEY` | nessuna | Chiave di LibreTranslate, se il server la chiede |
 
 ## Prima di aprire una pull request
 
