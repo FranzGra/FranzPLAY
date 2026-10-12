@@ -12,11 +12,13 @@ type VideoCardProps = {
   // position is where the person stopped, in seconds: a bar on the cover
   // shows how much was watched.
   position?: number;
+  // note is one more line under the details, like why it is suggested.
+  note?: string;
 };
 
 // VideoCard is a video in a grid: cover with its duration, title, and
 // category with how long ago it arrived.
-export function VideoCard({ video, now, layout = "grid", position }: VideoCardProps) {
+export function VideoCard({ video, now, layout = "grid", position, note }: VideoCardProps) {
   const details = [video.category, formatAge(video.addedAt, now)].filter(Boolean).join(" · ");
   const watched =
     position !== undefined && video.duration ? Math.min(1, position / video.duration) : null;
@@ -43,6 +45,7 @@ export function VideoCard({ video, now, layout = "grid", position }: VideoCardPr
       <div className={styles.text}>
         <h3 className={styles.title}>{video.title}</h3>
         <p className={styles.details}>{details}</p>
+        {note && <p className={styles.note}>{note}</p>}
       </div>
     </Link>
   );

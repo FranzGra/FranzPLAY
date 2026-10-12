@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchContinue, type Watched } from "../../api/progress";
 import { VideoCard } from "../videos/VideoCard";
-import styles from "./ContinueRow.module.css";
+import { VideoRow } from "../videos/VideoRow";
 
 // ContinueRow shows the videos the person is in the middle of, most recent
 // first, each with how much was watched. With none it shows nothing: the
@@ -11,18 +11,13 @@ export function ContinueRow() {
   const started = useStarted();
   if (started.length === 0) return null;
   return (
-    <section className={styles.root} aria-labelledby="continue-title">
-      <h2 id="continue-title" className={styles.title}>
-        Continua a guardare
-      </h2>
-      <ul className={styles.list}>
-        {started.map(({ video, position }) => (
-          <li key={video.id}>
-            <VideoCard video={video} now={now} position={position} />
-          </li>
-        ))}
-      </ul>
-    </section>
+    <VideoRow title="Continua a guardare">
+      {started.map(({ video, position }) => (
+        <li key={video.id}>
+          <VideoCard video={video} now={now} position={position} />
+        </li>
+      ))}
+    </VideoRow>
   );
 }
 

@@ -3,8 +3,8 @@ import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 
 describe("video page", () => {
-  it("shows the player, the details and other videos of the category", async () => {
-    const { server } = renderApp("/video/7", {
+  it("shows the player, the details and the videos to watch after", async () => {
+    renderApp("/video/7", {
       ...signedIn(),
       "GET /api/videos/7": { body: videoJSON() },
       "GET /api/videos/7/progress": { body: { position: 0, finished: false } },
@@ -13,8 +13,8 @@ describe("video page", () => {
           { key: "it.srt", lang: "it", label: "Italiano", src: "/api/videos/7/subtitles/it.srt" },
         ],
       },
-      "GET /api/videos": {
-        body: { videos: [videoJSON(), videoJSON({ id: 8, title: "Montagna" })], total: 2 },
+      "GET /api/videos/7/similar": {
+        body: [{ video: videoJSON({ id: 8, title: "Montagna" }), reason: "watchedTogether" }],
       },
     });
     expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();
@@ -32,9 +32,7 @@ describe("video page", () => {
 
     const side = screen.getByRole("complementary", { name: "Altri video" });
     expect(await within(side).findByRole("heading", { name: "Montagna" })).toBeInTheDocument();
-    expect(within(side).queryByRole("heading", { name: "Mare 2024" })).not.toBeInTheDocument();
-    const list = server.requests.find((r) => new URL(r.url).pathname === "/api/videos");
-    expect(new URL(list?.url ?? "").searchParams.get("category")).toBe("Vacanze");
+    expect(within(side).getByText("Visto da chi ha visto questo")).toBeInTheDocument();
   });
 
   it("says when a video does not exist", async () => {

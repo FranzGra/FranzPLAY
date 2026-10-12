@@ -71,6 +71,14 @@
   color: var(--color-text-muted);
 }
 
+/* Why the video is suggested: quieter than the details. */
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
 .text {
   display: flex;
   flex-direction: column;
