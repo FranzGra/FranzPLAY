@@ -40,16 +40,24 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 	video := filepath.Join(dir, "mare.mp4")
 	c := &Coverer{}
 
-	args := c.coverArgs(video, 300, "out.jpg")
+	args := c.coverArgs(video, 300, "", "out.jpg")
 	if !slices.Contains(args, "file:"+video) || !slices.Contains(args, "30") {
 		t.Errorf("without an image: %q, want a frame at second 30 of the video", args)
+	}
+
+	// A picture found on the internet comes before a frame of the video.
+	downloaded := filepath.Join(dir, "data", "online", "7-1234.img")
+	args = c.coverArgs(video, 300, downloaded, "out.jpg")
+	if !slices.Contains(args, "file:"+downloaded) || slices.Contains(args, "file:"+video) {
+		t.Errorf("with a picture from the internet: %q", args)
 	}
 
 	poster := filepath.Join(dir, "mare-poster.jpg")
 	if err := os.WriteFile(poster, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	args = c.coverArgs(video, 300, "out.jpg")
+	// An image next to the video comes before the internet's.
+	args = c.coverArgs(video, 300, downloaded, "out.jpg")
 	if !slices.Contains(args, "file:"+poster) || slices.Contains(args, "file:"+video) {
 		t.Errorf("with mare-poster.jpg: %q", args)
 	}
@@ -59,7 +67,7 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 	if err := os.WriteFile(plain, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if args = c.coverArgs(video, 300, "out.jpg"); !slices.Contains(args, "file:"+plain) {
+	if args = c.coverArgs(video, 300, "", "out.jpg"); !slices.Contains(args, "file:"+plain) {
 		t.Errorf("with mare.jpg: %q", args)
 	}
 }

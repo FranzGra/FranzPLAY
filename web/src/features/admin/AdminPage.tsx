@@ -12,6 +12,7 @@ const sections = [
   { to: "video", label: "Video" },
   { to: "commenti", label: "Commenti" },
   { to: "cartelle", label: "Cartelle" },
+  { to: "internet", label: "Internet" },
   { to: "lavori", label: "Lavori" },
 ] as const;
 

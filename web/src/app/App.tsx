@@ -4,6 +4,7 @@ import { CommentsPage } from "../features/admin/CommentsPage";
 import { FoldersPage } from "../features/admin/FoldersPage";
 import { InvitesPage } from "../features/admin/InvitesPage";
 import { JobsPage } from "../features/admin/JobsPage";
+import { OnlinePage } from "../features/admin/OnlinePage";
 import { PeoplePage } from "../features/admin/PeoplePage";
 import { VideosPage } from "../features/admin/VideosPage";
 import { AuthPage } from "../features/auth/AuthPage";
@@ -73,6 +74,7 @@ function Pages() {
           <Route path="video" element={<VideosPage />} />
           <Route path="commenti" element={<CommentsPage />} />
           <Route path="cartelle" element={<FoldersPage />} />
+          <Route path="internet" element={<OnlinePage />} />
           <Route path="lavori" element={<JobsPage />} />
         </Route>
         <Route

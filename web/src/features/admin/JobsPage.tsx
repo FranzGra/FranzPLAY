@@ -20,6 +20,7 @@ type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; jobs: Jo
 export const kindNames: Record<JobKind, string> = {
   probe: "Lettura del video",
   details: "Informazioni dal file accanto",
+  online: "Informazioni da internet",
   cover: "Copertina",
   preview: "Anteprime",
   tracks: "Lingue e sottotitoli",
@@ -30,6 +31,7 @@ export const kindNames: Record<JobKind, string> = {
 const missingTool: Record<JobKind, string> = {
   probe: "ffprobe",
   details: "", // needs no other program: it is always available
+  online: "", // the same
   cover: "ffmpeg",
   preview: "ffmpeg",
   tracks: "ffmpeg", // and ffprobe, which "probe" already names

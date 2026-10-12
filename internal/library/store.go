@@ -101,7 +101,7 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 		switch {
 		case u.kind == replaced:
 			// New content: what we knew about the old file is no longer true.
-			for _, k := range []jobs.Kind{jobs.Probe, jobs.Details} {
+			for _, k := range []jobs.Kind{jobs.Probe, jobs.Details, jobs.Online} {
 				if err := jobs.Enqueue(ctx, tx, u.id, k, false, now); err != nil {
 					return err
 				}
@@ -110,7 +110,7 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 			// Same content back: read it and its details file, look for the
 			// subtitles inside it and make its copy for the browsers, only
 			// if that never succeeded.
-			for _, k := range []jobs.Kind{jobs.Probe, jobs.Details, jobs.Tracks, jobs.Convert} {
+			for _, k := range []jobs.Kind{jobs.Probe, jobs.Details, jobs.Online, jobs.Tracks, jobs.Convert} {
 				if err := jobs.Enqueue(ctx, tx, u.id, k, true, now); err != nil {
 					return err
 				}
@@ -131,7 +131,7 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 		if err != nil {
 			return fmt.Errorf("add video %s: %w", f.loc.path, err)
 		}
-		for _, k := range []jobs.Kind{jobs.Probe, jobs.Details} {
+		for _, k := range []jobs.Kind{jobs.Probe, jobs.Details, jobs.Online} {
 			if err := jobs.Enqueue(ctx, tx, id, k, false, now); err != nil {
 				return err
 			}
