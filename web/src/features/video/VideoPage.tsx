@@ -150,6 +150,12 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
             </>
           )}
           {details.join(" · ")}
+          {video.uploader && (
+            <>
+              {" · Caricato da "}
+              <Link to={`/canale/${video.uploader.id}`}>{video.uploader.name}</Link>
+            </>
+          )}
         </p>
         {video.private ? (
           // Nobody else sees it: likes, playlists, sharing and comments

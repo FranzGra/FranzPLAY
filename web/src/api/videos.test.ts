@@ -54,6 +54,8 @@ describe("parseVideo", () => {
     ["published on a time", { ...sampleVideo, publishedOn: "2019-03-15T10:00:00Z" }],
     ["published on no real day", { ...sampleVideo, publishedOn: "2019-02-30" }],
     ["private not true or false", { ...sampleVideo, private: 1 }],
+    ["uploader without a name", { ...sampleVideo, uploader: { id: 3, name: "" } }],
+    ["uploader without an id", { ...sampleVideo, uploader: { id: 0, name: "Giulia" } }],
     ["numeric description", { ...sampleVideo, description: 5 }],
     ["zero id", { ...sampleVideo, id: 0 }],
     ["numeric title", { ...sampleVideo, title: 3 }],

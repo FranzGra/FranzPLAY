@@ -9,6 +9,8 @@ import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { PlaylistCard } from "../playlists/PlaylistCard";
 import listStyles from "../playlists/Playlists.module.css";
+import { useVideoList } from "../videos/useVideoList";
+import { VideoGrid } from "../videos/VideoGrid";
 import styles from "./ChannelPage.module.css";
 
 type State =
@@ -18,7 +20,8 @@ type State =
   | { kind: "ready"; channel: Channel };
 
 // ChannelPage shows a person: their name, since when they are on
-// FranzPLAY, and the playlists they show to everyone.
+// FranzPLAY, the videos they uploaded and the playlists they show to
+// everyone.
 export function ChannelPage() {
   const param = useParams().id ?? "";
   const id = /^\d+$/.test(param) ? Number(param) : 0;
@@ -87,6 +90,12 @@ export function ChannelPage() {
           </p>
         </div>
       </header>
+      <ChannelVideos
+        key={channel.id}
+        id={channel.id}
+        name={channel.name}
+        canUpload={mine && account.canUpload}
+      />
       <h2 className={styles.section}>Playlist</h2>
       {channel.playlists.length === 0 ? (
         mine ? (
@@ -108,6 +117,29 @@ export function ChannelPage() {
           ))}
         </ul>
       )}
+    </>
+  );
+}
+
+// ChannelVideos shows the videos a person uploaded for everyone. Who
+// never uploaded one sees no empty box, unless it is my channel and I
+// may upload: then it says where to start.
+function ChannelVideos({ id, name, canUpload }: { id: number; name: string; canUpload: boolean }) {
+  const { state, loadMore } = useVideoList({ uploader: id });
+  if (state.kind === "loading") return null;
+  if (state.kind === "ready" && state.videos.length === 0 && !canUpload) return null;
+  return (
+    <>
+      <h2 className={styles.section}>Video</h2>
+      <VideoGrid
+        state={state}
+        onMore={loadMore}
+        label={`Video caricati da ${name}`}
+        empty={{
+          title: "Nessun video caricato",
+          text: "I video che carichi da «Carica un video», nel Profilo, compariranno qui per tutti.",
+        }}
+      />
     </>
   );
 }

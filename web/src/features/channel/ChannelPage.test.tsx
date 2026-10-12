@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
-import { renderApp, signedIn } from "../../test/render";
+import { videoJSON } from "../../test/fixtures";
+import { renderApp, signedIn, testAccount } from "../../test/render";
 
 const list = {
   id: 2,
@@ -28,6 +29,42 @@ describe("channel page", () => {
     const card = screen.getByRole("link", { name: /Gite/ });
     expect(card).toHaveAttribute("href", "/playlist/2");
     expect(within(card).getByText("3 video")).toBeInTheDocument();
+  });
+
+  it("shows the videos the person uploaded", async () => {
+    const { server } = renderApp("/canale/5", {
+      ...signedIn(),
+      "GET /api/channels/5": { body: channel() },
+      "GET /api/videos": {
+        body: {
+          videos: [videoJSON({ title: "Al mare", uploader: { id: 5, name: "Giulia" } })],
+          total: 1,
+        },
+      },
+    });
+    const videos = await screen.findByRole("list", { name: "Video caricati da Giulia" });
+    expect(within(videos).getByText("Al mare")).toBeInTheDocument();
+    const asked = server.requests.find((r) => r.url.includes("/api/videos"));
+    expect(new URL(asked?.url ?? "").searchParams.get("uploader")).toBe("5");
+  });
+
+  it("shows no videos box for who never uploaded one", async () => {
+    renderApp("/canale/5", {
+      ...signedIn(),
+      "GET /api/channels/5": { body: channel() },
+      "GET /api/videos": { body: { videos: [], total: 0 } },
+    });
+    await screen.findByRole("heading", { level: 2, name: "Playlist" });
+    expect(screen.queryByRole("heading", { name: "Video" })).not.toBeInTheDocument();
+  });
+
+  it("tells me where my uploaded videos will appear", async () => {
+    renderApp("/canale/1", {
+      ...signedIn({ ...testAccount, canUpload: true }),
+      "GET /api/channels/1": { body: channel({ id: 1, name: "Francesco" }) },
+      "GET /api/videos": { body: { videos: [], total: 0 } },
+    });
+    expect(await screen.findByText("Nessun video caricato")).toBeInTheDocument();
   });
 
   it("shows the person's photo when they have one", async () => {

@@ -196,18 +196,23 @@ function VideoRow({
         </span>
         <div className={styles.failed}>
           <p className={styles.name}>
-            {video.hidden || video.missing ? (
+            {video.hidden || video.missing || video.private ? (
               video.title
             ) : (
               <Link to={`/video/${video.id}`}>{video.title}</Link>
             )}
           </p>
-          <p className={`${styles.role} ${styles.path}`} title={`${video.folder}/${video.path}`}>
-            {video.path}
-          </p>
+          {video.uploader ? (
+            <p className={styles.role}>Caricato da {video.uploader.name}</p>
+          ) : (
+            <p className={`${styles.role} ${styles.path}`} title={`${video.folder}/${video.path}`}>
+              {video.path}
+            </p>
+          )}
           <p className={styles.badges}>
             {video.hidden && <span className={styles.badge}>Nascosto</span>}
             {video.missing && <span className={styles.badge}>Non trovato</span>}
+            {video.private && <span className={styles.badge}>Solo per chi l'ha caricato</span>}
             {video.duration === null ? (
               <span className={styles.badge}>Non ancora letto</span>
             ) : (

@@ -77,6 +77,18 @@ describe("video page", () => {
     }
   });
 
+  it("says who uploaded the video, with a link to their channel", async () => {
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON({ uploader: { id: 5, name: "Giulia" } }) },
+    });
+    expect(await screen.findByRole("link", { name: "Giulia" })).toHaveAttribute(
+      "href",
+      "/canale/5",
+    );
+    expect(screen.getByText(/Caricato da/)).toBeInTheDocument();
+  });
+
   it("shows no description box when there is none", async () => {
     renderApp("/video/7", { ...signedIn(), "GET /api/videos/7": { body: videoJSON() } });
     expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();

@@ -15,7 +15,7 @@ import (
 
 // Routes adds the catalog's API to mux:
 //
-//	GET /api/videos                       list, newest first (?category=&q=&limit=&offset=);
+//	GET /api/videos                       list, newest first (?category=&uploader=&q=&limit=&offset=);
 //	                                      mixed with ?order=random&seed=N
 //	GET /api/videos/{id}                  one video
 //	GET /api/videos/{id}/stream           the video file, with jumps forward and back

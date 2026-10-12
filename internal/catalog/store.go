@@ -33,10 +33,17 @@ type Video struct {
 	Format   string    `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
 	Likes    int64     `json:"likes"`    // how many people like it
 	Private  bool      `json:"private"`  // only the person who uploaded it sees it
+	Uploader *Person   `json:"uploader"` // who uploaded it from the browser; null = from a video folder
 	// From a details file next to the video, like yt-dlp's .info.json:
 	Author      string  `json:"author"`                // who published it; "" = not known
 	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
 	Description *string `json:"description,omitempty"` // only for one video; null = none
+}
+
+// Person is someone on FranzPLAY, as a video names them.
+type Person struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // Preview is the image with small frames of a video, shown over the
@@ -82,6 +89,7 @@ func viewer(ctx context.Context) int64 {
 const videoColumns = `v.id, v.shown_title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
 	v.shown_author, v.shown_published_on, v.clip, v.private,
+	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
 
 // rowScanner is a *sql.Row or *sql.Rows.
@@ -102,9 +110,11 @@ func scanVideo(row rowScanner) (Video, error) {
 	var cover, videoCodec, audioCodec, preview, converted, author, published, clip sql.NullString
 	var addedAt int64
 	var relPath string
+	var uploaderID sql.NullInt64
+	var uploaderName sql.NullString
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
-		&author, &published, &clip, &v.Private, &v.Likes); err != nil {
+		&author, &published, &clip, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -130,6 +140,9 @@ func scanVideo(row rowScanner) (Video, error) {
 		address := "/api/clips/" + clip.String
 		v.Clip = &address
 	}
+	if uploaderID.Valid && uploaderName.Valid {
+		v.Uploader = &Person{ID: uploaderID.Int64, Name: uploaderName.String}
+	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
 	v.Format = fileFormat(relPath)
 	v.Author = author.String
@@ -149,6 +162,10 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 	if q.category != "" {
 		where += ` AND v.category = ?`
 		args = append(args, q.category)
+	}
+	if q.uploader != 0 {
+		where += ` AND v.uploaded_by = ?`
+		args = append(args, q.uploader)
 	}
 	// LIKE ignores case for the letters A to Z; that is enough for a home search.
 	for _, w := range q.words {

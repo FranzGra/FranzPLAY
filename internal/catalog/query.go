@@ -32,6 +32,7 @@ const (
 // listQuery is what the interface asks of the video list, already checked.
 type listQuery struct {
 	category string   // "" = all
+	uploader int64    // only the videos this person uploaded; 0 = all
 	words    []string // search: every word must be in the title or the category
 	limit    int
 	offset   int
@@ -46,7 +47,7 @@ type listQuery struct {
 const maxSeed = 1<<53 - 1
 
 // parseListQuery checks the parameters of GET /api/videos once, here.
-// Accepted: category, q (search), limit (1 to 200), offset (0 or more),
+// Accepted: category, uploader (a person's id), q (search), limit (1 to 200), offset (0 or more),
 // order=random with seed (1 to 2^53-1) for a mixed order.
 func parseListQuery(values url.Values) (listQuery, error) {
 	q := listQuery{category: strings.TrimSpace(values.Get("category")), limit: defaultLimit}
@@ -55,6 +56,13 @@ func parseListQuery(values url.Values) (listQuery, error) {
 		return listQuery{}, fmt.Errorf("%w: the search must be at most %d characters", errBadQuery, maxSearchLen)
 	}
 	q.words = searchWords(search)
+	if s := values.Get("uploader"); s != "" {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || n < 1 {
+			return listQuery{}, fmt.Errorf("%w: uploader must be the id of a person", errBadQuery)
+		}
+		q.uploader = n
+	}
 	if s := values.Get("limit"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 1 || n > maxLimit {
