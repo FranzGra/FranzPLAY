@@ -65,8 +65,7 @@ type coverChoice struct {
 func (c coverChoice) tag() string {
 	switch {
 	case c.own != "":
-		base := strings.TrimSuffix(filepath.Base(c.own), filepath.Ext(c.own))
-		return "o" + base[max(0, len(base)-8):]
+		return "o" + ownTag(c.own)
 	case c.second.Valid:
 		return "s" + strconv.FormatInt(c.second.Int64, 10)
 	default:

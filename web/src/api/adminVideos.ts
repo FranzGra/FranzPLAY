@@ -15,7 +15,12 @@ export type AdminVideo = Video & {
   categorySet: boolean; // the category was chosen by the administrator
   coverChoice: CoverChoice;
   coverSecond: number | null; // the moment chosen as cover, in seconds
+  clipChoice: ClipChoice;
 };
+
+// ClipChoice is where the clip on the card comes from: a "video" the
+// administrator uploaded, "none" at all, or "" when FranzPLAY makes it.
+export type ClipChoice = "" | "video" | "none";
 
 // CoverChoice is where the cover comes from: an "image" the administrator
 // uploaded, a "moment" of the video they chose, or "" when FranzPLAY picks.
@@ -43,6 +48,9 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   if (d.coverChoice !== "" && d.coverChoice !== "image" && d.coverChoice !== "moment") {
     throw new Error("admin video: bad coverChoice");
   }
+  if (d.clipChoice !== "" && d.clipChoice !== "video" && d.clipChoice !== "none") {
+    throw new Error("admin video: bad clipChoice");
+  }
   const second = d.coverSecond;
   if (
     second !== null &&
@@ -62,6 +70,7 @@ export function parseAdminVideo(data: unknown): AdminVideo {
     categorySet: d.categorySet,
     coverChoice: d.coverChoice,
     coverSecond: second,
+    clipChoice: d.clipChoice,
   };
 }
 
@@ -120,4 +129,20 @@ export async function setCoverSecond(id: number, second: number): Promise<void> 
 // resetCover goes back to the cover FranzPLAY picks by itself.
 export async function resetCover(id: number): Promise<void> {
   await request(`/api/admin/videos/${id}/cover`, { method: "DELETE" });
+}
+
+// uploadClip makes a short video the clip on a video's card. The server
+// keeps it in FranzPLAY's data folder and makes the clip from its start.
+export async function uploadClip(id: number, clip: Blob): Promise<void> {
+  await request(`/api/admin/videos/${id}/clip`, { method: "PUT", body: clip });
+}
+
+// remakeClip goes back to the clip FranzPLAY makes, and makes it again.
+export async function remakeClip(id: number): Promise<void> {
+  await request(`/api/admin/videos/${id}/clip/remake`, { method: "POST" });
+}
+
+// removeClip leaves the video's card without a clip.
+export async function removeClip(id: number): Promise<void> {
+  await request(`/api/admin/videos/${id}/clip`, { method: "DELETE" });
 }

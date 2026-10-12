@@ -24,6 +24,7 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
     categorySet: false,
     coverChoice: "",
     coverSecond: null,
+    clipChoice: "",
     ...overrides,
   };
 }

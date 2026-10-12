@@ -101,6 +101,58 @@ func TestClipSaved(t *testing.T) {
 	}
 }
 
+func TestClipFollowsTheAdministratorsChoice(t *testing.T) {
+	fx := newClipFixture(t, "/videos", "a.mp4", 600)
+	var got []string
+	fx.c.run = func(ctx context.Context, program string, args ...string) ([]byte, error) {
+		got = args
+		return fakeClipFFmpeg("clip", nil)(ctx, program, args...)
+	}
+	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+
+	// A video of their own: its first seconds, made like the others, with
+	// a new name so browsers do not keep the old clip.
+	if _, err := fx.db.Exec(`UPDATE videos SET own_clip = '1-0123456789abcdef.webm' WHERE id = ?`, fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	uploaded := "file:" + filepath.Join(fx.dataDir, OwnClipsDir, "1-0123456789abcdef.webm")
+	joined := strings.Join(got, " ")
+	for _, want := range []string{"-t 15 -i " + uploaded, "scale=-2:360", "-an", "+faststart"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("ffmpeg command %q has no %q", joined, want)
+		}
+	}
+	if strings.Contains(joined, "/videos/a.mp4") {
+		t.Errorf("the clip still comes from the video: %q", joined)
+	}
+	if s := fx.saved(t); s.String != "1-fp-o89abcdef.mp4" {
+		t.Errorf("saved %+v, want 1-fp-o89abcdef.mp4", s)
+	}
+	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-o89abcdef.mp4"}) {
+		t.Errorf("clips folder = %q, want only the new clip", files)
+	}
+
+	// No clip at all: the clip goes, and ffmpeg is not even run.
+	got = nil
+	if _, err := fx.db.Exec(`UPDATE videos SET own_clip = NULL, no_clip = 1 WHERE id = ?`, fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if s := fx.saved(t); s.Valid || got != nil {
+		t.Errorf("saved %+v, ffmpeg %q; want no clip and no ffmpeg", s, got)
+	}
+	if files := fx.files(t); len(files) != 0 {
+		t.Errorf("clips folder = %q, want empty", files)
+	}
+}
+
 func TestClipOfAShortVideo(t *testing.T) {
 	fx := newClipFixture(t, "/videos", "a.mp4", 3)
 	fx.c.run = func(context.Context, string, ...string) ([]byte, error) {
@@ -263,5 +315,50 @@ func TestClipWithRealFFmpeg(t *testing.T) {
 				t.Errorf("the video folder changed:\nbefore %q\nafter  %q", libraryBefore, after)
 			}
 		})
+	}
+}
+
+func TestOwnClipWithRealFFmpeg(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe not installed")
+	}
+	fx := newClipFixture(t, t.TempDir(), "a.mp4", 600)
+	fx.c.ffmpeg = ffmpeg
+	// A 20-second video with sound, uploaded by the administrator.
+	own := filepath.Join(fx.dataDir, OwnClipsDir, "1-0123456789abcdef.mp4")
+	if err := os.MkdirAll(filepath.Dir(own), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(context.Background(), ffmpeg, "-v", "error",
+		"-f", "lavfi", "-i", "testsrc=duration=20:size=1280x720:rate=25",
+		"-f", "lavfi", "-i", "sine=duration=20",
+		"-pix_fmt", "yuv420p", "-shortest", "file:"+own); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fx.db.Exec(`UPDATE videos SET own_clip = ? WHERE id = ?`, filepath.Base(own), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run(context.Background(), ffprobe, "-v", "error",
+		"-show_entries", "stream=codec_type,height:format=duration", "-of", "flat",
+		filepath.Join(fx.dataDir, ClipsDir, fx.saved(t).String))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := string(out)
+	if !strings.Contains(info, "height=360") || strings.Contains(info, `codec_type="audio"`) {
+		t.Errorf("clip: %s, want 360 high and silent", info)
+	}
+	_, after, _ := strings.Cut(info, "format.duration=\"")
+	if length, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(after), "\""), 64); err != nil ||
+		length < 14.5 || length > 15.5 {
+		t.Errorf("clip lasts %v (%v), want about 15 seconds", length, err)
 	}
 }
