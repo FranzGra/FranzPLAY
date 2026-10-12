@@ -59,8 +59,11 @@
   white-space: nowrap;
 }
 
-/* One row that scrolls sideways, like on YouTube. */
+/* One row that scrolls sideways, like on YouTube. position: relative
+   keeps inside it the hidden labels of the cards (positioned absolutely):
+   otherwise they would stretch the whole page sideways. */
 .list {
+  position: relative;
   display: grid;
   grid-auto-columns: minmax(240px, 280px);
   grid-auto-flow: column;
@@ -75,4 +78,15 @@
 
 .list li {
   scroll-snap-align: start;
+}
+
+/* On the phone the row runs to the edges of the screen, so it is clear
+   there is more to scroll. */
+@media (max-width: 899px) {
+  .list {
+    margin-inline: -16px;
+    padding-inline: 16px;
+    scroll-padding-inline: 16px;
+    grid-auto-columns: minmax(240px, 75%);
+  }
 }
