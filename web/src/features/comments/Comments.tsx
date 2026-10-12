@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { Link } from "react-router";
+import { avatarUrl } from "../../api/auth";
 import { type Comment, maxCommentLength } from "../../api/comments";
 import { formatSince } from "../../lib/format";
 import styles from "./Comments.module.css";
@@ -109,9 +110,18 @@ function CommentView({
   };
   return (
     <article className={styles.comment} aria-label={`Commento di ${comment.author.name}`}>
-      <span className={styles.avatar} aria-hidden="true">
-        {comment.author.name.charAt(0).toUpperCase()}
-      </span>
+      {comment.author.avatar > 0 ? (
+        <img
+          className={styles.avatar}
+          src={avatarUrl(comment.author.id, comment.author.avatar)}
+          alt=""
+          loading="lazy"
+        />
+      ) : (
+        <span className={styles.avatar} aria-hidden="true">
+          {comment.author.name.charAt(0).toUpperCase()}
+        </span>
+      )}
       <div className={styles.content}>
         <p className={styles.meta}>
           <Link to={`/canale/${comment.author.id}`} className={styles.author}>

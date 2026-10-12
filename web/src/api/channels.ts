@@ -7,6 +7,7 @@ import { type Playlist, parsePlaylist } from "./playlists";
 export type Channel = {
   id: number;
   name: string;
+  avatar: number; // version of their profile photo, 0 = none
   since: Date; // when they joined FranzPLAY
   playlists: Playlist[]; // public ones only
 };
@@ -20,8 +21,17 @@ export function parseChannel(data: unknown): Channel {
   if (typeof d.name !== "string" || d.name === "") throw new Error("channel name: not a name");
   const since = typeof d.since === "string" ? new Date(d.since) : new Date(Number.NaN);
   if (Number.isNaN(since.getTime())) throw new Error("channel since: not a date");
+  if (typeof d.avatar !== "number" || !Number.isInteger(d.avatar) || d.avatar < 0) {
+    throw new Error("channel avatar: not a version");
+  }
   if (!Array.isArray(d.playlists)) throw new Error("channel playlists: not a list");
-  return { id: d.id, name: d.name, since, playlists: d.playlists.map(parsePlaylist) };
+  return {
+    id: d.id,
+    name: d.name,
+    avatar: d.avatar,
+    since,
+    playlists: d.playlists.map(parsePlaylist),
+  };
 }
 
 export async function fetchChannel(id: number, signal?: AbortSignal): Promise<Channel> {

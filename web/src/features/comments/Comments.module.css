@@ -50,6 +50,7 @@
   background: var(--color-surface-raised);
   font-size: 16px;
   font-weight: 600;
+  object-fit: cover; /* when it is a photo */
 }
 
 .content {

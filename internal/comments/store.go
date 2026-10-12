@@ -23,6 +23,7 @@ type row struct {
 	id, videoID, userID int64
 	parentID            int64 // 0 = not a reply
 	author              string
+	avatar              int64 // version of the author's photo
 	body                string
 	createdAt           time.Time
 }
@@ -44,13 +45,13 @@ func (s store) present(ctx context.Context, videoID int64) error {
 	return nil
 }
 
-const selectRow = `SELECT c.id, c.video_id, c.user_id, coalesce(c.parent_id, 0), u.name, c.body, c.created_at
+const selectRow = `SELECT c.id, c.video_id, c.user_id, coalesce(c.parent_id, 0), u.name, u.avatar, c.body, c.created_at
 	FROM comments c JOIN users u ON u.id = c.user_id`
 
 func scanRow(sc interface{ Scan(...any) error }) (row, error) {
 	var r row
 	var created int64
-	if err := sc.Scan(&r.id, &r.videoID, &r.userID, &r.parentID, &r.author, &r.body, &created); err != nil {
+	if err := sc.Scan(&r.id, &r.videoID, &r.userID, &r.parentID, &r.author, &r.avatar, &r.body, &created); err != nil {
 		return row{}, err
 	}
 	r.createdAt = time.Unix(created, 0).UTC()

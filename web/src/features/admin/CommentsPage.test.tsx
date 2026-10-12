@@ -4,7 +4,7 @@ import { renderApp, signedIn } from "../../test/render";
 function recent(overrides: Record<string, unknown> = {}) {
   return {
     id: 5,
-    author: { id: 2, name: "Giulia" },
+    author: { id: 2, name: "Giulia", avatar: 0 },
     body: "Che bello!",
     createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
     video: { id: 7, title: "Mare 2024", visible: true },
@@ -24,7 +24,7 @@ describe("comments page", () => {
             recent(),
             recent({
               id: 6,
-              author: { id: 3, name: "Marco" },
+              author: { id: 3, name: "Marco", avatar: 0 },
               body: "Vero",
               reply: true,
               replies: 0,
