@@ -24,7 +24,7 @@ export function onUnauthorized(listener: Listener): () => void {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
   // keepalive lets the request finish even if the page is closing.

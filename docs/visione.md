@@ -421,7 +421,7 @@ Questo è anche un percorso di studio. Per questo:
 | ✅ C | Lingua | **Deciso**: inglese nel codice, italiano nei documenti. |
 | ✅ D | Licenza | **Deciso**: doppia licenza. **AGPL-3.0** per tutti (codice pubblico; chi lo modifica o lo offre online deve pubblicare le modifiche) più una **licenza commerciale** che può concedere solo Francesco. Chi contribuisce firma un accordo (CLA) che lascia a Francesco i diritti per poter dare la licenza commerciale. Il nome FranzPLAY si potrà proteggere come marchio. |
 | E | Fonti esterne per copertine e informazioni | Da decidere alla tappa 3. Proposta in sezione 7. |
-| F | "Non mi piace" accanto al like | Da decidere alla tappa 2. |
+| ✅ F | "Non mi piace" accanto al like | **Deciso**: solo il like. Tra familiari e amici il "non mi piace" serve poco e può offendere. |
 | ✅ H | Chi carica video | **Deciso**: solo gli utenti abilitati dall'admin, con uno spazio massimo. Sezione 5 bis. |
 | ✅ G | Dove tenere i dati | **Deciso**: una cartella dati unica accanto ai video (non dentro), con backup notturno ed esportazione JSON. Niente file scritti nelle cartelle video. Sezione 6 bis. |
 

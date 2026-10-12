@@ -20,6 +20,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/library"
+	"github.com/FranzGra/FranzPLAY/internal/likes"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/progress"
 	"github.com/FranzGra/FranzPLAY/internal/server"
@@ -113,7 +114,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		return err
 	}
 	site := server.New(version, logger, webui.Handler(webui.Files(), logger),
-		accounts.Routes, catalog.Routes(db, cfg.DataDir, logger), progress.Routes(db, catalog.NewLookup(db), logger))
+		accounts.Routes,
+		catalog.Routes(db, cfg.DataDir, logger),
+		progress.Routes(db, catalog.NewLookup(db), logger),
+		likes.Routes(db, logger),
+	)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
