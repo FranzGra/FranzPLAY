@@ -39,6 +39,9 @@ Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-p
 | `FRANZPLAY_LIBRARIES` | none | Video folders, read-only (separated by `;` on Windows, `:` elsewhere) |
 | `FRANZPLAY_FFPROBE` | `ffprobe` | ffprobe program (a name in PATH or a full path) |
 | `FRANZPLAY_FFMPEG` | `ffmpeg` | ffmpeg program (a name in PATH or a full path) |
+| `FRANZPLAY_WHISPER` | `whisper-cli` | whisper.cpp program for automatic subtitles; when missing, they are off |
+| `FRANZPLAY_TRANSLATE_URL` | none | Address of a LibreTranslate server that translates subtitles, like `http://localhost:5000` |
+| `FRANZPLAY_TRANSLATE_KEY` | none | LibreTranslate key, when the server asks for one |
 
 ## Contributing
 

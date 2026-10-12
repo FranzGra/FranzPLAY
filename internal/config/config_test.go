@@ -140,3 +140,35 @@ func TestLoadAcceptsSiblingFoldersWithSimilarNames(t *testing.T) {
 		t.Errorf("Load() unexpected error: %v", err)
 	}
 }
+
+func TestLoadWhisperAndTranslate(t *testing.T) {
+	cfg, err := Load(fakeEnv(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Whisper != DefaultWhisper || cfg.TranslateURL != "" || cfg.TranslateKey != "" {
+		t.Errorf("defaults = %q, %q, %q", cfg.Whisper, cfg.TranslateURL, cfg.TranslateKey)
+	}
+	cfg, err = Load(fakeEnv(map[string]string{
+		EnvWhisper:      " /opt/whisper/whisper-cli ",
+		EnvTranslate:    " http://192.168.1.5:5000/ ",
+		EnvTranslateKey: " secret ",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Whisper != "/opt/whisper/whisper-cli" || cfg.TranslateURL != "http://192.168.1.5:5000" || cfg.TranslateKey != "secret" {
+		t.Errorf("got %q, %q, %q", cfg.Whisper, cfg.TranslateURL, cfg.TranslateKey)
+	}
+}
+
+func TestLoadRejectsBadTranslateURL(t *testing.T) {
+	for _, value := range []string{"localhost:5000", "ftp://host", "http://", "http://user:pw@host", "http://host/?a=1", "::"} {
+		t.Run(value, func(t *testing.T) {
+			_, err := Load(fakeEnv(map[string]string{EnvTranslate: value}))
+			if !errors.Is(err, ErrInvalidConfig) {
+				t.Errorf("Load() with %s=%q error = %v, want ErrInvalidConfig", EnvTranslate, value, err)
+			}
+		})
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,19 +16,23 @@ import (
 
 // Environment variable names.
 const (
-	EnvAddr      = "FRANZPLAY_ADDR"
-	EnvDataDir   = "FRANZPLAY_DATA_DIR"
-	EnvLibraries = "FRANZPLAY_LIBRARIES"
-	EnvFFprobe   = "FRANZPLAY_FFPROBE"
-	EnvFFmpeg    = "FRANZPLAY_FFMPEG"
+	EnvAddr         = "FRANZPLAY_ADDR"
+	EnvDataDir      = "FRANZPLAY_DATA_DIR"
+	EnvLibraries    = "FRANZPLAY_LIBRARIES"
+	EnvFFprobe      = "FRANZPLAY_FFPROBE"
+	EnvFFmpeg       = "FRANZPLAY_FFMPEG"
+	EnvWhisper      = "FRANZPLAY_WHISPER"
+	EnvTranslate    = "FRANZPLAY_TRANSLATE_URL"
+	EnvTranslateKey = "FRANZPLAY_TRANSLATE_KEY"
 )
 
 // Default values, used when a variable is not set.
 const (
 	DefaultAddr    = ":8090"
 	DefaultDataDir = "data"
-	DefaultFFprobe = "ffprobe" // found through PATH
-	DefaultFFmpeg  = "ffmpeg"  // found through PATH
+	DefaultFFprobe = "ffprobe"     // found through PATH
+	DefaultFFmpeg  = "ffmpeg"      // found through PATH
+	DefaultWhisper = "whisper-cli" // the program of whisper.cpp, found through PATH
 )
 
 // ErrInvalidConfig is returned when a setting has a value FranzPLAY cannot use.
@@ -47,6 +52,15 @@ type Config struct {
 	FFprobe string
 	// FFmpeg is the ffmpeg program: a name looked up in PATH, or a full path.
 	FFmpeg string
+	// Whisper is the whisper.cpp program that writes subtitles from the
+	// sound of a video: a name looked up in PATH, or a full path. When it
+	// is missing, automatic subtitles are off.
+	Whisper string
+	// TranslateURL is the address of a LibreTranslate server, like
+	// "http://localhost:5000". Empty means subtitles are not translated.
+	TranslateURL string
+	// TranslateKey is the LibreTranslate key, when the server asks for one.
+	TranslateKey string
 }
 
 // Load builds a Config from environment variables.
@@ -57,12 +71,19 @@ func Load(getenv func(string) string) (Config, error) {
 		DataDir: valueOr(getenv(EnvDataDir), DefaultDataDir),
 		FFprobe: valueOr(getenv(EnvFFprobe), DefaultFFprobe),
 		FFmpeg:  valueOr(getenv(EnvFFmpeg), DefaultFFmpeg),
+		Whisper: valueOr(getenv(EnvWhisper), DefaultWhisper),
+
+		TranslateURL: strings.TrimSuffix(strings.TrimSpace(getenv(EnvTranslate)), "/"),
+		TranslateKey: strings.TrimSpace(getenv(EnvTranslateKey)),
 	}
 
 	if err := checkAddr(cfg.Addr); err != nil {
 		return Config{}, fmt.Errorf("%w: %s=%q: %w", ErrInvalidConfig, EnvAddr, cfg.Addr, err)
 	}
 	cfg.DataDir = filepath.Clean(cfg.DataDir)
+	if err := checkURL(cfg.TranslateURL); err != nil {
+		return Config{}, fmt.Errorf("%w: %s=%q: %w", ErrInvalidConfig, EnvTranslate, cfg.TranslateURL, err)
+	}
 
 	libraries, err := parseLibraries(getenv(EnvLibraries), cfg.DataDir)
 	if err != nil {
@@ -136,6 +157,26 @@ func checkAddr(addr string) error {
 	n, err := strconv.Atoi(port)
 	if err != nil || n < 0 || n > 65535 {
 		return fmt.Errorf("port %q is not a number between 0 and 65535", port)
+	}
+	return nil
+}
+
+// checkURL makes sure value is empty or a whole web address, like
+// "http://localhost:5000": a typo found now is better than every
+// translation failing later.
+func checkURL(value string) error {
+	if value == "" {
+		return nil
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		return err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" || u.Host == "" {
+		return errors.New("want an address like http://localhost:5000")
+	}
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("want only the address of the server, like http://localhost:5000")
 	}
 	return nil
 }
