@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { useAccount, useAuth } from "../../app/auth";
+import { Avatar } from "../../components/Avatar";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { PasswordForm } from "./PasswordForm";
@@ -44,9 +45,7 @@ export function ProfilePage() {
   return (
     <div className={styles.root}>
       <div className={styles.identity}>
-        <span className={`glass ${styles.avatar}`}>
-          <Icon name="profile" size={28} />
-        </span>
+        <Avatar name={account.name} size={64} />
         <div>
           <h1 className={styles.name}>{account.name}</h1>
           <p className={styles.role}>{account.role === "admin" ? "Amministratore" : "Utente"}</p>

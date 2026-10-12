@@ -1,5 +1,7 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { fetchPlaylists, onPlaylistsChanged, type Playlist, playlistName } from "../api/playlists";
+import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { useAccount } from "./auth";
 import styles from "./Layout.module.css";
@@ -25,6 +27,7 @@ const tabs = [
 export function Layout() {
   const navigate = useNavigate();
   const account = useAccount();
+  const lists = useMyPlaylists();
   const [query, setQuery] = useState("");
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
@@ -64,8 +67,8 @@ export function Layout() {
           <Icon name="search" />
         </Link>
 
-        <Link to="/profilo" className={`glass ${styles.avatar}`} aria-label="Il tuo profilo">
-          <Icon name="profile" size={20} />
+        <Link to="/profilo" className={styles.avatar} aria-label="Il tuo profilo">
+          <Avatar name={account.name} size={40} />
         </Link>
       </header>
 
@@ -82,6 +85,12 @@ export function Layout() {
             <Icon name="playlist" size={20} />
             Tutte le playlist
           </NavLink>
+          {lists.map((list) => (
+            <NavLink key={list.id} to={`/playlist/${list.id}`} className={styles.sideLink}>
+              <Icon name={list.kind === "later" ? "clock" : "playlist"} size={20} />
+              <span className={styles.sideText}>{playlistName(list)}</span>
+            </NavLink>
+          ))}
           {account.role === "admin" && (
             <>
               <div className={styles.sideHeading}>Gestione</div>
@@ -110,4 +119,31 @@ export function Layout() {
       </nav>
     </div>
   );
+}
+
+// useMyPlaylists loads my lists for the side menu, again after I create,
+// rename or delete one. Without them the menu still has "Tutte le
+// playlist", so a failure only goes to the console.
+function useMyPlaylists(): Playlist[] {
+  const [lists, setLists] = useState<Playlist[]>([]);
+  useEffect(() => {
+    let controller = new AbortController();
+    const load = () => {
+      controller.abort();
+      controller = new AbortController();
+      const { signal } = controller;
+      fetchPlaylists(undefined, signal)
+        .then(setLists)
+        .catch((error: unknown) => {
+          if (!signal.aborted) console.error(error);
+        });
+    };
+    load();
+    const stop = onPlaylistsChanged(load);
+    return () => {
+      stop();
+      controller.abort();
+    };
+  }, []);
+  return lists;
 }

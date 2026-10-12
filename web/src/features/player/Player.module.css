@@ -513,3 +513,20 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* In a small player, like on a phone, the panel takes the whole picture
+   and the rows are lower, so the whole menu fits without scrolling. */
+@container (max-height: 320px) {
+  .menu {
+    top: 8px;
+    bottom: 8px;
+    max-height: none;
+    padding: 4px;
+    background: var(--glass-bg-bar);
+  }
+
+  .menuRow,
+  .menuBack {
+    min-height: 36px;
+  }
+}

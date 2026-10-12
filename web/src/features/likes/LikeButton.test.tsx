@@ -15,7 +15,7 @@ describe("like button", () => {
     setup({ "GET /api/videos/7/like": { body: { liked: false, count: 3 } } });
     const button = await screen.findByRole("button", { name: "Mi piace" });
     expect(button).toHaveAttribute("aria-pressed", "false");
-    expect(button).toHaveTextContent("3");
+    expect(button).toHaveTextContent("Mi piace3");
     expect(screen.getByText("Piace a 3 persone")).toBeInTheDocument();
   });
 

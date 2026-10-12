@@ -1,4 +1,14 @@
-import { parsePlaylistPage, parsePlaylists, playlistName } from "./playlists";
+import { fakeServer } from "../test/render";
+import {
+  createPlaylist,
+  deletePlaylist,
+  onPlaylistsChanged,
+  parsePlaylistPage,
+  parsePlaylists,
+  playlistName,
+  putInPlaylist,
+  renamePlaylist,
+} from "./playlists";
 
 const playlist = (over: Record<string, unknown> = {}) => ({
   id: 3,
@@ -54,5 +64,30 @@ describe("parsePlaylists", () => {
 describe("parsePlaylistPage", () => {
   it("refuses a page without videos", () => {
     expect(() => parsePlaylistPage({ playlist: playlist() })).toThrow();
+  });
+});
+
+describe("onPlaylistsChanged", () => {
+  it("tells when one of my lists is created, renamed or deleted", async () => {
+    fakeServer({
+      "POST /api/playlists": { status: 201, body: playlist() },
+      "PUT /api/playlists/2": { status: 204 },
+      "DELETE /api/playlists/2": { status: 204 },
+      "PUT /api/playlists/2/videos/7": { status: 204 },
+    });
+    const listener = vi.fn();
+    const stop = onPlaylistsChanged(listener);
+    await createPlaylist("Gite");
+    await renamePlaylist(2, "Gite al mare");
+    await deletePlaylist(2);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    // Adding a video does not change the names in the menu.
+    await putInPlaylist(2, 7, true);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    stop();
+    await createPlaylist("Feste");
+    expect(listener).toHaveBeenCalledTimes(3);
   });
 });
