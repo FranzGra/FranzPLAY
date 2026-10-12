@@ -119,3 +119,16 @@ describe("clip on the video card", () => {
     expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
   });
 });
+
+describe("likes on the video card", () => {
+  it("shows how many people like the video", () => {
+    show(video({ likes: 3 }), video({ id: 8, title: "Lago", likes: 1 }));
+    expect(card()).toHaveTextContent(/3 persone a cui piace/);
+    expect(card("Lago")).toHaveTextContent(/1 mi piace/);
+  });
+
+  it("says nothing when nobody likes it yet", () => {
+    show(video({ likes: 0 }));
+    expect(card()).not.toHaveTextContent(/piace/);
+  });
+});

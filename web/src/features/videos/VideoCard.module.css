@@ -95,6 +95,15 @@
   color: var(--color-text-muted);
 }
 
+/* How many people like it, after the other details. */
+.likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Why the video is suggested: quieter than the details. */
 .note {
   margin: 0;

@@ -158,3 +158,15 @@ func TestShuffled(t *testing.T) {
 		t.Errorf("nothing to mix: %v", got)
 	}
 }
+
+func TestFileFormat(t *testing.T) {
+	tests := map[string]string{
+		"mare.mp4": "MP4", "Viaggi/Lago.MKV": "MKV", "clip.m2ts": "M2TS", "a.3gp": "3GP",
+		"senza": "", "punto.": "", "strano.mp 4": "", "lungo.abcdefghijk": "", "àccento.mövie": "",
+	}
+	for name, want := range tests {
+		if got := fileFormat(name); got != want {
+			t.Errorf("fileFormat(%q) = %q, want %q", name, got, want)
+		}
+	}
+}

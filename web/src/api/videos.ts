@@ -14,6 +14,8 @@ export type Video = {
   playable: boolean; // every browser can play it as it is
   preview: Preview | null; // frames for the player's timeline; null = none yet
   clip: string | null; // address of the seconds that play on the card; null = none yet
+  format: string; // the kind of file, from its name: "MP4", "MKV"; "" = none
+  likes: number; // how many people like it
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
@@ -101,6 +103,11 @@ export function parseVideo(data: unknown): Video {
   if (typeof v.playable !== "boolean") {
     throw new Error("video playable: not true or false");
   }
+  // A short name of letters and digits, as the server takes it from the
+  // file name: anything else is not a kind of file.
+  if (typeof v.format !== "string" || !/^[A-Z0-9]{0,10}$/.test(v.format)) {
+    throw new Error("video format: not a kind of file");
+  }
   if (typeof v.author !== "string") {
     throw new Error("video author: not text");
   }
@@ -123,6 +130,8 @@ export function parseVideo(data: unknown): Video {
     playable: v.playable,
     preview: parsePreview(v.preview),
     clip: v.clip,
+    format: v.format,
+    likes: count(v.likes, "video likes"),
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",

@@ -19,7 +19,7 @@ type VideoCardProps = {
 };
 
 // VideoCard is a video in a grid: cover with its duration, title, and
-// category with how long ago it arrived. Resting the mouse on it, or
+// category with how long ago it arrived and how many people like it. Resting the mouse on it, or
 // pressing it with a finger, plays a few silent seconds of the video.
 export function VideoCard({ video, now, layout = "grid", position, note }: VideoCardProps) {
   const { playing, handlers } = useClipPreview(video.clip);
@@ -55,7 +55,18 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
       </div>
       <div className={styles.text}>
         <h3 className={styles.title}>{video.title}</h3>
-        <p className={styles.details}>{details}</p>
+        <p className={styles.details}>
+          {details}
+          {video.likes > 0 && (
+            <span className={styles.likes}>
+              <Icon name="like" size={13} />
+              {video.likes}
+              <span className="visually-hidden">
+                {video.likes === 1 ? " mi piace" : " persone a cui piace"}
+              </span>
+            </span>
+          )}
+        </p>
         {note && <p className={styles.note}>{note}</p>}
       </div>
     </Link>

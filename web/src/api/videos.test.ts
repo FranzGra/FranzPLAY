@@ -63,6 +63,10 @@ describe("parseVideo", () => {
     ["missing preview", { ...sampleVideo, preview: undefined }],
     ["missing clip", { ...sampleVideo, clip: undefined }],
     ["clip elsewhere", { ...sampleVideo, clip: "https://evil.example/x.mp4" }],
+    ["missing format", { ...sampleVideo, format: undefined }],
+    ["format not a kind of file", { ...sampleVideo, format: "<b>MP4</b>" }],
+    ["missing likes", { ...sampleVideo, likes: undefined }],
+    ["negative likes", { ...sampleVideo, likes: -2 }],
     [
       "preview elsewhere",
       {
