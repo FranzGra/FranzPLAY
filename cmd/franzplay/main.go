@@ -21,6 +21,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/events"
+	"github.com/FranzGra/FranzPLAY/internal/home"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/likes"
@@ -194,6 +195,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		progress.Routes(db, catalog.NewLookup(db), logger),
 		recommend.Routes(db, catalog.NewLookup(db), logger),
 		likes.Routes(db, catalog.NewLookup(db), logger),
+		home.Routes(db, logger),
 		comments.Routes(db, logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),

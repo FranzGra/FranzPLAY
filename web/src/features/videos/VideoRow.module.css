@@ -16,6 +16,43 @@
   font-weight: 600;
 }
 
+/* The title opens and closes the row; the arrow points down when open. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px -10px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+.toggle svg {
+  color: var(--color-text-muted);
+  transform: rotate(90deg);
+  transition: transform 200ms ease;
+}
+
+.toggle[aria-expanded="false"] svg {
+  transform: rotate(0deg);
+}
+
+/* A closed row is just its title, a little quieter. */
+.root[data-open="false"] {
+  margin-bottom: 16px;
+}
+
+.root[data-open="false"] .title {
+  color: var(--color-text-muted);
+}
+
 .more {
   font-size: 14px;
   font-weight: 600;

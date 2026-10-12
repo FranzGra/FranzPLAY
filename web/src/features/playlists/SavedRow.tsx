@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchPlaylist, fetchPlaylists } from "../../api/playlists";
 import type { Video } from "../../api/videos";
+import type { Fold } from "../home/useHomeLayout";
 import { VideoCard } from "../videos/VideoCard";
 import { VideoRow } from "../videos/VideoRow";
 
@@ -11,7 +12,7 @@ type Saved = { list: number; videos: Video[] };
 
 // SavedRow shows on the Home the videos in my "Guarda più tardi". With
 // none it shows nothing.
-export function SavedRow() {
+export function SavedRow({ fold }: { fold?: Fold }) {
   const [now] = useState(() => new Date());
   const [saved, setSaved] = useState<Saved | null>(null);
   useEffect(() => {
@@ -26,7 +27,7 @@ export function SavedRow() {
   }, []);
   if (!saved || saved.videos.length === 0) return null;
   return (
-    <VideoRow title="I tuoi salvati" more={`/playlist/${saved.list}`}>
+    <VideoRow title="I tuoi salvati" fold={fold} more={`/playlist/${saved.list}`}>
       {saved.videos.map((video) => (
         <li key={video.id}>
           <VideoCard video={video} now={now} />
