@@ -171,6 +171,11 @@ telefono è nella pagina Profilo). Nella sezione **Persone** aggiungi familiari 
 una password, decidi chi può caricare video e chi è amministratore, dai una password nuova a chi
 l'ha dimenticata o togli una persona. Deve restare sempre almeno un amministratore.
 
+Nella sezione **Lavori** vedi cosa FranzPLAY sta facendo da solo (leggere i video, copertine,
+anteprime): quello in corso, quanti aspettano, quanti sono fatti e quali sono falliti, con il
+messaggio d'errore. Con **Riprova** (o **Riprova tutti**) li rimetti in coda. La pagina si aggiorna
+da sola mentre i lavori vanno avanti. Se manca ffmpeg o ffprobe, te lo dice in rosso.
+
 Nella **Home** compaiono i video più recenti, con le categorie in alto per filtrarli. Clicca su un
 video per guardarlo con il player di FranzPLAY:
 

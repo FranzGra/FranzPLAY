@@ -263,3 +263,65 @@
 .done {
   color: var(--color-text-muted);
 }
+
+.subheading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.warning {
+  margin: 16px 0 0;
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 24px 0 32px;
+}
+
+.stat {
+  margin: 0;
+  padding: 16px 20px;
+  border-radius: var(--radius-l);
+}
+
+.stat dt {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.stat dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.number {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.note {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.failed {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--color-danger);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

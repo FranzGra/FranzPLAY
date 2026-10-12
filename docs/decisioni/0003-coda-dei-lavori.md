@@ -17,8 +17,8 @@ sta guardando un video. Per ora il numero è fisso a uno; più avanti FranzPLAY 
 base alla macchina.
 
 **La coda nel database** sopravvive ai riavvii: se FranzPLAY si spegne a metà di un lavoro, alla
-partenza successiva quel lavoro ricomincia. Nel pannello admin (tappa 2) si vedranno i lavori in
-coda e quelli falliti, con il tasto "riprova".
+partenza successiva quel lavoro ricomincia. Nella pagina Amministrazione › Lavori si vedono i
+lavori in coda e quelli falliti, con il tasto "Riprova", e la pagina segue la coda in tempo reale.
 
 **Quando un lavoro fallisce:**
 - ritenta dopo 5 minuti, poi dopo 10;

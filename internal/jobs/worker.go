@@ -27,6 +27,7 @@ type Worker struct {
 	logger   *slog.Logger
 	now      func() time.Time
 	wake     chan struct{}
+	changed  func()
 }
 
 // NewWorker returns a worker for the given kinds of job. Jobs of a kind
@@ -38,7 +39,14 @@ func NewWorker(db *sql.DB, handlers map[Kind]Handler, logger *slog.Logger) *Work
 		logger:   logger,
 		now:      time.Now,
 		wake:     make(chan struct{}, 1),
+		changed:  func() {},
 	}
+}
+
+// OnChange sets a function called whenever a job starts or ends, so the
+// administrator's page can follow the queue. Call it before Run.
+func (w *Worker) OnChange(f func()) {
+	w.changed = f
 }
 
 // Wake tells the worker there may be new jobs. It never blocks.
@@ -100,6 +108,8 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	if err != nil || !ok {
 		return false, err
 	}
+	w.changed()
+	defer w.changed()
 
 	h := w.handlers[j.kind]
 	jobCtx, cancel := context.WithTimeout(ctx, jobTimeout)

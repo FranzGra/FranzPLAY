@@ -8,6 +8,7 @@
 package events
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
@@ -20,16 +21,26 @@ const (
 	// Library: the list of videos changed (a video arrived, moved or is
 	// gone), or a video has new information, like its cover.
 	Library Kind = "library"
+	// Jobs: the queue of heavy work moved (a job started, ended or
+	// failed). The administrator's page follows it.
+	Jobs Kind = "jobs"
 )
 
 // maxListeners is how many pages can listen at once. Each costs a
 // connection and a little memory; a family never gets close.
 const maxListeners = 64
 
+// listener is one open page. waiting holds the kinds that changed since
+// the page was last told, each once; ready says that waiting is not empty.
+type listener struct {
+	waiting map[Kind]bool // guarded by Hub.mu
+	ready   chan struct{} // holds at most one signal
+}
+
 // Hub hands each event to every page listening.
 type Hub struct {
 	mu        sync.Mutex
-	listeners map[chan Kind]struct{}
+	listeners map[*listener]struct{}
 	closed    bool
 	done      chan struct{} // closed when FranzPLAY stops
 
@@ -39,7 +50,7 @@ type Hub struct {
 // NewHub returns a hub with nobody listening.
 func NewHub() *Hub {
 	return &Hub{
-		listeners: map[chan Kind]struct{}{},
+		listeners: map[*listener]struct{}{},
 		done:      make(chan struct{}),
 		keepAlive: keepAlive,
 		calm:      calm,
@@ -47,34 +58,48 @@ func NewHub() *Hub {
 }
 
 // Publish tells every listener that k changed. It never waits: a
-// listener that has not yet read the last event of the same kind gets
-// just one, since "it changed" twice says no more than once.
+// listener that has not yet been told about k gets it just once, since
+// "it changed" twice says no more than once.
 func (h *Hub) Publish(k Kind) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.listeners {
+	for l := range h.listeners {
+		l.waiting[k] = true
 		select {
-		case ch <- k:
-		default: // an event is already waiting for this listener
+		case l.ready <- struct{}{}:
+		default: // already signalled
 		}
 	}
 }
 
 // listen adds a listener. ok is false when there are too many already or
 // FranzPLAY is stopping. stop removes the listener.
-func (h *Hub) listen() (events <-chan Kind, stop func(), ok bool) {
+func (h *Hub) listen() (l *listener, stop func(), ok bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed || len(h.listeners) >= maxListeners {
 		return nil, nil, false
 	}
-	ch := make(chan Kind, 1)
-	h.listeners[ch] = struct{}{}
-	return ch, func() {
+	l = &listener{waiting: map[Kind]bool{}, ready: make(chan struct{}, 1)}
+	h.listeners[l] = struct{}{}
+	return l, func() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
-		delete(h.listeners, ch)
+		delete(h.listeners, l)
 	}, true
+}
+
+// take returns the kinds waiting for l, in a fixed order, and forgets them.
+func (h *Hub) take(l *listener) []Kind {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	kinds := make([]Kind, 0, len(l.waiting))
+	for k := range l.waiting {
+		kinds = append(kinds, k)
+	}
+	clear(l.waiting)
+	slices.Sort(kinds)
+	return kinds
 }
 
 // Close ends every open stream, so the web server can stop without
