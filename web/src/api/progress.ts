@@ -101,3 +101,9 @@ export async function forgetVideo(id: number): Promise<void> {
 export async function forgetHistory(): Promise<void> {
   await request("/api/history", { method: "DELETE" });
 }
+
+// leaveContinue takes a video out of "Continua a guardare". The history
+// keeps it; watching it again puts it back.
+export async function leaveContinue(id: number): Promise<void> {
+  await request(`/api/continue/${id}`, { method: "DELETE" });
+}

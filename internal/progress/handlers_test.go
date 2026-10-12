@@ -352,3 +352,70 @@ func TestForgetHistory(t *testing.T) {
 		t.Errorf("nobody logged in: %d", rec.Code)
 	}
 }
+
+func TestLeaveContinueWatching(t *testing.T) {
+	s := newSite(t)
+	a := s.addVideo(t, "a.mp4", 600)
+	b := s.addVideo(t, "b.mp4", 600)
+	for _, v := range []int64{a, b} {
+		s.save(t, giulia, v, "100")
+	}
+	s.save(t, marco, a, "100")
+	continuing := func(user int64) []int64 {
+		items := decode[[]struct {
+			Video catalog.Video `json:"video"`
+		}](t, s.do(t, user, http.MethodGet, "/api/continue", ""))
+		ids := []int64{}
+		for _, it := range items {
+			ids = append(ids, it.Video.ID)
+		}
+		return ids
+	}
+	leave := func(user, video int64) int {
+		return s.do(t, user, http.MethodDelete, "/api/continue/"+strconv.FormatInt(video, 10), "").Code
+	}
+
+	if code := leave(giulia, a); code != http.StatusNoContent {
+		t.Fatalf("leave: %d", code)
+	}
+	if got := continuing(giulia); len(got) != 1 || got[0] != b {
+		t.Errorf("Giulia continues %v, want only b", got)
+	}
+	if got := continuing(marco); len(got) != 1 || got[0] != a {
+		t.Errorf("Marco continues %v, want his a", got)
+	}
+	// The history keeps it, with where Giulia stopped.
+	if h := decode[historyAnswer](t, s.do(t, giulia, http.MethodGet, "/api/history", "")); h.Total != 2 {
+		t.Errorf("history total = %d, want 2", h.Total)
+	}
+	target := "/api/videos/" + strconv.FormatInt(a, 10) + "/progress"
+	if got := decode[Mark](t, s.do(t, giulia, http.MethodGet, target, "")); got.Position != 100 {
+		t.Errorf("progress = %+v, want 100", got)
+	}
+	if code := leave(giulia, a); code != http.StatusNotFound {
+		t.Errorf("leave again: %d, want 404", code)
+	}
+
+	// Watching it again puts it back.
+	s.now = s.now.Add(time.Minute)
+	s.save(t, giulia, a, "150")
+	if got := continuing(giulia); len(got) != 2 || got[0] != a {
+		t.Errorf("after watching again: %v, want a first", got)
+	}
+
+	tests := []struct {
+		name  string
+		user  int64
+		video string
+		want  int
+	}{
+		{"nobody logged in", 0, strconv.FormatInt(b, 10), http.StatusUnauthorized},
+		{"never watched", marco, strconv.FormatInt(b, 10), http.StatusNotFound},
+		{"bad id", giulia, "zero", http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		if rec := s.do(t, tt.user, http.MethodDelete, "/api/continue/"+tt.video, ""); rec.Code != tt.want {
+			t.Errorf("%s: %d, want %d", tt.name, rec.Code, tt.want)
+		}
+	}
+}
