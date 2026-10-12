@@ -1,7 +1,15 @@
 import { screen, within } from "@testing-library/react";
 import { renderApp, signedIn } from "../../test/render";
 
-const allOff = { youtube: false, tmdb: false, tpdb: false, tmdbKey: false, tpdbKey: false };
+const allOff = {
+  youtube: false,
+  tmdb: false,
+  tpdb: false,
+  tmdbKey: false,
+  tpdbKey: false,
+  rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"] },
+  askedToday: 0,
+};
 
 describe("online sources page", () => {
   it("turns YouTube on", async () => {
@@ -115,5 +123,35 @@ describe("online sources page", () => {
       tmdb: false,
       tpdb: true,
     });
+  });
+
+  it("saves the hours, the daily limit and the order of the sources", async () => {
+    const saved = {
+      ...allOff,
+      rules: { from: 22, to: 6, daily: 50, order: ["tmdb", "youtube", "tpdb"] },
+    };
+    const { user, server } = renderApp("/admin/internet", {
+      ...signedIn(),
+      "GET /api/online": { body: { ...allOff, askedToday: 3 } },
+      "PUT /api/online/rules": { body: saved },
+    });
+    const form = await screen.findByRole("form", { name: "Regole" });
+    expect(form).toHaveTextContent("ha chiesto informazioni su 3 video");
+    expect(within(form).queryByRole("combobox", { name: "Dalle" })).not.toBeInTheDocument();
+
+    await user.click(within(form).getByRole("checkbox", { name: "Chiedi solo in certe ore" }));
+    await user.selectOptions(within(form).getByRole("combobox", { name: "Dalle" }), "22:00");
+    await user.selectOptions(within(form).getByRole("combobox", { name: "Alle" }), "06:00");
+    const daily = within(form).getByRole("spinbutton", { name: /quanti video al giorno/ });
+    await user.clear(daily);
+    await user.type(daily, "50");
+    expect(within(form).getByRole("button", { name: "Sposta YouTube su" })).toBeDisabled();
+    await user.click(within(form).getByRole("button", { name: "Sposta TMDB (film) su" }));
+    const order = within(form).getByRole("list", { name: "Ordine delle fonti" });
+    expect(within(order).getAllByRole("listitem")[0]).toHaveTextContent("1. TMDB (film)");
+
+    await user.click(within(form).getByRole("button", { name: "Salva le regole" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Regole salvate");
+    expect(await server.requests.at(-1)?.json()).toEqual(saved.rules);
   });
 });

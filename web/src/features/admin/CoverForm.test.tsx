@@ -128,7 +128,15 @@ describe("choosing a cover", () => {
   });
 
   it("searches the internet and uses a picture found", async () => {
-    const online = { youtube: false, tmdb: true, tpdb: true, tmdbKey: true, tpdbKey: false };
+    const online = {
+      youtube: false,
+      tmdb: true,
+      tpdb: true,
+      tmdbKey: true,
+      tpdbKey: false,
+      rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"] },
+      askedToday: 0,
+    };
     const { user, server, panel } = await openCover({
       "GET /api/online": { body: online },
       "GET /api/online/search": {
@@ -177,7 +185,15 @@ describe("choosing a cover", () => {
   });
 
   it("says how to turn a source on to search the internet", async () => {
-    const off = { youtube: true, tmdb: false, tpdb: true, tmdbKey: true, tpdbKey: false };
+    const off = {
+      youtube: true,
+      tmdb: false,
+      tpdb: true,
+      tmdbKey: true,
+      tpdbKey: false,
+      rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"] },
+      askedToday: 0,
+    };
     const { user, panel } = await openCover({ "GET /api/online": { body: off } });
     await user.click(within(panel).getByRole("button", { name: "Cerca su internet" }));
     expect(await within(panel).findByText(/accendi TMDB o ThePornDB/)).toBeInTheDocument();

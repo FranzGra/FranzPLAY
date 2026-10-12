@@ -25,6 +25,8 @@ type Sources struct {
 // they never leave the server.
 type settings struct {
 	Sources
+	rules   Rules
+	asked   string // the count of today's questions, as saved
 	tmdbKey string
 	tpdbKey string
 }
@@ -44,11 +46,12 @@ type querier interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
-// loadSettings reads the sources and their keys. A source never set is
-// off; a key never set is "".
+// loadSettings reads the sources, their keys and the rules. A source
+// never set is off; a key never set is "".
 func loadSettings(ctx context.Context, db querier) (s settings, err error) {
-	rows, err := db.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?)`,
-		keyYouTube, keyTMDB, keyTMDBKey, keyTPDB, keyTPDBKey)
+	s.rules = defaultRules()
+	rows, err := db.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?, ?)`,
+		keyYouTube, keyTMDB, keyTMDBKey, keyTPDB, keyTPDBKey, keyRules, keyAsked)
 	if err != nil {
 		return settings{}, fmt.Errorf("read online sources: %w", err)
 	}
@@ -69,6 +72,10 @@ func loadSettings(ctx context.Context, db querier) (s settings, err error) {
 			s.TPDB = value == "on"
 		case keyTPDBKey:
 			s.tpdbKey = value
+		case keyRules:
+			s.rules = parseRules(value)
+		case keyAsked:
+			s.asked = value
 		}
 	}
 	if err := rows.Err(); err != nil {

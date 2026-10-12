@@ -134,6 +134,10 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 			"after", time.Since(start).Round(time.Second))
 		return true, w.giveBack(ctx, j)
 	}
+	if later := (*LaterError)(nil); errors.As(runErr, &later) {
+		w.logger.DebugContext(ctx, "job postponed", "kind", j.kind, "video", j.videoID, "until", later.Until)
+		return true, w.postpone(ctx, j, later.Until)
+	}
 	if runErr == nil {
 		w.logger.InfoContext(ctx, "job done", "kind", j.kind, "video", j.videoID,
 			"duration", time.Since(start).Round(time.Millisecond))
@@ -217,6 +221,16 @@ func (w *Worker) giveBack(ctx context.Context, j job) error {
 	if _, err := w.db.ExecContext(ctx, `UPDATE jobs SET state = 'pending', updated_at = ?
 		WHERE id = ? AND state = 'running'`, w.now().Unix(), j.id); err != nil {
 		return fmt.Errorf("put back job %d: %w", j.id, err)
+	}
+	return nil
+}
+
+// postpone puts a job that is not due yet back in the queue until a
+// time. It is not a failed attempt.
+func (w *Worker) postpone(ctx context.Context, j job, until time.Time) error {
+	if _, err := w.db.ExecContext(ctx, `UPDATE jobs SET state = 'pending', run_after = ?, updated_at = ?
+		WHERE id = ? AND state = 'running'`, until.Unix(), w.now().Unix(), j.id); err != nil {
+		return fmt.Errorf("postpone job %d: %w", j.id, err)
 	}
 	return nil
 }

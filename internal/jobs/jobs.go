@@ -70,6 +70,18 @@ const (
 // that is not a video. Handlers wrap it: fmt.Errorf("...: %w", jobs.ErrPermanent).
 var ErrPermanent = errors.New("permanent failure")
 
+// LaterError is what a handler returns when the job is not due yet, like
+// a question to the internet outside the hours the administrator chose.
+// The job goes back in the queue until Until, and it is not a failed
+// attempt.
+type LaterError struct {
+	Until time.Time
+}
+
+func (e *LaterError) Error() string {
+	return "not now: wait until " + e.Until.UTC().Format(time.RFC3339)
+}
+
 // MaxAttempts is how many times a job is tried before it is marked failed.
 const MaxAttempts = 3
 

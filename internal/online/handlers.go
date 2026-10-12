@@ -22,6 +22,7 @@ import (
 //	PUT /api/online            turn them on or off {youtube, tmdb, tpdb}
 //	PUT /api/online/tmdb-key   save TMDB's key {key}, after TMDB said it is valid
 //	PUT /api/online/tpdb-key   the same for ThePornDB
+//	PUT /api/online/rules      the hours, the daily limit and the order {from, to, daily, order}
 //	GET /api/online/search     search a source by hand ?source=tmdb|tpdb&q=words
 //	GET /api/online/picture    a picture a search found ?source=…&at=…
 //
@@ -39,6 +40,7 @@ func (a api) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/online", a.only(a.handlePut))
 	mux.HandleFunc("PUT /api/online/tmdb-key", a.only(a.handleKey(keyTMDBKey)))
 	mux.HandleFunc("PUT /api/online/tpdb-key", a.only(a.handleKey(keyTPDBKey)))
+	mux.HandleFunc("PUT /api/online/rules", a.only(a.handleRules))
 	mux.HandleFunc("GET /api/online/search", a.only(a.handleSearch))
 	mux.HandleFunc("GET /api/online/picture", a.only(a.handlePicture))
 }
@@ -56,12 +58,15 @@ type api struct {
 // status is what the administrator sees of the settings.
 type status struct {
 	Sources
-	TMDBKey bool `json:"tmdbKey"` // a key for TMDB is saved
-	TPDBKey bool `json:"tpdbKey"` // a key for ThePornDB is saved
+	TMDBKey    bool  `json:"tmdbKey"` // a key for TMDB is saved
+	TPDBKey    bool  `json:"tpdbKey"` // a key for ThePornDB is saved
+	Rules      Rules `json:"rules"`
+	AskedToday int   `json:"askedToday"` // videos asked about today
 }
 
-func statusOf(s settings) status {
-	return status{Sources: s.Sources, TMDBKey: s.tmdbKey != "", TPDBKey: s.tpdbKey != ""}
+func (a api) statusOf(s settings) status {
+	return status{Sources: s.Sources, TMDBKey: s.tmdbKey != "", TPDBKey: s.tpdbKey != "",
+		Rules: s.rules, AskedToday: askedOn(s.asked, a.now())}
 }
 
 // only lets only administrators through.
@@ -85,7 +90,7 @@ func (a api) handleGet(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	respond.JSON(w, r, a.logger, http.StatusOK, statusOf(s))
+	respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
 }
 
 func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +119,47 @@ func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
 	a.logger.InfoContext(r.Context(), "online sources changed", "youtube", next.YouTube, "tmdb", next.TMDB,
 		"tpdb", next.TPDB, "by", who.Name)
 	s.Sources = next
-	respond.JSON(w, r, a.logger, http.StatusOK, statusOf(s))
+	respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
+}
+
+// handleRules saves the administrator's rules. The questions waiting for
+// the old hours or limit look again at once.
+func (a api) handleRules(w http.ResponseWriter, r *http.Request) {
+	var next Rules
+	if !decode(w, r, &next) || !next.valid() {
+		respond.Error(w, r, a.logger, http.StatusBadRequest,
+			"the rules need hours from 0 to 23, a limit of at least 0, and every source once in the order")
+		return
+	}
+	tx, err := a.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	err = saveRules(r.Context(), tx, next)
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), `UPDATE jobs SET run_after = 0
+			WHERE kind = ? AND state = 'pending' AND attempts = 0`, string(jobs.Online))
+	}
+	if err == nil {
+		err = tx.Commit()
+	} else {
+		err = errors.Join(err, tx.Rollback())
+	}
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	a.newJobs()
+	who, _ := a.account(r.Context())
+	a.logger.InfoContext(r.Context(), "online rules changed", "from", next.From, "to", next.To,
+		"daily", next.Daily, "order", strings.Join(next.Order, ","), "by", who.Name)
+	s, err := loadSettings(r.Context(), a.db)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
 }
 
 // keySource is a source with a key: how its keys look, and how to ask
@@ -178,7 +223,7 @@ func (a api) handleKey(setting string) http.HandlerFunc {
 		who, _ := a.account(r.Context())
 		a.logger.InfoContext(r.Context(), "key saved", "source", source.name, "by", who.Name)
 		*saved = key
-		respond.JSON(w, r, a.logger, http.StatusOK, statusOf(s))
+		respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
 	}
 }
 

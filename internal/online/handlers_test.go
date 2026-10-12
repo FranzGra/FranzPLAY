@@ -63,7 +63,7 @@ func TestAdministratorTurnsSourcesOn(t *testing.T) {
 	fx := newAdminFixture(t)
 
 	if rec := fx.do("GET", "/api/online", ""); rec.Code != http.StatusOK ||
-		strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":false,"tpdbKey":false}` {
+		strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":false,"tpdbKey":false,"rules":{"from":0,"to":0,"daily":0,"order":["youtube","tmdb","tpdb"]},"askedToday":0}` {
 		t.Fatalf("GET = %d %s", rec.Code, rec.Body)
 	}
 	if rec := fx.do("PUT", "/api/online", `{"youtube": true, "tmdb": false}`); rec.Code != http.StatusOK {
@@ -109,7 +109,7 @@ func TestAdministratorSavesTheTMDBKey(t *testing.T) {
 	}
 
 	rec := fx.do("PUT", "/api/online/tmdb-key", `{"key": " `+testKey+` "}`)
-	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":true,"tpdbKey":false}` {
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":true,"tpdbKey":false,"rules":{"from":0,"to":0,"daily":0,"order":["youtube","tmdb","tpdb"]},"askedToday":0}` {
 		t.Fatalf("save key = %d %s", rec.Code, rec.Body)
 	}
 	if got := fx.tm.asked[0]; got.URL.Path != "/3/authentication" || got.URL.Query().Get("api_key") != testKey {
