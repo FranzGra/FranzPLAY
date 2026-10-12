@@ -27,8 +27,8 @@ func newMux(t *testing.T, lists func(context.Context, int64) ([]playlists.Playli
 			t.Error(err)
 		}
 	})
-	if _, err := db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at)
-		VALUES (1, 'Giulia', 'x', 'admin', 1700000000), (2, 'Marco', 'x', 'user', 1)`); err != nil {
+	if _, err := db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at, avatar)
+		VALUES (1, 'Giulia', 'x', 'admin', 1700000000, 42), (2, 'Marco', 'x', 'user', 1, 0)`); err != nil {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
@@ -70,7 +70,7 @@ func TestChannel(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&c); err != nil {
 		t.Fatal(err)
 	}
-	if c.ID != 1 || c.Name != "Giulia" || !c.Since.Equal(time.Unix(1700000000, 0)) ||
+	if c.ID != 1 || c.Name != "Giulia" || c.Avatar != 42 || !c.Since.Equal(time.Unix(1700000000, 0)) ||
 		len(c.Playlists) != 1 || c.Playlists[0].ID != 7 || asked != 1 {
 		t.Errorf("channel = %+v, lists asked for %d", c, asked)
 	}

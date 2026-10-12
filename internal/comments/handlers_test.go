@@ -45,8 +45,8 @@ func newSite(t *testing.T) *site {
 	})
 	for _, q := range []string{
 		`INSERT INTO libraries (id, path) VALUES (1, '/video')`,
-		`INSERT INTO users (id, name, password_hash, role, created_at) VALUES
-			(1, 'Anna', 'x', 'admin', 1), (2, 'Giulia', 'x', 'user', 1), (3, 'Marco', 'x', 'user', 1)`,
+		`INSERT INTO users (id, name, password_hash, role, created_at, avatar) VALUES
+			(1, 'Anna', 'x', 'admin', 1, 0), (2, 'Giulia', 'x', 'user', 1, 42), (3, 'Marco', 'x', 'user', 1, 0)`,
 	} {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatal(err)
@@ -128,7 +128,7 @@ func TestWriteAndRead(t *testing.T) {
 	other := s.addVideo(t, "montagna.mp4")
 
 	first := s.write(t, giulia, video, "  Che bello!  ", 0)
-	if first.Body != "Che bello!" || first.Author != (Author{ID: giulia, Name: "Giulia"}) ||
+	if first.Body != "Che bello!" || first.Author != (Author{ID: giulia, Name: "Giulia", Avatar: 42}) ||
 		!first.CanDelete || !first.CreatedAt.Equal(time.Unix(1_000_060, 0)) {
 		t.Errorf("first = %+v", first)
 	}

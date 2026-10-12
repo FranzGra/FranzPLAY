@@ -6,7 +6,7 @@ import { Comments } from "./Comments";
 
 const comment = (over: Record<string, unknown> = {}) => ({
   id: 1,
-  author: { id: 2, name: "Giulia" },
+  author: { id: 2, name: "Giulia", avatar: 0 },
   body: "Che bello!",
   createdAt: new Date().toISOString(),
   canDelete: false,
@@ -30,13 +30,31 @@ async function bodyOf(request: Request): Promise<unknown> {
 }
 
 describe("comments", () => {
+  it("shows the author's photo, or their initial", async () => {
+    setup({
+      "GET /api/videos/7/comments": {
+        body: [
+          comment({ author: { id: 2, name: "Giulia", avatar: 9 } }),
+          comment({ id: 3, author: { id: 4, name: "marco", avatar: 0 } }),
+        ],
+      },
+    });
+    const giulia = await screen.findByRole("article", { name: "Commento di Giulia" });
+    expect(giulia.querySelector("img")).toHaveAttribute("src", "/api/users/2/avatar?v=9");
+    const marco = screen.getByRole("article", { name: "Commento di marco" });
+    expect(marco.querySelector("img")).toBeNull();
+    expect(marco).toHaveTextContent(/^M/);
+  });
+
   it("shows conversations with their replies", async () => {
     setup({
       "GET /api/videos/7/comments": {
         body: [
           comment({
             body: "Che bello!\nIl mare era perfetto",
-            replies: [comment({ id: 2, author: { id: 3, name: "marco" }, body: "Vero!" })],
+            replies: [
+              comment({ id: 2, author: { id: 3, name: "marco", avatar: 0 }, body: "Vero!" }),
+            ],
           }),
         ],
       },
@@ -68,7 +86,7 @@ describe("comments", () => {
         status: 201,
         body: comment({
           id: 5,
-          author: { id: 1, name: "Francesco" },
+          author: { id: 1, name: "Francesco", avatar: 0 },
           body: "Ciao a tutti",
           canDelete: true,
         }),
@@ -90,11 +108,17 @@ describe("comments", () => {
   it("answers a reply under the same conversation", async () => {
     const { user, server } = setup({
       "GET /api/videos/7/comments": {
-        body: [comment({ replies: [comment({ id: 2, author: { id: 3, name: "Marco" } })] })],
+        body: [
+          comment({ replies: [comment({ id: 2, author: { id: 3, name: "Marco", avatar: 0 } })] }),
+        ],
       },
       "POST /api/videos/7/comments": {
         status: 201,
-        body: comment({ id: 9, author: { id: 1, name: "Francesco" }, body: "Anche per me" }),
+        body: comment({
+          id: 9,
+          author: { id: 1, name: "Francesco", avatar: 0 },
+          body: "Anche per me",
+        }),
       },
     });
     const marco = await screen.findByRole("article", { name: "Commento di Marco" });

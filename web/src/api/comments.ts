@@ -5,6 +5,7 @@ import { request } from "./client";
 export type Author = {
   id: number;
   name: string;
+  avatar: number; // version of their profile photo, 0 = none
 };
 
 export type Comment = {
@@ -25,13 +26,20 @@ function isID(v: unknown): v is number {
   return typeof v === "number" && Number.isInteger(v) && v > 0;
 }
 
+function parseAuthor(data: unknown, what: string): Author {
+  const a = (data ?? {}) as Record<string, unknown>;
+  if (!isID(a.id) || typeof a.name !== "string") throw new Error(`${what} author: not a person`);
+  if (typeof a.avatar !== "number" || !Number.isInteger(a.avatar) || a.avatar < 0) {
+    throw new Error(`${what} author: bad avatar`);
+  }
+  return { id: a.id, name: a.name, avatar: a.avatar };
+}
+
 export function parseComment(data: unknown, depth = 0): Comment {
   if (typeof data !== "object" || data === null) throw new Error("comment: not an object");
   const d = data as Record<string, unknown>;
   if (!isID(d.id)) throw new Error("comment id: not an id");
-  if (typeof d.author !== "object" || d.author === null) throw new Error("comment author: missing");
-  const a = d.author as Record<string, unknown>;
-  if (!isID(a.id) || typeof a.name !== "string") throw new Error("comment author: not a person");
+  const author = parseAuthor(d.author, "comment");
   if (typeof d.body !== "string" || d.body === "") throw new Error("comment body: not a text");
   const createdAt = typeof d.createdAt === "string" ? new Date(d.createdAt) : new Date(Number.NaN);
   if (Number.isNaN(createdAt.getTime())) throw new Error("comment createdAt: not a date");
@@ -40,7 +48,7 @@ export function parseComment(data: unknown, depth = 0): Comment {
   if (depth > 0 && d.replies.length > 0) throw new Error("comment replies: a reply has replies");
   return {
     id: d.id,
-    author: { id: a.id, name: a.name },
+    author,
     body: d.body,
     createdAt,
     canDelete: d.canDelete,
@@ -91,9 +99,7 @@ export function parseRecentComment(data: unknown): RecentComment {
   if (typeof data !== "object" || data === null) throw new Error("recent comment: not an object");
   const d = data as Record<string, unknown>;
   if (!isID(d.id)) throw new Error("recent comment id: not an id");
-  const a = (d.author ?? {}) as Record<string, unknown>;
-  if (!isID(a.id) || typeof a.name !== "string")
-    throw new Error("recent comment author: not a person");
+  const author = parseAuthor(d.author, "recent comment");
   if (typeof d.body !== "string" || d.body === "")
     throw new Error("recent comment body: not a text");
   const createdAt = typeof d.createdAt === "string" ? new Date(d.createdAt) : new Date(Number.NaN);
@@ -108,7 +114,7 @@ export function parseRecentComment(data: unknown): RecentComment {
   }
   return {
     id: d.id,
-    author: { id: a.id, name: a.name },
+    author,
     body: d.body,
     createdAt,
     video: { id: v.id, title: v.title, visible: v.visible },

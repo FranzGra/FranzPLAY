@@ -2,7 +2,7 @@ import { parseComments } from "./comments";
 
 const comment = (over: Record<string, unknown> = {}) => ({
   id: 1,
-  author: { id: 2, name: "Giulia" },
+  author: { id: 2, name: "Giulia", avatar: 0 },
   body: "Che bello!",
   createdAt: "2026-10-12T09:00:00Z",
   canDelete: false,
@@ -16,14 +16,14 @@ describe("parseComments", () => {
     expect(got).toEqual([
       {
         id: 1,
-        author: { id: 2, name: "Giulia" },
+        author: { id: 2, name: "Giulia", avatar: 0 },
         body: "Che bello!",
         createdAt: new Date("2026-10-12T09:00:00Z"),
         canDelete: false,
         replies: [
           {
             id: 3,
-            author: { id: 2, name: "Giulia" },
+            author: { id: 2, name: "Giulia", avatar: 0 },
             body: "Che bello!",
             createdAt: new Date("2026-10-12T09:00:00Z"),
             canDelete: true,

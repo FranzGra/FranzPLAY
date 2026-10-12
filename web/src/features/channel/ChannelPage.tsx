@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
+import { avatarUrl } from "../../api/auth";
 import { type Channel, fetchChannel } from "../../api/channels";
 import { ApiError } from "../../api/client";
 import { useAccount } from "../../app/auth";
@@ -76,7 +77,7 @@ export function ChannelPage() {
     <>
       <header className={styles.identity}>
         <span className={styles.avatar}>
-          <Avatar name={channel.name} />
+          <Avatar name={channel.name} photo={avatarUrl(channel.id, channel.avatar)} />
         </span>
         <div>
           <h1 className={styles.name}>{channel.name}</h1>

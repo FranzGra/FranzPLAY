@@ -21,6 +21,7 @@ import (
 type Channel struct {
 	ID        int64                `json:"id"`
 	Name      string               `json:"name"`
+	Avatar    int64                `json:"avatar"`    // version of their profile photo, 0 = none
 	Since     time.Time            `json:"since"`     // when they joined FranzPLAY
 	Playlists []playlists.Playlist `json:"playlists"` // public ones only
 }
@@ -77,7 +78,8 @@ func (h handlers) channel(w http.ResponseWriter, r *http.Request) {
 func (h handlers) read(ctx context.Context, id int64) (Channel, error) {
 	c := Channel{ID: id}
 	var since int64
-	err := h.db.QueryRowContext(ctx, `SELECT name, created_at FROM users WHERE id = ?`, id).Scan(&c.Name, &since)
+	err := h.db.QueryRowContext(ctx, `SELECT name, avatar, created_at FROM users WHERE id = ?`, id).
+		Scan(&c.Name, &c.Avatar, &since)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Channel{}, errNotFound
 	}

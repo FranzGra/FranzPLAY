@@ -76,8 +76,9 @@ type Comment struct {
 
 // Author is who wrote a comment.
 type Author struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Avatar int64  `json:"avatar"` // version of their profile photo, 0 = none
 }
 
 // viewer is the person looking at the comments.
@@ -89,7 +90,7 @@ type viewer struct {
 func (v viewer) comment(r row) Comment {
 	return Comment{
 		ID:        r.id,
-		Author:    Author{ID: r.userID, Name: r.author},
+		Author:    Author{ID: r.userID, Name: r.author, Avatar: r.avatar},
 		Body:      r.body,
 		CreatedAt: r.createdAt,
 		CanDelete: canDelete(v.id, v.admin, r.userID),

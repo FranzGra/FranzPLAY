@@ -14,6 +14,7 @@ const list = {
 const channel = (over: Record<string, unknown> = {}) => ({
   id: 5,
   name: "Giulia",
+  avatar: 0,
   since: "2026-03-10T09:00:00Z",
   playlists: [list],
   ...over,
@@ -27,6 +28,15 @@ describe("channel page", () => {
     const card = screen.getByRole("link", { name: /Gite/ });
     expect(card).toHaveAttribute("href", "/playlist/2");
     expect(within(card).getByText("3 video")).toBeInTheDocument();
+  });
+
+  it("shows the person's photo when they have one", async () => {
+    renderApp("/canale/5", {
+      ...signedIn(),
+      "GET /api/channels/5": { body: channel({ avatar: 77 }) },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Giulia" });
+    expect(document.querySelector('img[src="/api/users/5/avatar?v=77"]')).not.toBeNull();
   });
 
   it("explains an empty channel to someone else", async () => {
