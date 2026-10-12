@@ -147,20 +147,16 @@ level=WARN msg="FranzPLAY has no administrator yet: ..." setup_code=RFY6-9YPX-QF
 Quel **codice di installazione** serve a creare l'amministratore, cioè te: solo chi vede il
 terminale può farlo. Da quel momento tutto FranzPLAY chiede nome e password.
 
-La pagina per entrare arriva con l'interfaccia vera, nel prossimo passo. Per ora gli indirizzi
-`/api/...` nel browser rispondono `login required`. Se vuoi curiosare lo stesso, da PowerShell
-(a FranzPLAY acceso, in una seconda finestra):
+Apri <http://localhost:8090>: compare la pagina **Benvenuto in FranzPLAY**. Scrivi il codice,
+il tuo nome e una password (almeno 8 caratteri) e premi **Crea e entra**. Le volte successive
+basta nome e password. Per uscire: pagina **Profilo**, tasto **Esci**.
 
-```powershell
-$codice = "RFY6-9YPX-QF7X"   # il tuo codice, preso dal terminale
-$dati = @{ code = $codice; name = "Francesco"; password = "scegli-una-password" } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8090/api/setup -ContentType application/json -Body $dati -SessionVariable s
-Invoke-RestMethod -Uri http://localhost:8090/api/videos -WebSession $s
-```
+I video non si vedono ancora nella Home, ma una volta entrato puoi già curiosare con il browser:
 
-Il primo `Invoke-RestMethod` crea l'amministratore ed entra; il secondo mostra l'elenco dei video, con durata e
-copertina. Le volte successive, al posto di `/api/setup` si usa `/api/login` con solo nome e
-password. Altri indirizzi utili: `/api/categories` (le categorie) e `/api/me` (chi sei).
+- <http://localhost:8090/api/videos>: l'elenco dei video, con durata e copertina;
+- <http://localhost:8090/api/categories>: le categorie;
+- <http://localhost:8090/api/videos/1/stream>: il primo video, che il browser riproduce
+  (se è un `.mp4` o un `.webm`).
 
 ### Cambiare porta
 

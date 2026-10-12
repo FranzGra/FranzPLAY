@@ -1,14 +1,40 @@
 import { Route, Routes } from "react-router";
+import { AuthPage } from "../features/auth/AuthPage";
 import { ComingSoonPage } from "../features/ComingSoonPage";
 import { HomePage } from "../features/home/HomePage";
 import { PlaylistsPage } from "../features/playlists/PlaylistsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { SearchPage } from "../features/search/SearchPage";
 import { VideoPage } from "../features/video/VideoPage";
+import { AuthProvider, useAuth } from "./auth";
 import { Layout } from "./Layout";
+import { StartupProblem } from "./StartupProblem";
 
-// App lists every page of FranzPLAY and its address.
+// App shows the login until someone is logged in, then FranzPLAY.
 export function App() {
+  return (
+    <AuthProvider>
+      <Gate />
+    </AuthProvider>
+  );
+}
+
+function Gate() {
+  const { state } = useAuth();
+  switch (state.kind) {
+    case "loading":
+      return <div aria-busy="true" />;
+    case "error":
+      return <StartupProblem />;
+    case "signed-out":
+      return <AuthPage mode={state.setupNeeded ? "setup" : "login"} />;
+    case "signed-in":
+      return <Pages />;
+  }
+}
+
+// Pages lists every page of FranzPLAY and its address.
+function Pages() {
   return (
     <Routes>
       <Route element={<Layout />}>

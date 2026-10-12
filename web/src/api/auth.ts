@@ -1,0 +1,72 @@
+// Logging in and out, and who is logged in.
+
+import { ApiError, request } from "./client";
+
+export type Role = "admin" | "user";
+
+export type Account = {
+  id: number;
+  name: string;
+  role: Role;
+  canUpload: boolean;
+};
+
+// parseAccount checks a user sent by the server, once, at the edge.
+export function parseAccount(data: unknown): Account {
+  if (typeof data !== "object" || data === null) {
+    throw new Error("account: response is not an object");
+  }
+  const { id, name, role, canUpload } = data as Record<string, unknown>;
+  if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
+    throw new Error("account: bad id");
+  }
+  if (typeof name !== "string" || name === "") {
+    throw new Error("account: bad name");
+  }
+  if (role !== "admin" && role !== "user") {
+    throw new Error(`account: unknown role ${JSON.stringify(role)}`);
+  }
+  if (typeof canUpload !== "boolean") {
+    throw new Error("account: bad canUpload");
+  }
+  return { id, name, role, canUpload };
+}
+
+// fetchMe returns the logged-in user, or null when nobody is logged in.
+export async function fetchMe(signal?: AbortSignal): Promise<Account | null> {
+  try {
+    return parseAccount(await request("/api/me", { signal }));
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+// fetchSetupNeeded tells whether FranzPLAY still waits for its administrator.
+export async function fetchSetupNeeded(signal?: AbortSignal): Promise<boolean> {
+  const data = await request("/api/setup", { signal });
+  if (typeof data !== "object" || data === null) {
+    throw new Error("setup: response is not an object");
+  }
+  const { needed } = data as Record<string, unknown>;
+  if (typeof needed !== "boolean") {
+    throw new Error("setup: missing needed");
+  }
+  return needed;
+}
+
+export async function login(name: string, password: string): Promise<Account> {
+  return parseAccount(await request("/api/login", { method: "POST", body: { name, password } }));
+}
+
+export async function setup(code: string, name: string, password: string): Promise<Account> {
+  return parseAccount(
+    await request("/api/setup", { method: "POST", body: { code, name, password } }),
+  );
+}
+
+export async function logout(): Promise<void> {
+  await request("/api/logout", { method: "POST" });
+}

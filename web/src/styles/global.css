@@ -12,6 +12,8 @@
   --color-accent: #2997ff;
   --color-accent-hover: #5cb0ff;
   --color-on-accent: #ffffff;
+  --color-danger: #fca5a5;
+  --color-danger-bg: rgb(239 68 68 / 0.14);
 
   /* Glass: translucent surfaces that blur what is behind them (like Apple's Liquid Glass). */
   --glass-bg: rgb(24 24 27 / 0.55);

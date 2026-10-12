@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router";
+import { useAccount, useAuth } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import styles from "./ProfilePage.module.css";
@@ -20,6 +22,17 @@ function versionText(state: ServerInfoState): string {
 export function ProfilePage() {
   usePageTitle("Profilo");
   const server = useServerInfo();
+  const account = useAccount();
+  const { signOut } = useAuth();
+  const [signOutFailed, setSignOutFailed] = useState(false);
+
+  function onSignOut() {
+    setSignOutFailed(false);
+    signOut().catch((error: unknown) => {
+      console.error(error);
+      setSignOutFailed(true);
+    });
+  }
 
   return (
     <div className={styles.root}>
@@ -27,7 +40,10 @@ export function ProfilePage() {
         <span className={`glass ${styles.avatar}`}>
           <Icon name="profile" size={28} />
         </span>
-        <h1 className={styles.name}>Il tuo profilo</h1>
+        <div>
+          <h1 className={styles.name}>{account.name}</h1>
+          <p className={styles.role}>{account.role === "admin" ? "Amministratore" : "Utente"}</p>
+        </div>
       </div>
 
       <button type="button" className={styles.upload} disabled aria-describedby="upload-hint">
@@ -48,6 +64,15 @@ export function ProfilePage() {
           </Link>
         ))}
       </nav>
+
+      <button type="button" className={`glass ${styles.signOut}`} onClick={onSignOut}>
+        Esci
+      </button>
+      {signOutFailed && (
+        <p className={styles.signOutError} role="alert">
+          Uscita non riuscita: il server non risponde. Riprova.
+        </p>
+      )}
 
       <p className={styles.version} role="status">
         {versionText(server)}

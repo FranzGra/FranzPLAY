@@ -93,3 +93,27 @@
   font-size: 13px;
   color: var(--color-text-muted);
 }
+
+.role {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.signOut {
+  align-self: flex-start;
+  height: var(--touch);
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.signOut:hover {
+  background: var(--glass-bg-strong);
+}
+
+.signOutError {
+  margin: -12px 0 0;
+  font-size: 13px;
+  color: var(--color-danger);
+}
