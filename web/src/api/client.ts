@@ -27,15 +27,18 @@ type RequestOptions = {
   method?: "GET" | "POST" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
+  // keepalive lets the request finish even if the page is closing.
+  keepalive?: boolean;
 };
 
 // request calls the API and returns the JSON answer, not yet checked:
 // each caller checks it with its own parse function.
 export async function request(path: string, options: RequestOptions = {}): Promise<unknown> {
-  const { method = "GET", body, signal } = options;
+  const { method = "GET", body, signal, keepalive } = options;
   const response = await fetch(path, {
     method,
     signal,
+    keepalive,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

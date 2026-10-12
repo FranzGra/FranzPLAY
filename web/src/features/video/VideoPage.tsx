@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ApiError } from "../../api/client";
+import { fetchProgress, saveProgress } from "../../api/progress";
 import {
   fetchSubtitles,
   fetchVideo,
@@ -20,7 +21,7 @@ type State =
   | { kind: "loading" }
   | { kind: "missing" }
   | { kind: "error" }
-  | { kind: "ready"; video: Video };
+  | { kind: "ready"; video: Video; startAt: number };
 
 // VideoPage is where a video is watched: the player, its details, and
 // other videos of the same category next to it.
@@ -43,8 +44,8 @@ export function VideoPage() {
     }
     const controller = new AbortController();
     setState({ kind: "loading" });
-    fetchVideo(id, controller.signal)
-      .then((video) => setState({ kind: "ready", video }))
+    Promise.all([fetchVideo(id, controller.signal), startPosition(id, controller.signal)])
+      .then(([video, startAt]) => setState({ kind: "ready", video, startAt }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         if (error instanceof ApiError && error.status === 404) {
@@ -73,13 +74,31 @@ export function VideoPage() {
         </EmptyState>
       );
     case "ready":
-      return <Watch video={state.video} />;
+      return <Watch video={state.video} startAt={state.startAt} />;
   }
 }
 
-function Watch({ video }: { video: Video }) {
+// startPosition is where to start the video: where the person stopped,
+// or the beginning. Without it the video still plays, so a failure only
+// goes to the console.
+async function startPosition(id: number, signal: AbortSignal): Promise<number> {
+  try {
+    return (await fetchProgress(id, signal)).position;
+  } catch (error) {
+    if (!signal.aborted) console.error(error);
+    return 0;
+  }
+}
+
+function Watch({ video, startAt }: { video: Video; startAt: number }) {
   const [now] = useState(() => new Date());
   const subtitles = useSubtitles(video.id);
+  const remember = useCallback(
+    (seconds: number) => {
+      saveProgress(video.id, seconds).catch((error: unknown) => console.error(error));
+    },
+    [video.id],
+  );
   const details = [
     formatAge(video.addedAt, now),
     video.height !== null && video.width !== null ? `${Math.min(video.width, video.height)}p` : "",
@@ -93,6 +112,8 @@ function Watch({ video }: { video: Video }) {
           src={streamURL(video.id)}
           poster={video.cover}
           subtitles={subtitles}
+          startAt={startAt}
+          onPosition={remember}
           unsupportedHint={
             video.playable
               ? undefined

@@ -32,7 +32,17 @@ type PlayerProps = {
   unsupportedHint?: string;
   // subtitles found next to the video file.
   subtitles?: SubtitleTrack[];
+  // startAt is where to start, in seconds: where the person stopped last time.
+  startAt?: number;
+  // onPosition hears where the video is, to remember it: every few seconds
+  // while it plays, on pause, after a jump, at the end, and when the player
+  // closes. Only once the video has been played.
+  onPosition?: (seconds: number) => void;
 };
+
+// reportEvery is how often, in seconds of video, onPosition hears the
+// position while the video plays.
+const reportEvery = 10;
 
 // hideAfter is how long the controls stay visible after the last movement,
 // while the video plays.
@@ -76,7 +86,14 @@ const noTracks: SubtitleTrack[] = [];
 // Player is FranzPLAY's video player, made to feel like YouTube's: a big
 // timeline, big buttons, ±10 seconds with buttons, keys and double taps,
 // speed in the settings, full screen.
-export function Player({ src, poster, unsupportedHint, subtitles = noTracks }: PlayerProps) {
+export function Player({
+  src,
+  poster,
+  unsupportedHint,
+  subtitles = noTracks,
+  startAt = 0,
+  onPosition,
+}: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -108,6 +125,28 @@ export function Player({ src, poster, unsupportedHint, subtitles = noTracks }: P
   }, [subtitles]);
   const hideTimer = useRef<number | undefined>(undefined);
   const lastTap = useRef(0);
+
+  // What onPosition knows: the time now, the last one told, and whether
+  // the video was played at all (opening a video is not watching it).
+  const position = useRef({ time: startAt, told: startAt, played: false });
+  const onPositionRef = useRef(onPosition);
+  useEffect(() => {
+    onPositionRef.current = onPosition;
+  }, [onPosition]);
+  const tell = useCallback(() => {
+    const p = position.current;
+    if (!p.played || p.time === p.told) return;
+    p.told = p.time;
+    onPositionRef.current?.(p.time);
+  }, []);
+  // Closing the page or leaving the video tells where it was left.
+  useEffect(() => {
+    window.addEventListener("pagehide", tell);
+    return () => {
+      window.removeEventListener("pagehide", tell);
+      tell();
+    };
+  }, [tell]);
 
   // The video element follows the state chosen here.
   useEffect(() => {
@@ -342,15 +381,39 @@ export function Player({ src, poster, unsupportedHint, subtitles = noTracks }: P
         preload="metadata"
         playsInline
         onPlay={() => {
+          position.current.played = true;
           setPlaying(true);
           setStarted(true);
           showControls();
         }}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-        onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+        onPause={() => {
+          setPlaying(false);
+          tell();
+        }}
+        onEnded={() => {
+          setPlaying(false);
+          tell();
+        }}
+        onTimeUpdate={(event) => {
+          const v = event.currentTarget;
+          setTime(v.currentTime);
+          position.current.time = v.currentTime;
+          if (!v.paused && Math.abs(v.currentTime - position.current.told) >= reportEvery) tell();
+        }}
+        onSeeked={(event) => {
+          position.current.time = event.currentTarget.currentTime;
+          if (event.currentTarget.paused) tell();
+        }}
         onDurationChange={(event) => setDuration(event.currentTarget.duration)}
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+        onLoadedMetadata={(event) => {
+          const v = event.currentTarget;
+          setDuration(v.duration);
+          // Start where the person stopped, if that is still inside the video.
+          if (startAt > 0 && v.currentTime === 0 && !(startAt >= v.duration)) {
+            v.currentTime = startAt;
+            setTime(startAt);
+          }
+        }}
         onProgress={onProgress}
         onWaiting={() => setWaiting(true)}
         onPlaying={() => setWaiting(false)}

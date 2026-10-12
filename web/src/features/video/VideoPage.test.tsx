@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 
@@ -7,6 +7,7 @@ describe("video page", () => {
     const { server } = renderApp("/video/7", {
       ...signedIn(),
       "GET /api/videos/7": { body: videoJSON() },
+      "GET /api/videos/7/progress": { body: { position: 0, finished: false } },
       "GET /api/videos/7/subtitles": {
         body: [
           { key: "it.srt", lang: "it", label: "Italiano", src: "/api/videos/7/subtitles/it.srt" },
@@ -59,5 +60,42 @@ describe("video page", () => {
     expect(
       await screen.findByRole("heading", { name: "Video non disponibile" }),
     ).toBeInTheDocument();
+  });
+
+  it("starts where the video was left and remembers where it stops", async () => {
+    const { server } = renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON() },
+      "GET /api/videos/7/progress": { body: { position: 100, finished: false } },
+      "GET /api/videos/7/subtitles": { body: [] },
+      "POST /api/videos/7/progress": { body: { position: 130, finished: false } },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    const video = document.querySelector("video") as HTMLVideoElement;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(100);
+
+    fireEvent.play(video);
+    video.currentTime = 130;
+    fireEvent.timeUpdate(video);
+    fireEvent.pause(video);
+    await waitFor(() => expect(server.requests.some((r) => r.method === "POST")).toBe(true));
+    const sent = server.requests.find((r) => r.method === "POST");
+    expect(await sent?.json()).toEqual({ position: 130 });
+  });
+
+  it("plays from the start when the position does not load", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON() },
+      "GET /api/videos/7/progress": { status: 500, body: { error: "internal error" } },
+      "GET /api/videos/7/subtitles": { body: [] },
+    });
+    expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();
+    const video = document.querySelector("video") as HTMLVideoElement;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(0);
+    expect(error).toHaveBeenCalled();
   });
 });

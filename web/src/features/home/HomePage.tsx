@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { type Category, fetchCategories } from "../../api/videos";
 import { usePageTitle } from "../../components/PageTitle";
+import { ContinueRow } from "../continue/ContinueRow";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
 import styles from "./HomePage.module.css";
 
 // HomePage shows the newest videos, with a row of categories on top to
-// see only one of them, like on YouTube.
+// see only one of them, and the videos to continue, like on YouTube.
 export function HomePage() {
   usePageTitle("");
   const [category, setCategory] = useState("");
@@ -32,6 +33,7 @@ export function HomePage() {
           ))}
         </ul>
       )}
+      {category === "" && <ContinueRow />}
       <VideoGrid
         state={state}
         onMore={loadMore}

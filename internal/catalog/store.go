@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/video"
@@ -124,6 +125,42 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 		return Video{}, fmt.Errorf("read video %d: %w", id, err)
 	}
 	return v, nil
+}
+
+// byIDs returns the present videos among ids, in the order of ids.
+func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
+	if len(ids) == 0 {
+		return []Video{}, nil
+	}
+	marks := strings.Repeat(",?", len(ids))[1:]
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+videoColumns+` FROM videos v
+		WHERE v.missing_since IS NULL AND v.id IN (`+marks+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read videos: %w", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	found := map[int64]Video{}
+	for rows.Next() {
+		v, err := scanVideo(rows)
+		if err != nil {
+			return nil, fmt.Errorf("read videos: %w", err)
+		}
+		found[v.ID] = v
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read videos: %w", err)
+	}
+	out := make([]Video, 0, len(found))
+	for _, id := range ids {
+		if v, ok := found[id]; ok {
+			out = append(out, v)
+		}
+	}
+	return out, nil
 }
 
 // categories returns the categories that have present videos, by name.
