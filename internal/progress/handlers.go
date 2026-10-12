@@ -39,6 +39,7 @@ type handlers struct {
 //	GET    /api/videos/{id}/progress where I stopped: {position, finished}
 //	POST   /api/videos/{id}/progress {position}: sent by the player while watching
 //	GET    /api/continue             the videos I am in the middle of
+//	DELETE /api/continue/{id}        take one out, keeping it in the history
 //	GET    /api/history              what I watched, most recent first (limit, offset)
 //	DELETE /api/history              forget everything I watched
 //	DELETE /api/history/{id}         forget one video
@@ -50,6 +51,7 @@ func (h handlers) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/videos/{id}/progress", h.get)
 	mux.HandleFunc("POST /api/videos/{id}/progress", h.save)
 	mux.HandleFunc("GET /api/continue", h.list)
+	mux.HandleFunc("DELETE /api/continue/{id}", h.leaveContinue)
 	mux.HandleFunc("GET /api/history", h.history)
 	mux.HandleFunc("DELETE /api/history", h.forgetAll)
 	mux.HandleFunc("DELETE /api/history/{id}", h.forgetOne)
@@ -195,6 +197,25 @@ func (h handlers) history(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond.JSON(w, r, h.logger, http.StatusOK, historyPage{Items: items, Total: total})
+}
+
+// leaveContinue takes one video out of "Continua a guardare". The history
+// keeps it, with where the person stopped; watching it again puts it back.
+func (h handlers) leaveContinue(w http.ResponseWriter, r *http.Request) {
+	userID, videoID, ok := h.request(w, r)
+	if !ok {
+		return
+	}
+	left, err := h.store.leaveContinue(r.Context(), userID, videoID)
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	if !left {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "this video is not in Continua a guardare")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // forgetOne removes one video from the history (and so from "Continua a

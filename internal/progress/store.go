@@ -32,7 +32,8 @@ func (s store) save(ctx context.Context, userID, videoID int64, m Mark, now time
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO watch_progress (user_id, video_id, position, finished, updated_at) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT (user_id, video_id) DO UPDATE SET
-			position = excluded.position, finished = excluded.finished, updated_at = excluded.updated_at`,
+			position = excluded.position, finished = excluded.finished, updated_at = excluded.updated_at,
+			in_continue = 1`,
 		userID, videoID, m.Position, m.Finished, now.Unix())
 	if err != nil {
 		return fmt.Errorf("save progress: %w", err)
@@ -68,7 +69,7 @@ type watched struct {
 func (s store) list(ctx context.Context, userID int64, onlyStarted bool, limit, offset int) (_ []watched, total int, err error) {
 	where := `p.user_id = ? AND v.visible`
 	if onlyStarted {
-		where += ` AND p.finished = 0 AND p.position > 0`
+		where += ` AND p.finished = 0 AND p.position > 0 AND p.in_continue`
 	}
 	from := ` FROM watch_progress p JOIN videos v ON v.id = p.video_id WHERE ` + where
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*)`+from, userID).Scan(&total); err != nil {
@@ -91,6 +92,21 @@ func (s store) list(ctx context.Context, userID int64, onlyStarted bool, limit, 
 		out = append(out, w)
 	}
 	return out, total, rows.Err()
+}
+
+// leaveContinue takes a video out of "Continua a guardare", keeping it in
+// the history. It reports whether the video was there.
+func (s store) leaveContinue(ctx context.Context, userID, videoID int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE watch_progress SET in_continue = 0
+		WHERE user_id = ? AND video_id = ? AND in_continue`, userID, videoID)
+	if err != nil {
+		return false, fmt.Errorf("leave continue: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("leave continue: %w", err)
+	}
+	return n > 0, nil
 }
 
 // forget removes one video from a person's history; with videoID 0, all
