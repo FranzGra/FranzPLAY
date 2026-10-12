@@ -15,6 +15,7 @@ import { CategoryPage } from "../features/categories/CategoryPage";
 import { ChannelPage } from "../features/channel/ChannelPage";
 import { HistoryPage } from "../features/history/HistoryPage";
 import { HomePage } from "../features/home/HomePage";
+import { LikedPage } from "../features/likes/LikedPage";
 import { PlaylistPage } from "../features/playlists/PlaylistPage";
 import { PlaylistsPage } from "../features/playlists/PlaylistsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
@@ -65,6 +66,7 @@ function Pages() {
         <Route path="cerca" element={<SearchPage />} />
         <Route path="video/:id" element={<VideoPage />} />
         <Route path="cronologia" element={<HistoryPage />} />
+        <Route path="mi-piace" element={<LikedPage />} />
         <Route path="categorie" element={<CategoriesPage />} />
         <Route path="categorie/:name" element={<CategoryPage />} />
         <Route path="admin" element={<AdminPage />}>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onServerEvent } from "../../api/events";
-import { fetchVideos, type Video } from "../../api/videos";
+import { fetchVideos, type Video, type VideoList } from "../../api/videos";
 
 // pageSize is how many videos are asked at a time: enough to fill a big
 // screen, few enough to answer fast on a Raspberry Pi.
@@ -18,11 +18,27 @@ export type VideoListState =
 // Filter chooses which videos: of one category, matching a search, or all.
 export type Filter = { category?: string; q?: string };
 
+// LoadPage asks the server for one page of a list of videos.
+export type LoadPage = (
+  page: { limit: number; offset?: number },
+  signal?: AbortSignal,
+) => Promise<VideoList>;
+
 // useVideoList loads the newest videos matching filter a page at a time.
+export function useVideoList({ category = "", q = "" }: Filter = {}) {
+  const load = useCallback<LoadPage>(
+    (page, signal) => fetchVideos({ category, q, ...page }, signal),
+    [category, q],
+  );
+  return usePagedVideos(load);
+}
+
+// usePagedVideos loads a list of videos a page at a time; load must stay
+// the same between renders (useCallback), or the list starts again.
 // loadMore adds the next page. When the server says the library changed,
 // the videos shown are asked again quietly, so new ones appear by
 // themselves and covers fill in as they are made.
-export function useVideoList({ category = "", q = "" }: Filter = {}) {
+export function usePagedVideos(load: LoadPage) {
   const [state, setState] = useState<VideoListState>({ kind: "loading" });
   const controller = useRef<AbortController | null>(null);
   const shown = useRef(pageSize);
@@ -32,7 +48,7 @@ export function useVideoList({ category = "", q = "" }: Filter = {}) {
     controller.current = c;
     shown.current = pageSize;
     setState({ kind: "loading" });
-    fetchVideos({ category, q, limit: pageSize }, c.signal)
+    load({ limit: pageSize }, c.signal)
       .then(({ videos, total }) => setState({ kind: "ready", videos, total, more: "idle" }))
       .catch((error: unknown) => {
         if (!c.signal.aborted) {
@@ -42,7 +58,7 @@ export function useVideoList({ category = "", q = "" }: Filter = {}) {
       });
 
     const refresh = () => {
-      fetchVideos({ category, q, limit: shown.current }, c.signal)
+      load({ limit: shown.current }, c.signal)
         .then(({ videos, total }) =>
           setState((current) =>
             current.kind === "ready" && current.more === "loading"
@@ -60,7 +76,7 @@ export function useVideoList({ category = "", q = "" }: Filter = {}) {
       stop();
       c.abort();
     };
-  }, [category, q]);
+  }, [load]);
 
   const loadMore = useCallback(() => {
     if (state.kind !== "ready" || state.more === "loading") {
@@ -70,7 +86,7 @@ export function useVideoList({ category = "", q = "" }: Filter = {}) {
     const offset = state.videos.length;
     shown.current = Math.min(offset + pageSize, maxShown);
     setState({ ...state, more: "loading" });
-    fetchVideos({ category, q, limit: pageSize, offset }, signal)
+    load({ limit: pageSize, offset }, signal)
       .then(({ videos, total }) =>
         setState((current) =>
           current.kind === "ready"
@@ -86,7 +102,7 @@ export function useVideoList({ category = "", q = "" }: Filter = {}) {
           );
         }
       });
-  }, [category, q, state]);
+  }, [load, state]);
 
   return { state, loadMore };
 }

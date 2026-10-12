@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { createPlaylist, fetchPlaylists, type Playlist } from "../../api/playlists";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
@@ -9,8 +10,8 @@ import styles from "./Playlists.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; lists: Playlist[] };
 
-// PlaylistsPage shows my lists: "Guarda più tardi" first, then the ones
-// I made, and lets me make a new one.
+// PlaylistsPage shows my lists: "Guarda più tardi" first, then the
+// videos I like, then the lists I made, and lets me make a new one.
 export function PlaylistsPage() {
   usePageTitle("Playlist");
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -73,9 +74,12 @@ export function PlaylistsPage() {
       {state.kind === "ready" && (
         <ul className={styles.grid}>
           {state.lists.map((list) => (
-            <li key={list.id}>
-              <PlaylistCard list={list} markPublic />
-            </li>
+            <Fragment key={list.id}>
+              <li>
+                <PlaylistCard list={list} markPublic />
+              </li>
+              {list.kind === "later" && <LikedCard />}
+            </Fragment>
           ))}
         </ul>
       )}
@@ -86,5 +90,21 @@ export function PlaylistsPage() {
         </p>
       )}
     </>
+  );
+}
+
+// LikedCard leads to the videos I like: on phones this page is the way
+// there, since the bottom bar has only three tabs.
+function LikedCard() {
+  return (
+    <li>
+      <Link to="/mi-piace" className={styles.card}>
+        <span className={styles.cover}>
+          <Icon name="like" size={32} />
+        </span>
+        <span className={styles.cardName}>Mi piace</span>
+        <span className={styles.cardCount}>I video che ti piacciono</span>
+      </Link>
+    </li>
   );
 }

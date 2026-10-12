@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { type Category, fetchCategories } from "../../api/videos";
 import { usePageTitle } from "../../components/PageTitle";
 import { ContinueRow } from "../continue/ContinueRow";
+import { LikedRow } from "../likes/LikedRow";
+import { SavedRow } from "../playlists/SavedRow";
 import { RecommendedRow } from "../recommend/RecommendedRow";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
@@ -38,6 +40,8 @@ export function HomePage() {
       {category === "" && (
         <>
           <ContinueRow />
+          <SavedRow />
+          <LikedRow />
           <RecommendedRow />
         </>
       )}
