@@ -52,4 +52,4 @@ spenti per questi video: nessun altro li vedrebbe.
 
 ## Cosa resta per dopo
 
-- «Solo alcune persone»: insieme alla condivisione privata di video e playlist.
+- «Solo alcune persone»: fatto, vedi la decisione 0016.

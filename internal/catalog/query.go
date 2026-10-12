@@ -33,6 +33,7 @@ const (
 type listQuery struct {
 	category string   // "" = all
 	uploader int64    // only the videos this person uploaded; 0 = all
+	shared   bool     // only the private videos shared with the person asking
 	words    []string // search: every word must be in the title or the category
 	limit    int
 	offset   int
@@ -47,7 +48,8 @@ type listQuery struct {
 const maxSeed = 1<<53 - 1
 
 // parseListQuery checks the parameters of GET /api/videos once, here.
-// Accepted: category, uploader (a person's id), q (search), limit (1 to 200), offset (0 or more),
+// Accepted: category, uploader (a person's id), shared=1 (only the videos
+// shared with me), q (search), limit (1 to 200), offset (0 or more),
 // order=random with seed (1 to 2^53-1) for a mixed order.
 func parseListQuery(values url.Values) (listQuery, error) {
 	q := listQuery{category: strings.TrimSpace(values.Get("category")), limit: defaultLimit}
@@ -62,6 +64,13 @@ func parseListQuery(values url.Values) (listQuery, error) {
 			return listQuery{}, fmt.Errorf("%w: uploader must be the id of a person", errBadQuery)
 		}
 		q.uploader = n
+	}
+	switch values.Get("shared") {
+	case "":
+	case "1":
+		q.shared = true
+	default:
+		return listQuery{}, fmt.Errorf("%w: shared must be 1", errBadQuery)
 	}
 	if s := values.Get("limit"); s != "" {
 		n, err := strconv.Atoi(s)
@@ -86,6 +95,9 @@ func parseListQuery(values url.Values) (listQuery, error) {
 		n, err := strconv.ParseUint(values.Get("seed"), 10, 64)
 		if err != nil || n < 1 || n > maxSeed {
 			return listQuery{}, fmt.Errorf("%w: order=random needs a seed from 1 to %d", errBadQuery, uint64(maxSeed))
+		}
+		if q.shared {
+			return listQuery{}, fmt.Errorf("%w: the videos shared with me come only newest first", errBadQuery)
 		}
 		q.shuffle = n
 	default:

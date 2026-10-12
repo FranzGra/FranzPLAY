@@ -108,6 +108,104 @@ func TestPrivateVideo(t *testing.T) {
 	expect(t, s.do(t, marco, "PUT", videoPath(id), strings.NewReader(`{"private":true}`)), http.StatusNotFound)
 }
 
+func TestSharedVideo(t *testing.T) {
+	s := newSite(t)
+	if _, err := s.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at)
+		VALUES (3, 'anna', 'x', 'user', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	shares := func(id int64) (people []int64) {
+		t.Helper()
+		rows, err := s.db.Query(`SELECT user_id FROM video_shares WHERE video_id = ? ORDER BY user_id`, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := rows.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+		for rows.Next() {
+			var p int64
+			if err := rows.Scan(&p); err != nil {
+				t.Fatal(err)
+			}
+			people = append(people, p)
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		return people
+	}
+	names := func(v myVideo) (out []string) {
+		for _, p := range v.SharedWith {
+			out = append(out, p.Name)
+		}
+		return out
+	}
+
+	// Refused at the start: the upload is not even made.
+	for name, body := range map[string]string{
+		"for everybody":   `{"name":"mare.mp4","size":3,"sharedWith":[2]}`,
+		"with myself":     `{"name":"mare.mp4","size":3,"private":true,"sharedWith":[1]}`,
+		"someone unknown": `{"name":"mare.mp4","size":3,"private":true,"sharedWith":[2,9]}`,
+	} {
+		if rec := s.do(t, giulia, "POST", "/api/uploads", strings.NewReader(body)); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", name, rec.Code)
+		}
+	}
+	var waiting int
+	if err := s.db.QueryRow(`SELECT count(*) FROM uploads`).Scan(&waiting); err != nil || waiting != 0 {
+		t.Fatalf("refused uploads left %d rows (%v)", waiting, err)
+	}
+
+	// Chosen at the start, the people come with the video.
+	body := strings.NewReader(`{"name":"mare.mp4","size":3,"private":true,"sharedWith":[2]}`)
+	u := decode[upload](t, s.do(t, giulia, "POST", "/api/uploads", body))
+	id := decode[upload](t, s.piece(t, giulia, u.ID, 0, "sea")).Video
+	if got := shares(id); len(got) != 1 || got[0] != 2 {
+		t.Fatalf("shared with %v, want Marco", got)
+	}
+	if list := decode[[]myVideo](t, s.do(t, giulia, "GET", "/api/uploads/videos", nil)); len(list) != 1 ||
+		strings.Join(names(list[0]), ",") != "Marco" {
+		t.Errorf("my videos = %+v", list)
+	}
+
+	// Other people instead, by name.
+	rec := s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"sharedWith":[3,2]}`))
+	expect(t, rec, http.StatusOK)
+	if v := decode[myVideo](t, rec); strings.Join(names(v), ",") != "anna,Marco" {
+		t.Errorf("shared with %v, want anna and Marco", names(v))
+	}
+	for name, body := range map[string]string{
+		"with myself":     `{"sharedWith":[1]}`,
+		"someone unknown": `{"sharedWith":[3,9]}`,
+		"and for all":     `{"private":false,"sharedWith":[3]}`,
+	} {
+		if rec := s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(body)); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", name, rec.Code)
+		}
+	}
+	if got := shares(id); len(got) != 2 {
+		t.Errorf("after refused changes shared with %v", got)
+	}
+	expect(t, s.do(t, marco, "PUT", videoPath(id), strings.NewReader(`{"sharedWith":[]}`)), http.StatusNotFound)
+
+	// For everybody: nobody is chosen any more, and nobody can be.
+	expect(t, s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"private":false}`)), http.StatusOK)
+	if got := shares(id); len(got) != 0 {
+		t.Errorf("public video shared with %v", got)
+	}
+	expect(t, s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"sharedWith":[2]}`)), http.StatusBadRequest)
+
+	// Only me again, then with Anna.
+	expect(t, s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"private":true,"sharedWith":[3]}`)),
+		http.StatusOK)
+	if got := shares(id); len(got) != 1 || got[0] != 3 {
+		t.Errorf("shared with %v, want Anna", got)
+	}
+}
+
 func TestDeleteMyVideo(t *testing.T) {
 	s := newSite(t)
 	id := s.uploadVideo(t, "mare.mp4", "sea")

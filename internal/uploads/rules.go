@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/FranzGra/FranzPLAY/internal/library"
+	"github.com/FranzGra/FranzPLAY/internal/sharing"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
@@ -74,8 +75,10 @@ type newUpload struct {
 	Name  string `json:"name"`  // the file name on their computer
 	Title string `json:"title"` // "" = from the file name
 	Size  int64  `json:"size"`  // bytes
-	// Private: only the person who uploads it will see the video.
-	Private bool `json:"private"`
+	// Private: only the person who uploads it will see the video, and the
+	// people in SharedWith, by id.
+	Private    bool    `json:"private"`
+	SharedWith []int64 `json:"sharedWith"`
 }
 
 // check decides whether a person may start an upload, given their space
@@ -108,7 +111,17 @@ func check(a users.Account, req newUpload, space Space, waiting int) (newUpload,
 	case req.Size > space.Free():
 		return newUpload{}, errNoSpace
 	}
-	return newUpload{Name: name, Title: title, Size: req.Size, Private: req.Private}, nil
+	if len(req.SharedWith) > 0 && !req.Private {
+		return newUpload{}, sharing.ErrNotPrivate
+	}
+	people, err := sharing.Clean(req.SharedWith, a.ID)
+	if err != nil {
+		return newUpload{}, err
+	}
+	if len(people) == 0 {
+		people = nil
+	}
+	return newUpload{Name: name, Title: title, Size: req.Size, Private: req.Private, SharedWith: people}, nil
 }
 
 // cleanText reports whether s is valid text of 1 to most characters,

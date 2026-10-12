@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/sharing"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -32,8 +33,11 @@ type Video struct {
 	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
 	Format   string    `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
 	Likes    int64     `json:"likes"`    // how many people like it
-	Private  bool      `json:"private"`  // only the person who uploaded it sees it
+	Private  bool      `json:"private"`  // only its uploader, and the people they chose, see it
 	Uploader *Person   `json:"uploader"` // who uploaded it from the browser; null = from a video folder
+	// SharedWith are the people a private video is shared with: only for
+	// one video, and only when its uploader asks.
+	SharedWith []sharing.Person `json:"sharedWith,omitempty"`
 	// From a details file next to the video, like yt-dlp's .info.json:
 	Author      string  `json:"author"`                // who published it; "" = not known
 	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
@@ -71,10 +75,18 @@ type store struct {
 }
 
 // watchable says which videos a person may open: the visible ones, and
-// their own private uploads, while those are on the disk and not hidden.
-// Its one argument is the person, from viewer. Lists keep to visible: a
-// private video shows up in no list, not even its uploader's.
-const watchable = `(v.visible OR (v.private AND v.uploaded_by = ? AND v.missing_since IS NULL AND v.hidden_at IS NULL))`
+// the private uploads that are theirs or shared with them, while those are
+// on the disk and not hidden. Its one argument is the person, from viewer.
+// Lists keep to visible: a private video shows up in no list, not even its
+// uploader's; only the list of the videos shared with me (sharedWithMe)
+// has them.
+const watchable = `(v.visible OR (v.private AND v.missing_since IS NULL AND v.hidden_at IS NULL
+	AND ? IN (SELECT v.uploaded_by UNION ALL SELECT s.user_id FROM video_shares s WHERE s.video_id = v.id)))`
+
+// sharedWithMe says which private videos were shared with a person, the
+// one argument, while those are on the disk and not hidden.
+const sharedWithMe = `(v.private AND v.missing_since IS NULL AND v.hidden_at IS NULL
+	AND EXISTS (SELECT 1 FROM video_shares s WHERE s.video_id = v.id AND s.user_id = ?))`
 
 // viewer returns who is asking; 0, nobody, outside a logged-in request.
 func viewer(ctx context.Context) int64 {
@@ -159,6 +171,10 @@ func scanVideo(row rowScanner) (Video, error) {
 func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err error) {
 	where := `v.visible`
 	args := []any{}
+	if q.shared {
+		where = sharedWithMe
+		args = append(args, viewer(ctx))
+	}
 	if q.category != "" {
 		where += ` AND v.category = ?`
 		args = append(args, q.category)
@@ -244,6 +260,15 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 	}
 	if description.Valid {
 		v.Description = &description.String
+	}
+	if v.Private && v.Uploader != nil && v.Uploader.ID == viewer(ctx) {
+		people, err := sharing.People(ctx, s.db, `SELECT s.video_id, u.id, u.name, u.avatar
+			FROM video_shares s JOIN users u ON u.id = s.user_id
+			WHERE s.video_id = ? ORDER BY u.name COLLATE NOCASE, u.id`, id)
+		if err != nil {
+			return Video{}, fmt.Errorf("read video %d: %w", id, err)
+		}
+		v.SharedWith = people[id]
 	}
 	return v, nil
 }
