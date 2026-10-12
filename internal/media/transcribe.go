@@ -114,13 +114,25 @@ type autoSubtitle struct {
 // errNoTranslator means a translation was asked but no translator is set.
 var errNoTranslator = errors.New("no translator set (FRANZPLAY_TRANSLATE_URL)")
 
+// errTakenBack means the administrator took the request back while the
+// job ran: what was made is thrown away, and the job is not a failure.
+var errTakenBack = errors.New("request taken back")
+
 // errVideoChanged means the file changed while it was being transcribed.
 var errVideoChanged = errors.New("the video file changed meanwhile: ask again")
 
 // Handle is the job handler for jobs.Transcribe. What is already made for
 // the current content is kept: asking for one more language only
 // translates that one.
-func (t *Transcriber) Handle(ctx context.Context, videoID int64) (err error) {
+func (t *Transcriber) Handle(ctx context.Context, videoID int64) error {
+	err := t.handle(ctx, videoID)
+	if errors.Is(err, errTakenBack) {
+		return nil
+	}
+	return err
+}
+
+func (t *Transcriber) handle(ctx context.Context, videoID int64) (err error) {
 	req, ok, err := t.request(ctx, videoID)
 	if err != nil || !ok {
 		return err // no request: the administrator took it back
@@ -368,6 +380,9 @@ func (t *Transcriber) save(ctx context.Context, videoID int64, fingerprint, mode
 		return fmt.Errorf("subtitles of video %d: %w", videoID, err)
 	}
 	old, saved, err := t.record(ctx, videoID, fingerprint, model, lang, from, name, replaceAll)
+	if errors.Is(err, errTakenBack) {
+		return errors.Join(err, removeFile(dir, name))
+	}
 	if err != nil || !saved {
 		err = errors.Join(err, removeFile(dir, name))
 		if err == nil {
@@ -380,7 +395,8 @@ func (t *Transcriber) save(ctx context.Context, videoID int64, fingerprint, mode
 
 // record saves one subtitle's row and returns the files of the rows it
 // replaced. saved is false when the video's content is not fingerprint
-// any more.
+// any more; nothing is saved either, with errTakenBack, when the request
+// is gone.
 func (t *Transcriber) record(ctx context.Context, videoID int64, fingerprint, model, lang, from, name string,
 	replaceAll bool,
 ) (old []string, saved bool, err error) {
@@ -390,10 +406,14 @@ func (t *Transcriber) record(ctx context.Context, videoID int64, fingerprint, mo
 	}
 	defer func() { err = finish(tx, err) }()
 
-	var same bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM videos WHERE id = ? AND fingerprint = ?)`,
-		videoID, fingerprint).Scan(&same); err != nil {
+	var same, asked bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM videos WHERE id = ? AND fingerprint = ?),
+		EXISTS (SELECT 1 FROM subtitle_requests WHERE video_id = ?)`,
+		videoID, fingerprint, videoID).Scan(&same, &asked); err != nil {
 		return nil, false, fmt.Errorf("save subtitles of video %d: %w", videoID, err)
+	}
+	if !asked {
+		return nil, false, errTakenBack
 	}
 	if !same {
 		return nil, false, nil
