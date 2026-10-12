@@ -18,6 +18,9 @@
 }
 
 .tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -31,10 +34,44 @@
     transform 150ms;
 }
 
+/* The color the administrator chose for the category, as a stripe. */
+.tile[style] {
+  box-shadow: inset 4px 0 0 var(--tile-color);
+}
+
+/* With an image, the name sits on a shade at the bottom, readable on any
+   picture. */
+.withImage {
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  color: #fff;
+}
+
+.image {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.withImage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0) 60%);
+}
+
 .tile:hover {
   color: var(--color-text);
   background: var(--glass-bg-strong);
   transform: translateY(-2px);
+}
+
+.withImage:hover {
+  color: #fff;
 }
 
 .name {
@@ -46,6 +83,10 @@
 .count {
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+.withImage .count {
+  color: rgb(255 255 255 / 0.8);
 }
 
 .back {

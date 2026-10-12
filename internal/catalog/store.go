@@ -62,10 +62,13 @@ type Preview struct {
 	Height  int    `json:"height"`
 }
 
-// Category is a category with how many videos it has.
+// Category is a category with how many videos it has, and the color and
+// image the administrator chose for it ("" and nil if none).
 type Category struct {
-	Name   string `json:"name"`
-	Videos int    `json:"videos"`
+	Name   string  `json:"name"`
+	Videos int     `json:"videos"`
+	Color  string  `json:"color"`
+	Image  *string `json:"image"` // address of the image
 }
 
 // store reads the catalog. It never writes: the library scan and the job
@@ -97,8 +100,13 @@ func viewer(ctx context.Context) int64 {
 	return a.ID
 }
 
+// shownCategory is the category people see for the video v: the name the
+// administrator gave it in the categories table, or the category itself.
+// Two categories given the same name show as one.
+const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name = v.category), v.category)`
+
 // videoColumns are read for every video, in the order scanVideo expects.
-const videoColumns = `v.id, v.shown_title, v.category, v.duration, v.width, v.height, v.cover, v.added_at,
+const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
 	v.shown_author, v.shown_published_on, v.clip, v.private,
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
@@ -176,7 +184,7 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		args = append(args, viewer(ctx))
 	}
 	if q.category != "" {
-		where += ` AND v.category = ?`
+		where += ` AND ` + shownCategory + ` = ?`
 		args = append(args, q.category)
 	}
 	if q.uploader != 0 {
@@ -185,7 +193,7 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 	}
 	// LIKE ignores case for the letters A to Z; that is enough for a home search.
 	for _, w := range q.words {
-		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR v.category LIKE ? ESCAPE '\')`
+		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\')`
 		p := likePattern(w)
 		args = append(args, p, p)
 	}
@@ -309,12 +317,14 @@ func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 	return out, nil
 }
 
-// categories returns the categories that have visible videos, by name.
+// categories returns the categories that have visible videos, by the
+// name people see, with the color and image the administrator chose.
 func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT category, count(*) FROM videos
-		WHERE visible AND category != ''
-		GROUP BY category ORDER BY category COLLATE NOCASE`)
+		SELECT coalesce(c.label, v.category) AS shown, count(*), coalesce(max(c.color), ''), max(c.image)
+		FROM videos v LEFT JOIN categories c ON c.name = v.category
+		WHERE v.visible AND v.category != ''
+		GROUP BY shown ORDER BY shown COLLATE NOCASE`)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
@@ -322,8 +332,12 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	out := []Category{}
 	for rows.Next() {
 		var c Category
-		if err := rows.Scan(&c.Name, &c.Videos); err != nil {
+		var image sql.NullString
+		if err := rows.Scan(&c.Name, &c.Videos, &c.Color, &image); err != nil {
 			return nil, fmt.Errorf("list categories: %w", err)
+		}
+		if image.Valid {
+			c.Image = categoryImageURL(image.String)
 		}
 		out = append(out, c)
 	}

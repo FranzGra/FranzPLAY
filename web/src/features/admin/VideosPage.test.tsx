@@ -87,7 +87,7 @@ describe("videos page", () => {
     const { user, server } = renderApp("/admin/video", {
       ...signedIn(),
       "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
-      "GET /api/categories": { body: [{ name: "Viaggi", videos: 3 }] },
+      "GET /api/categories": { body: [{ name: "Viaggi", videos: 3, color: "", image: null }] },
       "PUT /api/admin/videos/7/details": { status: 204 },
     });
     await screen.findByRole("list", { name: "Video" });

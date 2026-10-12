@@ -66,8 +66,8 @@ describe("home page", () => {
       ...signedIn(),
       "GET /api/categories": {
         body: [
-          { name: "Vacanze", videos: 1 },
-          { name: "Scuola", videos: 1 },
+          { name: "Vacanze", videos: 1, color: "", image: null },
+          { name: "Scuola", videos: 1, color: "", image: null },
         ],
       },
       "GET /api/videos": (request) => {
@@ -181,7 +181,7 @@ describe("home page", () => {
   it("shows the videos to continue, with how much was watched", async () => {
     const { user } = renderApp("/", {
       ...signedIn(),
-      "GET /api/categories": { body: [{ name: "Vacanze", videos: 1 }] },
+      "GET /api/categories": { body: [{ name: "Vacanze", videos: 1, color: "", image: null }] },
       "GET /api/continue": {
         body: [
           watchedJSON({

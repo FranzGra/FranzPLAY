@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import { AccessPage } from "../features/admin/AccessPage";
 import { AdminPage } from "../features/admin/AdminPage";
+import { CategoriesAdminPage } from "../features/admin/CategoriesAdminPage";
 import { CommentsPage } from "../features/admin/CommentsPage";
 import { FoldersPage } from "../features/admin/FoldersPage";
 import { InvitesPage } from "../features/admin/InvitesPage";
@@ -92,6 +93,7 @@ function Pages() {
           <Route path="inviti" element={<InvitesPage />} />
           <Route path="accessi" element={<AccessPage />} />
           <Route path="video" element={<VideosPage />} />
+          <Route path="categorie" element={<CategoriesAdminPage />} />
           <Route path="sottotitoli" element={<SubtitlesPage />} />
           <Route path="commenti" element={<CommentsPage />} />
           <Route path="cartelle" element={<FoldersPage />} />

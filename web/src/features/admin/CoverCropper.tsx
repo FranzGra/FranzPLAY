@@ -15,7 +15,8 @@ import {
 // The window, in screen pixels: 16:9, and narrow enough for a small phone.
 const window169 = windowOf(272);
 
-// CoverCropper shows the chosen picture in a window the shape of a cover:
+// CoverCropper shows the chosen picture in a window the shape of a cover
+// (16:9), for the cover of a video or the image of a category:
 // the administrator drags it and zooms until the right part shows, then
 // saves. Arrow keys move it too.
 export function CoverCropper({
@@ -24,8 +25,12 @@ export function CoverCropper({
   problem,
   onSave,
   onCancel,
+  title = "Sistema la copertina",
+  saveLabel = "Usa come copertina",
 }: {
   picture: LoadedPhoto;
+  title?: string;
+  saveLabel?: string;
   saving: boolean;
   problem: string;
   onSave: (rect: Rect) => void;
@@ -83,10 +88,10 @@ export function CoverCropper({
         aria-labelledby="cover-crop-title"
       >
         <h2 id="cover-crop-title" className={styles.title}>
-          Sistema la copertina
+          {title}
         </h2>
         <p className={styles.hint}>
-          Trascina l'immagine e usa lo zoom: diventa copertina quello che si vede nel riquadro.
+          Trascina l'immagine e usa lo zoom: si tiene quello che si vede nel riquadro.
         </p>
         <div
           className={styles.window}
@@ -143,7 +148,7 @@ export function CoverCropper({
             disabled={saving}
             onClick={() => onSave(cropRect(picture, window169, zoom, offset))}
           >
-            {saving ? "Salvo…" : "Usa come copertina"}
+            {saving ? "Salvo…" : saveLabel}
           </button>
         </div>
       </div>
