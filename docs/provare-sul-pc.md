@@ -121,6 +121,16 @@ $env:FRANZPLAY_LIBRARIES = "D:\Video;E:\Film di famiglia"
 go run ./cmd/franzplay
 ```
 
+Windows con il **Prompt dei comandi** (la finestra nera che mostra `C:\...>` invece di `PS C:\...>`):
+qui si usa `set`, senza virgolette e senza spazi intorno all'`=`.
+
+```bat
+set FRANZPLAY_LIBRARIES=D:\Video;E:\Film di famiglia
+go run ./cmd/franzplay
+```
+
+L'impostazione vale finché resta aperta quella finestra: in una finestra nuova va riscritta.
+
 Mac e Linux, con più cartelle separate da `:`:
 
 ```sh
@@ -186,6 +196,13 @@ Windows (PowerShell):
 
 ```powershell
 $env:FRANZPLAY_ADDR = ":9000"
+go run ./cmd/franzplay
+```
+
+Windows (Prompt dei comandi):
+
+```bat
+set FRANZPLAY_ADDR=:9000
 go run ./cmd/franzplay
 ```
 
