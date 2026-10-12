@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import {
   askSubtitles,
   deleteMadeSubtitles,
+  downloadModel,
   fetchSubtitledVideos,
   fetchSubtitlesSetup,
   languageName,
@@ -89,7 +90,7 @@ export function SubtitlesPage() {
         computer piccolo ci vuole tempo: un film può richiedere ore. Il lavoro si fa un video alla
         volta, quando il computer non ha altro da fare.
       </p>
-      {state.kind === "ready" && <Setup setup={state.setup} />}
+      {state.kind === "ready" && <Setup setup={state.setup} onChanged={reload} />}
       <div className={styles.tools}>
         <search className={styles.searchForm}>
           <form onSubmit={search}>
@@ -173,7 +174,7 @@ export function SubtitlesPage() {
 
 // Setup says what is missing on this computer to make subtitles, and how
 // to add it.
-function Setup({ setup }: { setup: SubtitlesSetup }) {
+function Setup({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () => void }) {
   if (!setup.whisper) {
     return (
       <div className={`glass ${styles.panel}`}>
@@ -191,17 +192,18 @@ function Setup({ setup }: { setup: SubtitlesSetup }) {
   }
   return (
     <div className={`glass ${styles.panel}`}>
-      <div>
+      <div className={styles.failed}>
         {setup.models.length === 0 ? (
           <p className={styles.name}>Manca il modello di Whisper</p>
         ) : (
           <p className={styles.name}>Whisper è pronto. Modelli: {setup.models.join(", ")}</p>
         )}
         <p className={styles.role}>
-          I modelli sono i file come <code>ggml-small.bin</code> (circa 500 MB, va bene su un
-          Raspberry Pi) o <code>ggml-medium.bin</code> (più preciso, più lento). Vanno nella
-          cartella <code className={styles.path}>{setup.modelsFolder}</code>.
+          Il modello è "l'orecchio" di Whisper. FranzPLAY può scaricarlo da solo qui sotto, oppure
+          puoi mettere tu i file come <code>ggml-small.bin</code> nella cartella{" "}
+          <code className={styles.path}>{setup.modelsFolder}</code>.
         </p>
+        <Downloads setup={setup} onChanged={onChanged} />
         {!setup.translator && (
           <p className={styles.role}>
             Per tradurre i sottotitoli serve un server LibreTranslate: scrivi il suo indirizzo
@@ -215,6 +217,82 @@ function Setup({ setup }: { setup: SubtitlesSetup }) {
         )}
       </div>
     </div>
+  );
+}
+
+// megabytes writes a size for people: "466 MB".
+function megabytes(bytes: number): string {
+  return `${Math.round(bytes / (1 << 20)).toLocaleString("it-IT")} MB`;
+}
+
+// Downloads lists the models FranzPLAY can download, and how the
+// download goes.
+function Downloads({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () => void }) {
+  const [problem, setProblem] = useState("");
+  const d = setup.download;
+  const going = d !== null && !d.ended;
+  if (setup.downloadable.length === 0) return null;
+
+  const start = (name: string) => {
+    setProblem("");
+    downloadModel(name)
+      .then(onChanged)
+      .catch((error: unknown) => {
+        console.error(error);
+        setProblem("Non posso scaricarlo adesso: forse un altro modello sta già scaricando.");
+      });
+  };
+
+  return (
+    <>
+      <ul className={styles.models} aria-label="Modelli da scaricare">
+        {setup.downloadable.map((m) => {
+          const here = setup.models.includes(m.name);
+          return (
+            <li key={m.name} className={styles.model}>
+              <span>
+                <strong>{m.name}</strong> · {megabytes(m.size)}
+                <span className={styles.role}> {m.about}</span>
+              </span>
+              {here ? (
+                <span className={styles.role}>Già qui</span>
+              ) : (
+                <button
+                  type="button"
+                  className={`glass ${styles.action}`}
+                  disabled={going}
+                  onClick={() => start(m.name)}
+                  aria-label={`Scarica ${m.name}`}
+                >
+                  Scarica
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {d && going && (
+        <p className={styles.role} role="status">
+          Scarico {d.name}: {megabytes(d.done)}
+          {d.total > 0 && ` di ${megabytes(d.total)}`}…
+        </p>
+      )}
+      {d?.ended && d.error === "" && (
+        <p className={styles.done} role="status">
+          {d.name} scaricato.
+        </p>
+      )}
+      {d?.ended && d.error !== "" && (
+        <p className={styles.problem} role="alert">
+          {d.name}: {d.error}
+        </p>
+      )}
+      {problem && (
+        <p className={styles.problem} role="alert">
+          {problem}
+        </p>
+      )}
+    </>
   );
 }
 

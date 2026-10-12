@@ -316,3 +316,21 @@ func TestDeleteMade(t *testing.T) {
 	s.do(t, "DELETE", path+"EN", "", http.StatusNotFound)
 	s.do(t, "DELETE", path+"english", "", http.StatusNotFound)
 }
+
+func TestDownloadRoute(t *testing.T) {
+	s := newSite(t)
+	s.do(t, "POST", "/api/admin/subtitles/models/small", "", http.StatusNotFound) // no downloader
+	got := decode[Setup](t, s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusOK))
+	if len(got.Downloadable) != 0 || got.Download != nil {
+		t.Errorf("setup = %+v", got)
+	}
+
+	// A downloader that is not running is always busy.
+	s.opts.Downloader = NewDownloader(s.dataDir, "http://unused", func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s.do(t, "POST", "/api/admin/subtitles/models/small", "", http.StatusConflict)
+	s.do(t, "POST", "/api/admin/subtitles/models/huge", "", http.StatusNotFound)
+	got = decode[Setup](t, s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusOK))
+	if len(got.Downloadable) != len(Models) || got.Downloadable[1].Name != "small" || got.Download != nil {
+		t.Errorf("setup = %+v", got)
+	}
+}

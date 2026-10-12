@@ -10,6 +10,11 @@ const setup = {
   translatorLanguages: ["en", "it", "de"],
   languages: ["it", "en", "es", "fr", "de", "pt"],
   modelsFolder: "/srv/franzplay/whisper",
+  downloadable: [
+    { name: "base", size: 142 << 20, about: "Veloce." },
+    { name: "small", size: 466 << 20, about: "Il giusto mezzo." },
+  ],
+  download: null as unknown,
 };
 
 function video(overrides: Record<string, unknown> = {}) {
@@ -54,7 +59,7 @@ function rowOf(name: string) {
   return row;
 }
 
-function routes(videos = [video(), lago, bosco], ready = setup) {
+function routes(videos = [video(), lago, bosco], ready: Record<string, unknown> = setup) {
   return {
     ...signedIn(),
     "GET /api/admin/subtitles/setup": { body: ready },
@@ -174,5 +179,33 @@ describe("subtitles page", () => {
     ];
     act(() => FakeEventSource.last?.emit("jobs"));
     expect(await screen.findByText(/Whisper sta ascoltando/)).toBeInTheDocument();
+  });
+  it("downloads a model and shows how it goes", async () => {
+    const { user, server } = renderApp("/admin/sottotitoli", {
+      ...routes([video()], { ...setup, models: ["small"] }),
+      "POST /api/admin/subtitles/models/base": { status: 202 },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    const models = screen.getByRole("list", { name: "Modelli da scaricare" });
+    expect(within(models).getByText("Già qui")).toBeInTheDocument();
+    await user.click(within(models).getByRole("button", { name: "Scarica base" }));
+    await vi.waitFor(() =>
+      expect(server.requests.some((r) => r.url.endsWith("/api/admin/subtitles/models/base"))).toBe(
+        true,
+      ),
+    );
+  });
+
+  it("shows a download going on", async () => {
+    renderApp(
+      "/admin/sottotitoli",
+      routes([video()], {
+        ...setup,
+        download: { name: "base", done: 71 << 20, total: 142 << 20, error: "", ended: false },
+      }),
+    );
+    await screen.findByRole("list", { name: "Video" });
+    expect(screen.getByText("Scarico base: 71 MB di 142 MB…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scarica base" })).toBeDisabled();
   });
 });
