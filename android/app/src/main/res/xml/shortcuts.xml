@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon: "Cambia server". -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_server"
+        android:shortcutId="change_server"
+        android:shortcutShortLabel="@string/change_server">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="io.github.franzgra.franzplay.SetupActivity"
+            android:targetPackage="io.github.franzgra.franzplay" />
+    </shortcut>
+</shortcuts>

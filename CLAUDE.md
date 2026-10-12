@@ -73,6 +73,7 @@ internal/oldimport/ porta i dati del vecchio FranzPLAY da una copia .sql del suo
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
 internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)
+android/            l'app Android: una finestra sull'interfaccia del server (docs/app-android.md)
 docs/               visione, decisioni (docs/decisioni/), guida per provare sul PC e per importare dal vecchio
 ```
 

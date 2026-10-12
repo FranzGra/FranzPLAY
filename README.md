@@ -32,6 +32,7 @@ needs a login.
 
 Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-pc.md`](docs/provare-sul-pc.md).
 Moving from the old FranzPLAY (in Italian): [`docs/importare-dal-vecchio.md`](docs/importare-dal-vecchio.md).
+Android app (in Italian): [`docs/app-android.md`](docs/app-android.md).
 
 | Variable | Default | What it does |
 |---|---|---|
