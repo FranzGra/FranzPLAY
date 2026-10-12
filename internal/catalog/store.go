@@ -348,6 +348,48 @@ func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, 
 	return name, nil
 }
 
+// autoSubtitle is a subtitle written by whisper, or its translation.
+type autoSubtitle struct {
+	lang string // "it"
+	file string // in the data folder's autosubtitles/
+}
+
+// auto returns the automatic subtitles made from the video's current
+// content, by language.
+func (s store) auto(ctx context.Context, id int64) (subs []autoSubtitle, err error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT a.lang, a.file FROM auto_subtitles a JOIN videos v ON v.id = a.video_id
+		WHERE a.video_id = ? AND a.fingerprint = v.fingerprint ORDER BY a.lang`, id)
+	if err != nil {
+		return nil, fmt.Errorf("read automatic subtitles of video %d: %w", id, err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		var a autoSubtitle
+		if err := rows.Scan(&a.lang, &a.file); err != nil {
+			return nil, fmt.Errorf("read automatic subtitles of video %d: %w", id, err)
+		}
+		subs = append(subs, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read automatic subtitles of video %d: %w", id, err)
+	}
+	return subs, nil
+}
+
+// autoFile returns the file of one automatic subtitle of a visible video.
+func (s store) autoFile(ctx context.Context, id int64, lang string) (string, error) {
+	var name string
+	err := s.db.QueryRowContext(ctx, `SELECT a.file FROM auto_subtitles a JOIN videos v ON v.id = a.video_id
+		WHERE a.video_id = ? AND a.lang = ? AND a.fingerprint = v.fingerprint AND v.visible`, id, lang).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", errNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("find automatic subtitle %s of video %d: %w", lang, id, err)
+	}
+	return name, nil
+}
+
 // audio returns the sound tracks inside a video file, in the order of the
 // file.
 func (s store) audio(ctx context.Context, id int64) (tracks []video.EmbeddedAudio, err error) {

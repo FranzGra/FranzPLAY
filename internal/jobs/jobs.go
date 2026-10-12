@@ -24,6 +24,9 @@ const (
 	Clip    Kind = "clip"    // make the few seconds that play on the video's card
 	Tracks  Kind = "tracks"  // list the languages inside the file, copy its subtitles
 	Convert Kind = "convert" // make a copy every browser plays, when the file itself does not
+	// Transcribe writes subtitles from the sound with whisper and translates
+	// them, only when the administrator asks.
+	Transcribe Kind = "transcribe"
 )
 
 // defaultTimeout stops a job that takes far too long, like ffmpeg stuck
@@ -31,14 +34,15 @@ const (
 // seconds.
 const defaultTimeout = 10 * time.Minute
 
-// convertTimeout is the time allowed to a conversion: encoding a long
-// film again takes hours on a Raspberry Pi.
-const convertTimeout = 24 * time.Hour
+// longTimeout is the time allowed to a conversion or a transcription:
+// encoding a long film again, or listening to it, takes hours on a
+// Raspberry Pi.
+const longTimeout = 24 * time.Hour
 
 // timeout is how long a job of this kind may run.
 func (k Kind) timeout() time.Duration {
-	if k == Convert {
-		return convertTimeout
+	if k == Convert || k == Transcribe {
+		return longTimeout
 	}
 	return defaultTimeout
 }
@@ -46,9 +50,10 @@ func (k Kind) timeout() time.Duration {
 // givesWay reports whether a job of this kind stops when other work
 // arrives, to start again later from the beginning. Conversions do: they
 // run only when the machine has nothing else to do, so a new video gets
-// its cover in seconds, not after a film has been encoded.
+// its cover in seconds, not after a film has been encoded. Transcriptions
+// do too, for the same reason.
 func (k Kind) givesWay() bool {
-	return k == Convert
+	return k == Convert || k == Transcribe
 }
 
 // state is where a job is in its life. It is stored as text in the database.

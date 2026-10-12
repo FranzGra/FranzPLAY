@@ -190,9 +190,10 @@ func TestWorkerPermanentFailure(t *testing.T) {
 }
 
 func TestWorkerRunsTheKindsInOrder(t *testing.T) {
-	fx := newFixture(t, 6)
+	fx := newFixture(t, 7)
 	fx.enqueue(t, fx.videos[5], Details)
 	fx.enqueue(t, fx.videos[4], Convert)
+	fx.enqueue(t, fx.videos[6], Transcribe)
 	fx.enqueue(t, fx.videos[3], Tracks)
 	fx.enqueue(t, fx.videos[0], Preview)
 	fx.enqueue(t, fx.videos[1], Cover)
@@ -202,10 +203,10 @@ func TestWorkerRunsTheKindsInOrder(t *testing.T) {
 		return func(context.Context, int64) error { order = append(order, k); return nil }
 	}
 	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Details: record(Details), Cover: record(Cover),
-		Preview: record(Preview), Tracks: record(Tracks), Convert: record(Convert)})
+		Preview: record(Preview), Tracks: record(Tracks), Transcribe: record(Transcribe), Convert: record(Convert)})
 	for runNext(t, w) {
 	}
-	if want := []Kind{Probe, Details, Cover, Preview, Tracks, Convert}; !slices.Equal(order, want) {
+	if want := []Kind{Probe, Details, Cover, Preview, Tracks, Transcribe, Convert}; !slices.Equal(order, want) {
 		t.Errorf("order = %v, want %v", order, want)
 	}
 }
@@ -268,7 +269,7 @@ func TestConversionDoesNotGiveWayToItsOwnKind(t *testing.T) {
 }
 
 func TestTimeouts(t *testing.T) {
-	if Convert.timeout() < 12*time.Hour || Cover.timeout() > time.Hour {
+	if Convert.timeout() < 12*time.Hour || Transcribe.timeout() < 12*time.Hour || Cover.timeout() > time.Hour {
 		t.Errorf("timeouts: convert %v, cover %v", Convert.timeout(), Cover.timeout())
 	}
 }

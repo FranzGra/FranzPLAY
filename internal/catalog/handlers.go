@@ -19,7 +19,7 @@ import (
 //	                                      mixed with ?order=random&seed=N
 //	GET /api/videos/{id}                  one video
 //	GET /api/videos/{id}/stream           the video file, with jumps forward and back
-//	GET /api/videos/{id}/subtitles        the subtitles next to the video file and inside it
+//	GET /api/videos/{id}/subtitles        the subtitles next to the video file, inside it and made by whisper
 //	GET /api/videos/{id}/subtitles/{key}  one subtitle, as WebVTT
 //	GET /api/categories                   categories with their number of videos
 //	GET /api/covers/{name}                a cover image
@@ -27,7 +27,8 @@ import (
 //	GET /api/clips/{name}                 the seconds that play on a video's card
 func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
 	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir),
-		convertedDir: filepath.Join(dataDir, media.ConvertedDir), logger: logger}
+		autoSubtitlesDir: filepath.Join(dataDir, media.AutoSubtitlesDir),
+		convertedDir:     filepath.Join(dataDir, media.ConvertedDir), logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos", h.list)
 		mux.HandleFunc("GET /api/videos/{id}", h.get)
@@ -44,8 +45,10 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 type handlers struct {
 	store        store
 	subtitlesDir string // the copies of the subtitles inside the videos
-	convertedDir string // the copies of the videos not every browser plays
-	logger       *slog.Logger
+	// autoSubtitlesDir holds the subtitles written by whisper.
+	autoSubtitlesDir string
+	convertedDir     string // the copies of the videos not every browser plays
+	logger           *slog.Logger
 }
 
 // listResponse is the body of GET /api/videos.

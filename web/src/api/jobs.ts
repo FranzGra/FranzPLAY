@@ -11,6 +11,7 @@ export type JobKind =
   | "preview"
   | "clip"
   | "tracks"
+  | "transcribe"
   | "convert";
 
 export type Job = {
@@ -41,6 +42,7 @@ const jobKinds: readonly JobKind[] = [
   "preview",
   "clip",
   "tracks",
+  "transcribe",
   "convert",
 ];
 
