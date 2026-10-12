@@ -40,6 +40,7 @@
 
 .cover {
   flex: none;
+  align-self: flex-start; /* never taller than 16:9, whatever the buttons beside it */
   width: 120px;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius-s);
