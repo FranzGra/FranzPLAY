@@ -27,6 +27,11 @@ type Report struct {
 	Problems   int // folders or files that could not be read
 }
 
+// Changed reports whether the scan changed the list of videos people see.
+func (r Report) Changed() bool {
+	return r.Added+r.Moved+r.Updated+r.Restored+r.Missing+r.Forgotten > 0
+}
+
 // Scanner keeps the catalog in line with the video folders.
 type Scanner struct {
 	store     store
@@ -35,6 +40,7 @@ type Scanner struct {
 	now       func() time.Time
 	open      func(dir string) fs.FS
 	newJobs   func()
+	changed   func()
 }
 
 // NewScanner returns a scanner for the given video folders.
@@ -46,12 +52,17 @@ func NewScanner(db *sql.DB, libraries []string, logger *slog.Logger) *Scanner {
 		now:       time.Now,
 		open:      os.DirFS, // read-only view of the folder
 		newJobs:   func() {},
+		changed:   func() {},
 	}
 }
 
 // OnNewJobs sets what to call when a scan adds work to the job queue,
 // usually waking the job worker.
 func (s *Scanner) OnNewJobs(f func()) { s.newJobs = f }
+
+// OnChange sets what to call when a scan changes the list of videos,
+// usually telling the open pages.
+func (s *Scanner) OnChange(f func()) { s.changed = f }
 
 // Run scans once right away, then again at every interval, until ctx is
 // cancelled. A failed scan is logged and retried at the next interval.
@@ -172,6 +183,9 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 		default:
 			report.Updated++
 		}
+	}
+	if report.Changed() {
+		s.changed()
 	}
 	return report, nil
 }

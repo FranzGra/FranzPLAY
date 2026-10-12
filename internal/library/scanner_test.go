@@ -369,15 +369,20 @@ func TestScanAsksToReadNewAndChangedVideos(t *testing.T) {
 	writeFile(t, lib, "a.mp4", "a")
 	writeFile(t, lib, "b.mp4", "b")
 	ts := newTestScanner(t, lib)
-	woken := 0
+	woken, changed := 0, 0
 	ts.OnNewJobs(func() { woken++ })
+	ts.OnChange(func() { changed++ })
 
 	ts.scan(t, Report{Added: 2})
 	if got := ts.probeJobs(t); len(got) != 2 || got["a.mp4"] != "pending" || got["b.mp4"] != "pending" {
 		t.Fatalf("probe jobs = %v, want one pending per new video", got)
 	}
-	if woken != 1 {
-		t.Errorf("worker woken %d times, want 1", woken)
+	if woken != 1 || changed != 1 {
+		t.Errorf("worker woken %d times, pages told %d times; want 1 and 1", woken, changed)
+	}
+	ts.scan(t, Report{Unchanged: 2})
+	if changed != 1 {
+		t.Errorf("pages told %d times after a scan that changed nothing, want still 1", changed)
 	}
 
 	// The jobs are done; then a.mp4 is replaced and b.mp4 renamed.

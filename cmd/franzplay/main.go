@@ -19,6 +19,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/comments"
 	"github.com/FranzGra/FranzPLAY/internal/config"
 	"github.com/FranzGra/FranzPLAY/internal/database"
+	"github.com/FranzGra/FranzPLAY/internal/events"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/likes"
@@ -79,18 +80,30 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	}
 	// Background work: the job queue and the library scan. Both must end
 	// before the database closes (deferred above, so it runs after this).
+	hub := events.NewHub()
+	// tell wraps a job that changes what the video lists show: when it
+	// succeeds, the open pages hear about it.
+	tell := func(h jobs.Handler) jobs.Handler {
+		return func(ctx context.Context, videoID int64) error {
+			if err := h(ctx, videoID); err != nil {
+				return err
+			}
+			hub.Publish(events.Library)
+			return nil
+		}
+	}
 	handlers := map[jobs.Kind]jobs.Handler{}
 	if ffprobe, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe not found: videos will have no duration until it is installed",
 			"setting", config.EnvFFprobe, "error", err)
 	} else {
-		handlers[jobs.Probe] = media.NewProber(db, ffprobe).Handle
+		handlers[jobs.Probe] = tell(media.NewProber(db, ffprobe).Handle)
 	}
 	if ffmpeg, err := exec.LookPath(cfg.FFmpeg); err != nil {
 		logger.Warn("ffmpeg not found: videos will have no cover or previews until it is installed",
 			"setting", config.EnvFFmpeg, "error", err)
 	} else {
-		handlers[jobs.Cover] = media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle
+		handlers[jobs.Cover] = tell(media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle)
 		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
 	}
 	// Before the worker starts, so it never sees a cover or a preview being made.
@@ -107,6 +120,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	worker := jobs.NewWorker(db, handlers, logger)
 	scanner := library.NewScanner(db, cfg.Libraries, logger)
 	scanner.OnNewJobs(worker.Wake)
+	scanner.OnChange(func() { hub.Publish(events.Library) })
 
 	bgCtx, stopBackground := context.WithCancel(ctx)
 	var background sync.WaitGroup
@@ -128,6 +142,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		likes.Routes(db, logger),
 		comments.Routes(db, logger),
 		playlists.Routes(db, catalog.NewLookup(db), logger),
+		hub.Routes(logger),
 	)
 
 	srv := &http.Server{
@@ -137,6 +152,8 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		IdleTimeout:       2 * time.Minute,
 		// No WriteTimeout: streaming a long video must not be cut off.
 	}
+	// Open event streams never end by themselves: close them when stopping.
+	srv.RegisterOnShutdown(hub.Close)
 
 	serveErr := make(chan error, 1)
 	go func() {
