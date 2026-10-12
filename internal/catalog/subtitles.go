@@ -30,28 +30,28 @@ type subtitleTrack struct {
 
 // findSubtitles lists the subtitle files next to a video. The folder is
 // only read (rule 1).
-func (h handlers) findSubtitles(w http.ResponseWriter, r *http.Request) (videoFile string, subs []video.Subtitle, ok bool) {
+func (h handlers) findSubtitles(w http.ResponseWriter, r *http.Request) (id int64, videoFile string, subs []video.Subtitle, ok bool) {
 	id, valid := parseID(r.PathValue("id"))
 	if !valid {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
-		return "", nil, false
+		return 0, "", nil, false
 	}
 	name, err := h.store.file(r.Context(), id)
 	if errors.Is(err, errNotFound) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
-		return "", nil, false
+		return 0, "", nil, false
 	}
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
-		return "", nil, false
+		return 0, "", nil, false
 	}
 	entries, err := os.ReadDir(filepath.Dir(name))
 	if errors.Is(err, fs.ErrNotExist) {
-		return name, nil, true // folder gone: the next scan will notice
+		return id, name, nil, true // folder gone: the next scan will notice
 	}
 	if err != nil {
 		respond.InternalError(w, r, h.logger, fmt.Errorf("read video folder: %w", err))
-		return "", nil, false
+		return 0, "", nil, false
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -59,16 +59,38 @@ func (h handlers) findSubtitles(w http.ResponseWriter, r *http.Request) (videoFi
 			names = append(names, e.Name())
 		}
 	}
-	return name, video.FindSubtitles(name, names), true
+	return id, name, video.FindSubtitles(name, names), true
 }
 
+// insidePrefix starts the key of a subtitle inside the video file:
+// "inside-2" is the file's stream 2. A subtitle next to the video always
+// ends with .srt or .vtt, so the two never mix.
+const insidePrefix = "inside-"
+
+// insideStream reads the stream of a key made with insidePrefix.
+func insideStream(key string) (int, bool) {
+	n, found := strings.CutPrefix(key, insidePrefix)
+	if !found {
+		return 0, false
+	}
+	stream, err := strconv.Atoi(n)
+	return stream, err == nil && stream >= 0 && strconv.Itoa(stream) == n
+}
+
+// subtitles lists the subtitles next to the video first, since someone
+// put them there on purpose, then the ones inside the file.
 func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
-	_, subs, ok := h.findSubtitles(w, r)
+	videoID, _, subs, ok := h.findSubtitles(w, r)
 	if !ok {
 		return
 	}
-	id := r.PathValue("id")
-	tracks := make([]subtitleTrack, 0, len(subs))
+	id := strconv.FormatInt(videoID, 10)
+	inside, err := h.store.embedded(r.Context(), videoID)
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	tracks := make([]subtitleTrack, 0, len(subs)+len(inside))
 	for _, s := range subs {
 		tracks = append(tracks, subtitleTrack{
 			Key:   s.Key,
@@ -77,13 +99,27 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 			Src:   "/api/videos/" + id + "/subtitles/" + url.PathEscape(s.Key),
 		})
 	}
+	for _, s := range inside {
+		key := insidePrefix + strconv.Itoa(s.Stream)
+		tracks = append(tracks, subtitleTrack{
+			Key:   key,
+			Lang:  video.LangCode(s.Lang),
+			Label: s.Label(),
+			Src:   "/api/videos/" + id + "/subtitles/" + key,
+		})
+	}
 	respond.JSON(w, r, h.logger, http.StatusOK, tracks)
 }
 
 // subtitle sends one subtitle file as WebVTT. The key must be one of the
-// subtitles found next to the video: nothing else on the disk can be asked.
+// subtitles found next to the video or copied from inside it: nothing
+// else on the disk can be asked.
 func (h handlers) subtitle(w http.ResponseWriter, r *http.Request) {
-	videoFile, subs, ok := h.findSubtitles(w, r)
+	if stream, ok := insideStream(r.PathValue("key")); ok {
+		h.insideSubtitle(w, r, stream)
+		return
+	}
+	_, videoFile, subs, ok := h.findSubtitles(w, r)
 	if !ok {
 		return
 	}
@@ -108,7 +144,40 @@ func (h handlers) subtitle(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	body := video.ToWebVTT(video.DecodeSubtitleText(data), found.Format)
+	h.sendVTT(w, r, video.ToWebVTT(video.DecodeSubtitleText(data), found.Format))
+}
+
+// insideSubtitle sends the copy of a subtitle inside the video file,
+// already WebVTT.
+func (h handlers) insideSubtitle(w http.ResponseWriter, r *http.Request, stream int) {
+	id, valid := parseID(r.PathValue("id"))
+	if !valid {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
+		return
+	}
+	name, err := h.store.embeddedFile(r.Context(), id, stream)
+	if errors.Is(err, errNotFound) {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "subtitle not found")
+		return
+	}
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	data, err := readSmall(filepath.Join(h.subtitlesDir, filepath.Base(name)), maxSubtitleSize)
+	if errors.Is(err, fs.ErrNotExist) {
+		respond.Error(w, r, h.logger, http.StatusNotFound, "subtitle not found")
+		return
+	}
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	h.sendVTT(w, r, string(data))
+}
+
+// sendVTT answers with a subtitle in WebVTT.
+func (h handlers) sendVTT(w http.ResponseWriter, r *http.Request, body string) {
 	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.Header().Set("Cache-Control", "private, no-cache")

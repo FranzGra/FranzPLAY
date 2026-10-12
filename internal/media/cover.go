@@ -175,12 +175,12 @@ func removeFile(dir, name string) error {
 // It only ever looks inside the covers folder of the data folder. It must
 // run before the job worker starts, so it never sees a cover being made.
 func RemoveOrphanCovers(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, CoversDir), "cover")
+	return removeOrphans(ctx, db, filepath.Join(dataDir, CoversDir), "videos", "cover")
 }
 
 // removeOrphans deletes what is in dir and not named in the given column
-// of the videos: old files, and work left half done by a crash.
-func removeOrphans(ctx context.Context, db *sql.DB, dir, column string) (removed int, err error) {
+// of a table: old files, and work left half done by a crash.
+func removeOrphans(ctx context.Context, db *sql.DB, dir, table, column string) (removed int, err error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
@@ -188,7 +188,7 @@ func removeOrphans(ctx context.Context, db *sql.DB, dir, column string) (removed
 	if err != nil {
 		return 0, fmt.Errorf("read %s folder: %w", column, err)
 	}
-	used, err := usedFiles(ctx, db, column)
+	used, err := usedFiles(ctx, db, table, column)
 	if err != nil {
 		return 0, err
 	}
@@ -212,10 +212,10 @@ func removeOrphans(ctx context.Context, db *sql.DB, dir, column string) (removed
 	return removed, nil
 }
 
-// usedFiles returns the file names in a column of the videos: "cover" or
-// "preview", never anything a request chose.
-func usedFiles(ctx context.Context, db *sql.DB, column string) (_ map[string]bool, err error) {
-	rows, err := db.QueryContext(ctx, `SELECT `+column+` FROM videos WHERE `+column+` IS NOT NULL`)
+// usedFiles returns the file names in a column of a table: constants of
+// this package, never anything a request chose.
+func usedFiles(ctx context.Context, db *sql.DB, table, column string) (_ map[string]bool, err error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+column+` FROM `+table+` WHERE `+column+` IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("read %s files: %w", column, err)
 	}

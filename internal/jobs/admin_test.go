@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -84,8 +85,8 @@ func TestOverview(t *testing.T) {
 	if f.Title != "Mare" || f.Error != "broken file" || f.Attempts != 3 || !f.At.Equal(fx.clock) {
 		t.Errorf("failed job = %+v", f)
 	}
-	want := []KindState{{Probe, true}, {Cover, true}, {Preview, false}}
-	if len(o.Kinds) != 3 || o.Kinds[0] != want[0] || o.Kinds[1] != want[1] || o.Kinds[2] != want[2] {
+	want := []KindState{{Probe, true}, {Cover, true}, {Preview, false}, {Tracks, false}}
+	if !slices.Equal(o.Kinds, want) {
 		t.Errorf("kinds = %+v, want %+v", o.Kinds, want)
 	}
 }

@@ -209,7 +209,7 @@ func TestRemoveOrphanCovers(t *testing.T) {
 	}
 }
 
-func TestProberAsksForTheCoverAndThePreviews(t *testing.T) {
+func TestProberAsksForTheCoverThePreviewsAndTheSubtitles(t *testing.T) {
 	db, id := catalog(t, "/videos", "a.mp4")
 	var args []string
 	p := NewProber(db, "ffprobe")
@@ -217,7 +217,7 @@ func TestProberAsksForTheCoverAndThePreviews(t *testing.T) {
 	if err := p.Handle(context.Background(), id); err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"cover", "preview"} {
+	for _, kind := range []string{"cover", "preview", "tracks"} {
 		var state string
 		if err := db.QueryRow(`SELECT state FROM jobs WHERE video_id = ? AND kind = ?`, id, kind).Scan(&state); err != nil {
 			t.Fatalf("no %s job: %v", kind, err)

@@ -219,3 +219,45 @@ func (s store) file(ctx context.Context, id int64) (string, error) {
 	}
 	return filepath.Join(root, filepath.FromSlash(rel)), nil
 }
+
+// embeddedSubtitle is a subtitle inside a video file, with its copy.
+type embeddedSubtitle struct {
+	video.EmbeddedSubtitle
+	file string // the copy, in the data folder's subtitles/
+}
+
+// embedded returns the subtitles inside a video file that were copied
+// for the browser, in the order of the file.
+func (s store) embedded(ctx context.Context, id int64) (subs []embeddedSubtitle, err error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT stream, lang, title, forced, file FROM video_subtitles
+		WHERE video_id = ? ORDER BY stream`, id)
+	if err != nil {
+		return nil, fmt.Errorf("read subtitles of video %d: %w", id, err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		var e embeddedSubtitle
+		if err := rows.Scan(&e.Stream, &e.Lang, &e.Title, &e.Forced, &e.file); err != nil {
+			return nil, fmt.Errorf("read subtitles of video %d: %w", id, err)
+		}
+		subs = append(subs, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read subtitles of video %d: %w", id, err)
+	}
+	return subs, nil
+}
+
+// embeddedFile returns the copy of one subtitle inside a visible video.
+func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, error) {
+	var name string
+	err := s.db.QueryRowContext(ctx, `SELECT s.file FROM video_subtitles s JOIN videos v ON v.id = s.video_id
+		WHERE s.video_id = ? AND s.stream = ? AND v.visible`, id, stream).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", errNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("find subtitle %d of video %d: %w", stream, id, err)
+	}
+	return name, nil
+}

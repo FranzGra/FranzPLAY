@@ -106,6 +106,9 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	} else {
 		handlers[jobs.Cover] = tell(media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle)
 		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
+		if ffprobe, err := exec.LookPath(cfg.FFprobe); err == nil {
+			handlers[jobs.Tracks] = media.NewSubtitler(db, ffprobe, ffmpeg, cfg.DataDir).Handle
+		}
 	}
 	// Before the worker starts, so it never sees a cover or a preview being made.
 	if n, err := media.RemoveOrphanCovers(ctx, db, cfg.DataDir); err != nil {
@@ -117,6 +120,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		logger.Error("remove unused previews", "error", err)
 	} else if n > 0 {
 		logger.Info("removed unused previews", "count", n)
+	}
+	if n, err := media.RemoveOrphanSubtitles(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused subtitles", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused subtitles", "count", n)
 	}
 	worker := jobs.NewWorker(db, handlers, logger)
 	worker.OnChange(func() { hub.Publish(events.Jobs) })

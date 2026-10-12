@@ -95,10 +95,21 @@ func SubtitleLabel(lang string) string {
 	}
 }
 
+// twoLetters are the short codes browsers expect for the three-letter
+// ones that video files often use.
+var twoLetters = map[string]string{
+	"ita": "it", "eng": "en", "spa": "es", "fra": "fr", "fre": "fr", "deu": "de", "ger": "de",
+	"por": "pt", "rus": "ru", "jpn": "ja", "zho": "zh", "chi": "zh", "ara": "ar",
+	"nld": "nl", "dut": "nl", "pol": "pl", "ron": "ro", "rum": "ro",
+}
+
 // LangCode is the language for the browser (the srclang of a track): the
-// first part of the name, "" when unknown.
+// first part of the name, "" when unknown. "ita" becomes "it".
 func LangCode(lang string) string {
 	code, _, _ := strings.Cut(lang, ".")
+	if short, ok := twoLetters[strings.ToLower(code)]; ok {
+		return short
+	}
 	return strings.ReplaceAll(code, "_", "-")
 }
 

@@ -231,7 +231,12 @@ tua. «Guarda più tardi» resta sempre privata.
 
 **Sottotitoli.** FranzPLAY usa i file `.srt` e `.vtt` che stanno accanto al video con lo stesso
 nome, per esempio `mare.srt`, oppure `mare.it.srt` e `mare.en.srt` se ci sono più lingue. Non li
-modifica: li legge e li converte al volo.
+modifica: li legge e li converte al volo. Usa anche i sottotitoli **dentro** il video, come quelli
+di molti file `.mkv`: ne fa una copia nella cartella dati, in `subtitles/`, e compaiono nel menu
+dei sottotitoli del player insieme agli altri. Per un film lungo la copia può richiedere un po' di
+tempo, perché ffmpeg deve leggere tutto il file: la vedi in Amministrazione › Lavori come
+«Lingue e sottotitoli». I sottotitoli fatti di immagini (quelli dei DVD e dei Blu-ray) il browser
+non li sa mostrare, quindi per ora vengono saltati.
 
 Se un video resta nero o compare «Questo video non si riesce a riprodurre», il browser non conosce
 il suo formato (capita con alcuni `.mkv` e `.avi`). La conversione automatica arriverà in una

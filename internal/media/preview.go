@@ -176,5 +176,5 @@ func countFrames(work string) (int, error) {
 // video uses any more, and work left half done. Like RemoveOrphanCovers,
 // it must run before the job worker starts.
 func RemoveOrphanPreviews(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, PreviewsDir), "preview")
+	return removeOrphans(ctx, db, filepath.Join(dataDir, PreviewsDir), "videos", "preview")
 }

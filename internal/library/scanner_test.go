@@ -341,7 +341,13 @@ func TestScanOfAnUnchangedLibraryReadsNoVideo(t *testing.T) {
 
 func (ts *testScanner) probeJobs(t *testing.T) map[string]string {
 	t.Helper()
-	rows, err := ts.db.Query(`SELECT v.path, j.state FROM jobs j JOIN videos v ON v.id = j.video_id WHERE j.kind = 'probe'`)
+	return ts.jobs(t, "probe")
+}
+
+// jobs returns the state of the jobs of a kind, by video path.
+func (ts *testScanner) jobs(t *testing.T, kind string) map[string]string {
+	t.Helper()
+	rows, err := ts.db.Query(`SELECT v.path, j.state FROM jobs j JOIN videos v ON v.id = j.video_id WHERE j.kind = ?`, kind)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,5 +410,33 @@ func TestScanAsksToReadNewAndChangedVideos(t *testing.T) {
 	ts.scan(t, Report{Unchanged: 2})
 	if woken != 2 {
 		t.Errorf("worker woken %d times, want 2 (not on an unchanged scan)", woken)
+	}
+}
+
+func TestScanAsksForWhatFailedWhileAVideoWasMissing(t *testing.T) {
+	lib := t.TempDir()
+	name := writeFile(t, lib, "film.mkv", "film")
+	writeFile(t, lib, "altro.mp4", "other") // so the folder never looks unplugged
+	ts := newTestScanner(t, lib)
+	ts.scan(t, Report{Added: 2})
+	stash := filepath.Join(t.TempDir(), "film.mkv")
+	if err := os.Rename(name, stash); err != nil {
+		t.Fatal(err)
+	}
+	ts.scan(t, Report{Unchanged: 1, Missing: 1})
+	// It was read before going missing; its subtitles failed while it was away.
+	if _, err := ts.db.Exec(`UPDATE jobs SET state = 'done' WHERE kind = 'probe';
+		INSERT INTO jobs (video_id, kind, state, updated_at) SELECT id, 'tracks', 'failed', 1 FROM videos WHERE path = 'film.mkv'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(stash, name); err != nil {
+		t.Fatal(err)
+	}
+	ts.scan(t, Report{Unchanged: 1, Restored: 1})
+	if got := ts.jobs(t, "probe")["film.mkv"]; got != "done" {
+		t.Errorf("probe job %q, want still done (same content)", got)
+	}
+	if got := ts.jobs(t, "tracks")["film.mkv"]; got != "pending" {
+		t.Errorf("subtitles job %q, want pending again", got)
 	}
 }
