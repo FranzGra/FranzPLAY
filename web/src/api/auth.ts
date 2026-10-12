@@ -1,5 +1,6 @@
 // Logging in and out, and who is logged in.
 
+import { isAccentColor } from "../app/accent";
 import { ApiError, request } from "./client";
 
 export type Role = "admin" | "user";
@@ -31,6 +32,7 @@ export type Account = {
   name: string;
   role: Role;
   canUpload: boolean;
+  accentColor: string; // "#rrggbb", or "" for FranzPLAY's own
 };
 
 // parseAccount checks a user sent by the server, once, at the edge.
@@ -38,7 +40,7 @@ export function parseAccount(data: unknown): Account {
   if (typeof data !== "object" || data === null) {
     throw new Error("account: response is not an object");
   }
-  const { id, name, role, canUpload } = data as Record<string, unknown>;
+  const { id, name, role, canUpload, accentColor } = data as Record<string, unknown>;
   if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
     throw new Error("account: bad id");
   }
@@ -51,7 +53,10 @@ export function parseAccount(data: unknown): Account {
   if (typeof canUpload !== "boolean") {
     throw new Error("account: bad canUpload");
   }
-  return { id, name, role, canUpload };
+  if (typeof accentColor !== "string" || (accentColor !== "" && !isAccentColor(accentColor))) {
+    throw new Error("account: bad accentColor");
+  }
+  return { id, name, role, canUpload, accentColor };
 }
 
 // fetchMe returns the logged-in user, or null when nobody is logged in.
@@ -143,4 +148,10 @@ export async function rename(name: string): Promise<Account> {
 // password once more.
 export async function deleteMe(password: string): Promise<void> {
   await request("/api/me", { method: "DELETE", body: { password } });
+}
+
+// setAccentColor saves the color I chose for the interface ("" for
+// FranzPLAY's own).
+export async function setAccentColor(color: string): Promise<Account> {
+  return parseAccount(await request("/api/me/color", { method: "PUT", body: { color } }));
 }

@@ -25,6 +25,27 @@ func (s *Service) rename(ctx context.Context, a Account, name string) (Account, 
 	return a, nil
 }
 
+// setAccentColor changes the color a user chose for the interface.
+func (s *Service) setAccentColor(ctx context.Context, a Account, color string) (Account, error) {
+	c, err := parseColor(color)
+	if err != nil {
+		return Account{}, err
+	}
+	var value any // NULL for FranzPLAY's own color
+	if c != "" {
+		value = string(c)
+	}
+	res, err := s.store.db.ExecContext(ctx, `UPDATE users SET accent_color = ? WHERE id = ?`, value, a.ID)
+	if err != nil {
+		return Account{}, fmt.Errorf("set accent color: %w", err)
+	}
+	if err := oneRow(res, "set accent color"); err != nil {
+		return Account{}, err
+	}
+	a.AccentColor = c
+	return a, nil
+}
+
 // renameUser changes a name, if no other user has it. A user may change
 // only the capitals of their own name ("giulia" to "Giulia").
 func (s store) renameUser(ctx context.Context, id int64, name string) (err error) {
@@ -144,4 +165,27 @@ func (s *Service) handleDeleteMe(w http.ResponseWriter, r *http.Request) {
 	}
 	clearCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type colorRequest struct {
+	Color string `json:"color"`
+}
+
+func (s *Service) handleAccentColor(w http.ResponseWriter, r *http.Request) {
+	a, ok := FromContext(r.Context())
+	if !ok {
+		respond.Error(w, r, s.logger, http.StatusUnauthorized, "login required")
+		return
+	}
+	var req colorRequest
+	if err := readJSON(w, r, &req); err != nil {
+		s.badRequest(w, r)
+		return
+	}
+	a, err := s.setAccentColor(r.Context(), a, req.Color)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	respond.JSON(w, r, s.logger, http.StatusOK, a)
 }

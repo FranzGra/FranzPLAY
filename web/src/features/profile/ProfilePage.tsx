@@ -4,6 +4,7 @@ import { useAccount, useAuth } from "../../app/auth";
 import { Avatar } from "../../components/Avatar";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
+import { AccentPicker } from "./AccentPicker";
 import { DeleteAccount } from "./DeleteAccount";
 import { NameForm } from "./NameForm";
 import { PasswordForm } from "./PasswordForm";
@@ -73,6 +74,8 @@ export function ProfilePage() {
           </Link>
         ))}
       </nav>
+
+      <AccentPicker />
 
       {editing === "name" && (
         <NameForm

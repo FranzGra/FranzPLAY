@@ -14,6 +14,9 @@ type Account struct {
 	Name      string `json:"name"`
 	Role      Role   `json:"role"`
 	CanUpload bool   `json:"canUpload"`
+	// AccentColor is the color the user chose for the interface; "" means
+	// FranzPLAY's own.
+	AccentColor Color `json:"accentColor"`
 }
 
 // Store errors.
@@ -81,8 +84,9 @@ func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now tim
 func (s store) credentials(ctx context.Context, name string) (Account, string, error) {
 	var a Account
 	var hash, role string
-	err := s.db.QueryRowContext(ctx, `SELECT id, name, role, can_upload, password_hash FROM users WHERE name = ?`, name).
-		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &hash)
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, name, role, can_upload, coalesce(accent_color, ''), password_hash FROM users WHERE name = ?`, name).
+		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.AccentColor, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, "", errUserNotFound
 	}
@@ -111,7 +115,7 @@ func (s store) passwordHash(ctx context.Context, id int64) (string, error) {
 }
 
 func (s store) list(ctx context.Context) (_ []Account, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload FROM users ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, coalesce(accent_color, '') FROM users ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -120,7 +124,7 @@ func (s store) list(ctx context.Context) (_ []Account, err error) {
 	for rows.Next() {
 		var a Account
 		var role string
-		if err := rows.Scan(&a.ID, &a.Name, &role, &a.CanUpload); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.AccentColor); err != nil {
 			return nil, fmt.Errorf("list users: %w", err)
 		}
 		r, ok := parseRole(role)
@@ -176,7 +180,8 @@ func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bo
 
 	a := Account{ID: id, Role: role, CanUpload: canUpload}
 	var old string
-	err = tx.QueryRowContext(ctx, `SELECT name, role FROM users WHERE id = ?`, id).Scan(&a.Name, &old)
+	err = tx.QueryRowContext(ctx, `SELECT name, role, coalesce(accent_color, '') FROM users WHERE id = ?`, id).
+		Scan(&a.Name, &old, &a.AccentColor)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, errUserNotFound
 	}

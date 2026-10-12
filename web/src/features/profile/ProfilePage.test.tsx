@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, signedIn, testAccount } from "../../test/render";
 
 describe("profile page", () => {
@@ -162,6 +162,73 @@ describe("profile page", () => {
     await user.click(screen.getByRole("button", { name: "Elimina per sempre" }));
     expect(await screen.findByText(/unico amministratore/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+  });
+
+  it("chooses the color of the interface", async () => {
+    const { user, server } = renderApp("/profilo", {
+      ...signedIn(),
+      "PUT /api/me/color": async (request) =>
+        new Response(
+          JSON.stringify({ ...testAccount, accentColor: (await request.clone().json()).color }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+    });
+    const colors = await screen.findByRole("region", { name: "Colore" });
+    expect(within(colors).getByRole("button", { name: "FranzPLAY" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // Nothing to save until another color is picked in the color window.
+    expect(
+      within(colors).queryByRole("button", { name: "Usa questo colore" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(colors).getByRole("button", { name: "Viola" }));
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#7c3aed"),
+    );
+    expect(within(colors).getByRole("button", { name: "Viola" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(await server.requests.at(-1)?.json()).toEqual({ color: "#7c3aed" });
+
+    // Any other color, saved only when asked.
+    fireEvent.input(within(colors).getByLabelText("Un altro colore"), {
+      target: { value: "#123456" },
+    });
+    await user.click(within(colors).getByRole("button", { name: "Usa questo colore" }));
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#123456"),
+    );
+
+    await user.click(within(colors).getByRole("button", { name: "FranzPLAY" }));
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe(""),
+    );
+  });
+
+  it("says when the color was not saved", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { user } = renderApp("/profilo", {
+      ...signedIn(),
+      "PUT /api/me/color": { status: 500, body: { error: "internal error" } },
+    });
+    const colors = await screen.findByRole("region", { name: "Colore" });
+    await user.click(within(colors).getByRole("button", { name: "Rosso" }));
+    expect(await within(colors).findByRole("alert")).toHaveTextContent("Colore non salvato");
+    expect(within(colors).getByRole("button", { name: "FranzPLAY" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("starts in the color I chose", async () => {
+    renderApp("/profilo", signedIn({ ...testAccount, accentColor: "#0d9488" }));
+    expect(await screen.findByRole("button", { name: "Verde acqua" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#0d9488");
   });
 
   it("shows the server version", async () => {

@@ -227,7 +227,7 @@
   margin-left: -8px;
   border-radius: 50%;
   background: var(--color-accent);
-  box-shadow: 0 0 0 3px rgb(41 151 255 / 0.3);
+  box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.3);
   transform: translateY(-50%) scale(0.75);
   transition: transform 120ms;
 }

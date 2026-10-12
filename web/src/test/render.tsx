@@ -4,10 +4,18 @@ import { MemoryRouter } from "react-router";
 import type { Account } from "../api/auth";
 import { App } from "../app/App";
 
-export const testAccount: Account = { id: 1, name: "Francesco", role: "admin", canUpload: true };
+export const testAccount: Account = {
+  id: 1,
+  name: "Francesco",
+  role: "admin",
+  canUpload: true,
+  accentColor: "",
+};
 
 // A route of the fake server: what it answers to "METHOD /path".
-type Answer = { status?: number; body?: unknown } | ((request: Request) => Response);
+type Answer =
+  | { status?: number; body?: unknown }
+  | ((request: Request) => Response | Promise<Response>);
 export type Routes = Record<string, Answer>;
 
 // fakeServer replaces fetch() with a small pretend server. Unknown

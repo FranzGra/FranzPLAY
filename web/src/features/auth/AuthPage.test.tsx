@@ -134,7 +134,7 @@ describe("registering without an invite", () => {
   });
 
   it("creates my account and lets me in", async () => {
-    const newcomer = { id: 7, name: "Giulia", role: "user", canUpload: false };
+    const newcomer = { id: 7, name: "Giulia", role: "user", canUpload: false, accentColor: "" };
     const { user, server } = renderApp("/", {
       ...open,
       "POST /api/register": { status: 201, body: newcomer },

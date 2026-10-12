@@ -60,10 +60,10 @@ func (s store) sessionAccount(ctx context.Context, hash []byte, now time.Time) (
 	var role string
 	var lastSeen int64
 	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.name, u.role, u.can_upload, s.last_seen
+		SELECT u.id, u.name, u.role, u.can_upload, coalesce(u.accent_color, ''), s.last_seen
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ?`, hash, now.Unix()).
-		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &lastSeen)
+		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.AccentColor, &lastSeen)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, errNoSession
 	}
