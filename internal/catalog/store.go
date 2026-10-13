@@ -31,6 +31,7 @@ type Video struct {
 	Playable bool      `json:"playable"` // every browser can play it: as it is, or its copy
 	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
 	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
+	ClipHD   *string   `json:"clipHD"`   // the same clip, sharper, for a good connection; null = none yet
 	Format   string    `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
 	Likes    int64     `json:"likes"`    // how many people like it
 	Private  bool      `json:"private"`  // only its uploader, and the people they chose, see it
@@ -119,7 +120,7 @@ const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name =
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
-	v.shown_author, v.shown_published_on, v.clip, v.private,
+	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private,
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
 
@@ -138,14 +139,14 @@ func (m moreColumns) Scan(dest ...any) error { return m.row.Scan(append(dest, m.
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
 	var duration, width, height, previewGap, previewCount sql.NullInt64
-	var cover, videoCodec, audioCodec, preview, converted, author, published, clip sql.NullString
+	var cover, videoCodec, audioCodec, preview, converted, author, published, clip, clipHD sql.NullString
 	var addedAt int64
 	var relPath string
 	var uploaderID sql.NullInt64
 	var uploaderName sql.NullString
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
-		&author, &published, &clip, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
+		&author, &published, &clip, &clipHD, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
 		return Video{}, err
 	}
 	if duration.Valid {
@@ -170,6 +171,10 @@ func scanVideo(row rowScanner) (Video, error) {
 	if clip.Valid {
 		address := "/api/clips/" + clip.String
 		v.Clip = &address
+	}
+	if clipHD.Valid {
+		address := "/api/clips-hd/" + clipHD.String
+		v.ClipHD = &address
 	}
 	if uploaderID.Valid && uploaderName.Valid {
 		v.Uploader = &Person{ID: uploaderID.Int64, Name: uploaderName.String}
