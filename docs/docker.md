@@ -32,8 +32,18 @@ curl -fsSLO https://raw.githubusercontent.com/FranzGra/FranzPLAY/main/.env.examp
 cp .env.example .env
 ```
 
+Su **Windows**, in PowerShell, i comandi sono un po' diversi (`curl.exe` con `.exe`, e `copy`
+al posto di `cp`):
+
+```powershell
+mkdir franzplay; cd franzplay
+curl.exe -fsSLO https://raw.githubusercontent.com/FranzGra/FranzPLAY/main/compose.yaml
+curl.exe -fsSLO https://raw.githubusercontent.com/FranzGra/FranzPLAY/main/.env.example
+copy .env.example .env
+```
+
 Se hai già scaricato tutto il progetto con `git clone`, sono già nella sua cartella principale:
-basta `cp .env.example .env`.
+basta `cp .env.example .env` (su Windows `copy .env.example .env`).
 
 ## 3. Scrivi le tue scelte nel file `.env`
 
@@ -49,7 +59,7 @@ Le altre hanno già un valore che va bene:
 | Impostazione | Di solito | Cosa fa |
 |---|---|---|
 | `FRANZPLAY_VIDEO_FOLDER` | da scrivere | La cartella dei tuoi video. FranzPLAY la vede in **sola lettura**: non può toccarla |
-| `FRANZPLAY_DATA_FOLDER` | `./data` | La cartella dati: database, copertine, anteprime, video caricati. Deve stare fuori da quella dei video |
+| `FRANZPLAY_DATA_FOLDER` | `./data` | La cartella dati: database, copertine, anteprime, video caricati. Deve stare fuori da quella dei video. **Su Windows e Mac scrivi `franzplay-data`**: la tiene Docker, perché il database su una cartella di Windows o del Mac sarebbe lento e a rischio |
 | `FRANZPLAY_PORT` | `8090` | La porta del sito |
 | `PUID` e `PGID` | `1000` | Il tuo utente: i file della cartella dati saranno tuoi. Li vedi con il comando `id` |
 | `TZ` | `Europe/Rome` | Il fuso orario |
@@ -93,6 +103,9 @@ spiegato in [provare-sul-pc.md](provare-sul-pc.md#il-primo-accesso).
 **Copia di sicurezza.** Tutto quello che FranzPLAY sa sta nella cartella dati. Fermalo
 (`docker compose down`), copia la cartella dove vuoi e riaccendilo. Per spostare FranzPLAY su un
 altro computer: stessa cosa, e sul nuovo scrivi in `.env` dove hai messo la cartella.
+
+Se usi `franzplay-data` (Windows e Mac), la cartella la tiene Docker: la vedi in Docker Desktop,
+sezione **Volumes**, e da lì la puoi esportare.
 
 ## Più cartelle di video
 

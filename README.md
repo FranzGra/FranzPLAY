@@ -49,6 +49,19 @@ Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-p
 Moving from the old FranzPLAY (in Italian): [`docs/importare-dal-vecchio.md`](docs/importare-dal-vecchio.md).
 Android app (in Italian): [`docs/app-android.md`](docs/app-android.md).
 
+### Covers and previews
+
+FranzPLAY makes a cover, a few silent seconds that play on the cover (360p and 720p, the browser
+picks one by the connection) and the small frames over the player's timeline. All of them go in
+the data folder (`covers/`, `clips/`, `clips-hd/`, `previews/`), never in your video folders.
+
+To use your own cover, put an image **with the same name as the video** next to it:
+for `beach.mp4`, `beach.jpg` (or `.jpeg`, `.png`, `.webp`, `-poster.jpg`, `-thumb.jpg`), as
+yt-dlp saves them with `--write-thumbnail`. It is only read, never changed. The administrator can
+also upload a cover or pick a moment of the video in **Amministrazione › Video**.
+
+Full guide (in Italian): [`docs/copertine-e-anteprime.md`](docs/copertine-e-anteprime.md).
+
 | Variable | Default | What it does |
 |---|---|---|
 | `FRANZPLAY_ADDR` | `:8090` | Address and port of the web server |
