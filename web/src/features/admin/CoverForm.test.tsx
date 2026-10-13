@@ -134,8 +134,9 @@ describe("choosing a cover", () => {
       tpdb: true,
       tmdbKey: true,
       tpdbKey: false,
-      rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"] },
+      rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"], confirm: false },
       askedToday: 0,
+      proposals: 0,
     };
     const { user, server, panel } = await openCover({
       "GET /api/online": { body: online },
@@ -191,8 +192,9 @@ describe("choosing a cover", () => {
       tpdb: true,
       tmdbKey: true,
       tpdbKey: false,
-      rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"] },
+      rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"], confirm: false },
       askedToday: 0,
+      proposals: 0,
     };
     const { user, panel } = await openCover({ "GET /api/online": { body: off } });
     await user.click(within(panel).getByRole("button", { name: "Cerca su internet" }));

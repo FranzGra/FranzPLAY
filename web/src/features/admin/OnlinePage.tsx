@@ -10,6 +10,7 @@ import {
 } from "../../api/online";
 import { EmptyState } from "../../components/EmptyState";
 import styles from "./Admin.module.css";
+import { OnlineProposals } from "./OnlineProposals";
 import { OnlineRulesForm } from "./OnlineRules";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; status: OnlineStatus };
@@ -182,6 +183,11 @@ export function OnlinePage() {
           setDone("Regole salvate.");
         }}
       />
+      {(before.rules.confirm || before.proposals > 0) && (
+        <OnlineProposals
+          onChange={(left) => setState({ kind: "ready", status: { ...before, proposals: left } })}
+        />
+      )}
       {problem && (
         <p role="alert" className={styles.problem}>
           {problem}

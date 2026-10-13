@@ -272,7 +272,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		autosubs.Routes(db, subtitles, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),
 		uploader.Routes,
-		online.Routes(db, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
+		online.Routes(db, cfg.DataDir, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		site.Routes(db, logger),
 		overview.Routes(db, overview.Settings{Version: version, DataDir: cfg.DataDir,
 			Libraries: cfg.Libraries, Tools: available[jobs.Probe] && available[jobs.Cover]}, logger),

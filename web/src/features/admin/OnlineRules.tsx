@@ -152,6 +152,20 @@ export function OnlineRulesForm({
         </ol>
       </div>
 
+      <label className={styles.check}>
+        <input
+          type="checkbox"
+          checked={rules.confirm}
+          onChange={(e) => setRules({ ...rules, confirm: e.target.checked })}
+        />
+        Chiedi conferma prima di usare quello che trova
+      </label>
+      <p className={styles.role}>
+        Con la conferma, copertina e titolo trovati aspettano qui sotto finché scegli «Usa» o
+        «Scarta». Le fonti rispondono solo quando riconoscono proprio quel video (stesso codice,
+        stesso titolo e anno, o stessa impronta del file), quindi non c'è un punteggio da regolare.
+      </p>
+
       <div className={styles.buttons}>
         <button type="submit" className={styles.primary} disabled={sending}>
           Salva le regole

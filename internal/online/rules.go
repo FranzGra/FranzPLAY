@@ -11,7 +11,8 @@ import (
 )
 
 // Rules are the administrator's limits on the questions to the internet:
-// when they may be asked, how many a day, and which source first.
+// when they may be asked, how many a day, which source first, and if
+// what is found waits for their yes.
 type Rules struct {
 	// From and To are the hours questions may be asked in, from From up to
 	// To, on the clock of the machine FranzPLAY runs on. From 22 to 6 is
@@ -23,6 +24,9 @@ type Rules struct {
 	// Order are the sources, the one asked first first. When a source
 	// finds nothing, the next one that can know the video is asked.
 	Order []string `json:"order"`
+	// Confirm keeps what is found as a proposal the administrator accepts
+	// or discards ("chiedi conferma"); otherwise it is used at once.
+	Confirm bool `json:"confirm"`
 }
 
 // maxDaily is the highest daily limit accepted.

@@ -17,22 +17,25 @@ export type KeySource = "tmdb" | "tpdb";
 
 // OnlineRules are the administrator's limits on the questions: the hours
 // (from up to to; the same hour twice means at any time), the most videos
-// a day (0: no limit) and the order the sources are asked in.
+// a day (0: no limit), the order the sources are asked in, and if what is
+// found waits for their yes.
 export type OnlineRules = {
   from: number;
   to: number;
   daily: number;
   order: SourceName[];
+  confirm: boolean;
 };
 
 // OnlineStatus is what the server says: the sources, if a key is saved,
-// the rules, and how many videos were asked about today. A key never
-// comes back from the server.
+// the rules, how many videos were asked about today and how many
+// proposals wait for a yes. A key never comes back from the server.
 export type OnlineStatus = OnlineSources & {
   tmdbKey: boolean;
   tpdbKey: boolean;
   rules: OnlineRules;
   askedToday: number;
+  proposals: number;
 };
 
 const sourceNames: readonly string[] = ["youtube", "tmdb", "tpdb"];
@@ -55,7 +58,15 @@ function parseRules(data: unknown): OnlineRules {
   ) {
     throw new Error("online rules order: not every source once");
   }
-  return { from: whole("from", 23), to: whole("to", 23), daily: whole("daily", 100000), order };
+  const { confirm } = fields;
+  if (typeof confirm !== "boolean") throw new Error("online rules confirm: not true or false");
+  return {
+    from: whole("from", 23),
+    to: whole("to", 23),
+    daily: whole("daily", 100000),
+    order,
+    confirm,
+  };
 }
 
 export function parseStatus(data: unknown): OnlineStatus {
@@ -73,13 +84,14 @@ export function parseStatus(data: unknown): OnlineStatus {
     tmdbKey: flag("tmdbKey"),
     tpdbKey: flag("tpdbKey"),
     rules: parseRules(fields.rules),
-    askedToday: asked(fields.askedToday),
+    askedToday: count(fields.askedToday, "askedToday"),
+    proposals: count(fields.proposals, "proposals"),
   };
 }
 
-function asked(value: unknown): number {
+function count(value: unknown, name: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new Error("online askedToday: not a count");
+    throw new Error(`online ${name}: not a count`);
   }
   return value;
 }
@@ -95,9 +107,18 @@ export async function saveSources({ youtube, tmdb, tpdb }: OnlineSources): Promi
 }
 
 // saveRules saves the administrator's rules.
-export async function saveRules({ from, to, daily, order }: OnlineRules): Promise<OnlineStatus> {
+export async function saveRules({
+  from,
+  to,
+  daily,
+  order,
+  confirm,
+}: OnlineRules): Promise<OnlineStatus> {
   return parseStatus(
-    await request("/api/online/rules", { method: "PUT", body: { from, to, daily, order } }),
+    await request("/api/online/rules", {
+      method: "PUT",
+      body: { from, to, daily, order, confirm },
+    }),
   );
 }
 
@@ -162,4 +183,70 @@ export async function fetchPicture(source: KeySource, at: string): Promise<Blob>
   if (!response.ok)
     throw new ApiError(response.status, `picture: the server answered ${response.status}`);
   return response.blob();
+}
+
+// Proposal is what a source found for a video, waiting for the
+// administrator's yes: video is the title people see now.
+export type Proposal = {
+  videoId: number;
+  video: string;
+  source: SourceName;
+  title: string;
+  author: string;
+  date: string;
+  description: string;
+  picture: boolean;
+};
+
+export function parseProposals(data: unknown): Proposal[] {
+  if (typeof data !== "object" || data === null) throw new Error("proposals: not an object");
+  const { proposals } = data as Record<string, unknown>;
+  if (!Array.isArray(proposals)) throw new Error("proposals: not a list");
+  return proposals.map((item, i) => {
+    if (typeof item !== "object" || item === null) throw new Error(`proposal ${i}: not an object`);
+    const fields = item as Record<string, unknown>;
+    const text = (name: string): string => {
+      const value = fields[name];
+      if (typeof value !== "string") throw new Error(`proposal ${i} ${name}: not text`);
+      return value;
+    };
+    const { videoId, source, picture } = fields;
+    if (typeof videoId !== "number" || !Number.isInteger(videoId) || videoId < 1) {
+      throw new Error(`proposal ${i} videoId: not an id`);
+    }
+    if (typeof source !== "string" || !sourceNames.includes(source)) {
+      throw new Error(`proposal ${i} source: unknown`);
+    }
+    if (typeof picture !== "boolean") throw new Error(`proposal ${i} picture: not true or false`);
+    return {
+      videoId,
+      video: text("video"),
+      source: source as SourceName,
+      title: text("title"),
+      author: text("author"),
+      date: text("date"),
+      description: text("description"),
+      picture,
+    };
+  });
+}
+
+// fetchProposals lists what the sources found and waits for a yes.
+export async function fetchProposals(signal?: AbortSignal): Promise<Proposal[]> {
+  return parseProposals(await request("/api/online/proposals", { signal }));
+}
+
+// proposalPictureURL is the picture of a proposal, kept by FranzPLAY.
+export function proposalPictureURL(videoId: number): string {
+  return `/api/online/proposals/${videoId}/picture`;
+}
+
+// acceptProposal uses a proposal for its video.
+export async function acceptProposal(videoId: number): Promise<void> {
+  await request(`/api/online/proposals/${videoId}`, { method: "POST" });
+}
+
+// discardProposal throws a proposal away: the video keeps what it had.
+export async function discardProposal(videoId: number): Promise<void> {
+  await request(`/api/online/proposals/${videoId}`, { method: "DELETE" });
 }

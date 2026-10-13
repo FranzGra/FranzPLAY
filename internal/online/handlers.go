@@ -22,15 +22,19 @@ import (
 //	PUT /api/online            turn them on or off {youtube, tmdb, tpdb}
 //	PUT /api/online/tmdb-key   save TMDB's key {key}, after TMDB said it is valid
 //	PUT /api/online/tpdb-key   the same for ThePornDB
-//	PUT /api/online/rules      the hours, the daily limit and the order {from, to, daily, order}
+//	PUT /api/online/rules      the hours, the daily limit, the order and the confirm mode {from, to, daily, order, confirm}
 //	GET /api/online/search     search a source by hand ?source=tmdb|tpdb&q=words
 //	GET /api/online/picture    a picture a search found ?source=…&at=…
+//	GET /api/online/proposals              what was found and waits for a yes
+//	GET /api/online/proposals/{id}/picture its picture
+//	POST /api/online/proposals/{id}        use it
+//	DELETE /api/online/proposals/{id}      throw it away
 //
 // A key is never sent back: the answers only say if there is one.
 // newJobs is called when the change put work in the queue.
-func Routes(db *sql.DB, newJobs func(), logger *slog.Logger) func(mux *http.ServeMux) {
+func Routes(db *sql.DB, dataDir string, newJobs func(), logger *slog.Logger) func(mux *http.ServeMux) {
 	client := &http.Client{Timeout: askTimeout}
-	a := api{db: db, newJobs: newJobs, logger: logger, now: time.Now, account: users.FromContext,
+	a := api{db: db, dataDir: dataDir, newJobs: newJobs, logger: logger, now: time.Now, account: users.FromContext,
 		tmdb: newTMDB(client), tpdb: newTPDB(client)}
 	return a.routes
 }
@@ -43,10 +47,15 @@ func (a api) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/online/rules", a.only(a.handleRules))
 	mux.HandleFunc("GET /api/online/search", a.only(a.handleSearch))
 	mux.HandleFunc("GET /api/online/picture", a.only(a.handlePicture))
+	mux.HandleFunc("GET /api/online/proposals", a.only(a.handleProposals))
+	mux.HandleFunc("GET /api/online/proposals/{id}/picture", a.only(a.handleProposalPicture))
+	mux.HandleFunc("POST /api/online/proposals/{id}", a.only(a.handleAccept))
+	mux.HandleFunc("DELETE /api/online/proposals/{id}", a.only(a.handleDiscard))
 }
 
 type api struct {
 	db      *sql.DB
+	dataDir string
 	newJobs func()
 	logger  *slog.Logger
 	now     func() time.Time
@@ -62,11 +71,18 @@ type status struct {
 	TPDBKey    bool  `json:"tpdbKey"` // a key for ThePornDB is saved
 	Rules      Rules `json:"rules"`
 	AskedToday int   `json:"askedToday"` // videos asked about today
+	Proposals  int   `json:"proposals"`  // what was found and waits for a yes
 }
 
-func (a api) statusOf(s settings) status {
-	return status{Sources: s.Sources, TMDBKey: s.tmdbKey != "", TPDBKey: s.tpdbKey != "",
-		Rules: s.rules, AskedToday: askedOn(s.asked, a.now())}
+// sendStatus answers with what the administrator sees of the settings.
+func (a api) sendStatus(w http.ResponseWriter, r *http.Request, s settings) {
+	n, err := countProposals(r.Context(), a.db)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	respond.JSON(w, r, a.logger, http.StatusOK, status{Sources: s.Sources, TMDBKey: s.tmdbKey != "",
+		TPDBKey: s.tpdbKey != "", Rules: s.rules, AskedToday: askedOn(s.asked, a.now()), Proposals: n})
 }
 
 // only lets only administrators through.
@@ -90,7 +106,7 @@ func (a api) handleGet(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
+	a.sendStatus(w, r, s)
 }
 
 func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +135,7 @@ func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
 	a.logger.InfoContext(r.Context(), "online sources changed", "youtube", next.YouTube, "tmdb", next.TMDB,
 		"tpdb", next.TPDB, "by", who.Name)
 	s.Sources = next
-	respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
+	a.sendStatus(w, r, s)
 }
 
 // handleRules saves the administrator's rules. The questions waiting for
@@ -153,13 +169,13 @@ func (a api) handleRules(w http.ResponseWriter, r *http.Request) {
 	a.newJobs()
 	who, _ := a.account(r.Context())
 	a.logger.InfoContext(r.Context(), "online rules changed", "from", next.From, "to", next.To,
-		"daily", next.Daily, "order", strings.Join(next.Order, ","), "by", who.Name)
+		"daily", next.Daily, "order", strings.Join(next.Order, ","), "confirm", next.Confirm, "by", who.Name)
 	s, err := loadSettings(r.Context(), a.db)
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
+	a.sendStatus(w, r, s)
 }
 
 // keySource is a source with a key: how its keys look, and how to ask
@@ -223,7 +239,7 @@ func (a api) handleKey(setting string) http.HandlerFunc {
 		who, _ := a.account(r.Context())
 		a.logger.InfoContext(r.Context(), "key saved", "source", source.name, "by", who.Name)
 		*saved = key
-		respond.JSON(w, r, a.logger, http.StatusOK, a.statusOf(s))
+		a.sendStatus(w, r, s)
 	}
 }
 
