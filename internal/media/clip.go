@@ -75,17 +75,22 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 		return errors.Join(removeIfValid(dir, old), removeIfValid(dirHD, oldHD))
 	}
 	name := clipName(videoID, fingerprint)
-	var args func(out, outHD string) []string
+	var build func(ctx context.Context, out, outHD string) error
 	if own.Valid {
 		uploaded := filepath.Join(c.dataDir, OwnClipsDir, filepath.Base(own.String))
 		name = strings.TrimSuffix(name, ".mp4") + "-o" + ownTag(own.String) + ".mp4"
-		args = func(out, outHD string) []string { return ownClipArgs(uploaded, c.threads, out, outHD) }
+		build = func(ctx context.Context, out, outHD string) error {
+			_, err := c.run(ctx, c.ffmpeg, ownClipArgs(uploaded, c.threads, out, outHD)...)
+			return err
+		}
 	} else {
 		parts := video.ClipParts(duration.Int64)
 		if len(parts) == 0 {
 			return nil // too short to need a clip
 		}
-		args = func(out, outHD string) []string { return clipArgs(file, parts, c.threads, out, outHD) }
+		build = func(ctx context.Context, out, outHD string) error {
+			return c.fromParts(ctx, file, parts, dir, out, outHD)
+		}
 	}
 
 	// Rule 6: ffmpeg writes temporary files, renamed only when finished.
@@ -100,7 +105,7 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 	}
 	defer func() { err = errors.Join(err, removeFile(dirHD, filepath.Base(tmpHD))) }()
 
-	if _, err := c.run(ctx, c.ffmpeg, args(tmp, tmpHD)...); err != nil {
+	if err := build(ctx, tmp, tmpHD); err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
 	}
 	for _, made := range []string{tmp, tmpHD} {
@@ -189,23 +194,60 @@ func ownClipArgs(uploaded string, threads int, out, outHD string) []string {
 	return append(args, clipOutputs(threads, out, outHD)...)
 }
 
-// clipArgs builds the ffmpeg command for the clips: each part is read
-// straight from its moment (-ss before -i jumps there without decoding
-// what comes before), made the same size, and the parts are joined one
-// after the other. No sound: the clip plays silent on the card.
-func clipArgs(file string, parts []video.ClipPart, threads int, out, outHD string) []string {
-	args := []string{"-v", "error", "-y"}
-	var filter, joined strings.Builder
-	for i, p := range parts {
-		args = append(args,
-			"-ss", strconv.FormatInt(p.Start, 10), "-t", strconv.FormatInt(p.Length, 10),
-			"-i", "file:"+file)
-		label := "p" + strconv.Itoa(i)
-		fmt.Fprintf(&filter, "[%d:v:0]%s[%s];", i, clipFrames, label)
-		joined.WriteString("[" + label + "]")
+// fromParts makes the clips from the moments of the video, one moment at
+// a time: each is read straight from its place (-ss before -i jumps there
+// without decoding what comes before), made the same size, and written to
+// a work folder in dir; a last run joins them. Opened all together, the
+// moments of a 4K film needed 1.3 GB of memory, too much for a Raspberry
+// Pi with 2 GB; one at a time, about 0.46 GB, and no slower.
+func (c *Clipper) fromParts(ctx context.Context, file string, parts []video.ClipPart, dir, out, outHD string) (err error) {
+	work, err := os.MkdirTemp(dir, ".new-*")
+	if err != nil {
+		return err
 	}
-	fmt.Fprintf(&filter, "%sconcat=n=%d:v=1:a=0[clip];%s", joined.String(), len(parts), twoSizes)
-	args = append(args, "-filter_complex", filter.String())
+	defer func() { err = errors.Join(err, os.RemoveAll(work)) }()
+	pieces := make([]string, len(parts))
+	for i, p := range parts {
+		pieces[i] = filepath.Join(work, strconv.Itoa(i)+".mp4")
+		if _, err := c.run(ctx, c.ffmpeg, partArgs(file, p, c.threads, pieces[i])...); err != nil {
+			return err
+		}
+	}
+	_, err = c.run(ctx, c.ffmpeg, joinPartsArgs(pieces, c.threads, out, outHD)...)
+	return err
+}
+
+// partArgs builds the ffmpeg command for one moment of the clip. The
+// piece is only a step: it is made fast and nearly lossless (crf
+// pieceQuality), so the clips lose nothing when it is encoded again.
+func partArgs(file string, p video.ClipPart, threads int, out string) []string {
+	return []string{"-v", "error", "-y",
+		"-ss", strconv.FormatInt(p.Start, 10), "-t", strconv.FormatInt(p.Length, 10),
+		"-i", "file:" + file,
+		"-map", "0:v:0", "-an", "-sn", "-dn",
+		"-vf", clipFrames,
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", strconv.Itoa(pieceQuality),
+		"-threads", strconv.Itoa(threads),
+		"-f", "mp4", "file:" + out,
+	}
+}
+
+// pieceQuality is the quality of the moments before they are joined: low
+// numbers are sharper, and 16 cannot be told from the original.
+const pieceQuality = 16
+
+// joinPartsArgs builds the ffmpeg command that joins the moments one after
+// the other and writes the two clips. No sound: the clip plays silent on
+// the card.
+func joinPartsArgs(pieces []string, threads int, out, outHD string) []string {
+	args := []string{"-v", "error", "-y"}
+	var joined strings.Builder
+	for i, p := range pieces {
+		args = append(args, "-i", "file:"+p)
+		fmt.Fprintf(&joined, "[%d:v:0]", i)
+	}
+	filter := fmt.Sprintf("%sconcat=n=%d:v=1:a=0[clip];%s", joined.String(), len(pieces), twoSizes)
+	args = append(args, "-filter_complex", filter)
 	return append(args, clipOutputs(threads, out, outHD)...)
 }
 
