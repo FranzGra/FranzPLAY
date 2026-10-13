@@ -3,6 +3,69 @@ import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 
 describe("video page", () => {
+  it("prepares at once a video this browser says it cannot play, and says so", async () => {
+    // jsdom, like an old iPhone with a .webm, can play nothing.
+    const { server } = renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": {
+        body: videoJSON({
+          format: "WEBM",
+          playable: false,
+          fileType: 'video/webm; codecs="vp09.00.40.08, opus"',
+        }),
+      },
+      "POST /api/videos/7/prepare": { body: { state: "working", percent: 40 } },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    await waitFor(() =>
+      expect(server.requests.some((r) => r.method === "POST" && r.url.endsWith("/prepare"))).toBe(
+        true,
+      ),
+    );
+    const video = document.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "error", { value: { code: 4 } });
+    fireEvent.error(video);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /sta preparando adesso una versione adatta \(40%\)/,
+    );
+  });
+
+  it("plays the copy once it is ready, after the player failed", async () => {
+    let asked = 0;
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON({ format: "MKV", playable: false, fileType: "" }) },
+      "POST /api/videos/7/prepare": () => {
+        asked++;
+        return new Response(JSON.stringify({ state: "ready" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    const first = document.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(first, "error", { value: { code: 4 } });
+    fireEvent.error(first);
+    // The player starts again, on the copy.
+    await waitFor(() => expect(document.querySelector("video")).not.toBe(first));
+    expect(asked).toBe(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("plays the file itself when this browser is sure it can, and else the copy", async () => {
+    const spy = vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("probably");
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON({ copy: true }) },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    expect(document.querySelector("video")).toHaveAttribute(
+      "src",
+      "/api/videos/7/stream?original=1",
+    );
+    spy.mockRestore();
+  });
+
   it("shows the player, the details and the videos to watch after", async () => {
     renderApp("/video/7", {
       ...signedIn(),

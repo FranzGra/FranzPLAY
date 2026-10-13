@@ -84,9 +84,26 @@ Apple dichiara di supportare, e vanno confermate su un iPhone e un Mac veri.
 - I video in HEVC (molti film recenti, i video dell'iPhone) costavano già una nuova codifica:
   non cambia niente.
 
+## Chi aspetta passa avanti
+
+Le copie sono l'ultimo lavoro della coda e cedono il passo (decisione 0007): su una libreria
+grande, un `.mkv` poteva aspettare giorni. Ma se una persona lo apre adesso sul suo iPhone, lo
+vuole adesso.
+
+- Quando il browser dice di non saper aprire il file (prima ancora di provare, se lo sa già, o
+  quando il player fallisce), la pagina lo dice al server (`POST /api/videos/{id}/prepare`).
+- Il lavoro della copia di quel video diventa **urgente**: passa davanti a tutti gli altri e non
+  cede più il passo. Se una copia "normale" di un altro video sta andando, si ferma e lascia
+  passare quella urgente. Se la copia era fallita, si riprova da capo.
+- Nel player compare cosa succede: «in coda», «la sta preparando adesso (35%)», o «non è
+  riuscito». La percentuale viene da ffmpeg, che ogni pochi secondi scrive a che punto è in un
+  piccolo file nella cartella dati.
+- Quando la copia è pronta, il video **parte da solo**: la pagina lo sente dagli avvisi del
+  server e ricarica il player.
+
+Un lavoro si segna urgente solo per un video che quella persona può vedere, e solo se gli serve
+davvero una copia.
+
 ## Cosa resta da fare
 
-- Quando una persona apre un video che il suo dispositivo non sa aprire e la copia non è ancora
-  pronta, oggi deve aspettare che la coda ci arrivi. Il passo successivo: il video **passa
-  davanti** nella coda, e il player mostra a che punto è.
 - Cambiare lingua audio su Safari, che vuole ricevere il video a pezzi (passo separato).

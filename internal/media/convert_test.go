@@ -60,16 +60,17 @@ func (fx *convertFixture) files(t *testing.T) []string {
 
 func TestConvertArgs(t *testing.T) {
 	copyPicture := convertArgs("/v/film.mkv", video.ConvertPlan{Needed: true, CopyVideo: true},
-		[]string{"ac3", "aac"}, 2, "/data/converted/.new-1.mp4")
+		[]string{"ac3", "aac"}, 2, "/data/converted/.progress-1.txt", "/data/converted/.new-1.mp4")
 	want := []string{"-v", "error", "-nostdin", "-y", "-i", "file:/v/film.mkv", "-map", "0:V:0", "-c:v", "copy",
 		"-map", "0:a:0", "-c:a:0", "aac", "-ac:a:0", "2", "-b:a:0", "192k",
 		"-map", "0:a:1", "-c:a:1", "copy",
-		"-sn", "-dn", "-threads", "2", "-movflags", "+faststart", "-f", "mp4", "file:/data/converted/.new-1.mp4"}
+		"-sn", "-dn", "-threads", "2", "-progress", "file:/data/converted/.progress-1.txt", "-stats_period", "5",
+		"-movflags", "+faststart", "-f", "mp4", "file:/data/converted/.new-1.mp4"}
 	if !slices.Equal(copyPicture, want) {
 		t.Errorf("copy the picture:\n got %q\nwant %q", copyPicture, want)
 	}
 
-	encode := strings.Join(convertArgs("/v/film.avi", video.ConvertPlan{Needed: true}, nil, 1, "out.mp4"), " ")
+	encode := strings.Join(convertArgs("/v/film.avi", video.ConvertPlan{Needed: true}, nil, 1, "p.txt", "out.mp4"), " ")
 	for _, part := range []string{"-c:v libx264", "-pix_fmt yuv420p", "yadif=deint=interlaced",
 		"min(1080,trunc(ih/2)*2)", "-map 0:a? -c:a aac -ac 2"} {
 		if !strings.Contains(encode, part) {
@@ -302,6 +303,9 @@ func TestConvertWithRealFFmpeg(t *testing.T) {
 			if err := db.QueryRow(`SELECT converted FROM videos WHERE id = ?`, id).Scan(&name); err != nil {
 				t.Fatal(err)
 			}
+			if left, err := os.ReadDir(filepath.Join(dataDir, ConvertedDir)); err != nil || len(left) != 1 {
+				t.Errorf("converted folder holds %v (%v), want only the copy", left, err)
+			}
 			out, err := run(context.Background(), ffprobe, "-v", "error", "-show_entries",
 				"stream=codec_name,pix_fmt,width,height", "-of", "json", filepath.Join(dataDir, ConvertedDir, name))
 			if err != nil {
@@ -338,4 +342,31 @@ func firstOf(list []string) string {
 		return ""
 	}
 	return list[0]
+}
+
+func TestConvertedSoFar(t *testing.T) {
+	dataDir := t.TempDir()
+	if _, ok, err := ConvertedSoFar(dataDir, 4); ok || err != nil {
+		t.Errorf("no copy being made: ok %v, %v", ok, err)
+	}
+	dir := filepath.Join(dataDir, ConvertedDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// What ffmpeg writes with -progress: a block every few seconds.
+	progress := "frame=10\nout_time_us=2000000\nprogress=continue\n" +
+		"frame=300\nout_time_us=12500000\nout_time=00:00:12.500000\nprogress=continue\n"
+	if err := os.WriteFile(filepath.Join(dir, progressName(4)), []byte(progress), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok, err := ConvertedSoFar(dataDir, 4); got != 12.5 || !ok || err != nil {
+		t.Errorf("ConvertedSoFar = %v, %v, %v; want 12.5", got, ok, err)
+	}
+	// Just started: no time yet (ffmpeg writes N/A at first).
+	if err := os.WriteFile(filepath.Join(dir, progressName(4)), []byte("out_time_us=N/A\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := ConvertedSoFar(dataDir, 4); ok || err != nil {
+		t.Errorf("no time yet: ok %v, %v", ok, err)
+	}
 }

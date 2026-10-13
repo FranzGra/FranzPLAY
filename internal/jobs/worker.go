@@ -127,6 +127,7 @@ type job struct {
 	videoID  int64
 	kind     Kind
 	attempts int
+	urgent   bool // someone is waiting for it: it never gives way
 }
 
 // RunNext runs the next job that is due, if there is one, and reports
@@ -144,8 +145,8 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	yieldCtx, yield := context.WithCancelCause(ctx)
 	jobCtx, cancel := context.WithTimeout(yieldCtx, j.kind.timeout())
 	stopWatching := func() {}
-	if j.kind.givesWay() {
-		stopWatching = w.watchForOthers(jobCtx, yield)
+	if j.kind.givesWay() && !j.urgent {
+		stopWatching = w.watchForOthers(jobCtx, j.id, yield)
 	}
 	start := time.Now()
 	runErr := w.runHandler(jobCtx, h, j)
@@ -186,7 +187,7 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 // watchForOthers watches the queue while a job that gives way runs, and
 // stops it with errGaveWay as soon as another job is due. The returned
 // function ends the watch, and returns once it has ended.
-func (w *Worker) watchForOthers(ctx context.Context, stop context.CancelCauseFunc) func() {
+func (w *Worker) watchForOthers(ctx context.Context, jobID int64, stop context.CancelCauseFunc) func() {
 	quit := make(chan struct{})
 	ended := make(chan struct{})
 	go func() {
@@ -202,7 +203,7 @@ func (w *Worker) watchForOthers(ctx context.Context, stop context.CancelCauseFun
 			case <-w.wake:
 			case <-ticker.C:
 			}
-			waiting, err := w.othersWaiting(ctx)
+			waiting, err := w.othersWaiting(ctx, jobID)
 			if err != nil {
 				if ctx.Err() == nil {
 					w.logger.ErrorContext(ctx, "job queue", "error", err)
@@ -221,11 +222,13 @@ func (w *Worker) watchForOthers(ctx context.Context, stop context.CancelCauseFun
 	}
 }
 
-// othersWaiting reports whether a job that does not give way is due, and
-// is new work. A job trying again after a failure waits for the end of the
-// long one: offline, the internet lookups fail and come back every few
-// minutes, and each would throw away hours of conversion.
-func (w *Worker) othersWaiting(ctx context.Context) (bool, error) {
+// othersWaiting reports whether the running job jobID must give way to a
+// job that is due: new work of a kind that never gives way, or a job
+// someone is waiting for. It never must when someone is waiting for jobID
+// itself. A job trying again after a failure waits for the end of the long
+// one: offline, the internet lookups fail and come back every few minutes,
+// and each would throw away hours of conversion.
+func (w *Worker) othersWaiting(ctx context.Context, jobID int64) (bool, error) {
 	args := []any{w.now().Unix()}
 	placeholders := ""
 	for k := range w.handlers {
@@ -239,12 +242,16 @@ func (w *Worker) othersWaiting(ctx context.Context) (bool, error) {
 		args = append(args, string(k))
 	}
 	if placeholders == "" {
-		return false, nil
+		placeholders = "NULL" // matches no kind
 	}
+	urgent, urgentArgs := w.kindsPlaceholders()
+	args = append(args, urgentArgs...)
+	args = append(args, jobID)
 	var waiting bool
 	err := w.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
-		WHERE state = 'pending' AND run_after <= ? AND attempts = 0 AND kind IN (`+placeholders+`))`,
-		args...).Scan(&waiting)
+		WHERE state = 'pending' AND run_after <= ?
+		AND ((attempts = 0 AND kind IN (`+placeholders+`)) OR (urgent AND kind IN (`+urgent+`))))
+		AND NOT EXISTS (SELECT 1 FROM jobs WHERE id = ? AND urgent)`, args...).Scan(&waiting)
 	if err != nil {
 		return false, fmt.Errorf("look for waiting jobs: %w", err)
 	}
@@ -277,19 +284,15 @@ func (w *Worker) postpone(ctx context.Context, j job, until time.Time) error {
 // jobs wait, would rather pick another index and sort: INDEXED BY tells it
 // which one to use.
 func claimQuery(placeholders string) string {
-	return `SELECT id, video_id, kind, attempts FROM jobs INDEXED BY jobs_next
+	return `SELECT id, video_id, kind, attempts, urgent FROM jobs INDEXED BY jobs_next
 		WHERE state = 'pending' AND run_after <= ? AND kind IN (` + placeholders + `)
 		ORDER BY priority, id
 		LIMIT 1`
 }
 
-// claim takes the oldest due job of a kind this worker can do and marks it
-// running. Probes go first, since covers and previews need the duration
-// they find; then the details files, read in an instant, then covers,
-// which every page shows, then previews, then the subtitles inside the
-// files, which mean reading the whole file, and last the conversions,
-// which can take hours. That order is the column jobs.priority.
-func (w *Worker) claim(ctx context.Context) (job, bool, error) {
+// kindsPlaceholders returns "?, ?, ..." with one place per kind this
+// worker can do, and the kinds to put there.
+func (w *Worker) kindsPlaceholders() (string, []any) {
 	kinds := make([]any, 0, len(w.handlers))
 	placeholders := ""
 	for k := range w.handlers {
@@ -299,6 +302,18 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 		placeholders += "?"
 		kinds = append(kinds, string(k))
 	}
+	return placeholders, kinds
+}
+
+// claim takes the oldest due job of a kind this worker can do and marks it
+// running. Probes go first, since covers and previews need the duration
+// they find; then the details files, read in an instant, then covers,
+// which every page shows, then previews, then the subtitles inside the
+// files, which mean reading the whole file, and last the conversions,
+// which can take hours. Before all of them, the jobs someone is waiting
+// for (urgent). That order is the column jobs.priority.
+func (w *Worker) claim(ctx context.Context) (job, bool, error) {
+	placeholders, kinds := w.kindsPlaceholders()
 	if len(kinds) == 0 {
 		return job{}, false, nil
 	}
@@ -307,7 +322,7 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	args := append([]any{now}, kinds...)
 	var j job
 	var kind string
-	err := w.db.QueryRowContext(ctx, claimQuery(placeholders), args...).Scan(&j.id, &j.videoID, &kind, &j.attempts)
+	err := w.db.QueryRowContext(ctx, claimQuery(placeholders), args...).Scan(&j.id, &j.videoID, &kind, &j.attempts, &j.urgent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return job{}, false, nil
 	}

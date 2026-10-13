@@ -111,7 +111,8 @@ func Enqueue(ctx context.Context, db execer, videoID int64, kind Kind, onlyIfNot
 	query := `
 		INSERT INTO jobs (video_id, kind, state, updated_at) VALUES (?, ?, 'pending', ?)
 		ON CONFLICT (video_id, kind) DO UPDATE
-		SET state = 'pending', attempts = 0, last_error = '', run_after = 0, updated_at = excluded.updated_at`
+		SET state = 'pending', attempts = 0, last_error = '', run_after = 0, urgent = 0,
+		    updated_at = excluded.updated_at`
 	if onlyIfNotDone {
 		query += ` WHERE state != 'done'`
 	}
@@ -119,4 +120,25 @@ func Enqueue(ctx context.Context, db execer, videoID int64, kind Kind, onlyIfNot
 		return fmt.Errorf("enqueue %s job for video %d: %w", kind, videoID, err)
 	}
 	return nil
+}
+
+// Hurry puts a job on a video before all the others, because someone is
+// waiting for it; a conversion then no longer gives way. A job that
+// failed is tried again from the start. It reports whether there was a
+// job to hurry: one that is done, or was never asked for, stays as it is.
+func Hurry(ctx context.Context, db execer, videoID int64, kind Kind, now time.Time) (bool, error) {
+	res, err := db.ExecContext(ctx, `
+		UPDATE jobs SET urgent = 1, run_after = 0, updated_at = ?,
+			attempts = CASE WHEN state = 'failed' THEN 0 ELSE attempts END,
+			last_error = CASE WHEN state = 'failed' THEN '' ELSE last_error END,
+			state = CASE WHEN state = 'failed' THEN 'pending' ELSE state END
+		WHERE video_id = ? AND kind = ? AND state != 'done'`, now.Unix(), videoID, string(kind))
+	if err != nil {
+		return false, fmt.Errorf("hurry %s job for video %d: %w", kind, videoID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("hurry %s job for video %d: %w", kind, videoID, err)
+	}
+	return n > 0, nil
 }
