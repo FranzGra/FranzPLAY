@@ -62,7 +62,7 @@ Le altre hanno già un valore che va bene:
 docker compose up -d
 ```
 
-La prima volta Docker scarica l'immagine (circa 100 MB) e la avvia; `-d` vuol dire "in sottofondo":
+La prima volta Docker scarica l'immagine (circa 60 MB) e la avvia; `-d` vuol dire "in sottofondo":
 il terminale torna libero e FranzPLAY resta acceso, anche dopo un riavvio del computer.
 
 Apri il browser su **http://indirizzo-del-computer:8090**: sullo stesso computer è
