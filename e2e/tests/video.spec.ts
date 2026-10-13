@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { logIn, PEOPLE, videos, watchErrors } from "./franzplay";
 
 // The heart of FranzPLAY: a video starts quickly and jumps quickly. The
@@ -118,6 +118,11 @@ test("on a phone a tap shows the controls and a double tap jumps", async ({ page
   await expect
     .poll(() => player.evaluate((v: HTMLVideoElement) => v.currentTime))
     .toBeGreaterThan(0);
+  // An earlier test watched this video, so it starts where that one
+  // stopped, near the end: back to the start, so a jump has room.
+  await player.evaluate((v: HTMLVideoElement) => {
+    v.currentTime = 0;
+  });
   await expect(root).toHaveAttribute("data-controls", "hidden", { timeout: 10_000 });
 
   const box = await root.boundingBox();
@@ -137,4 +142,76 @@ test("on a phone a tap shows the controls and a double tap jumps", async ({ page
     .poll(() => player.evaluate((v: HTMLVideoElement) => v.currentTime))
     .toBeGreaterThan(before + 10);
   expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+});
+
+// countGlides counts the browser's smooth page changes (view transitions) from
+// now on, and waitGlides waits until all of them have ended.
+async function countGlides(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { glides: Promise<void>[] };
+    w.glides = [];
+    const start = document.startViewTransition.bind(document);
+    document.startViewTransition = (update) => {
+      const glide = start(update);
+      w.glides.push(glide.finished);
+      return glide;
+    };
+  });
+}
+
+async function waitGlides(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const w = window as unknown as { glides: Promise<void>[] };
+    await Promise.all(w.glides);
+    return w.glides.length;
+  });
+}
+
+async function openTheaterTest(page: Page) {
+  await logIn(page, PEOPLE[0]);
+  const video = (await videos(page)).find((v) => v.title === "Gita al mare");
+  await page.goto(`/video/${video?.id}`);
+  await expect(page.locator("video")).toHaveCount(1);
+}
+
+test("theater mode glides in and out, and nothing else jumps", async ({ page, isMobile }) => {
+  test.skip(isMobile, "theater mode is for wide screens");
+  const errors = watchErrors(page);
+  await openTheaterTest(page);
+  const player = page.locator("[data-controls]");
+  const menu = page.getByRole("navigation", { name: "Menu principale" });
+  const normal = await player.boundingBox();
+  await countGlides(page);
+
+  await page.keyboard.press("t");
+  expect(await waitGlides(page)).toBe(1);
+  await expect(menu).toBeHidden();
+  const theater = await player.boundingBox();
+  expect(theater?.width).toBeGreaterThan((normal?.width ?? 0) + 100);
+
+  await page.keyboard.press("t");
+  expect(await waitGlides(page)).toBe(2);
+  await expect(menu).toBeVisible();
+  // Back to the same place and size (the page may still have been
+  // settling in by a fraction of a pixel when first measured).
+  const back = await player.boundingBox();
+  for (const side of ["x", "y", "width", "height"] as const) {
+    expect(back?.[side]).toBeCloseTo(normal?.[side] ?? 0, 0);
+  }
+  // The page stays where it was: only the player changes size.
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test("theater mode switches at once for whoever asked for less motion", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "theater mode is for wide screens");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openTheaterTest(page);
+  await countGlides(page);
+  await page.keyboard.press("t");
+  await expect(page.getByRole("navigation", { name: "Menu principale" })).toBeHidden();
+  expect(await waitGlides(page)).toBe(0);
 });
