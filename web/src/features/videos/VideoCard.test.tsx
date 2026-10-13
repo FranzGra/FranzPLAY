@@ -167,6 +167,17 @@ describe("clip on a touch screen", () => {
     expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
   });
 
+  it("leaves the small cards beside the player still", () => {
+    phone({ "Mare 2024": { top: 300 } });
+    render(
+      <MemoryRouter>
+        <VideoCard video={video()} now={now} layout="row" />
+      </MemoryRouter>,
+    );
+    wait(settleDelay);
+    expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
+  });
+
   it("opens the video on a tap, as always", () => {
     phone({ "Mare 2024": { top: 300 } });
     show(video());

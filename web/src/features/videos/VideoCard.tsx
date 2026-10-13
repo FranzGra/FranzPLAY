@@ -24,7 +24,7 @@ type VideoCardProps = {
 // plays a few silent seconds of the video; on a touch screen the card that
 // stays in the middle of the screen plays them.
 export function VideoCard({ video, now, layout = "grid", position, note }: VideoCardProps) {
-  const { playing, handlers, coverRef } = useClipPreview(video.clip);
+  const { playing, handlers, coverRef } = useClipPreview(video.clip, layout === "grid");
   const details = [video.category, formatAge(video.addedAt, now)].filter(Boolean).join(" · ");
   const watched =
     position !== undefined && video.duration ? Math.min(1, position / video.duration) : null;

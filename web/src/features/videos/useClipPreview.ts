@@ -21,8 +21,9 @@ let stopPlaying: (() => void) | null = null;
 // left in the middle of the screen when the page stops plays by itself.
 // It gives back whether the clip should show, the handlers for the card
 // and a ref for its cover, which is what the middle of the screen is
-// measured against.
-export function useClipPreview(clip: string | null) {
+// measured against. by itself false keeps a card out of that, like the
+// small ones beside the player, which must not move while a video plays.
+export function useClipPreview(clip: string | null, byItself = true) {
   const [playing, setPlaying] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   const [cover, setCover] = useState<HTMLElement | null>(null);
@@ -49,9 +50,9 @@ export function useClipPreview(clip: string | null) {
 
   // On a touch screen the card takes part in "who is in the middle".
   useEffect(() => {
-    if (clip === null || cover === null || !touchScreen()) return;
+    if (clip === null || cover === null || !byItself || !touchScreen()) return;
     return watchMiddle({ cover, start, stop });
-  }, [clip, cover, start, stop]);
+  }, [clip, cover, byItself, start, stop]);
 
   if (clip === null) {
     return { playing: false, handlers: {}, coverRef: setCover };
