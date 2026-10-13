@@ -460,3 +460,36 @@ func TestScanAsksForWhatFailedWhileAVideoWasMissing(t *testing.T) {
 		t.Errorf("subtitles job %q, want pending again", got)
 	}
 }
+
+// TestScanAddsAndForgetsManyVideosABatchAtATime: big changes are saved in
+// several short transactions, and nothing is lost or counted twice.
+func TestScanAddsAndForgetsManyVideosABatchAtATime(t *testing.T) {
+	lib := t.TempDir()
+	writeFile(t, lib, "keep.mp4", "keep")
+	var names []string
+	for i := range 7 {
+		names = append(names, writeFile(t, lib, fmt.Sprintf("Viaggi/v%d.mp4", i), fmt.Sprintf("video %d", i)))
+	}
+	ts := newTestScanner(t, lib)
+	ts.store.batch = 3
+
+	ts.scan(t, Report{Added: 8})
+	if got := len(ts.videos(t)); got != 8 {
+		t.Fatalf("catalog has %d videos, want 8", got)
+	}
+	if got := len(ts.probeJobs(t)); got != 8 {
+		t.Errorf("%d videos waiting to be read, want 8", got)
+	}
+
+	for _, name := range names {
+		if err := os.Remove(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ts.scan(t, Report{Unchanged: 1, Missing: 7})
+	ts.clock = ts.clock.Add(ForgetAfter + time.Hour)
+	ts.scan(t, Report{Unchanged: 1, Forgotten: 7})
+	if got := ts.videos(t); len(got) != 1 || got["keep.mp4"].id == 0 {
+		t.Errorf("catalog = %v, want only keep.mp4", got)
+	}
+}
