@@ -327,9 +327,10 @@ func TestConversionDoesNotGiveWayToItsOwnKind(t *testing.T) {
 	}
 }
 
-func (fx *fixture) hurry(t *testing.T, videoID int64, kind Kind) bool {
+// hurry marks the conversion of a video as one someone is waiting for.
+func (fx *fixture) hurry(t *testing.T, videoID int64) bool {
 	t.Helper()
-	ok, err := Hurry(context.Background(), fx.db, videoID, kind, fx.clock)
+	ok, err := Hurry(context.Background(), fx.db, videoID, Convert, fx.clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +343,7 @@ func TestHurriedJobGoesFirst(t *testing.T) {
 	fx.enqueue(t, fx.videos[0], Probe)
 	fx.enqueue(t, fx.videos[1], Cover)
 	fx.enqueue(t, fx.videos[2], Convert)
-	if !fx.hurry(t, fx.videos[2], Convert) {
+	if !fx.hurry(t, fx.videos[2]) {
 		t.Fatal("waiting conversion not hurried")
 	}
 	var order []Kind
@@ -371,16 +372,16 @@ func TestHurryTriesAFailedJobAgainAndLeavesDoneOnes(t *testing.T) {
 	fx.enqueue(t, fx.videos[1], Convert)
 	mustExec(t, fx.db, `UPDATE jobs SET state = 'done' WHERE video_id = ?`, fx.videos[1])
 
-	if !fx.hurry(t, fx.videos[0], Convert) {
+	if !fx.hurry(t, fx.videos[0]) {
 		t.Error("failed job not hurried")
 	}
 	if j := fx.job(t, fx.videos[0], Convert); j.state != pending || j.attempts != 0 || j.lastError != "" {
 		t.Errorf("failed job after hurry = %+v, want pending from scratch", j)
 	}
-	if fx.hurry(t, fx.videos[1], Convert) || fx.job(t, fx.videos[1], Convert).state != done {
+	if fx.hurry(t, fx.videos[1]) || fx.job(t, fx.videos[1], Convert).state != done {
 		t.Error("done job hurried")
 	}
-	if fx.hurry(t, fx.videos[2], Convert) {
+	if fx.hurry(t, fx.videos[2]) {
 		t.Error("job never asked for hurried")
 	}
 }
@@ -400,7 +401,7 @@ func TestHurriedConversionDoesNotGiveWay(t *testing.T) {
 			case id == film && len(order) == 1:
 				// Someone opens another video their phone cannot play.
 				fx.enqueue(t, waited, Convert)
-				fx.hurry(t, waited, Convert)
+				fx.hurry(t, waited)
 				w.Wake()
 				<-ctx.Done()
 				return ctx.Err()
@@ -434,7 +435,7 @@ func TestConversionHurriedWhileRunningGoesOn(t *testing.T) {
 	w := fx.worker(nil)
 	w.handlers = map[Kind]Handler{
 		Convert: func(ctx context.Context, _ int64) error {
-			fx.hurry(t, film, Convert)
+			fx.hurry(t, film)
 			fx.enqueue(t, fresh, Probe)
 			w.Wake()
 			select {
