@@ -780,6 +780,50 @@ func TestVideosSayWhoUploadedThem(t *testing.T) {
 	}
 }
 
+func TestVideoSaysWhoseItIs(t *testing.T) {
+	s := newSite(t)
+	folder := s.addVideo(t, "folder.mp4", "a", "", 1, false)
+	uploaded := s.addVideo(t, "uploaded.mp4", "b", "", 2, false)
+	owner := func(id int64) *Owner {
+		t.Helper()
+		return decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(id, 10))).Owner
+	}
+
+	// Before anyone exists, a video belongs to nobody.
+	if o := owner(folder); o != nil {
+		t.Errorf("owner with nobody = %+v, want none", o)
+	}
+
+	// Anna is the first administrator, who installed FranzPLAY; Bruno
+	// became one later, Giulia uploads videos.
+	if _, err := s.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at, avatar) VALUES
+		(1, 'Bruno', 'x', 'admin', 20, 0), (2, 'Anna', 'x', 'admin', 10, 77), (3, 'Giulia', 'x', 'user', 5, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = 3 WHERE id = ?`, uploaded); err != nil {
+		t.Fatal(err)
+	}
+	if o := owner(folder); o == nil || *o != (Owner{ID: 2, Name: "Anna", Avatar: 77}) {
+		t.Errorf("owner of a folder video = %+v, want Anna, the first administrator", o)
+	}
+	if o := owner(uploaded); o == nil || *o != (Owner{ID: 3, Name: "Giulia"}) {
+		t.Errorf("owner of an uploaded video = %+v, want Giulia", o)
+	}
+
+	// Lists do not carry it: only the video page shows it.
+	if list := decode[listResponse](t, s.get(t, "/api/videos")); list.Videos[0].Owner != nil {
+		t.Errorf("list owner = %+v, want none", list.Videos[0].Owner)
+	}
+
+	// When Giulia goes away, her video goes to the main administrator.
+	if _, err := s.db.Exec(`DELETE FROM users WHERE id = 3`); err != nil {
+		t.Fatal(err)
+	}
+	if o := owner(uploaded); o == nil || o.ID != 2 {
+		t.Errorf("owner after the uploader left = %+v, want Anna", o)
+	}
+}
+
 func TestSharedVideoOnlyForTheChosenPeople(t *testing.T) {
 	s := newSite(t)
 	for _, name := range []string{"Giulia", "Marco", "Anna"} {

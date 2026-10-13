@@ -204,16 +204,32 @@
   color: var(--color-text-muted);
 }
 
+/* --page-top and --page-side are the room around the page: a page that
+   wants to touch the edges (the player in theater mode) uses them. */
 .main {
+  --page-top: 28px;
+  --page-side: 40px;
   flex: 1;
   min-width: 0;
-  padding: 28px 40px 64px;
+  padding: var(--page-top) var(--page-side) 64px;
 }
 
 /* Keeps every page in a centered column, so it does not stick to the side menu */
 .page {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+/* The video page takes all the room and arranges itself, like on YouTube. */
+.body:not([data-width="normal"]) .page {
+  max-width: none;
+}
+
+/* Theater mode: the side menu steps aside so the player has the whole width. */
+@media (min-width: 900px) {
+  .body[data-width="full"] .sidebar {
+    display: none;
+  }
 }
 
 /* Bottom bar, only on phones: a floating glass capsule */
@@ -280,7 +296,10 @@
   }
 
   .main {
-    padding: 16px 16px calc(var(--tabbar-height) + 40px + env(safe-area-inset-bottom));
+    --page-top: 16px;
+    --page-side: 16px;
+    padding: var(--page-top) var(--page-side)
+      calc(var(--tabbar-height) + 40px + env(safe-area-inset-bottom));
   }
 
   .tabbar {

@@ -64,6 +64,8 @@ describe("keyAction", () => {
     ["m", { kind: "toggle-mute" }],
     ["f", { kind: "toggle-fullscreen" }],
     ["c", { kind: "toggle-subtitles" }],
+    ["t", { kind: "toggle-theater" }],
+    ["T", { kind: "toggle-theater" }],
     ["0", { kind: "seek-to-fraction", fraction: 0 }],
     ["5", { kind: "seek-to-fraction", fraction: 0.5 }],
     ["End", { kind: "seek-to-fraction", fraction: 1 }],

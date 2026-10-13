@@ -111,16 +111,56 @@ describe("video page", () => {
     expect(screen.queryByRole("link", { name: "Carica un video" })).not.toBeInTheDocument();
   });
 
-  it("says who uploaded the video, with a link to their channel", async () => {
+  it("says whose the video is, with their photo and a link to their channel", async () => {
     renderApp("/video/7", {
       ...signedIn(),
-      "GET /api/videos/7": { body: videoJSON({ uploader: { id: 5, name: "Giulia" } }) },
+      "GET /api/videos/7": {
+        body: videoJSON({
+          uploader: { id: 5, name: "Giulia" },
+          owner: { id: 5, name: "Giulia", avatar: 42 },
+        }),
+      },
     });
-    expect(await screen.findByRole("link", { name: "Giulia" })).toHaveAttribute(
-      "href",
-      "/canale/5",
-    );
-    expect(screen.getByText(/Caricato da/)).toBeInTheDocument();
+    const owner = await screen.findByRole("link", { name: "Giulia" });
+    expect(owner).toHaveAttribute("href", "/canale/5");
+    expect(owner.querySelector("img")).toHaveAttribute("src", "/api/users/5/avatar?v=42");
+  });
+
+  it("shows the initial of an owner without a photo", async () => {
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON({ owner: { id: 1, name: "anna", avatar: 0 } }) },
+    });
+    const owner = await screen.findByRole("link", { name: "anna" });
+    expect(owner).toHaveAttribute("href", "/canale/1");
+    expect(owner.querySelector("img")).toBeNull();
+    expect(owner).toHaveTextContent("Aanna");
+  });
+
+  it("switches to theater mode with its button or the t key, and remembers it", async () => {
+    const { user, unmount } = renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON() },
+    });
+    const frame = () => document.querySelector("[data-width]");
+    await user.click(await screen.findByRole("button", { name: "Modalità Teatro (t)" }));
+    expect(frame()).toHaveAttribute("data-width", "full");
+    expect(document.querySelector("[data-theater]")).toHaveAttribute("data-theater", "on");
+    expect(localStorage.getItem("franzplay.theater")).toBe("true");
+
+    fireEvent.keyDown(document.body, { key: "t" });
+    expect(frame()).toHaveAttribute("data-width", "wide");
+    expect(screen.getByRole("button", { name: "Modalità Teatro (t)" })).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "T" });
+    expect(screen.getByRole("button", { name: "Visualizzazione normale (t)" })).toBeInTheDocument();
+    unmount();
+
+    // The next video opens in theater mode too; other pages are as usual.
+    renderApp("/video/7", { ...signedIn(), "GET /api/videos/7": { body: videoJSON() } });
+    expect(
+      await screen.findByRole("button", { name: "Visualizzazione normale (t)" }),
+    ).toBeInTheDocument();
+    expect(frame()).toHaveAttribute("data-width", "full");
   });
 
   it("shows no description box when there is none", async () => {

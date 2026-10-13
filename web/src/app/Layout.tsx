@@ -7,6 +7,7 @@ import { Icon } from "../components/Icon";
 import { SiteName } from "../components/SiteName";
 import { useAccount } from "./auth";
 import styles from "./Layout.module.css";
+import { type PageWidth, PageWidthContext } from "./pageWidth";
 
 // sideLinks are the first links of the side menu; the channel is mine.
 function sideLinks(me: number) {
@@ -35,6 +36,7 @@ export function Layout() {
   const [query, setQuery] = useState("");
   const page = useRef<HTMLDivElement>(null);
   useEnterOnNavigate(page);
+  const [width, setWidth] = useState<PageWidth>("normal");
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +80,7 @@ export function Layout() {
         </Link>
       </header>
 
-      <div className={styles.body}>
+      <div className={styles.body} data-width={width}>
         <nav className={styles.sidebar} aria-label="Menu principale">
           {sideLinks(account.id).map((link) => (
             <NavLink key={link.to} to={link.to} end className={styles.sideLink}>
@@ -110,7 +112,9 @@ export function Layout() {
 
         <main className={styles.main}>
           <div ref={page} className={styles.page}>
-            <Outlet />
+            <PageWidthContext.Provider value={setWidth}>
+              <Outlet />
+            </PageWidthContext.Provider>
           </div>
         </main>
       </div>
