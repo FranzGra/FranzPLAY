@@ -185,7 +185,8 @@ export function Player({
   const [duration, setDuration] = useState(Number.NaN);
   const [buffered, setBuffered] = useState(0);
   const [waiting, setWaiting] = useState(false);
-  const [failed, setFailed] = useState(false);
+  // failed says why the video stopped: null while it plays fine.
+  const [failed, setFailed] = useState<string | null>(null);
   const [volume, setVolume] = useState(() => loadSetting("volume", parseVolume, 1));
   const [muted, setMuted] = useState(() => loadSetting("muted", parseMuted, false));
   // silenced: the browser let the video start by itself only without
@@ -277,7 +278,7 @@ export function Player({
     autoTried.current = false;
     setSilenced(false);
     setStarted(false);
-    setFailed(false);
+    setFailed(null);
     setTime(0);
     setDuration(Number.NaN);
     setBuffered(0);
@@ -660,14 +661,14 @@ export function Player({
         onWaiting={() => setWaiting(true)}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
-        onError={() => {
+        onError={(e) => {
           if (soundRef.current) {
             // The server could not make this sound track: back to the original.
             setNotice("Questa lingua adesso non si riesce a caricare: riprova tra poco.");
             void switchAudio(null, position.current.time, false);
             return;
           }
-          setFailed(true);
+          setFailed(failureText(e.currentTarget.error?.code, unsupportedHint));
         }}
       >
         {subtitles.map((t) => (
@@ -740,10 +741,7 @@ export function Player({
       {failed && (
         <div className={styles.failure} role="alert">
           <p className={styles.failureTitle}>Questo video non si riesce a riprodurre</p>
-          <p className={styles.failureText}>
-            {unsupportedHint ??
-              "Il file potrebbe essere stato spostato o danneggiato. Riprova più tardi."}
-          </p>
+          <p className={styles.failureText}>{failed}</p>
         </div>
       )}
 
@@ -878,4 +876,22 @@ export function Player({
       </div>
     </div>
   );
+}
+
+// failureText explains why a video stopped, from the browser's error code
+// (MediaError.code). hint, when given, is what the page already knows about
+// a format not every browser plays.
+export function failureText(code: number | undefined, hint?: string): string {
+  if (hint) {
+    return hint;
+  }
+  switch (code) {
+    case 2: // MEDIA_ERR_NETWORK
+      return "La connessione con FranzPLAY si è interrotta. Controlla la rete e riprova.";
+    case 3: // MEDIA_ERR_DECODE
+    case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+      return "Questo browser non sa leggere il formato di questo video. Prova con un altro browser, come Chrome, Safari o Firefox.";
+    default:
+      return "Il file potrebbe essere stato spostato o danneggiato. Riprova più tardi.";
+  }
 }
