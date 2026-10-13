@@ -30,8 +30,8 @@
   border-radius: var(--radius-m);
   color: var(--color-text);
   transition:
-    background-color var(--duration-fast),
-    translate var(--duration-normal) var(--ease-out),
+    background-color var(--duration-normal),
+    box-shadow var(--duration-normal),
     scale var(--duration-fast) var(--ease-out);
 }
 
@@ -55,11 +55,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: scale var(--duration-slow) var(--ease-out);
-}
-
-.tile:hover .image {
-  scale: 1.05;
 }
 
 .withImage::before {
@@ -72,8 +67,8 @@
 
 .tile:hover {
   color: var(--color-text);
+  /* It lights up in place, without growing or moving. */
   background: var(--glass-bg-strong);
-  translate: 0 -3px;
 }
 
 .tile:active {

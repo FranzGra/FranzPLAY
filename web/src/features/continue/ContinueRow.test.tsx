@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { videoJSON, watchedJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 
@@ -24,7 +24,7 @@ describe("continue watching", () => {
     await user.click(
       within(row).getByRole("button", { name: "Togli «Primo» da Continua a guardare" }),
     );
-    expect(titles(row)).toEqual(["Secondo"]);
+    await waitFor(() => expect(titles(row)).toEqual(["Secondo"]));
     expect(
       server.requests.some((r) => r.method === "DELETE" && r.url.endsWith("/continue/3")),
     ).toBe(true);
@@ -39,7 +39,9 @@ describe("continue watching", () => {
     });
     const row = await screen.findByRole("region", { name: "Continua a guardare" });
     await user.click(within(row).getByRole("button", { name: /Togli «Primo»/ }));
-    expect(screen.queryByRole("region", { name: "Continua a guardare" })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Continua a guardare" })).not.toBeInTheDocument(),
+    );
   });
 
   it("puts the video back in its place when the server refuses", async () => {

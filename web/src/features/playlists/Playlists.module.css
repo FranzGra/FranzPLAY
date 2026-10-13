@@ -170,6 +170,8 @@
   color: var(--color-text);
 }
 
+/* Under the mouse the whole card lights up (the global glow class) and
+   keeps its size. */
 .card:hover {
   color: var(--color-text);
 }
@@ -185,25 +187,12 @@
   border-radius: var(--radius-m);
   background: var(--color-surface);
   color: var(--color-text-muted);
-  transition:
-    translate var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out);
-}
-
-.card:hover .cover {
-  translate: 0 -3px;
-  box-shadow: 0 12px 28px rgb(0 0 0 / 0.45);
 }
 
 .cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: scale var(--duration-slow) var(--ease-out);
-}
-
-.card:hover .cover img {
-  scale: 1.04;
 }
 
 .badge {

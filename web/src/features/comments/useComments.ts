@@ -39,19 +39,21 @@ export function useComments(videoId: number) {
     [videoId, change],
   );
 
-  const remove = useCallback(
-    async (id: number) => {
-      await deleteComment(id);
+  // remove deletes a comment on the server; drop then takes it off the
+  // page. They are apart so the page can let it fade away meanwhile.
+  const remove = useCallback((id: number) => deleteComment(id), []);
+
+  const drop = useCallback(
+    (id: number) =>
       change((comments) =>
         comments
           .filter((c) => c.id !== id)
           .map((c) => ({ ...c, replies: c.replies.filter((r) => r.id !== id) })),
-      );
-    },
+      ),
     [change],
   );
 
-  return { state, add, remove };
+  return { state, add, remove, drop };
 }
 
 // countComments counts conversations and replies together.

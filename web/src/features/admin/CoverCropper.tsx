@@ -1,4 +1,11 @@
-import { type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  type Ref,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { LoadedPhoto } from "../profile/photo";
 import styles from "./CoverCropper.module.css";
 import {
@@ -25,6 +32,8 @@ export function CoverCropper({
   problem,
   onSave,
   onCancel,
+  ref,
+  leaving = false,
   title = "Sistema la copertina",
   saveLabel = "Usa come copertina",
 }: {
@@ -35,6 +44,8 @@ export function CoverCropper({
   problem: string;
   onSave: (rect: Rect) => void;
   onCancel: () => void;
+  ref?: Ref<HTMLDivElement>; // the window, for its closing move
+  leaving?: boolean; // the window is closing
 }) {
   const [zoom, setZoom] = useState(minZoom);
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
@@ -80,7 +91,7 @@ export function CoverCropper({
   };
 
   return (
-    <div className={styles.backdrop}>
+    <div ref={ref} className={styles.backdrop} data-leaving={leaving || undefined}>
       <div
         className={`glass ${styles.dialog}`}
         role="dialog"

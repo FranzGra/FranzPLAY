@@ -15,6 +15,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatVideos } from "../../lib/format";
+import { removeSmoothly } from "../../lib/motion";
 import { type Choice, choiceOf, namesList, playlistSharing, ready } from "../sharing/audience";
 import { type Hints, WhoSees } from "../sharing/WhoSees";
 import { VideoCard } from "../videos/VideoCard";
@@ -133,10 +134,16 @@ export function PlaylistPage() {
       });
   };
 
-  const takeOut = (videoId: number) => {
+  // takeOut lets the video fade away while the server takes it out of the
+  // list; the videos below then glide up.
+  const takeOut = (videoId: number, item: Element | null) => {
     setProblem("");
-    putInPlaylist(playlist.id, videoId, false)
-      .then(() =>
+    removeSmoothly(
+      item,
+      async () => {
+        await putInPlaylist(playlist.id, videoId, false);
+      },
+      () =>
         setState((s) =>
           s.kind === "ready"
             ? {
@@ -146,11 +153,10 @@ export function PlaylistPage() {
               }
             : s,
         ),
-      )
-      .catch((error: unknown) => {
-        console.error(error);
-        setProblem("Non sono riuscito a togliere il video. Riprova.");
-      });
+    ).catch((error: unknown) => {
+      console.error(error);
+      setProblem("Non sono riuscito a togliere il video. Riprova.");
+    });
   };
 
   return (
@@ -299,7 +305,7 @@ export function PlaylistPage() {
       ) : (
         <ol className={styles.videos}>
           {videos.map((video) => (
-            <li key={video.id} className={styles.item}>
+            <li key={video.id} className={styles.item} data-flip>
               <VideoCard video={video} now={now} layout="row" />
               {mine && (
                 <button
@@ -307,7 +313,7 @@ export function PlaylistPage() {
                   className={styles.remove}
                   aria-label={`Togli «${video.title}» dalla playlist`}
                   title="Togli dalla playlist"
-                  onClick={() => takeOut(video.id)}
+                  onClick={(event) => takeOut(video.id, event.currentTarget.closest("li"))}
                 >
                   <Icon name="close" size={20} />
                 </button>

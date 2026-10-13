@@ -175,6 +175,18 @@ describe("player", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("slides the settings pages in the way the person goes", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    const page = () => screen.getByRole("dialog").firstElementChild;
+    // The first page opens with the panel: it does not slide.
+    expect(page()).not.toHaveAttribute("data-direction");
+    await user.click(screen.getByRole("button", { name: /Velocità/ }));
+    expect(page()).toHaveAttribute("data-direction", "forward");
+    await user.click(screen.getByRole("button", { name: "Velocità" }));
+    expect(page()).toHaveAttribute("data-direction", "back");
+  });
+
   it("closes the settings with a click on the picture, without pausing", async () => {
     const { user, play } = setup();
     await user.click(screen.getByRole("button", { name: "Impostazioni" }));

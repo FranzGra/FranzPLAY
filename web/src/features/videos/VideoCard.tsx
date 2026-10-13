@@ -30,7 +30,7 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
   return (
     <Link
       to={`/video/${video.id}`}
-      className={styles.root}
+      className={`glow ${styles.root}`}
       data-layout={layout}
       data-clip={video.clip !== null || undefined}
       {...handlers}

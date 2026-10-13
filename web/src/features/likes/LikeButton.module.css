@@ -19,10 +19,35 @@
   cursor: pointer;
 }
 
-/* How many people like it, after a thin line, as on YouTube. */
+/* How many people like it, after a thin line, as on YouTube. The number
+   rolls in from below when it grows, from above when it shrinks. */
 .count {
+  display: inline-flex;
   padding-left: 10px;
+  overflow: hidden;
   border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.number {
+  animation: roll-up var(--duration-normal) var(--ease-out);
+}
+
+.number[data-direction="down"] {
+  animation-name: roll-down;
+}
+
+@keyframes roll-up {
+  from {
+    opacity: 0;
+    translate: 0 70%;
+  }
+}
+
+@keyframes roll-down {
+  from {
+    opacity: 0;
+    translate: 0 -70%;
+  }
 }
 
 .button:hover {
@@ -34,10 +59,86 @@
   color: var(--color-bg);
 }
 
-/* The thumb pops when it turns on. */
+/* The thumb bounces when it turns on, and a ring and six sparks in the
+   accent color fly out around it. */
+.icon {
+  position: relative;
+  display: flex;
+}
+
 .button[aria-pressed="true"] svg {
   fill: currentColor;
-  animation: var(--motion-pop);
+  animation: var(--motion-bounce);
+}
+
+.burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  animation: ring 520ms var(--ease-out);
+}
+
+/* The sparks: one small dot drawn six times around the middle. */
+.burst::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  box-shadow:
+    0 -26px 0 var(--color-accent),
+    22.5px -13px 0 var(--color-accent-light),
+    22.5px 13px 0 var(--color-accent),
+    0 26px 0 var(--color-accent-light),
+    -22.5px 13px 0 var(--color-accent),
+    -22.5px -13px 0 var(--color-accent-light);
+  animation: sparks 560ms var(--ease-out);
+}
+
+@keyframes ring {
+  0% {
+    opacity: 0.9;
+    scale: 0.3;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.1;
+  }
+}
+
+@keyframes sparks {
+  0% {
+    opacity: 1;
+    scale: 0.4;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.15;
+  }
+}
+
+/* Less motion: no ring, no sparks, no rolling number. */
+@media (prefers-reduced-motion: reduce) {
+  .burst {
+    display: none;
+  }
+
+  .number {
+    animation: none;
+  }
 }
 
 .button:disabled {

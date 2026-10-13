@@ -8,8 +8,9 @@ import {
 } from "react";
 
 // How long the pointer rests on a card before its clip plays: moving the
-// mouse across the grid does not start every clip on the way.
-export const hoverDelay = 300; // milliseconds
+// mouse across the grid does not start every clip on the way. A full
+// second, as Francesco asked: only a card the person stops on plays.
+export const hoverDelay = 1000; // milliseconds
 // How long a finger presses a card before its clip plays. A quicker tap
 // opens the video, as always.
 export const pressDelay = 400; // milliseconds

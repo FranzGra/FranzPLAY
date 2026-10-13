@@ -69,6 +69,19 @@
   scale: var(--press-scale);
 }
 
+/* Once the video starts, the big button grows and fades away. */
+.bigPlay[data-leaving] {
+  animation: big-play-out var(--duration-normal) ease-in both;
+  pointer-events: none;
+}
+
+@keyframes big-play-out {
+  to {
+    opacity: 0;
+    scale: 1.5;
+  }
+}
+
 /* What a key or a double tap just did, shown for a moment in the middle. */
 .flash {
   position: absolute;
@@ -84,6 +97,27 @@
   pointer-events: none;
   transform: translate(-50%, -50%);
   animation: flash 600ms ease-out forwards;
+}
+
+/* A thin ring runs out from the icon, like a ripple. */
+.flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgb(255 255 255 / 0.6);
+  border-radius: 50%;
+  animation: ripple 600ms var(--ease-out) forwards;
+}
+
+@keyframes ripple {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 1.7;
+  }
 }
 
 @keyframes flash {
@@ -118,8 +152,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flash {
+  .flash,
+  .flash::after {
     animation-duration: 1ms;
+  }
+
+  .menuPage[data-direction] {
+    animation: none;
   }
 }
 
@@ -347,10 +386,11 @@
   scale: 1.12;
 }
 
-/* An icon that changes (play and pause, sound on and off) pops in. */
+/* An icon that changes (play and pause, sound on and off) turns into the
+   other: it spins in from a quarter turn, growing with a little spring. */
 .swap {
   display: flex;
-  animation: var(--motion-pop-in);
+  animation: var(--motion-swap-in);
 }
 
 .volume {
@@ -422,9 +462,34 @@
   animation: var(--motion-pop-in);
 }
 
-/* Moving to another page of the menu: the new rows fade in. */
-.menu > * {
-  animation: var(--motion-fade-in);
+/* Closing, it shrinks back toward the gear. */
+.menu[data-leaving] {
+  animation: var(--motion-pop-out);
+  pointer-events: none;
+}
+
+/* Moving to another page of the menu: a deeper page slides in from the
+   right, going back slides in from the left. */
+.menuPage[data-direction="forward"] {
+  animation: page-forward var(--duration-normal) var(--ease-out) both;
+}
+
+.menuPage[data-direction="back"] {
+  animation-name: page-back;
+}
+
+@keyframes page-forward {
+  from {
+    opacity: 0;
+    translate: 24px 0;
+  }
+}
+
+@keyframes page-back {
+  from {
+    opacity: 0;
+    translate: -24px 0;
+  }
 }
 
 .menuRow,

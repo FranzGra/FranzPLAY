@@ -10,8 +10,10 @@ export type HistoryState =
   | { kind: "ready"; items: Watched[]; total: number; more: "idle" | "loading" | "error" };
 
 // useHistory loads the history a page at a time. loadMore adds the next
-// page; forget removes one video; clear empties it. forget and clear
-// throw if the server refuses, so the page can say so.
+// page. forget tells the server to remove one video and drop takes it off
+// the page; clear and empty do the same for the whole history. They are
+// apart so the page can let a video fade away while the server answers.
+// forget and clear throw if the server refuses, so the page can say so.
 export function useHistory() {
   const [state, setState] = useState<HistoryState>({ kind: "loading" });
   const controller = useRef<AbortController | null>(null);
@@ -52,8 +54,9 @@ export function useHistory() {
       });
   }, [state]);
 
-  const forget = useCallback(async (id: number) => {
-    await forgetVideo(id);
+  const forget = useCallback((id: number) => forgetVideo(id), []);
+
+  const drop = useCallback((id: number) => {
     setState((current) =>
       current.kind === "ready"
         ? {
@@ -65,10 +68,11 @@ export function useHistory() {
     );
   }, []);
 
-  const clear = useCallback(async () => {
-    await forgetHistory();
+  const clear = useCallback(() => forgetHistory(), []);
+
+  const empty = useCallback(() => {
     setState({ kind: "ready", items: [], total: 0, more: "idle" });
   }, []);
 
-  return { state, loadMore, forget, clear };
+  return { state, loadMore, forget, drop, clear, empty };
 }
