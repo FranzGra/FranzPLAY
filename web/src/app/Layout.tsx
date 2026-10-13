@@ -151,7 +151,7 @@ export function Layout() {
             className={styles.tab}
             aria-current={currentTab === i ? "page" : undefined}
           >
-            <Icon name={tab.icon} size={24} />
+            <Icon name={tab.icon} size={26} />
             {tab.label}
           </Link>
         ))}
