@@ -85,6 +85,7 @@ export async function fetchMe(signal?: AbortSignal): Promise<Account | null> {
 // SetupStatus is what the login page needs to know before anyone logs in.
 export type SetupStatus = {
   needed: boolean; // FranzPLAY still waits for its administrator
+  codeNeeded: boolean; // creating it asks for the code written in the log
   openRegistration: boolean; // anyone may create an account by themselves
 };
 
@@ -94,20 +95,25 @@ export async function fetchSetup(signal?: AbortSignal): Promise<SetupStatus> {
   if (typeof data !== "object" || data === null) {
     throw new Error("setup: response is not an object");
   }
-  const { needed, openRegistration } = data as Record<string, unknown>;
+  const { needed, codeNeeded, openRegistration } = data as Record<string, unknown>;
   if (typeof needed !== "boolean") {
     throw new Error("setup: missing needed");
+  }
+  if (typeof codeNeeded !== "boolean") {
+    throw new Error("setup: missing codeNeeded");
   }
   if (typeof openRegistration !== "boolean") {
     throw new Error("setup: missing openRegistration");
   }
-  return { needed, openRegistration };
+  return { needed, codeNeeded, openRegistration };
 }
 
 export async function login(name: string, password: string): Promise<Account> {
   return parseAccount(await request("/api/login", { method: "POST", body: { name, password } }));
 }
 
+// setup creates the administrator. code is "" unless the server asks for
+// the one written in its log.
 export async function setup(code: string, name: string, password: string): Promise<Account> {
   return parseAccount(
     await request("/api/setup", { method: "POST", body: { code, name, password } }),
