@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { renderApp, signedIn } from "../test/render";
 
 describe("navigation", () => {
@@ -120,6 +120,11 @@ describe("navigation", () => {
     async function goToProfile() {
       const { user } = renderApp("/");
       const tabbar = await screen.findByRole("navigation", { name: "Menu del telefono" });
+      // The first page's own move may come a moment after the frame shows:
+      // wait for it, so only the move to the new page is counted.
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+        await waitFor(() => expect(animate).toHaveBeenCalled());
+      }
       animate.mockClear();
       await user.click(within(tabbar).getByRole("link", { name: "Profilo" }));
     }
