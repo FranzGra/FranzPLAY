@@ -179,6 +179,13 @@ func validMadeName(name, ext string) bool {
 			}
 		}
 		return len(tag) <= 11
+	case 'w': // the width of the frames of the previews
+		for _, c := range tag[1:] {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return len(tag) <= 5
 	case 'o': // an uploaded file
 		return isHex(tag[1:]) && len(tag) <= 9
 	default:

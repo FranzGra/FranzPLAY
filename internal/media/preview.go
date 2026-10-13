@@ -87,12 +87,14 @@ func (p *Previewer) Handle(ctx context.Context, videoID int64) (err error) {
 		return errors.Join(fmt.Errorf("previews of video %d: ffmpeg wrote no image", videoID), err)
 	}
 
-	name := coverName(videoID, fingerprint) // same naming: changes with the content
+	name := previewName(videoID, fingerprint)
 	if err := os.Rename(sprite, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("previews of video %d: %w", videoID, err)
 	}
-	res, err := p.db.ExecContext(ctx, `UPDATE videos SET preview = ?, preview_gap = ?, preview_count = ?
-		WHERE id = ? AND fingerprint = ?`, name, gap, count, videoID, fingerprint)
+	res, err := p.db.ExecContext(ctx, `UPDATE videos
+		SET preview = ?, preview_gap = ?, preview_count = ?, preview_width = ?, preview_height = ?
+		WHERE id = ? AND fingerprint = ?`,
+		name, gap, count, video.PreviewWidth, video.PreviewHeight, videoID, fingerprint)
 	if err != nil {
 		return fmt.Errorf("save previews of video %d: %w", videoID, err)
 	}
@@ -108,6 +110,15 @@ func (p *Previewer) Handle(ctx context.Context, videoID int64) (err error) {
 		return removeFile(dir, old.String)
 	}
 	return nil
+}
+
+// previewName is the file name of the previews of a video: like its cover,
+// it changes with the content, and also with the size of the frames. The
+// browser keeps these images for a year, so an image made again at a new
+// size needs a new name, or the player would cut the old one wrong.
+func previewName(videoID int64, fingerprint string) string {
+	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") +
+		"-w" + strconv.Itoa(video.PreviewWidth) + ".jpg"
 }
 
 // frames writes the single frames in work and counts them.

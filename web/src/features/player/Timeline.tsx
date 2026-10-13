@@ -84,24 +84,25 @@ export function Timeline({ time, duration, buffered, onSeek, preview }: Timeline
 }
 
 // PreviewFrame is the small frame of the video above the timeline, kept
-// inside the player at both ends.
+// inside the player at both ends. Its width comes from the style sheet
+// (smaller on phones); the image is made with sharper frames than that,
+// so it looks crisp on screens with more pixels per point.
 function PreviewFrame({ preview, time, left }: { preview: Preview; time: number; left: string }) {
-  const { x, y } = previewFrame(preview, time);
-  const half = preview.width / 2;
+  const { position, size } = previewFrame(preview, time);
   return (
     <div
       className={styles.frame}
-      style={{ left: `clamp(${half}px, ${left}, calc(100% - ${half}px))` }}
+      style={{ left: `clamp(var(--preview-half), ${left}, calc(100% - var(--preview-half)))` }}
       aria-hidden="true"
       data-testid="preview"
     >
       <div
         className={styles.frameImage}
         style={{
-          width: preview.width,
-          height: preview.height,
+          aspectRatio: `${preview.width} / ${preview.height}`,
           backgroundImage: `url("${preview.src}")`,
-          backgroundPosition: `-${x}px -${y}px`,
+          backgroundPosition: position,
+          backgroundSize: size,
         }}
       />
       <span className={styles.frameTime}>{formatDuration(time)}</span>

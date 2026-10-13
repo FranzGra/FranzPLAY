@@ -109,18 +109,29 @@ describe("speedLabel", () => {
 });
 
 describe("previewFrame", () => {
-  const preview = { gap: 2, count: 45, columns: 10, width: 160, height: 90 };
+  const preview = { gap: 2, count: 45, columns: 10 }; // 5 rows
   it.each([
-    [0, 0, 0],
-    [1.9, 0, 0],
-    [2, 160, 0],
-    [19.5, 1440, 0], // frame 9, end of the first row
-    [20, 0, 90], // frame 10, second row
-    [88, 640, 360], // frame 44, the last
-    [500, 640, 360], // past the end: still the last
-    [-3, 0, 0],
-  ])("at %s seconds the frame is at %i,%i", (time, x, y) => {
-    expect(previewFrame(preview, time)).toEqual({ x, y });
+    [0, "0% 0%"],
+    [1.9, "0% 0%"],
+    [2, "11.1111% 0%"], // frame 1 of 10 in the row
+    [19.5, "100% 0%"], // frame 9, end of the first row
+    [20, "0% 25%"], // frame 10, second row of 5
+    [88, "44.4444% 100%"], // frame 44, the last
+    [500, "44.4444% 100%"], // past the end: still the last
+    [-3, "0% 0%"],
+  ])("at %s seconds the frame is at %s", (time, position) => {
+    expect(previewFrame(preview, time)).toEqual({ position, size: "1000% 500%" });
+  });
+
+  it("works with a single row and a single frame", () => {
+    expect(previewFrame({ gap: 2, count: 4, columns: 4 }, 5)).toEqual({
+      position: "66.6667% 0%",
+      size: "400% 100%",
+    });
+    expect(previewFrame({ gap: 2, count: 1, columns: 1 }, 5)).toEqual({
+      position: "0% 0%",
+      size: "100% 100%",
+    });
   });
 });
 
