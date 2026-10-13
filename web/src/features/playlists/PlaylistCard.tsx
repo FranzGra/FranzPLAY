@@ -17,7 +17,7 @@ export function PlaylistCard({
   showOwner?: boolean;
 }) {
   return (
-    <Link to={`/playlist/${list.id}`} className={styles.card}>
+    <Link to={`/playlist/${list.id}`} className={`glow ${styles.card}`}>
       <span className={styles.cover}>
         {list.cover ? (
           <img src={list.cover} alt="" loading="lazy" decoding="async" />

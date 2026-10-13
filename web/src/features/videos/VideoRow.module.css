@@ -110,8 +110,12 @@
   grid-auto-columns: minmax(240px, 280px);
   grid-auto-flow: column;
   gap: 20px;
-  margin: 0;
-  padding: 0 0 8px;
+  /* Room around the cards for their glow under the mouse: a row that
+     scrolls sideways would otherwise cut it. The negative margin keeps the
+     cards where they were. */
+  margin: -10px -10px 0;
+  padding: 10px 10px 16px;
+  scroll-padding-inline: 10px;
   list-style: none;
   overflow-x: auto;
   scroll-snap-type: x mandatory;

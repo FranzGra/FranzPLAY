@@ -30,8 +30,9 @@
   border-radius: var(--radius-m);
   color: var(--color-text);
   transition:
-    background-color var(--duration-fast),
-    scale var(--duration-slow) var(--ease-out);
+    background-color var(--duration-normal),
+    box-shadow var(--duration-normal),
+    scale var(--duration-fast) var(--ease-out);
 }
 
 /* The color the administrator chose for the category, as a stripe. */
@@ -66,14 +67,12 @@
 
 .tile:hover {
   color: var(--color-text);
+  /* It lights up in place, without growing or moving. */
   background: var(--glass-bg-strong);
-  /* It grows softly a little, without moving up. */
-  scale: var(--hover-scale);
 }
 
 .tile:active {
   scale: 0.98;
-  transition-duration: var(--duration-fast);
 }
 
 .withImage:hover {

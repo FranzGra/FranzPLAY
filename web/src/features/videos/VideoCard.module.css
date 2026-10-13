@@ -18,23 +18,13 @@
   overflow: hidden;
   background: var(--color-surface);
   box-shadow: 0 0 0 1px var(--color-border);
-  transition:
-    scale var(--duration-slow) var(--ease-out),
-    box-shadow var(--duration-slow) var(--ease-out);
+  transition: scale var(--duration-fast) var(--ease-out);
 }
 
-/* Under the mouse the cover grows softly a little, without moving up;
-   pressed, it sinks back. */
-.root:hover .cover {
-  scale: var(--hover-scale);
-  box-shadow:
-    0 0 0 1px var(--color-border),
-    0 14px 30px rgb(0 0 0 / 0.45);
-}
-
+/* Under the mouse the whole card lights up (the global glow class) and
+   keeps its size; pressed, the cover sinks a little. */
 .root:active .cover {
   scale: 0.98;
-  transition-duration: var(--duration-fast);
 }
 
 .cover img {

@@ -103,7 +103,7 @@ export function PlaylistsPage() {
 function LikedCard() {
   return (
     <li>
-      <Link to="/mi-piace" className={styles.card}>
+      <Link to="/mi-piace" className={`glow ${styles.card}`}>
         <span className={styles.cover}>
           <Icon name="like" size={32} />
         </span>
@@ -119,7 +119,7 @@ function LikedCard() {
 function SharedCard() {
   return (
     <li>
-      <Link to="/condivisi" className={styles.card}>
+      <Link to="/condivisi" className={`glow ${styles.card}`}>
         <span className={styles.cover}>
           <Icon name="share" size={32} />
         </span>

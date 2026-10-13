@@ -46,7 +46,6 @@
   --duration-normal: 220ms;
   --duration-slow: 360ms;
   --press-scale: 0.96;
-  --hover-scale: 1.03; /* a card under the mouse grows this much, softly */
   /* Ready-made animations for the components. They live in variables so
      CSS Modules leave the names alone and every page shares the same moves. */
   --motion-enter: enter var(--duration-slow) var(--ease-out) both;
@@ -226,6 +225,41 @@ input {
   -webkit-backdrop-filter: var(--glass-blur);
 }
 
+/* A card that lights up under the mouse, as in the old FranzPLAY: it keeps
+   its size and place, and a glass panel softly appears around all of it,
+   picture and words. The panel lies just outside the card, so nothing on
+   the page moves. */
+.glow {
+  position: relative;
+  isolation: isolate;
+}
+
+.glow::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border: var(--glass-border);
+  border-color: rgb(255 255 255 / 0.14);
+  border-radius: calc(var(--radius-m) + 6px);
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.03));
+  box-shadow:
+    var(--glass-highlight),
+    0 0 0 1px rgb(var(--color-accent-rgb) / 0.12),
+    0 12px 32px rgb(0 0 0 / 0.35),
+    0 0 28px rgb(var(--color-accent-rgb) / 0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .glow:hover::before,
+  .glow:focus-visible::before {
+    opacity: 1;
+  }
+}
+
 /* A list whose items come in one after the other: put it on the list. Only
    the first few wait, so a long list never feels slow. */
 .stagger > * {
@@ -281,6 +315,5 @@ input {
     --motion-sink-out: none;
     --motion-bounce: none;
     --motion-swap-in: none;
-    --hover-scale: 1;
   }
 }
