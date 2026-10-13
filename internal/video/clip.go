@@ -4,8 +4,11 @@ package video
 // pointer rests on it, or a finger presses it on a phone. It is made of
 // short parts taken from different moments, so it gives an idea of the
 // whole video, and it is small: ClipHeight pixels high, a few hundred KB.
+// Each clip is also made sharper, ClipHDHeight pixels high, for browsers
+// on a good connection.
 const (
-	ClipHeight      = 360 // pixels: sharp on a card, light to download
+	ClipHeight      = 360 // pixels: light to download, fine on a slow connection
+	ClipHDHeight    = 720 // pixels: sharp on any card, even on a sharp screen
 	clipParts       = 3   // moments shown in a long video
 	clipPartSeconds = 2   // seconds of each moment
 	minClipVideo    = 4   // seconds: shorter videos get no clip

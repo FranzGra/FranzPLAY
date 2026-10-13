@@ -121,6 +121,25 @@ describe("clip on the video card", () => {
     expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
   });
 
+  it("plays the sharp clip on a good connection", () => {
+    show(video({ clipHD: "/api/clips-hd/7-0a1b2c3d.mp4" }));
+    fireEvent.pointerEnter(card(), { pointerType: "mouse" });
+    wait(hoverDelay);
+    expect(screen.getByTestId("clip")).toHaveAttribute("src", "/api/clips-hd/7-0a1b2c3d.mp4");
+  });
+
+  it("plays the light clip on a slow connection", () => {
+    vi.stubGlobal("navigator", { ...navigator, connection: { effectiveType: "3g", downlink: 1 } });
+    try {
+      show(video({ clipHD: "/api/clips-hd/7-0a1b2c3d.mp4" }));
+      fireEvent.pointerEnter(card(), { pointerType: "mouse" });
+      wait(hoverDelay);
+      expect(screen.getByTestId("clip")).toHaveAttribute("src", "/api/clips/7-0a1b2c3d.mp4");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("does nothing for a video with no clip yet", () => {
     show(video({ clip: null }));
     fireEvent.pointerEnter(card(), { pointerType: "mouse" });

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import type { Video } from "../../api/videos";
 import { Icon } from "../../components/Icon";
+import { goodConnection } from "../../lib/connection";
 import { formatAge, formatDuration } from "../../lib/format";
 import { useClipPreview } from "./useClipPreview";
 import styles from "./VideoCard.module.css";
@@ -42,7 +43,7 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
             <Icon name="play" size={28} />
           </span>
         )}
-        {playing && video.clip && <Clip src={video.clip} />}
+        {playing && video.clip && <Clip src={chooseClip(video.clip, video.clipHD)} />}
         {video.duration !== null && (
           <span className={styles.duration}>{formatDuration(video.duration)}</span>
         )}
@@ -71,6 +72,13 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
       </div>
     </Link>
   );
+}
+
+// chooseClip picks which clip plays: the sharp one on a good connection,
+// like the Wi-Fi at home, the light one otherwise. It asks each time a clip
+// starts, so a phone leaving home switches to the light ones.
+function chooseClip(clip: string, clipHD: string | null): string {
+  return clipHD !== null && goodConnection() ? clipHD : clip;
 }
 
 // Clip plays a few silent seconds over the cover. It is made only while it

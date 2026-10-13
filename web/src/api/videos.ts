@@ -15,6 +15,7 @@ export type Video = {
   playable: boolean; // every browser can play it as it is
   preview: Preview | null; // frames for the player's timeline; null = none yet
   clip: string | null; // address of the seconds that play on the card; null = none yet
+  clipHD: string | null; // the same seconds, sharper, for a good connection; null = none yet
   format: string; // the kind of file, from its name: "MP4", "MKV"; "" = none
   likes: number; // how many people like it
   private: boolean; // only the person who uploaded it sees it, and the people they chose
@@ -134,6 +135,10 @@ export function parseVideo(data: unknown): Video {
   if (v.clip !== null && (typeof v.clip !== "string" || !v.clip.startsWith("/api/clips/"))) {
     throw new Error("video clip: not a clip address");
   }
+  const clipHD = v.clipHD ?? null;
+  if (clipHD !== null && (typeof clipHD !== "string" || !clipHD.startsWith("/api/clips-hd/"))) {
+    throw new Error("video clipHD: not a sharp clip address");
+  }
   if (typeof v.playable !== "boolean") {
     throw new Error("video playable: not true or false");
   }
@@ -167,6 +172,7 @@ export function parseVideo(data: unknown): Video {
     playable: v.playable,
     preview: parsePreview(v.preview),
     clip: v.clip,
+    clipHD,
     format: v.format,
     likes: count(v.likes, "video likes"),
     private: v.private,

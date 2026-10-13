@@ -26,6 +26,7 @@ import (
 //	GET /api/covers/{name}                a cover image
 //	GET /api/previews/{name}              the frames shown over the timeline
 //	GET /api/clips/{name}                 the seconds that play on a video's card
+//	GET /api/clips-hd/{name}              the same seconds, sharper, for a good connection
 func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
 	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir),
 		autoSubtitlesDir: filepath.Join(dataDir, media.AutoSubtitlesDir),
@@ -41,6 +42,7 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 		mux.HandleFunc("GET /api/covers/{name}", h.image(filepath.Join(dataDir, media.CoversDir)))
 		mux.HandleFunc("GET /api/previews/{name}", h.image(filepath.Join(dataDir, media.PreviewsDir)))
 		mux.HandleFunc("GET /api/clips/{name}", h.made(filepath.Join(dataDir, media.ClipsDir), ".mp4", "video/mp4"))
+		mux.HandleFunc("GET /api/clips-hd/{name}", h.made(filepath.Join(dataDir, media.ClipsHDDir), ".mp4", "video/mp4"))
 	}
 }
 
