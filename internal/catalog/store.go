@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -244,7 +245,9 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 // matching videos (a few kilobytes even for thousands of videos), mixes
 // them, and reads the videos of the page asked.
 func (s store) listShuffled(ctx context.Context, where string, args []any, q listQuery) (_ []Video, total int, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT v.id FROM videos v WHERE `+where+` ORDER BY v.id`, args...)
+	// No ORDER BY: SQLite can then read the small videos_shown index instead
+	// of the whole table, and the ids are put in order below.
+	rows, err := s.db.QueryContext(ctx, `SELECT v.id FROM videos v WHERE `+where, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list videos: %w", err)
 	}
@@ -260,6 +263,7 @@ func (s store) listShuffled(ctx context.Context, where string, args []any, q lis
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("list videos: %w", err)
 	}
+	slices.Sort(ids) // the same starting order every time, so a seed always mixes the same way
 	mixed := shuffled(ids, q.shuffle)
 	from := min(q.offset, len(mixed))
 	to := min(from+q.limit, len(mixed))
@@ -362,9 +366,13 @@ func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 // name people see, with the color and image the administrator chose.
 func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT coalesce(c.label, v.category) AS shown, count(*), coalesce(max(c.color), ''), max(c.image)
-		FROM videos v LEFT JOIN categories c ON c.name = v.category
-		WHERE v.visible AND v.category != ''
+		SELECT coalesce(c.label, g.category) AS shown, sum(g.videos), coalesce(max(c.color), ''), max(c.image)
+		FROM (
+			-- Counted first by the folder name, from the videos_shown index,
+			-- then joined to the names the administrator chose.
+			SELECT v.category, count(*) AS videos FROM videos v
+			WHERE v.visible AND v.category != '' GROUP BY v.category
+		) g LEFT JOIN categories c ON c.name = g.category
 		GROUP BY shown ORDER BY shown COLLATE NOCASE`)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
