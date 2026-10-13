@@ -43,13 +43,15 @@ func catalog(t *testing.T, root, rel string) (*sql.DB, int64) {
 type savedInfo struct {
 	duration, width, height           sql.NullInt64
 	videoCodec, audioCodec, container sql.NullString
+	pixelFormat                       sql.NullString
 }
 
 func info(t *testing.T, db *sql.DB, id int64) savedInfo {
 	t.Helper()
 	var s savedInfo
-	err := db.QueryRow(`SELECT duration, width, height, video_codec, audio_codec, container FROM videos WHERE id = ?`, id).
-		Scan(&s.duration, &s.width, &s.height, &s.videoCodec, &s.audioCodec, &s.container)
+	err := db.QueryRow(`SELECT duration, width, height, video_codec, audio_codec, container, pixel_format
+		FROM videos WHERE id = ?`, id).
+		Scan(&s.duration, &s.width, &s.height, &s.videoCodec, &s.audioCodec, &s.container, &s.pixelFormat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +70,7 @@ func TestProberSavesWhatFFprobeFound(t *testing.T) {
 	var args []string
 	p := NewProber(db, "ffprobe")
 	p.run = fakeRun(`{"format":{"format_name":"matroska,webm","duration":"90.4"},
-		"streams":[{"codec_type":"video","codec_name":"vp9","width":1280,"height":720},
+		"streams":[{"codec_type":"video","codec_name":"vp9","width":1280,"height":720,"pix_fmt":"yuv420p10le"},
 		{"codec_type":"audio","codec_name":"opus"}]}`, nil, &args)
 
 	if err := p.Handle(context.Background(), id); err != nil {
@@ -80,7 +82,8 @@ func TestProberSavesWhatFFprobeFound(t *testing.T) {
 	}
 	got := info(t, db, id)
 	if got.duration.Int64 != 90 || got.width.Int64 != 1280 || got.height.Int64 != 720 ||
-		got.videoCodec.String != "vp9" || got.audioCodec.String != "opus" || got.container.String != "matroska,webm" {
+		got.videoCodec.String != "vp9" || got.audioCodec.String != "opus" || got.container.String != "matroska,webm" ||
+		got.pixelFormat.String != "yuv420p10le" {
 		t.Errorf("saved %+v", got)
 	}
 	// What the reading makes possible is asked for next.

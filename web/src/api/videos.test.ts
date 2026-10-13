@@ -1,6 +1,6 @@
 import { videoJSON } from "../test/fixtures";
 import { fakeServer } from "../test/render";
-import { fetchVideos, parseCategories, parseVideo } from "./videos";
+import { fetchVideos, parseCategories, parseVideo, playsFileItself, streamURL } from "./videos";
 
 const sampleVideo = videoJSON();
 
@@ -157,5 +157,27 @@ describe("fetchVideos", () => {
     expect(url.searchParams.get("category")).toBe("Gite & mare");
     expect(url.searchParams.get("limit")).toBe("24");
     expect(url.searchParams.get("offset")).toBe("48");
+  });
+});
+
+describe("playsFileItself", () => {
+  const webm = parseVideo(
+    videoJSON({ fileType: 'video/webm; codecs="vp09.00.40.08, opus"', playable: true, copy: true }),
+  );
+
+  it("plays the file itself only when the browser is sure", () => {
+    expect(playsFileItself(webm, () => "probably")).toBe(true);
+    expect(playsFileItself(webm, () => "maybe")).toBe(false);
+    expect(playsFileItself(webm, () => "")).toBe(false);
+  });
+
+  it("never asks about a file no browser is worth asking about", () => {
+    const mkv = parseVideo(videoJSON({ fileType: "" }));
+    expect(playsFileItself(mkv, () => "probably")).toBe(false);
+  });
+
+  it("asks for the file itself by address", () => {
+    expect(streamURL(7)).toBe("/api/videos/7/stream");
+    expect(streamURL(7, true)).toBe("/api/videos/7/stream?original=1");
   });
 });

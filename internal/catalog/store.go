@@ -30,13 +30,18 @@ type Video struct {
 	Cover    *string   `json:"cover"`    // address of the image; null = none yet
 	AddedAt  time.Time `json:"addedAt"`  // when FranzPLAY found it
 	Playable bool      `json:"playable"` // every browser can play it: as it is, or its copy
-	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
-	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
-	ClipHD   *string   `json:"clipHD"`   // the same clip, sharper, for a good connection; null = none yet
-	Format   string    `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
-	Likes    int64     `json:"likes"`    // how many people like it
-	Private  bool      `json:"private"`  // only its uploader, and the people they chose, see it
-	Uploader *Person   `json:"uploader"` // who uploaded it from the browser; null = from a video folder
+	// FileType describes the file for the browser's canPlayType, like
+	// `video/webm; codecs="vp9, opus"`; "" = no browser is worth asking.
+	// A browser that can play it may ask for the file instead of the copy.
+	FileType string   `json:"fileType"`
+	Copy     bool     `json:"copy"`     // a copy for every device is ready
+	Preview  *Preview `json:"preview"`  // frames for the timeline; null = none yet
+	Clip     *string  `json:"clip"`     // address of the seconds that play on the card; null = none yet
+	ClipHD   *string  `json:"clipHD"`   // the same clip, sharper, for a good connection; null = none yet
+	Format   string   `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
+	Likes    int64    `json:"likes"`    // how many people like it
+	Private  bool     `json:"private"`  // only its uploader, and the people they chose, see it
+	Uploader *Person  `json:"uploader"` // who uploaded it from the browser; null = from a video folder
 	// Owner is whose video it is, shown under the title: its uploader, or
 	// for a video from a folder the main administrator. Only for one video;
 	// null if FranzPLAY has nobody yet.
@@ -121,7 +126,7 @@ const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name =
 
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
-	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.preview_width, v.preview_height, v.converted,
+	v.path, v.video_codec, v.audio_codec, v.pixel_format, v.preview, v.preview_gap, v.preview_count, v.preview_width, v.preview_height, v.converted,
 	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private,
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
@@ -141,13 +146,13 @@ func (m moreColumns) Scan(dest ...any) error { return m.row.Scan(append(dest, m.
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
 	var duration, width, height, previewGap, previewCount, previewWidth, previewHeight sql.NullInt64
-	var cover, videoCodec, audioCodec, preview, converted, author, published, clip, clipHD sql.NullString
+	var cover, videoCodec, audioCodec, pixels, preview, converted, author, published, clip, clipHD sql.NullString
 	var addedAt int64
 	var relPath string
 	var uploaderID sql.NullInt64
 	var uploaderName sql.NullString
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
-		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &previewWidth, &previewHeight, &converted,
+		&relPath, &videoCodec, &audioCodec, &pixels, &preview, &previewGap, &previewCount, &previewWidth, &previewHeight, &converted,
 		&author, &published, &clip, &clipHD, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
 		return Video{}, err
 	}
@@ -187,8 +192,10 @@ func scanVideo(row rowScanner) (Video, error) {
 	if published.Valid {
 		v.PublishedOn = &published.String
 	}
-	v.Playable = converted.Valid || video.DirectlyPlayable(path.Ext(relPath),
-		video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String})
+	info := video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String, PixelFormat: pixels.String}
+	v.Playable = converted.Valid || video.DirectlyPlayable(path.Ext(relPath), info)
+	v.FileType = video.BrowserType(path.Ext(relPath), info)
+	v.Copy = converted.Valid
 	return v, nil
 }
 
@@ -410,8 +417,9 @@ func (s store) file(ctx context.Context, id int64) (string, error) {
 }
 
 // played returns the file the browser gets for a video: the copy made for
-// the browsers, in convertedDir, when there is one; else the file itself.
-func (s store) played(ctx context.Context, id int64, convertedDir string) (name string, isCopy bool, err error) {
+// the browsers, in convertedDir, when there is one and original is false;
+// else the file itself.
+func (s store) played(ctx context.Context, id int64, convertedDir string, original bool) (name string, isCopy bool, err error) {
 	var root, rel string
 	var converted sql.NullString
 	err = s.db.QueryRowContext(ctx, `
@@ -423,7 +431,7 @@ func (s store) played(ctx context.Context, id int64, convertedDir string) (name 
 	if err != nil {
 		return "", false, fmt.Errorf("find video %d: %w", id, err)
 	}
-	if converted.Valid {
+	if converted.Valid && !original {
 		return filepath.Join(convertedDir, filepath.Base(converted.String)), true, nil
 	}
 	return filepath.Join(root, filepath.FromSlash(rel)), false, nil

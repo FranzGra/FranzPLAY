@@ -14,9 +14,11 @@ import (
 
 // videoExtensions are the file types treated as videos (lower case).
 var videoExtensions = map[string]bool{
-	".3gp": true, ".avi": true, ".flv": true, ".m2ts": true, ".m4v": true,
+	".3g2": true, ".3gp": true, ".asf": true, ".avi": true, ".divx": true,
+	".dv": true, ".f4v": true, ".flv": true, ".m2ts": true, ".m4v": true,
 	".mkv": true, ".mov": true, ".mp4": true, ".mpeg": true, ".mpg": true,
-	".mts": true, ".ogv": true, ".ts": true, ".webm": true, ".wmv": true,
+	".mts": true, ".mxf": true, ".ogm": true, ".ogv": true, ".rm": true,
+	".rmvb": true, ".ts": true, ".webm": true, ".wmv": true,
 }
 
 // ignoredDirs are folders that NAS systems and operating systems create

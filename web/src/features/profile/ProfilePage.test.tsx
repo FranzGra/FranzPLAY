@@ -247,7 +247,9 @@ describe("profile page", () => {
       "aria-pressed",
       "true",
     );
-    expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#0d9488");
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#0d9488"),
+    );
   });
 
   it("shows the server version", async () => {
