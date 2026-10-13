@@ -18,11 +18,18 @@ export async function logIn(page: Page, name: string) {
   expect(res.ok()).toBe(true);
 }
 
-// watchErrors collects what goes wrong in the page: errors in the code
-// and failed requests to the server.
+// watchErrors collects what goes wrong in the page: errors in the code,
+// failed requests to the server, and any request that leaves the machine
+// (a font or a script from the internet): FranzPLAY must work offline.
 export function watchErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on("request", (r) => {
+    const url = new URL(r.url());
+    if ((url.protocol === "http:" || url.protocol === "https:") && url.origin !== BASE) {
+      errors.push(`request outside FranzPLAY: ${r.url()}`);
+    }
+  });
   page.on("console", (m) => {
     // Opening another address cuts short the requests still on their way,
     // like the last saved position (sent with keepalive, so the server
