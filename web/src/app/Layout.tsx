@@ -21,11 +21,29 @@ function sideLinks(me: number) {
   ] as const;
 }
 
+// The tabs of the phone bar. Each one also lights up on the pages reached
+// from it, so on a phone it is clear where you are: the history, the upload
+// and the administration open from the Profile page, for instance.
 const tabs = [
-  { to: "/", label: "Home", icon: "home" },
-  { to: "/playlist", label: "Playlist", icon: "playlist" },
-  { to: "/profilo", label: "Profilo", icon: "profile" },
+  { to: "/", label: "Home", icon: "home", also: ["/categorie", "/cerca"] },
+  { to: "/playlist", label: "Playlist", icon: "playlist", also: ["/mi-piace", "/condivisi"] },
+  {
+    to: "/profilo",
+    label: "Profilo",
+    icon: "profile",
+    also: ["/cronologia", "/carica", "/admin"],
+  },
 ] as const;
+
+// tabFor says which tab of the phone bar a page belongs to: its index, or
+// null for a page of no tab, like a video.
+export function tabFor(path: string): number | null {
+  const under = (base: string) => path === base || path.startsWith(`${base}/`);
+  const i = tabs.findIndex((tab) =>
+    tab.to === "/" ? path === "/" || tab.also.some(under) : [tab.to, ...tab.also].some(under),
+  );
+  return i === -1 ? null : i;
+}
 
 // Layout is the frame around every page: top bar, side menu on computers,
 // bottom bar with three tabs on phones.
@@ -40,6 +58,7 @@ export function Layout() {
   const [query, setQuery] = useState("");
   const page = useRef<HTMLDivElement>(null);
   useEnterOnNavigate(page);
+  const currentTab = tabFor(useLocation().pathname);
   const [width, setWidth] = useState<PageWidth>("normal");
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
@@ -124,11 +143,16 @@ export function Layout() {
       </div>
 
       <nav className={`glass ${styles.tabbar}`} aria-label="Menu del telefono">
-        {tabs.map((tab) => (
-          <NavLink key={tab.to} to={tab.to} end className={styles.tab}>
+        {tabs.map((tab, i) => (
+          <Link
+            key={tab.to}
+            to={tab.to}
+            className={styles.tab}
+            aria-current={currentTab === i ? "page" : undefined}
+          >
             <Icon name={tab.icon} size={24} />
             {tab.label}
-          </NavLink>
+          </Link>
         ))}
       </nav>
     </div>

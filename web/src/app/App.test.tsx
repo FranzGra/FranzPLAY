@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { renderApp, signedIn } from "../test/render";
+import { tabFor } from "./Layout";
 
 describe("navigation", () => {
   it("shows the home page with an empty state", async () => {
@@ -27,6 +28,25 @@ describe("navigation", () => {
       "page",
     );
     expect(within(tabbar).getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current");
+  });
+
+  it.each([
+    ["/", 0],
+    ["/categorie/Vacanze", 0],
+    ["/cerca", 0],
+    ["/playlist", 1],
+    ["/playlist/4", 1],
+    ["/mi-piace", 1],
+    ["/condivisi", 1],
+    ["/profilo", 2],
+    ["/cronologia", 2],
+    ["/carica", 2],
+    ["/admin/persone", 2],
+    ["/video/7", null],
+    ["/canale/3", null],
+    ["/playlists-old", null],
+  ])("lights the phone tab of %s", (path, want) => {
+    expect(tabFor(path)).toBe(want);
   });
 
   it("shows an icon next to every page in the side menu", async () => {
