@@ -33,6 +33,10 @@ export function Layout() {
   const navigate = useNavigate();
   const account = useAccount();
   const lists = useMyPlaylists();
+  // "Guarda più tardi" comes first, then "Tutte le playlist", then the
+  // lists I made.
+  const later = lists.filter((list) => list.kind === "later");
+  const mine = lists.filter((list) => list.kind !== "later");
   const [query, setQuery] = useState("");
   const page = useRef<HTMLDivElement>(null);
   useEnterOnNavigate(page);
@@ -89,15 +93,15 @@ export function Layout() {
             </NavLink>
           ))}
           <div className={styles.sideHeading}>Le tue playlist</div>
+          {later.map((list) => (
+            <PlaylistLink key={list.id} list={list} />
+          ))}
           <NavLink to="/playlist" end className={styles.sideLink}>
             <Icon name="playlist" size={20} />
             Tutte le playlist
           </NavLink>
-          {lists.map((list) => (
-            <NavLink key={list.id} to={`/playlist/${list.id}`} className={styles.sideLink}>
-              <Icon name={list.kind === "later" ? "clock" : "playlist"} size={20} />
-              <span className={styles.sideText}>{playlistName(list)}</span>
-            </NavLink>
+          {mine.map((list) => (
+            <PlaylistLink key={list.id} list={list} />
           ))}
           {account.role === "admin" && (
             <>
@@ -128,6 +132,16 @@ export function Layout() {
         ))}
       </nav>
     </div>
+  );
+}
+
+// PlaylistLink is one of my lists in the side menu.
+function PlaylistLink({ list }: { list: Playlist }) {
+  return (
+    <NavLink to={`/playlist/${list.id}`} className={styles.sideLink}>
+      <Icon name={list.kind === "later" ? "clock" : "playlist"} size={20} />
+      <span className={styles.sideText}>{playlistName(list)}</span>
+    </NavLink>
   );
 }
 

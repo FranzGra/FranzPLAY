@@ -74,6 +74,38 @@ describe("navigation", () => {
     );
   });
 
+  it("puts «Guarda più tardi» first, then all playlists, then mine", async () => {
+    const list = (id: number, kind: string, name: string) => ({
+      id,
+      kind,
+      name,
+      owner: { id: 1, name: "Francesco" },
+      public: false,
+      videos: 0,
+      cover: null,
+      updatedAt: "2026-10-12T09:00:00Z",
+    });
+    renderApp("/", {
+      ...signedIn(),
+      // The order from the server does not matter.
+      "GET /api/playlists": {
+        body: [list(2, "playlist", "Gite"), list(1, "later", ""), list(3, "playlist", "Ricette")],
+      },
+    });
+    const menu = await screen.findByRole("navigation", { name: "Menu principale" });
+    await within(menu).findByRole("link", { name: "Gite" });
+    const names = within(menu)
+      .getAllByRole("link")
+      .map((link) => link.textContent);
+    const start = names.indexOf("Guarda più tardi");
+    expect(names.slice(start, start + 4)).toEqual([
+      "Guarda più tardi",
+      "Tutte le playlist",
+      "Gite",
+      "Ricette",
+    ]);
+  });
+
   describe("moving to another page", () => {
     // jsdom cannot animate: a stand-in records what the page asked for.
     const animate = vi.fn(() => ({ cancel: vi.fn() }));

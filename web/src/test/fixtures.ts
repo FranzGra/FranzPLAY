@@ -13,6 +13,7 @@ export function videoJSON(overrides: Record<string, unknown> = {}) {
     playable: true,
     preview: null,
     clip: null,
+    clipHD: null,
     format: "MP4",
     likes: 0,
     private: false,
