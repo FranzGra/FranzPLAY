@@ -666,8 +666,9 @@ func BenchmarkClaim(b *testing.B) {
 	for b.Loop() {
 		var id, video, attempts int64
 		var kind string
+		var urgent bool
 		if err := db.QueryRow(query, t0.Unix(), "probe", "cover", "preview", "clip", "convert").
-			Scan(&id, &video, &kind, &attempts); err != nil {
+			Scan(&id, &video, &kind, &attempts, &urgent); err != nil {
 			b.Fatal(err)
 		}
 	}
