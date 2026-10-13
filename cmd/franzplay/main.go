@@ -303,15 +303,33 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	}
 
 	logger.Info("FranzPLAY stopping")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("stop web server: %w", err)
+	if err := stopServer(srv, shutdownTimeout, logger); err != nil {
+		return err
 	}
 	if err := <-serveErr; !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("web server: %w", err)
 	}
 	logger.Info("FranzPLAY stopped")
+	return nil
+}
+
+// stopServer lets the requests in progress finish, for at most timeout.
+// A video being watched never finishes by itself, so after timeout the
+// connections still open are closed: that is a normal stop, not an error.
+func stopServer(srv *http.Server, timeout time.Duration, logger *slog.Logger) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	err := srv.Shutdown(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		if err != nil {
+			return fmt.Errorf("stop web server: %w", err)
+		}
+		return nil
+	}
+	logger.Info("closing the videos still playing")
+	if err := srv.Close(); err != nil {
+		return fmt.Errorf("stop web server: %w", err)
+	}
 	return nil
 }
 

@@ -47,7 +47,29 @@ type Scanner struct {
 
 	mu     sync.Mutex
 	status Status
+
+	// What the previous scan learned about files that are not in the
+	// catalog, so the next scan does not read them again. Only Scan uses
+	// them, and only Run calls Scan, so they need no lock.
+	pending map[location]found    // new or changed files, to notice one still being copied
+	skipped map[location]skipFile // duplicates and unreadable files
 }
+
+// skipFile is a file the catalog does not hold: a second copy of a video,
+// or a file that could not be read. While its size and date stay the same,
+// the next scans reuse what was learned instead of reading it again (an
+// archive with thousands of copies would otherwise be read every minute,
+// and the disk would never rest).
+type skipFile struct {
+	found
+	fingerprint string // empty when the file could not be read
+	readAt      int64  // when it was read, Unix nanoseconds
+}
+
+// retryUnreadable is how long an unreadable file is left alone before the
+// scan tries again: the reason (a disk error, its permissions) may be gone
+// without the file itself changing.
+const retryUnreadable = time.Hour
 
 // NewScanner returns a scanner for the given video folders.
 func NewScanner(db *sql.DB, libraries []string, logger *slog.Logger) *Scanner {
@@ -199,15 +221,49 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 
 	// 2. Read the fingerprint of the files that are new or changed.
 	unchanged, toIdentify := compare(knownVideos, files)
+	presentAt := make(map[location]int64, len(knownVideos))
+	for _, k := range knownVideos {
+		if !k.missing {
+			presentAt[k.loc] = k.id
+		}
+	}
+	scanStart := s.now().UnixNano()
+	pending := make(map[location]found, len(toIdentify))
+	skipped := make(map[location]skipFile)
 	identifiedFiles := make([]identified, 0, len(toIdentify))
 	for _, f := range toIdentify {
 		if err := ctx.Err(); err != nil {
 			return report, err
 		}
+		pending[f.loc] = f
+		knownID, knownHere := presentAt[f.loc]
+		before, seenBefore := s.pending[f.loc]
+		if stillCopying(f, before, seenBefore, knownHere, scanStart) {
+			// Still being written: look again at the next scan. A known
+			// video keeps its place meanwhile, and is not marked missing.
+			if knownHere {
+				unchanged = append(unchanged, knownID)
+			}
+			continue
+		}
+		if old, ok := s.skipped[f.loc]; ok && old.found == f &&
+			(old.fingerprint != "" || scanStart-old.readAt < int64(retryUnreadable)) {
+			skipped[f.loc] = old
+			if old.fingerprint == "" {
+				// Still unreadable: said already, and still no reason to
+				// trust this folder to mark videos missing.
+				report.Problems++
+				trusted[f.loc.library] = false
+				continue
+			}
+			identifiedFiles = append(identifiedFiles, identified{found: f, fingerprint: old.fingerprint})
+			continue
+		}
 		fp, err := Fingerprint(folders[f.loc.library], f.loc.path)
 		if err != nil {
 			report.Problems++
 			trusted[f.loc.library] = false
+			skipped[f.loc] = skipFile{found: f, readAt: scanStart}
 			s.logger.WarnContext(ctx, "cannot read video", "path", f.loc.path, "error", err)
 			continue
 		}
@@ -233,8 +289,14 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	}
 
 	for _, d := range ch.duplicates {
-		s.logger.InfoContext(ctx, "duplicate video ignored", "path", d.loc.path)
+		if _, known := s.skipped[d.loc]; !known {
+			s.logger.InfoContext(ctx, "duplicate video ignored", "path", d.loc.path)
+		}
+		skipped[d.loc] = skipFile{found: d.found, fingerprint: d.fingerprint}
 	}
+	// Remembered only now that the scan is saved: a scan that failed
+	// halfway will look at everything again.
+	s.pending, s.skipped = pending, skipped
 	report.Unchanged = len(ch.unchanged)
 	report.Added = len(ch.added)
 	report.Missing = len(ch.gone)

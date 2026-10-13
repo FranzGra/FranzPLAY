@@ -184,7 +184,9 @@ func (h handlers) made(dir, ext, contentType string) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		// private: these files are behind the login. A shared cache (a
+		// proxy in front of FranzPLAY) must not hand them to strangers.
+		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 		http.ServeContent(w, r, "", info.ModTime(), file)
 	}
 }
