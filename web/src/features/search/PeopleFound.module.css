@@ -1,0 +1,58 @@
+.section {
+  margin-bottom: 28px;
+  animation: var(--motion-enter);
+}
+
+.title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-height: var(--touch);
+  padding: 6px 18px 6px 6px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  text-decoration: none;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.person:hover {
+  background: var(--glass-bg-strong);
+  border-color: rgb(var(--color-accent-rgb) / 0.45);
+}
+
+.person:focus-visible {
+  outline: 2px solid rgb(var(--color-accent-rgb) / 0.8);
+  outline-offset: 2px;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The list item must be able to shrink, or a very long name would widen the page. */
+.list > li {
+  min-width: 0;
+  max-width: 100%;
+}
