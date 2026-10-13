@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -24,6 +25,53 @@ const ConvertedDir = "converted"
 // the content changes.
 func convertedName(videoID int64, fingerprint string) string {
 	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") + ".mp4"
+}
+
+// progressName is the file, in the converted folder, where ffmpeg writes
+// how far the copy of a video is, while it makes it.
+func progressName(videoID int64) string {
+	return ".progress-" + strconv.FormatInt(videoID, 10) + ".txt"
+}
+
+// ConvertedSoFar returns how many seconds of a video ffmpeg has put in its
+// copy, while it makes it, from the progress file in dataDir/converted.
+// ok is false when no copy is being made.
+func ConvertedSoFar(dataDir string, videoID int64) (seconds float64, ok bool, err error) {
+	f, err := os.Open(filepath.Join(dataDir, ConvertedDir, progressName(videoID)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("read progress of video %d: %w", videoID, err)
+	}
+	defer func() { err = errors.Join(err, f.Close()) }()
+	// ffmpeg adds a few lines every few seconds: the last ones are enough.
+	info, err := f.Stat()
+	if err != nil {
+		return 0, false, fmt.Errorf("read progress of video %d: %w", videoID, err)
+	}
+	tail := make([]byte, min(info.Size(), 4096))
+	if _, err := f.ReadAt(tail, info.Size()-int64(len(tail))); err != nil && !errors.Is(err, io.EOF) {
+		return 0, false, fmt.Errorf("read progress of video %d: %w", videoID, err)
+	}
+	seconds, ok = parseProgress(tail)
+	return seconds, ok, nil
+}
+
+// parseProgress reads the last "out_time_us=" line ffmpeg wrote with
+// -progress: the time reached, in microseconds.
+func parseProgress(data []byte) (float64, bool) {
+	seconds, found := 0.0, false
+	for line := range strings.Lines(string(data)) {
+		value, ok := strings.CutPrefix(strings.TrimSpace(line), "out_time_us=")
+		if !ok {
+			continue
+		}
+		if us, err := strconv.ParseInt(value, 10, 64); err == nil && us >= 0 {
+			seconds, found = float64(us)/1e6, true
+		}
+	}
+	return seconds, found
 }
 
 // Converter makes, with ffmpeg, a copy of the videos that not every
@@ -154,7 +202,13 @@ func (c *Converter) convert(ctx context.Context, videoID int64, file string, pla
 		}
 	}()
 
-	if _, err := c.run(ctx, c.ffmpeg, convertArgs(file, plan, sounds, c.threads, tmpName)...); err != nil {
+	progress := filepath.Join(dir, progressName(videoID))
+	defer func() {
+		if rmErr := os.Remove(progress); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+			err = errors.Join(err, rmErr)
+		}
+	}()
+	if _, err := c.run(ctx, c.ffmpeg, convertArgs(file, plan, sounds, c.threads, progress, tmpName)...); err != nil {
 		return fmt.Errorf("convert video %d: %w", videoID, err)
 	}
 	info, err := os.Stat(tmpName)
@@ -205,7 +259,9 @@ var encodeFilter = "yadif=deint=interlaced," +
 // (V:0 leaves out cover images) and every sound track, in the same order,
 // so the choice of language works on it too. Subtitles stay out: FranzPLAY
 // shows them from its own copies.
-func convertArgs(file string, plan video.ConvertPlan, sounds []string, threads int, out string) []string {
+//
+// ffmpeg writes how far it is in the file progress, every few seconds.
+func convertArgs(file string, plan video.ConvertPlan, sounds []string, threads int, progress, out string) []string {
 	args := []string{"-v", "error", "-nostdin", "-y", "-i", "file:" + file, "-map", "0:V:0"}
 	if plan.CopyVideo {
 		args = append(args, "-c:v", "copy")
@@ -230,6 +286,7 @@ func convertArgs(file string, plan video.ConvertPlan, sounds []string, threads i
 	}
 	return append(args,
 		"-sn", "-dn", "-threads", strconv.Itoa(threads),
+		"-progress", "file:"+progress, "-stats_period", "5",
 		// faststart puts the index at the beginning: the video starts at once.
 		"-movflags", "+faststart", "-f", "mp4", "file:"+out)
 }

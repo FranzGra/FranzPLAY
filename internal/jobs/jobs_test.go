@@ -327,6 +327,131 @@ func TestConversionDoesNotGiveWayToItsOwnKind(t *testing.T) {
 	}
 }
 
+func (fx *fixture) hurry(t *testing.T, videoID int64, kind Kind) bool {
+	t.Helper()
+	ok, err := Hurry(context.Background(), fx.db, videoID, kind, fx.clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ok
+}
+
+// Someone is waiting for a conversion: it goes before everything else.
+func TestHurriedJobGoesFirst(t *testing.T) {
+	fx := newFixture(t, 3)
+	fx.enqueue(t, fx.videos[0], Probe)
+	fx.enqueue(t, fx.videos[1], Cover)
+	fx.enqueue(t, fx.videos[2], Convert)
+	if !fx.hurry(t, fx.videos[2], Convert) {
+		t.Fatal("waiting conversion not hurried")
+	}
+	var order []Kind
+	record := func(k Kind) Handler {
+		return func(context.Context, int64) error { order = append(order, k); return nil }
+	}
+	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Cover: record(Cover), Convert: record(Convert)})
+	for runNext(t, w) {
+	}
+	if want := []Kind{Convert, Probe, Cover}; !slices.Equal(order, want) {
+		t.Errorf("order = %v, want %v", order, want)
+	}
+	// Asked again later (the file changed): an ordinary job again.
+	fx.enqueue(t, fx.videos[2], Convert)
+	var urgent bool
+	if err := fx.db.QueryRow(`SELECT urgent FROM jobs WHERE video_id = ? AND kind = 'convert'`,
+		fx.videos[2]).Scan(&urgent); err != nil || urgent {
+		t.Errorf("urgent = %v, %v after asking again", urgent, err)
+	}
+}
+
+func TestHurryTriesAFailedJobAgainAndLeavesDoneOnes(t *testing.T) {
+	fx := newFixture(t, 3)
+	fx.enqueue(t, fx.videos[0], Convert)
+	mustExec(t, fx.db, `UPDATE jobs SET state = 'failed', attempts = 3, last_error = 'boom' WHERE video_id = ?`, fx.videos[0])
+	fx.enqueue(t, fx.videos[1], Convert)
+	mustExec(t, fx.db, `UPDATE jobs SET state = 'done' WHERE video_id = ?`, fx.videos[1])
+
+	if !fx.hurry(t, fx.videos[0], Convert) {
+		t.Error("failed job not hurried")
+	}
+	if j := fx.job(t, fx.videos[0], Convert); j.state != pending || j.attempts != 0 || j.lastError != "" {
+		t.Errorf("failed job after hurry = %+v, want pending from scratch", j)
+	}
+	if fx.hurry(t, fx.videos[1], Convert) || fx.job(t, fx.videos[1], Convert).state != done {
+		t.Error("done job hurried")
+	}
+	if fx.hurry(t, fx.videos[2], Convert) {
+		t.Error("job never asked for hurried")
+	}
+}
+
+// A conversion someone waits for is not stopped by new covers, and an
+// ordinary one is stopped by a conversion someone waits for.
+func TestHurriedConversionDoesNotGiveWay(t *testing.T) {
+	fx := newFixture(t, 3)
+	film, waited, fresh := fx.videos[0], fx.videos[1], fx.videos[2]
+	fx.enqueue(t, film, Convert)
+	var order []int64
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{
+		Convert: func(ctx context.Context, id int64) error {
+			order = append(order, id)
+			switch {
+			case id == film && len(order) == 1:
+				// Someone opens another video their phone cannot play.
+				fx.enqueue(t, waited, Convert)
+				fx.hurry(t, waited, Convert)
+				w.Wake()
+				<-ctx.Done()
+				return ctx.Err()
+			case id == waited:
+				// New videos arrive while it is being converted.
+				fx.enqueue(t, fresh, Probe)
+				w.Wake()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(200 * time.Millisecond):
+				}
+			}
+			return nil
+		},
+		Probe: func(_ context.Context, id int64) error { order = append(order, -id); return nil },
+	}
+	for runNext(t, w) {
+	}
+	if want := []int64{film, waited, -fresh, film}; !slices.Equal(order, want) {
+		t.Errorf("order = %v, want %v", order, want)
+	}
+}
+
+// Someone opens the very video being converted: from then on, the
+// conversion goes on to the end.
+func TestConversionHurriedWhileRunningGoesOn(t *testing.T) {
+	fx := newFixture(t, 2)
+	film, fresh := fx.videos[0], fx.videos[1]
+	fx.enqueue(t, film, Convert)
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{
+		Convert: func(ctx context.Context, _ int64) error {
+			fx.hurry(t, film, Convert)
+			fx.enqueue(t, fresh, Probe)
+			w.Wake()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+				return nil
+			}
+		},
+		Probe: func(context.Context, int64) error { return nil },
+	}
+	runNext(t, w)
+	if j := fx.job(t, film, Convert); j.state != done {
+		t.Errorf("conversion = %+v, want done", j)
+	}
+}
+
 func TestTimeouts(t *testing.T) {
 	if Convert.timeout() < 12*time.Hour || Transcribe.timeout() < 12*time.Hour || Cover.timeout() > time.Hour {
 		t.Errorf("timeouts: convert %v, cover %v", Convert.timeout(), Cover.timeout())

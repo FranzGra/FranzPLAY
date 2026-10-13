@@ -33,8 +33,11 @@ type PlayerProps = {
   src: string;
   poster: string | null;
   // unsupportedHint explains why the video may not play, when the server
-  // already knows the browser may not manage its format.
+  // already knows the browser may not manage its format. It may change
+  // while the explanation is shown, as the copy is being prepared.
   unsupportedHint?: string;
+  // onUnsupported hears that this browser cannot play the video.
+  onUnsupported?: () => void;
   // subtitles found next to the video file.
   subtitles?: SubtitleTrack[];
   // startAt is where to start, in seconds: where the person stopped last time.
@@ -174,6 +177,7 @@ export function Player({
   src,
   poster,
   unsupportedHint,
+  onUnsupported,
   subtitles = noTracks,
   startAt = 0,
   onPosition,
@@ -193,8 +197,9 @@ export function Player({
   const [duration, setDuration] = useState(Number.NaN);
   const [buffered, setBuffered] = useState(0);
   const [waiting, setWaiting] = useState(false);
-  // failed says why the video stopped: null while it plays fine.
-  const [failed, setFailed] = useState<string | null>(null);
+  // failed is the browser's error code when the video stopped (0 = none
+  // given): null while it plays fine.
+  const [failed, setFailed] = useState<number | null>(null);
   const [volume, setVolume] = useState(() => loadSetting("volume", parseVolume, 1));
   const [muted, setMuted] = useState(() => loadSetting("muted", parseMuted, false));
   // silenced: the browser let the video start by itself only without
@@ -217,7 +222,7 @@ export function Player({
   const [flash, setFlash] = useState<Flash | null>(null);
   // The settings menu and the big play button leave softly.
   const menu = usePresence(menuOpen ? true : null);
-  const bigPlay = usePresence<true, HTMLButtonElement>(!started && !failed ? true : null);
+  const bigPlay = usePresence<true, HTMLButtonElement>(!started && failed === null ? true : null);
   const [track, setTrack] = useState<string | null>(() =>
     pickTrack(subtitles, loadSetting("subtitles", parseSubtitleChoice, { on: false, lang: "" })),
   );
@@ -684,7 +689,9 @@ export function Player({
             void switchAudio(null, position.current.time, false);
             return;
           }
-          setFailed(failureText(e.currentTarget.error?.code, unsupportedHint));
+          const code = e.currentTarget.error?.code ?? 0;
+          setFailed(code);
+          if (code !== 2) onUnsupported?.(); // 2: the network, not the format
         }}
       >
         {subtitles.map((t) => (
@@ -762,10 +769,10 @@ export function Player({
         </div>
       )}
 
-      {failed && (
+      {failed !== null && (
         <div className={styles.failure} role="alert">
           <p className={styles.failureTitle}>Questo video non si riesce a riprodurre</p>
-          <p className={styles.failureText}>{failed}</p>
+          <p className={styles.failureText}>{failureText(failed, unsupportedHint)}</p>
         </div>
       )}
 
