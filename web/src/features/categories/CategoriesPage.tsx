@@ -47,24 +47,28 @@ export function CategoriesPage() {
       )}
       {state.kind === "ready" && state.categories.length > 0 && (
         <ul className={`stagger ${styles.list}`}>
-          {state.categories.map((category) => (
-            <li key={category.name}>
-              <Link
-                to={`/categorie/${encodeURIComponent(category.name)}`}
-                className={`glass ${styles.tile} ${category.image ? styles.withImage : ""}`}
-                // The color the administrator chose: a stripe on the tile.
-                style={
-                  category.color ? ({ "--tile-color": category.color } as CSSProperties) : undefined
-                }
-              >
-                {category.image && (
-                  <img className={styles.image} src={category.image} alt="" loading="lazy" />
-                )}
-                <span className={styles.name}>{category.name}</span>
-                <span className={styles.count}>{formatVideos(category.videos)}</span>
-              </Link>
-            </li>
-          ))}
+          {state.categories.map((category) => {
+            // The administrator's image, else the cover of its newest video.
+            const picture = category.image ?? category.cover;
+            return (
+              <li key={category.name}>
+                <Link
+                  to={`/categorie/${encodeURIComponent(category.name)}`}
+                  className={`glass ${styles.tile} ${picture ? styles.withImage : ""}`}
+                  // The color the administrator chose: a stripe on the tile.
+                  style={
+                    category.color
+                      ? ({ "--tile-color": category.color } as CSSProperties)
+                      : undefined
+                  }
+                >
+                  {picture && <img className={styles.image} src={picture} alt="" loading="lazy" />}
+                  <span className={styles.name}>{category.name}</span>
+                  <span className={styles.count}>{formatVideos(category.videos)}</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

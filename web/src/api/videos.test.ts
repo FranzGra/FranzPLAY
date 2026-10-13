@@ -130,15 +130,24 @@ describe("parseCategories", () => {
       color: "#e11d48",
       image: "/api/category-images/1-0123456789abcdef.jpg",
     };
-    expect(
-      parseCategories([vacanze, { name: "Corsi", videos: 1, color: "", image: null }]),
-    ).toEqual([vacanze, { name: "Corsi", videos: 1, color: "", image: null }]);
+    const corsi = {
+      name: "Corsi",
+      videos: 1,
+      color: "",
+      image: null,
+      cover: "/api/covers/4-0a1b.jpg",
+    };
+    expect(parseCategories([vacanze, corsi])).toEqual([{ ...vacanze, cover: null }, corsi]);
   });
 
   it.each([
     ["an object", { name: "Vacanze" }],
     ["an empty name", [{ name: "", videos: 1 }]],
     ["a bad count", [{ name: "Vacanze", videos: "3", color: "", image: null }]],
+    [
+      "a cover from elsewhere",
+      [{ name: "Vacanze", videos: 3, color: "", image: null, cover: "https://x/y.jpg" }],
+    ],
     ["a bad color", [{ name: "Vacanze", videos: 3, color: "red", image: null }]],
     ["a foreign image", [{ name: "Vacanze", videos: 3, color: "", image: "https://x/y.jpg" }]],
   ])("rejects %s", (_label, data) => {

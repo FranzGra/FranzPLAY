@@ -25,7 +25,8 @@ function sideLinks(me: number) {
 // from it, so on a phone it is clear where you are: the history, the upload
 // and the administration open from the Profile page, for instance.
 const tabs = [
-  { to: "/", label: "Home", icon: "home", also: ["/categorie", "/cerca"] },
+  { to: "/", label: "Home", icon: "home", also: ["/cerca"] },
+  { to: "/categorie", label: "Categorie", icon: "categories", also: [] },
   { to: "/playlist", label: "Playlist", icon: "playlist", also: ["/mi-piace", "/condivisi"] },
   {
     to: "/profilo",
@@ -46,7 +47,7 @@ export function tabFor(path: string): number | null {
 }
 
 // Layout is the frame around every page: top bar, side menu on computers,
-// bottom bar with three tabs on phones.
+// bottom bar with four tabs on phones.
 export function Layout() {
   const navigate = useNavigate();
   const account = useAccount();
