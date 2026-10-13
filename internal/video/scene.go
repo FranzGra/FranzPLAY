@@ -39,6 +39,7 @@ func OSHash(r io.ReaderAt, size int64) (string, error) {
 type Scene struct {
 	Details
 	Picture string // the address of its best picture; "" if none
+	Thumb   string // the address of a small picture, for a list; "" if none
 }
 
 // tpdbScenes are the fields of ThePornDB's answer to a search FranzPLAY uses.
@@ -56,6 +57,7 @@ type tpdbScene struct {
 	Image      string `json:"image"`
 	Background struct {
 		Large string `json:"large"`
+		Small string `json:"small"`
 	} `json:"background"`
 	Posters struct {
 		Large string `json:"large"`
@@ -81,19 +83,49 @@ func ParseTPDBScenes(data []byte, hash string) (_ Scene, ok bool, err error) {
 	if len(s.Hashes) > 0 && !hasHash(s, hash) {
 		return Scene{}, false, nil
 	}
-	scene := Scene{Details: Details{
-		Title:       cut(oneLine(s.Title), MaxDetailsTitle),
-		Description: cleanDescription(s.Description),
-		Author:      cut(oneLine(s.Site.Name), MaxDetailsAuthor),
-		Date:        firstDay(s.Date),
-	}}
-	for _, p := range []string{s.Background.Large, s.Image, s.Posters.Large} {
-		if tpdbPicture(p) {
-			scene.Picture = p
-			break
+	return sceneOf(s), true, nil
+}
+
+// maxSearchHits is how many answers of a search are kept: enough to find
+// the right one among the first, few enough for a quick list.
+const maxSearchHits = 12
+
+// ParseTPDBSearch reads ThePornDB's answer to a search by words, which
+// the administrator makes by hand: every scene found, to choose from.
+func ParseTPDBSearch(data []byte) ([]Scene, error) {
+	var in tpdbScenes
+	if err := json.Unmarshal(data, &in); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrBadDetails, err)
+	}
+	scenes := make([]Scene, 0, min(len(in.Data), maxSearchHits))
+	for _, s := range in.Data[:min(len(in.Data), maxSearchHits)] {
+		scenes = append(scenes, sceneOf(s))
+	}
+	return scenes, nil
+}
+
+// sceneOf reads one scene: the site that made it is its author, the wide
+// picture is the best one.
+func sceneOf(s tpdbScene) Scene {
+	return Scene{
+		Details: Details{
+			Title:       cut(oneLine(s.Title), MaxDetailsTitle),
+			Description: cleanDescription(s.Description),
+			Author:      cut(oneLine(s.Site.Name), MaxDetailsAuthor),
+			Date:        firstDay(s.Date),
+		},
+		Picture: firstPicture(s.Background.Large, s.Image, s.Posters.Large),
+		Thumb:   firstPicture(s.Background.Small, s.Image, s.Background.Large, s.Posters.Large),
+	}
+}
+
+func firstPicture(addresses ...string) string {
+	for _, p := range addresses {
+		if TPDBPicture(p) {
+			return p
 		}
 	}
-	return scene, true, nil
+	return ""
 }
 
 func hasHash(s tpdbScene, hash string) bool {
@@ -105,10 +137,10 @@ func hasHash(s tpdbScene, hash string) bool {
 	return false
 }
 
-// tpdbPicture says if an address is a picture on ThePornDB's own servers,
+// TPDBPicture says if an address is a picture on ThePornDB's own servers,
 // over HTTPS. Anything else is not used, so a strange answer can never
 // make FranzPLAY download from somewhere else.
-func tpdbPicture(address string) bool {
+func TPDBPicture(address string) bool {
 	u, err := url.Parse(address)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" {
 		return false

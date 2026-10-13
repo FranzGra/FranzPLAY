@@ -7,9 +7,11 @@ import { type LoadedPhoto, loadPhoto } from "../profile/photo";
 import styles from "./Admin.module.css";
 import { CoverCropper } from "./CoverCropper";
 import { renderCover } from "./coverImage";
+import { OnlineSearch } from "./OnlineSearch";
 
 // CoverForm lets the administrator choose the cover of a video: an image
-// of their own, cut to the shape of a cover, or a moment of the video. The
+// of their own or one found on the internet, cut to the shape of a cover,
+// or a moment of the video. The
 // choice stays until they go back to the one FranzPLAY picks: a new
 // reading of the folders or a search on the internet never replaces it.
 export function CoverForm({
@@ -23,6 +25,7 @@ export function CoverForm({
 }) {
   const [picture, setPicture] = useState<LoadedPhoto | null>(null);
   const [moment, setMoment] = useState(false);
+  const [online, setOnline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
 
@@ -47,10 +50,7 @@ export function CoverForm({
       .finally(() => setBusy(false));
   };
 
-  const pick = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = ""; // the same file can be picked again
-    if (!file) return;
+  const open = (file: Blob) => {
     setProblem("");
     loadPhoto(file)
       .then(setPicture)
@@ -58,6 +58,12 @@ export function CoverForm({
         console.error(error);
         setProblem("Questo file non sembra un'immagine. Prova con una foto JPEG o PNG.");
       });
+  };
+
+  const pick = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // the same file can be picked again
+    if (file) open(file);
   };
 
   const now = nowText(video);
@@ -80,9 +86,24 @@ export function CoverForm({
           className={`glass ${styles.action}`}
           aria-expanded={moment}
           disabled={busy || video.duration === null}
-          onClick={() => setMoment(!moment)}
+          onClick={() => {
+            setMoment(!moment);
+            setOnline(false);
+          }}
         >
           Scegli un momento
+        </button>
+        <button
+          type="button"
+          className={`glass ${styles.action}`}
+          aria-expanded={online}
+          disabled={busy}
+          onClick={() => {
+            setOnline(!online);
+            setMoment(false);
+          }}
+        >
+          Cerca su internet
         </button>
         {video.coverChoice !== "" && (
           <button
@@ -114,6 +135,7 @@ export function CoverForm({
           }
         />
       )}
+      {online && <OnlineSearch title={video.title} busy={busy} onPick={open} />}
       {problem && !picture && (
         <p role="alert" className={styles.problem}>
           {problem}

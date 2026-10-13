@@ -21,12 +21,19 @@ const maxLongAnswer = 1 << 20
 type tmdb struct {
 	client *http.Client
 	api    string // https://api.themoviedb.org/3
-	images string // https://image.tmdb.org/t/p/w1280
+	images string // https://image.tmdb.org/t/p
 }
+
+// The sizes of TMDB's pictures FranzPLAY asks for: a big one for covers,
+// a small one for a list to choose from.
+const (
+	tmdbBig   = "/w1280"
+	tmdbSmall = "/w300"
+)
 
 // newTMDB returns the client of TMDB's real addresses.
 func newTMDB(client *http.Client) tmdb {
-	return tmdb{client: client, api: "https://api.themoviedb.org/3", images: "https://image.tmdb.org/t/p/w1280"}
+	return tmdb{client: client, api: "https://api.themoviedb.org/3", images: "https://image.tmdb.org/t/p"}
 }
 
 // errKeyRefused means a source said the key is not valid (any more).
@@ -71,7 +78,7 @@ func (t tmdb) lookup(ctx context.Context, key string, q video.FilmQuery) (_ foun
 	}
 	f := found{details: film.Details}
 	if film.Picture != "" {
-		image, status, err := get(ctx, t.client, t.images+film.Picture, nil, maxImage, "image/")
+		image, status, err := get(ctx, t.client, t.images+tmdbBig+film.Picture, nil, maxImage, "image/")
 		switch {
 		case err != nil:
 			return found{}, false, fmt.Errorf("tmdb film %d picture: %w", hit.ID, err)
@@ -82,6 +89,20 @@ func (t tmdb) lookup(ctx context.Context, key string, q video.FilmQuery) (_ foun
 		}
 	}
 	return f, true, nil
+}
+
+// find asks TMDB for the films these words describe, for the
+// administrator to choose from.
+func (t tmdb) find(ctx context.Context, key, words string) ([]video.FilmHit, error) {
+	data, ok, err := t.ask(ctx, key, "/search/movie", url.Values{"query": {words}, "language": {"it-IT"}})
+	if err != nil || !ok {
+		return nil, err
+	}
+	hits, err := video.ParseTMDBSearch(data)
+	if err != nil {
+		return nil, fmt.Errorf("tmdb search: %w", err)
+	}
+	return hits, nil
 }
 
 // checkKey asks TMDB if a key is valid, before it is saved.
