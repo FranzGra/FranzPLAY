@@ -159,14 +159,17 @@ un fotogramma a un decimo del video (al massimo al primo minuto), così evita gl
 Al primo avvio FranzPLAY non ha ancora utenti. Nel terminale compare una riga come questa:
 
 ```
-level=WARN msg="FranzPLAY has no administrator yet: ..." setup_code=RFY6-9YPX-QF7X
+level=WARN msg="FranzPLAY has no administrator yet: the first person who opens the site creates it"
 ```
 
-Quel **codice di installazione** serve a creare l'amministratore, cioè te: solo chi vede il
-terminale può farlo. Da quel momento tutto FranzPLAY chiede nome e password.
+Apri <http://localhost:8090>: compare la pagina **Benvenuto in FranzPLAY**. Scrivi il tuo nome e
+una password (almeno 8 caratteri) e premi **Crea e entra**: sei l'amministratore. Questa pagina
+c'è solo finché l'amministratore non esiste: da quel momento tutto FranzPLAY chiede nome e
+password, e nessun altro può diventare amministratore così.
 
-Apri <http://localhost:8090>: compare la pagina **Benvenuto in FranzPLAY**. Scrivi il codice,
-il tuo nome e una password (almeno 8 caratteri) e premi **Crea e entra**. Le volte successive
+Se il computer è raggiungibile da internet prima che tu crei l'amministratore, avvia FranzPLAY con
+`FRANZPLAY_SETUP_CODE=true`: allora la pagina chiede anche un **codice di installazione**, che
+compare nel terminale alla voce `setup_code` e che vede solo chi ha avviato FranzPLAY. Le volte successive
 basta nome e password. Per uscire: pagina **Profilo**, tasto **Esci**. Sempre dal Profilo, con
 **Cambia password** scegli una password nuova: sugli altri dispositivi dovrai entrare di nuovo.
 

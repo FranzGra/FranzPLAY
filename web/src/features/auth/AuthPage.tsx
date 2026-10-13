@@ -23,14 +23,17 @@ function title(mode: Mode, name: string): string {
 }
 
 // AuthPage is what people see before logging in: the login form, or, on a
-// brand new FranzPLAY, the form that creates the administrator. When the
+// brand new FranzPLAY, the form that creates the administrator (asking for
+// the code in the log only when the installer turned it on). When the
 // administrator lets anyone register, the login form also offers to
 // create an account.
 export function AuthPage({
   mode: startMode,
+  setupCode = false,
   openRegistration = false,
 }: {
   mode: "login" | "setup";
+  setupCode?: boolean;
   openRegistration?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>(startMode);
@@ -63,7 +66,7 @@ export function AuthPage({
     try {
       const account =
         mode === "setup"
-          ? await setup(code, name, password)
+          ? await setup(setupCode ? code : "", name, password)
           : mode === "register"
             ? await register(name, password)
             : await login(name, password);
@@ -103,8 +106,14 @@ export function AuthPage({
         <h1 className={styles.title}>{title(mode, siteName(look))}</h1>
         {mode === "setup" && (
           <p className={styles.intro}>
-            Crea l'amministratore, cioè il tuo utente. Il codice di installazione è scritto nel
-            terminale dove hai avviato FranzPLAY, alla voce <code>setup_code</code>.
+            Crea l'amministratore, cioè il tuo utente: potrai gestire video, persone e impostazioni.
+            {setupCode && (
+              <>
+                {" "}
+                Il codice di installazione è scritto nel terminale dove hai avviato FranzPLAY, alla
+                voce <code>setup_code</code>.
+              </>
+            )}
           </p>
         )}
 
@@ -114,7 +123,7 @@ export function AuthPage({
           </p>
         )}
 
-        {mode === "setup" && (
+        {mode === "setup" && setupCode && (
           <Field
             label="Codice di installazione"
             value={code}

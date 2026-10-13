@@ -37,6 +37,8 @@ services:
       # Traduzione dei sottotitoli (facoltativa): vedi .env.example.
       FRANZPLAY_TRANSLATE_URL: ${FRANZPLAY_TRANSLATE_URL:-}
       FRANZPLAY_TRANSLATE_KEY: ${FRANZPLAY_TRANSLATE_KEY:-}
+      # Codice dal log per creare il primo amministratore: vedi .env.example.
+      FRANZPLAY_SETUP_CODE: ${FRANZPLAY_SETUP_CODE:-false}
 
     volumes:
       # La cartella dati di FranzPLAY: database, copertine, anteprime, video caricati.

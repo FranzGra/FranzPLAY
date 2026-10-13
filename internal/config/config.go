@@ -24,6 +24,7 @@ const (
 	EnvWhisper      = "FRANZPLAY_WHISPER"
 	EnvTranslate    = "FRANZPLAY_TRANSLATE_URL"
 	EnvTranslateKey = "FRANZPLAY_TRANSLATE_KEY"
+	EnvSetupCode    = "FRANZPLAY_SETUP_CODE"
 )
 
 // Default values, used when a variable is not set.
@@ -61,6 +62,11 @@ type Config struct {
 	TranslateURL string
 	// TranslateKey is the LibreTranslate key, when the server asks for one.
 	TranslateKey string
+	// SetupCode makes the first setup ask for a one-time code written in
+	// the log. Off by default: the first person who opens the site creates
+	// the administrator. Turn it on when the site is reachable from the
+	// internet before the first setup.
+	SetupCode bool
 }
 
 // Load builds a Config from environment variables.
@@ -83,6 +89,14 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg.DataDir = filepath.Clean(cfg.DataDir)
 	if err := checkURL(cfg.TranslateURL); err != nil {
 		return Config{}, fmt.Errorf("%w: %s=%q: %w", ErrInvalidConfig, EnvTranslate, cfg.TranslateURL, err)
+	}
+
+	if v := strings.TrimSpace(getenv(EnvSetupCode)); v != "" {
+		on, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("%w: %s=%q: use true or false", ErrInvalidConfig, EnvSetupCode, v)
+		}
+		cfg.SetupCode = on
 	}
 
 	libraries, err := parseLibraries(getenv(EnvLibraries), cfg.DataDir)

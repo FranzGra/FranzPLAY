@@ -5,12 +5,12 @@ import { checkSetup } from "./AuthPage";
 const signedOut: Routes = {
   ...emptyLibrary,
   "GET /api/me": { status: 401, body: { error: "login required" } },
-  "GET /api/setup": { body: { needed: false, openRegistration: false } },
+  "GET /api/setup": { body: { needed: false, codeNeeded: false, openRegistration: false } },
 };
 
 const newFranzPLAY: Routes = {
   ...signedOut,
-  "GET /api/setup": { body: { needed: true, openRegistration: false } },
+  "GET /api/setup": { body: { needed: true, codeNeeded: false, openRegistration: false } },
 };
 
 describe("login", () => {
@@ -58,7 +58,7 @@ describe("login", () => {
         expired
           ? new Response(JSON.stringify({ error: "login required" }), { status: 401 })
           : new Response(JSON.stringify(testAccount)),
-      "GET /api/setup": { body: { needed: false, openRegistration: false } },
+      "GET /api/setup": { body: { needed: false, codeNeeded: false, openRegistration: false } },
       "GET /api/health": () =>
         new Response(JSON.stringify({ error: "login required" }), { status: 401 }),
     });
@@ -69,8 +69,14 @@ describe("login", () => {
   });
 });
 
+// withSetupCode is a new FranzPLAY whose installer asked for the code in the log.
+const withSetupCode: Routes = {
+  ...signedOut,
+  "GET /api/setup": { body: { needed: true, codeNeeded: true, openRegistration: false } },
+};
+
 describe("first setup", () => {
-  it("asks for the code and creates the administrator", async () => {
+  it("creates the administrator without any code", async () => {
     const { user, server } = renderApp("/", {
       ...newFranzPLAY,
       "POST /api/setup": { status: 201, body: testAccount },
@@ -78,6 +84,24 @@ describe("first setup", () => {
     expect(
       await screen.findByRole("heading", { name: "Benvenuto in FranzPLAY" }),
     ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Codice di installazione")).not.toBeInTheDocument();
+    expect(screen.queryByText(/setup_code/)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Nome"), "Francesco");
+    await user.type(screen.getByLabelText("Password"), "una-password");
+    await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
+    await user.click(screen.getByRole("button", { name: "Crea e entra" }));
+
+    expect(await screen.findByRole("heading", { name: "Ancora nessun video" })).toBeInTheDocument();
+    const sent = server.requests.find((r) => r.method === "POST");
+    expect(await sent?.json()).toEqual({ code: "", name: "Francesco", password: "una-password" });
+  });
+
+  it("asks for the code when the installer turned it on", async () => {
+    const { user, server } = renderApp("/", {
+      ...withSetupCode,
+      "POST /api/setup": { status: 201, body: testAccount },
+    });
+    expect(await screen.findByText(/setup_code/)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Codice di installazione"), "ABCD-EFGH-JKMN");
     await user.type(screen.getByLabelText("Nome"), "Francesco");
     await user.type(screen.getByLabelText("Password"), "una-password");
@@ -100,8 +124,7 @@ describe("first setup", () => {
       "POST /api/setup": { status: 201, body: testAccount },
       "PUT /api/site": { body: chosen },
     });
-    await user.type(await screen.findByLabelText("Codice di installazione"), "ABCD-EFGH-JKMN");
-    await user.type(screen.getByLabelText("Nome"), "Francesco");
+    await user.type(await screen.findByLabelText("Nome"), "Francesco");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
     const site = screen.getByRole("region", { name: "Il tuo sito" });
@@ -119,8 +142,7 @@ describe("first setup", () => {
 
   it("does not ask the server when the passwords differ", async () => {
     const { user, server } = renderApp("/", newFranzPLAY);
-    await user.type(await screen.findByLabelText("Codice di installazione"), "ABCD-EFGH-JKMN");
-    await user.type(screen.getByLabelText("Nome"), "Francesco");
+    await user.type(await screen.findByLabelText("Nome"), "Francesco");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "altra-password");
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));
@@ -131,7 +153,7 @@ describe("first setup", () => {
 
   it("explains a wrong code", async () => {
     const { user } = renderApp("/", {
-      ...newFranzPLAY,
+      ...withSetupCode,
       "POST /api/setup": { status: 401, body: { error: "the setup code is not right" } },
     });
     await user.type(await screen.findByLabelText("Codice di installazione"), "SBAGLIATO");
@@ -148,7 +170,7 @@ describe("first setup", () => {
 describe("registering without an invite", () => {
   const open: Routes = {
     ...signedOut,
-    "GET /api/setup": { body: { needed: false, openRegistration: true } },
+    "GET /api/setup": { body: { needed: false, codeNeeded: false, openRegistration: true } },
   };
 
   it("is not offered while the administrator keeps it closed", async () => {

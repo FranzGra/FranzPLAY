@@ -60,16 +60,16 @@ export default async function globalSetup() {
     },
     stdio: ["ignore", "ignore", "pipe"],
   });
-  // The setup code for the administrator is written in the log.
-  const code = await new Promise<string>((ok, fail) => {
+  // A new FranzPLAY says in the log that it waits for its administrator,
+  // which the first visitor creates without any code.
+  await new Promise<void>((ok, fail) => {
     let log = "";
     const timer = setTimeout(() => fail(new Error(`FranzPLAY did not start:\n${log}`)), 20_000);
     server.stderr.on("data", (chunk: Buffer) => {
       log += chunk.toString();
-      const found = /setup_code=(\S+)/.exec(log);
-      if (found) {
+      if (log.includes("no administrator yet")) {
         clearTimeout(timer);
-        ok(found[1]);
+        ok();
       }
     });
     server.on("exit", (status) => fail(new Error(`FranzPLAY stopped (${status}):\n${log}`)));
@@ -77,11 +77,7 @@ export default async function globalSetup() {
   server.stderr.resume();
   writeFileSync(STATE_FILE, JSON.stringify({ pid: server.pid, root }));
 
-  const setup = await api("/api/setup", {
-    code,
-    name: ADMIN,
-    password: PASSWORD,
-  });
+  const setup = await api("/api/setup", { name: ADMIN, password: PASSWORD });
   const cookie = (setup.headers.get("set-cookie") ?? "").split(";")[0];
   for (const name of PEOPLE) {
     await api("/api/users", { name, password: PASSWORD, role: "user", canUpload: true }, cookie);
