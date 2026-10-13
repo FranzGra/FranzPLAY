@@ -20,6 +20,7 @@ import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatAge, formatDate } from "../../lib/format";
+import { morph } from "../../lib/motion";
 import { loadSetting, saveSetting } from "../../lib/storage";
 import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
@@ -132,11 +133,15 @@ function parseTheater(data: unknown): boolean {
 // the next videos, like on YouTube.
 function useTheater(): [boolean, () => void] {
   const [theater, setTheater] = useState(() => loadSetting("theater", parseTheater, false));
+  // The player grows or shrinks smoothly, and the column of next videos
+  // glides to its new place, instead of jumping (morph).
   const toggle = useCallback(() => {
-    setTheater((on) => {
-      saveSetting("theater", !on);
-      return !on;
-    });
+    morph(() =>
+      setTheater((on) => {
+        saveSetting("theater", !on);
+        return !on;
+      }),
+    );
   }, []);
   return [theater, toggle];
 }

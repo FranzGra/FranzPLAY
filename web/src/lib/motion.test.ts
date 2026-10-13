@@ -1,4 +1,4 @@
-import { removeAllSmoothly, removeSmoothly, slideIntoPlace } from "./motion";
+import { morph, removeAllSmoothly, removeSmoothly, slideIntoPlace } from "./motion";
 
 type Call = { element: Element; keyframes: Keyframe[]; options: KeyframeAnimationOptions };
 
@@ -138,5 +138,47 @@ describe("slideIntoPlace", () => {
     });
 
     expect(calls.map((c) => c.element)).toEqual([outer]);
+  });
+});
+
+describe("morph", () => {
+  // fakeViewTransitions stands in for the browser's view transitions,
+  // which jsdom lacks, and runs the change the way the browser would.
+  function fakeViewTransitions() {
+    const start = vi.fn((update: () => void) => {
+      update();
+      return {} as ViewTransition;
+    });
+    Object.defineProperty(document, "startViewTransition", { value: start, configurable: true });
+    return start;
+  }
+
+  afterEach(() => {
+    // biome-ignore lint/suspicious/noExplicitAny: the stand-in goes away
+    delete (document as any).startViewTransition;
+    vi.unstubAllGlobals();
+  });
+
+  it("makes the change at once where the browser cannot glide", () => {
+    const change = vi.fn();
+    morph(change);
+    expect(change).toHaveBeenCalledOnce();
+  });
+
+  it("lets the browser glide to the change", () => {
+    const start = fakeViewTransitions();
+    const change = vi.fn();
+    morph(change);
+    expect(start).toHaveBeenCalledOnce();
+    expect(change).toHaveBeenCalledOnce();
+  });
+
+  it("makes the change at once for whoever asked for less motion", () => {
+    const start = fakeViewTransitions();
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("reduce") }));
+    const change = vi.fn();
+    morph(change);
+    expect(start).not.toHaveBeenCalled();
+    expect(change).toHaveBeenCalledOnce();
   });
 });

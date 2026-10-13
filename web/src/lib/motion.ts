@@ -117,3 +117,19 @@ export async function removeAllSmoothly(
 function setInert(item: Element | null, inert: boolean) {
   if (item instanceof HTMLElement) item.inert = inert;
 }
+
+// morph runs change, which rearranges the page, and lets the browser glide
+// from the old look to the new one instead of jumping: whatever has a
+// view-transition-name in the CSS grows, shrinks and moves to its new
+// place, and the rest fades across. The browser does it with pictures of
+// the page, so nothing is laid out again while it moves. Browsers without
+// it, and whoever asked for less motion, get the change at once.
+export function morph(change: () => void): void {
+  if (typeof document.startViewTransition !== "function" || lessMotion()) {
+    change();
+    return;
+  }
+  // The browser takes its picture of the new page when this returns, so
+  // React must draw the change right away.
+  document.startViewTransition(() => flushSync(change));
+}

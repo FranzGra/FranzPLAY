@@ -16,18 +16,25 @@
   margin: 0 auto;
 }
 
+/* view-transition-name: switching theater mode on or off, the player
+   grows or shrinks to its new size, and the title and the column of next
+   videos glide to their new places, instead of jumping (morph in
+   lib/motion.ts; how they glide is at the end of this file). */
 .player {
   grid-area: player;
+  view-transition-name: video-player;
 }
 
 .info {
   grid-area: info;
   min-width: 0;
+  view-transition-name: video-info;
 }
 
 .side {
   grid-area: side;
   min-width: 0;
+  view-transition-name: video-side;
 }
 
 /* A private video suggests nothing else: no column on the right. */
@@ -59,8 +66,9 @@
   background: #000;
 }
 
+/* A margin, not padding: the column glides as it is, without growing. */
 .theater .side {
-  padding-top: 20px;
+  margin-top: 20px;
 }
 
 .placeholder {
@@ -204,7 +212,7 @@
   }
 
   .theater .side {
-    padding-top: 0;
+    margin-top: 32px;
   }
 }
 
@@ -307,4 +315,30 @@
   .comments > section {
     margin-top: 16px;
   }
+}
+
+/* While theater mode switches, the browser moves pictures of the page.
+   The picture of the player keeps the video's height, centered, as the
+   player itself does: so the video grows or shrinks in one piece, and
+   only the black at its sides comes and goes. */
+::view-transition-old(video-player),
+::view-transition-new(video-player) {
+  block-size: 100%;
+  inline-size: auto;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+}
+
+::view-transition-image-pair(video-player) {
+  overflow: clip;
+}
+
+/* The title, the comments and the next videos keep their size and only
+   glide: text that stretched would look blurred. */
+::view-transition-old(video-info),
+::view-transition-new(video-info),
+::view-transition-old(video-side),
+::view-transition-new(video-side) {
+  inline-size: auto;
+  block-size: auto;
 }
