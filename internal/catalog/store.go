@@ -29,6 +29,11 @@ type Video struct {
 	Cover    *string   `json:"cover"`    // address of the image; null = none yet
 	AddedAt  time.Time `json:"addedAt"`  // when FranzPLAY found it
 	Playable bool      `json:"playable"` // every browser can play it: as it is, or its copy
+	// FileType describes the file for the browser's canPlayType, like
+	// `video/webm; codecs="vp9, opus"`; "" = no browser is worth asking.
+	// A browser that can play it may ask for the file instead of the copy.
+	FileType string `json:"fileType"`
+	Copy     bool   `json:"copy"` // a copy for every device is ready
 	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
 	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
 	ClipHD   *string   `json:"clipHD"`   // the same clip, sharper, for a good connection; null = none yet
@@ -185,8 +190,10 @@ func scanVideo(row rowScanner) (Video, error) {
 	if published.Valid {
 		v.PublishedOn = &published.String
 	}
-	v.Playable = converted.Valid || video.DirectlyPlayable(path.Ext(relPath),
-		video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String, PixelFormat: pixels.String})
+	info := video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String, PixelFormat: pixels.String}
+	v.Playable = converted.Valid || video.DirectlyPlayable(path.Ext(relPath), info)
+	v.FileType = video.BrowserType(path.Ext(relPath), info)
+	v.Copy = converted.Valid
 	return v, nil
 }
 
@@ -401,8 +408,9 @@ func (s store) file(ctx context.Context, id int64) (string, error) {
 }
 
 // played returns the file the browser gets for a video: the copy made for
-// the browsers, in convertedDir, when there is one; else the file itself.
-func (s store) played(ctx context.Context, id int64, convertedDir string) (name string, isCopy bool, err error) {
+// the browsers, in convertedDir, when there is one and original is false;
+// else the file itself.
+func (s store) played(ctx context.Context, id int64, convertedDir string, original bool) (name string, isCopy bool, err error) {
 	var root, rel string
 	var converted sql.NullString
 	err = s.db.QueryRowContext(ctx, `
@@ -414,7 +422,7 @@ func (s store) played(ctx context.Context, id int64, convertedDir string) (name 
 	if err != nil {
 		return "", false, fmt.Errorf("find video %d: %w", id, err)
 	}
-	if converted.Valid {
+	if converted.Valid && !original {
 		return filepath.Join(convertedDir, filepath.Base(converted.String)), true, nil
 	}
 	return filepath.Join(root, filepath.FromSlash(rel)), false, nil

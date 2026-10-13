@@ -377,12 +377,31 @@ func TestStreamSendsTheCopyForTheBrowsers(t *testing.T) {
 	if _, err := s.db.Exec(`UPDATE videos SET converted = '1-abc.mp4' WHERE id = ?`, id); err != nil {
 		t.Fatal(err)
 	}
-	if v := decode[Video](t, s.get(t, "/api/videos/1")); !v.Playable {
+	if v := decode[Video](t, s.get(t, "/api/videos/1")); !v.Playable || !v.Copy {
 		t.Error("video with a copy said not playable")
 	}
 	rec := s.get(t, "/api/videos/1/stream")
 	if rec.Body.String() != "mp4 copy" || rec.Header().Get("Content-Type") != "video/mp4" {
 		t.Errorf("with the copy: %q %q", rec.Body, rec.Header().Get("Content-Type"))
+	}
+	// A browser that can play the file itself asks for it.
+	if rec := s.get(t, "/api/videos/1/stream?original=1"); rec.Body.String() != "matroska" {
+		t.Errorf("file itself asked: %q", rec.Body)
+	}
+}
+
+// The browser learns what the file is, to ask itself whether it can play
+// it at its full quality instead of the copy.
+func TestVideoSaysWhatItsFileIs(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "web.webm", "webm", "", 1, true)
+	if _, err := s.db.Exec(`UPDATE videos SET video_codec = 'vp9', audio_codec = 'opus', pixel_format = 'yuv420p'
+		WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	v := decode[Video](t, s.get(t, "/api/videos/1"))
+	if want := `video/webm; codecs="vp09.00.40.08, opus"`; v.FileType != want || v.Playable || v.Copy {
+		t.Errorf("video = type %q playable %v copy %v, want %q, not playable, no copy", v.FileType, v.Playable, v.Copy, want)
 	}
 }
 

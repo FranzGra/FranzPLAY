@@ -52,6 +52,16 @@ Altre cose che la copia ora fa da sola:
 - Altri tipi di file riconosciuti nelle cartelle: `.3g2`, `.asf`, `.divx`, `.dv`, `.f4v`,
   `.mxf`, `.ogm`, `.rm`, `.rmvb`.
 
+### Ogni dispositivo prende la versione migliore che sa aprire
+
+Con la copia pronta, prima il server mandava la copia a tutti. Ma un `.webm` in VP9 a 4K si vede
+benissimo su Chrome e su Firefox, mentre la copia è al massimo 1080p: sarebbe stato un peggioramento.
+
+Adesso il server dice al browser che file è (per esempio `video/webm; codecs="vp09.00.40.08, opus"`)
+e il browser stesso risponde se lo sa aprire (`canPlayType`). Se risponde «sicuramente» prende il
+file originale, a piena qualità; altrimenti prende la copia. Così Chrome guarda l'originale e
+l'iPhone la copia, senza che nessuno debba scegliere.
+
 FranzPLAY ora legge anche il **formato dei colori** dell'immagine (per esempio `yuv420p` a 8 bit
 o `yuv420p10le` a 10 bit) e lo salva nel database. Dopo l'aggiornamento, ogni video già letto
 **ricontrolla da solo** se gli serve una copia.

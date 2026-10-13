@@ -12,7 +12,11 @@ export type Video = {
   height: number | null;
   cover: string | null; // address of the image; null = none yet
   addedAt: Date;
-  playable: boolean; // every browser can play it as it is
+  playable: boolean; // every browser can play it: as it is, or its copy
+  // fileType describes the file for canPlayType, like
+  // 'video/webm; codecs="vp09.00.40.08, opus"'; "" = no browser is worth asking.
+  fileType: string;
+  copy: boolean; // a copy for every device is ready
   preview: Preview | null; // frames for the player's timeline; null = none yet
   clip: string | null; // address of the seconds that play on the card; null = none yet
   clipHD: string | null; // the same seconds, sharper, for a good connection; null = none yet
@@ -142,6 +146,12 @@ export function parseVideo(data: unknown): Video {
   if (typeof v.playable !== "boolean") {
     throw new Error("video playable: not true or false");
   }
+  if (typeof v.fileType !== "string" || v.fileType.length > 200) {
+    throw new Error("video fileType: not a file type");
+  }
+  if (typeof v.copy !== "boolean") {
+    throw new Error("video copy: not true or false");
+  }
   // A short name of letters and digits, as the server takes it from the
   // file name: anything else is not a kind of file.
   if (typeof v.format !== "string" || !/^[A-Z0-9]{0,10}$/.test(v.format)) {
@@ -170,6 +180,8 @@ export function parseVideo(data: unknown): Video {
     cover: v.cover,
     addedAt,
     playable: v.playable,
+    fileType: v.fileType,
+    copy: v.copy,
     preview: parsePreview(v.preview),
     clip: v.clip,
     clipHD,
@@ -271,9 +283,18 @@ export async function fetchCategories(signal?: AbortSignal): Promise<Category[]>
   return parseCategories(await request("/api/categories", { signal }));
 }
 
-// streamURL is the address of the video file, for the player.
-export function streamURL(id: number): string {
-  return `/api/videos/${id}/stream`;
+// streamURL is the address of the video file, for the player: the copy
+// made for every device when there is one, the file itself if original.
+export function streamURL(id: number, original = false): string {
+  return `/api/videos/${id}/stream${original ? "?original=1" : ""}`;
+}
+
+// playsFileItself reports whether this browser can play the file of a
+// video as it is: then it gets the file at its full quality, not the copy
+// made for every device. canPlayType answers "probably" only when it
+// knows the box and every format inside.
+export function playsFileItself(video: Video, canPlayType: (type: string) => string): boolean {
+  return video.fileType !== "" && canPlayType(video.fileType) === "probably";
 }
 
 // SubtitleTrack is a subtitle file found next to a video.
