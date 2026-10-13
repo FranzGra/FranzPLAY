@@ -172,3 +172,18 @@ func TestLoadRejectsBadTranslateURL(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadSetupCode(t *testing.T) {
+	for value, want := range map[string]bool{"": false, "false": false, "true": true, " 1 ": true, "0": false} {
+		cfg, err := Load(fakeEnv(map[string]string{EnvSetupCode: value}))
+		if err != nil {
+			t.Fatalf("%s=%q: %v", EnvSetupCode, value, err)
+		}
+		if cfg.SetupCode != want {
+			t.Errorf("%s=%q: SetupCode = %v, want %v", EnvSetupCode, value, cfg.SetupCode, want)
+		}
+	}
+	if _, err := Load(fakeEnv(map[string]string{EnvSetupCode: "maybe"})); !errors.Is(err, ErrInvalidConfig) {
+		t.Errorf("%s=maybe error = %v, want ErrInvalidConfig", EnvSetupCode, err)
+	}
+}

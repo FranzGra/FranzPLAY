@@ -22,6 +22,14 @@ l'amministratore.
 codice lo vede solo chi può leggere il terminale. Una volta creato l'amministratore il codice non
 serve più e non viene più mostrato.
 
+**Aggiornamento del 13 ottobre 2026: il codice ora è spento di serie.** Francesco non vuole dover
+cercare un codice nel terminale: chi installa apre il sito e crea subito l'amministratore. Il
+rischio resta quello detto sopra, ma è piccolo: la pagina esiste solo nei pochi minuti tra
+l'installazione e la creazione dell'amministratore, di solito su una rete di casa, e dopo non si
+riapre mai (il database rifiuta un "primo utente" se ne esiste già uno, anche con due richieste
+nello stesso istante). Nel log FranzPLAY scrive che aspetta il suo amministratore. Chi mette il
+sito su internet prima di crearlo accende il codice con `FRANZPLAY_SETUP_CODE=true`.
+
 ## Le password
 
 - Non si salvano mai. Si salva un'**impronta** fatta con **Argon2id**: un calcolo lento e che usa

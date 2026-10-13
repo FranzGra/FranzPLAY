@@ -5,12 +5,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +33,12 @@ type site struct {
 
 func newSite(t *testing.T) *site {
 	t.Helper()
+	return newSiteWith(t, false)
+}
+
+// newSiteWith is newSite where the first setup may ask for the code in the log.
+func newSiteWith(t *testing.T, requireSetupCode bool) *site {
+	t.Helper()
 	dataDir := t.TempDir()
 	db, err := database.Open(context.Background(), dataDir)
 	if err != nil {
@@ -43,7 +51,7 @@ func newSite(t *testing.T) *site {
 	})
 	s := &site{t: t, db: db, now: time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC), logs: &bytes.Buffer{}, dataDir: dataDir}
 	logger := slog.New(slog.NewTextHandler(s.logs, nil))
-	s.svc, err = NewService(context.Background(), db, s.dataDir, logger)
+	s.svc, err = NewService(context.Background(), db, s.dataDir, requireSetupCode, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,8 +122,74 @@ func (s *site) setUp() *browser {
 	return b
 }
 
-func TestSetupNeedsTheCodeFromTheLog(t *testing.T) {
+func TestFirstVisitorCreatesTheAdministrator(t *testing.T) {
 	s := newSite(t)
+	if strings.Contains(s.logs.String(), "setup_code") {
+		t.Fatalf("a setup code was made without being asked for; log:\n%s", s.logs)
+	}
+	if !strings.Contains(s.logs.String(), "first person who opens the site") {
+		t.Fatalf("the log does not say how to create the administrator; log:\n%s", s.logs)
+	}
+
+	b := s.browser()
+	rec := b.do("GET", "/api/setup", nil)
+	expect(t, rec, http.StatusOK)
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"codeNeeded":false,"openRegistration":false}` {
+		t.Fatalf("setup status %s", rec.Body)
+	}
+	rec = b.do("POST", "/api/setup", map[string]string{"name": "Admin", "password": "admin-password"})
+	expect(t, rec, http.StatusCreated)
+	var a Account
+	if err := json.Unmarshal(rec.Body.Bytes(), &a); err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "Admin" || a.Role != Admin || !a.CanUpload {
+		t.Fatalf("administrator = %+v", a)
+	}
+	expect(t, b.do("GET", "/api/me", nil), http.StatusOK) // logged in at once
+
+	// Setup happens once: nobody else can become administrator this way.
+	expect(t, s.browser().do("POST", "/api/setup", map[string]string{
+		"name": "Second", "password": "second-password",
+	}), http.StatusConflict)
+	rec = b.do("GET", "/api/setup", nil)
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"codeNeeded":false,"openRegistration":false}` {
+		t.Fatalf("setup status %s", rec.Body)
+	}
+}
+
+func TestSetupHappensOnlyOnceEvenAtTheSameTime(t *testing.T) {
+	s := newSite(t)
+	const tries = 4
+	codes := make(chan int, tries)
+	var wg sync.WaitGroup
+	for i := range tries {
+		wg.Go(func() {
+			rec := s.browser().do("POST", "/api/setup", map[string]string{
+				"name": fmt.Sprintf("Admin%d", i), "password": "admin-password",
+			})
+			codes <- rec.Code
+		})
+	}
+	wg.Wait()
+	close(codes)
+	created := 0
+	for code := range codes {
+		if code == http.StatusCreated {
+			created++
+		}
+	}
+	n, err := s.svc.store.countUsers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created != 1 || n != 1 {
+		t.Fatalf("%d setups succeeded and %d users exist, want 1 and 1", created, n)
+	}
+}
+
+func TestSetupNeedsTheCodeFromTheLogWhenAsked(t *testing.T) {
+	s := newSiteWith(t, true)
 	code := s.svc.setupCode
 	if code == "" || !strings.Contains(s.logs.String(), code) {
 		t.Fatalf("setup code %q not in the log", code)
@@ -124,11 +198,14 @@ func TestSetupNeedsTheCodeFromTheLog(t *testing.T) {
 	b := s.browser()
 	rec := b.do("GET", "/api/setup", nil)
 	expect(t, rec, http.StatusOK)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"openRegistration":false}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"codeNeeded":true,"openRegistration":false}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 	expect(t, b.do("POST", "/api/setup", map[string]string{
 		"code": "AAAA-AAAA-AAAA", "name": "Intruder", "password": "intruder-password",
+	}), http.StatusUnauthorized)
+	expect(t, b.do("POST", "/api/setup", map[string]string{
+		"name": "Intruder", "password": "intruder-password",
 	}), http.StatusUnauthorized)
 
 	// The code is accepted typed in lower case and with spaces around.
@@ -150,7 +227,7 @@ func TestSetupNeedsTheCodeFromTheLog(t *testing.T) {
 		"code": code, "name": "Second", "password": "second-password",
 	}), http.StatusConflict)
 	rec = b.do("GET", "/api/setup", nil)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"openRegistration":false}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"codeNeeded":false,"openRegistration":false}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 }
@@ -158,12 +235,15 @@ func TestSetupNeedsTheCodeFromTheLog(t *testing.T) {
 func TestNoSetupCodeWhenUsersExist(t *testing.T) {
 	s := newSite(t)
 	s.setUp()
-	again, err := NewService(context.Background(), s.db, s.dataDir, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again.needsSetup() {
-		t.Fatal("a restarted FranzPLAY asks for setup again")
+	for _, requireCode := range []bool{false, true} {
+		var logs bytes.Buffer
+		again, err := NewService(context.Background(), s.db, s.dataDir, requireCode, slog.New(slog.NewTextHandler(&logs, nil)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if again.needsSetup() || again.needsSetupCode() || strings.Contains(logs.String(), "setup") {
+			t.Fatalf("a restarted FranzPLAY asks for setup again (code %v); log:\n%s", requireCode, logs.String())
+		}
 	}
 }
 
