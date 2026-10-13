@@ -19,6 +19,7 @@ import {
   clampVolume,
   insideRanges,
   keyAction,
+  nativeAudio,
   originalAudio,
   pickAudio,
   skipSeconds,
@@ -235,6 +236,12 @@ export function Player({
   // for the video's events, which must not wait for a new render.
   const [sound, setSound] = useState<Sound | null>(null);
   const soundRef = useRef<Sound | null>(null);
+  // nativeStream is the sound track the browser itself plays, when it can
+  // switch them (Safari): null = the original one.
+  const [nativeStream, setNativeStream] = useState<number | null>(null);
+  const nativeRef = useRef<number | null>(null);
+  // nativeWanted is a sound track asked for before the browser knew them.
+  const nativeWanted = useRef<{ stream: number | null } | null>(null);
   // Where to go once the video with another sound track has loaded.
   const pending = useRef<{ at: number; play: boolean } | null>(null);
   // Counts the changes of sound track: an answer to an old one is ignored.
@@ -303,6 +310,9 @@ export function Player({
     setTime(0);
     setDuration(Number.NaN);
     setBuffered(0);
+    nativeRef.current = null;
+    nativeWanted.current = null;
+    setNativeStream(null);
   }, [src]);
 
   // The browser loads the chosen subtitles; FranzPLAY draws them itself,
@@ -386,11 +396,41 @@ export function Player({
     [],
   );
 
+  // switchNatively asks the browser itself to play a sound track (null:
+  // the original one) when it can: Safari, which does not play the video
+  // the server makes while it plays. The file and its copy hold every
+  // sound track in the order of the list. It reports whether it did.
+  const switchNatively = useCallback(
+    (v: HTMLVideoElement, stream: number | null): boolean => {
+      const tracks = nativeAudio(v);
+      const want = stream ?? originalAudio(audio)?.stream ?? null;
+      const index = audio.findIndex((a) => a.stream === want);
+      if (!tracks || tracks.length !== audio.length || index < 0) return false;
+      Array.from(tracks).forEach((track, i) => {
+        track.enabled = i === index;
+      });
+      const chosen = want === originalAudio(audio)?.stream ? null : want;
+      nativeRef.current = chosen;
+      setNativeStream(chosen);
+      return true;
+    },
+    [audio],
+  );
+
   // switchAudio plays the video with a sound track (null: the original
   // one), from at seconds.
   const switchAudio = useCallback(
     async (stream: number | null, at: number, play: boolean) => {
       const turn = ++switches.current;
+      const v0 = video.current;
+      if (v0 && !soundRef.current && nativeAudio(v0)) {
+        if (v0.readyState < HTMLMediaElement.HAVE_METADATA) {
+          // The browser knows the tracks once the start of the file is read.
+          nativeWanted.current = { stream };
+          return;
+        }
+        if (switchNatively(v0, stream)) return;
+      }
       let next: Sound | null = null;
       if (stream !== null && stream !== originalAudio(audio)?.stream) {
         if (!findAudio) return;
@@ -417,7 +457,7 @@ export function Player({
         if (play) startPlaying(v);
       }
     },
-    [audio, findAudio, src],
+    [audio, findAudio, src, switchNatively],
   );
 
   const seekTo = useCallback(
@@ -454,7 +494,8 @@ export function Player({
   // The language chosen last time, if this video has it.
   useEffect(() => {
     const want = pickAudio(audio, loadSetting("audio", parseLang, ""));
-    const now = soundRef.current?.stream ?? originalAudio(audio)?.stream ?? null;
+    const now =
+      soundRef.current?.stream ?? nativeRef.current ?? originalAudio(audio)?.stream ?? null;
     if (want === null || want === now) return;
     const v = video.current;
     void switchAudio(want, position.current.time, v ? !v.paused : false);
@@ -681,6 +722,11 @@ export function Player({
         onLoadedMetadata={(event) => {
           const v = event.currentTarget;
           setDuration(realDuration(v));
+          const wanted = nativeWanted.current;
+          if (wanted) {
+            nativeWanted.current = null;
+            void switchAudio(wanted.stream, realTime(v), !v.paused);
+          }
           const p = pending.current;
           if (p) {
             // Another sound track: go back to where the person was.
@@ -803,7 +849,7 @@ export function Player({
           tracks={subtitles}
           track={track}
           audio={audio}
-          audioStream={sound?.stream ?? originalAudio(audio)?.stream ?? null}
+          audioStream={sound?.stream ?? nativeStream ?? originalAudio(audio)?.stream ?? null}
           onAudio={chooseAudio}
           onTrack={chooseTrack}
           subtitleStyle={subtitleStyle}

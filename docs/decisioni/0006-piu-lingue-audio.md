@@ -36,3 +36,14 @@ ffmpeg stesso, facendo lo stesso salto: così il player conta il tempo giusto e 
 **Andare avanti e indietro.** Il video rimontato arriva un pezzo alla volta e non si può saltare
 in un punto non ancora arrivato: in quel caso il player chiede al server un nuovo video che parte
 da lì. La durata la prende dal catalogo, perché il video rimontato non la conosce.
+
+## Su iPhone, iPad e Mac
+
+Safari non sa guardare il video rimontato al volo: vuole ricevere ogni video **a pezzi**, chiedendo
+lui quale pezzo, e un video che nasce mentre si guarda non ha pezzi da dare. In compenso Safari,
+unico tra i browser, sa **cambiare da solo** la traccia audio di un file (`audioTracks`).
+
+Così su Safari il player non chiede niente al server: dice al browser quale traccia suonare, sul
+file stesso o sulla sua copia (decisione [0022](0022-video-su-apple.md)), che tengono tutte le
+tracce nello stesso ordine. Il cambio è immediato e non costa niente al server. Chrome e Firefox
+continuano con il video rimontato.
