@@ -657,32 +657,40 @@ func TestClips(t *testing.T) {
 	s := newSite(t)
 	id := s.addVideo(t, "mare.mp4", "sea", "", 1, true)
 	got := decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(id, 10)))
-	if got.Clip != nil {
-		t.Errorf("clip before it is made: %q", *got.Clip)
+	if got.Clip != nil || got.ClipHD != nil {
+		t.Errorf("clip before it is made: %v %v", got.Clip, got.ClipHD)
 	}
 
-	if _, err := s.db.Exec(`UPDATE videos SET clip = '1-abc.mp4' WHERE id = ?`, id); err != nil {
+	if _, err := s.db.Exec(`UPDATE videos SET clip = '1-abc.mp4', clip_hd = '1-abc.mp4' WHERE id = ?`, id); err != nil {
 		t.Fatal(err)
 	}
 	got = decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(id, 10)))
 	if got.Clip == nil || *got.Clip != "/api/clips/1-abc.mp4" {
 		t.Errorf("clip = %v, want /api/clips/1-abc.mp4", got.Clip)
 	}
+	if got.ClipHD == nil || *got.ClipHD != "/api/clips-hd/1-abc.mp4" {
+		t.Errorf("clipHD = %v, want /api/clips-hd/1-abc.mp4", got.ClipHD)
+	}
 
-	dir := filepath.Join(s.dataDir, media.ClipsDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "1-abc.mp4"), []byte("moving"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	rec := s.get(t, "/api/clips/1-abc.mp4")
-	if rec.Code != http.StatusOK || rec.Body.String() != "moving" || rec.Header().Get("Content-Type") != "video/mp4" {
-		t.Errorf("clip: %d %q %q", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
-	}
-	for _, target := range []string{"/api/clips/2-abc.mp4", "/api/clips/1-abc.jpg", "/api/clips/..%2Ffranzplay.db"} {
-		if rec := s.get(t, target); rec.Code != http.StatusNotFound {
-			t.Errorf("%s: status %d, want 404", target, rec.Code)
+	for _, c := range []struct{ folder, address, data string }{
+		{media.ClipsDir, "/api/clips/", "moving"},
+		{media.ClipsHDDir, "/api/clips-hd/", "moving sharply"},
+	} {
+		dir := filepath.Join(s.dataDir, c.folder)
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "1-abc.mp4"), []byte(c.data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		rec := s.get(t, c.address+"1-abc.mp4")
+		if rec.Code != http.StatusOK || rec.Body.String() != c.data || rec.Header().Get("Content-Type") != "video/mp4" {
+			t.Errorf("clip %s: %d %q %q", c.address, rec.Code, rec.Header().Get("Content-Type"), rec.Body)
+		}
+		for _, name := range []string{"2-abc.mp4", "1-abc.jpg", "..%2Ffranzplay.db"} {
+			if rec := s.get(t, c.address+name); rec.Code != http.StatusNotFound {
+				t.Errorf("%s%s: status %d, want 404", c.address, name, rec.Code)
+			}
 		}
 	}
 }
