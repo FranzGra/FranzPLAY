@@ -67,7 +67,7 @@ export function Layout() {
               <span className="visually-hidden">Cerca</span>
               <input
                 type="search"
-                placeholder="Cerca tra i tuoi video"
+                placeholder="Cerca video e persone"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />

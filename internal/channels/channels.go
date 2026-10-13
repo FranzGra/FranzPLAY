@@ -10,7 +10,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FranzGra/FranzPLAY/internal/playlists"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
@@ -25,6 +27,22 @@ type Channel struct {
 	Since     time.Time            `json:"since"`     // when they joined FranzPLAY
 	Playlists []playlists.Playlist `json:"playlists"` // public ones only
 }
+
+// Person is someone found by a search: only what everyone may see of
+// them, never their email, role or anything private.
+type Person struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Avatar int64  `json:"avatar"` // version of their profile photo, 0 = none
+}
+
+// Search limits: longer searches are refused, extra words ignored, and a
+// search shows at most maxFound people.
+const (
+	maxSearchLen   = 100 // characters
+	maxSearchWords = 8
+	maxFound       = 12
+)
 
 var errNotFound = errors.New("channel not found")
 
@@ -41,7 +59,8 @@ type handlers struct {
 // Routes adds the channels API to mux. Everyone logged in can see every
 // channel:
 //
-//	GET /api/channels/{id}   a person's name and public playlists
+//	GET /api/channels?q=words  the people whose name has every word
+//	GET /api/channels/{id}     a person's name and public playlists
 func Routes(db *sql.DB, lists func(ctx context.Context, owner int64) ([]playlists.Playlist, error),
 	logger *slog.Logger,
 ) func(mux *http.ServeMux) {
@@ -49,7 +68,87 @@ func Routes(db *sql.DB, lists func(ctx context.Context, owner int64) ([]playlist
 }
 
 func (h handlers) routes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/channels", h.search)
 	mux.HandleFunc("GET /api/channels/{id}", h.channel)
+}
+
+func (h handlers) search(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.account(r.Context()); !ok {
+		respond.Error(w, r, h.logger, http.StatusUnauthorized, "login required")
+		return
+	}
+	q := r.URL.Query().Get("q")
+	if utf8.RuneCountInString(q) > maxSearchLen {
+		respond.Error(w, r, h.logger, http.StatusBadRequest,
+			fmt.Sprintf("the search must be at most %d characters", maxSearchLen))
+		return
+	}
+	people, err := h.find(r.Context(), searchWords(q))
+	if err != nil {
+		respond.InternalError(w, r, h.logger, err)
+		return
+	}
+	respond.JSON(w, r, h.logger, http.StatusOK, map[string]any{"people": people})
+}
+
+// find returns, by name, the people whose name contains every word. No
+// words finds nobody: a search box left empty is not "show everyone".
+func (h handlers) find(ctx context.Context, words []string) (_ []Person, err error) {
+	people := []Person{}
+	if len(words) == 0 {
+		return people, nil
+	}
+	where := make([]string, len(words))
+	args := make([]any, 0, len(words)+1)
+	for i, word := range words {
+		where[i] = `name LIKE ? ESCAPE '\'`
+		args = append(args, likePattern(word))
+	}
+	args = append(args, maxFound)
+	rows, err := h.db.QueryContext(ctx, `SELECT id, name, avatar FROM users WHERE `+
+		strings.Join(where, " AND ")+` ORDER BY name COLLATE NOCASE, id LIMIT ?`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("search people: %w", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		var p Person
+		if err := rows.Scan(&p.ID, &p.Name, &p.Avatar); err != nil {
+			return nil, fmt.Errorf("search people: %w", err)
+		}
+		people = append(people, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("search people: %w", err)
+	}
+	return people, nil
+}
+
+// searchWords splits a search into its words, without repeats and at most
+// maxSearchWords: "anna  Rossi anna" becomes ["anna", "Rossi"].
+func searchWords(search string) []string {
+	var words []string
+	seen := map[string]bool{}
+	for _, w := range strings.Fields(search) {
+		key := strings.ToLower(w)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		words = append(words, w)
+		if len(words) == maxSearchWords {
+			break
+		}
+	}
+	return words
+}
+
+// likePattern turns a word into a LIKE pattern that finds it anywhere,
+// with LIKE's wildcards (% and _) escaped: "a_b" finds only "a_b".
+// LIKE ignores case for the letters A to Z; that is enough for names.
+func likePattern(word string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(word) + "%"
 }
 
 func (h handlers) channel(w http.ResponseWriter, r *http.Request) {

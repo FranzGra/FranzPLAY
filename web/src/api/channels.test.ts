@@ -1,4 +1,5 @@
-import { parseChannel } from "./channels";
+import { fakeServer } from "../test/render";
+import { parseChannel, searchPeople } from "./channels";
 
 const channel = (over: Record<string, unknown> = {}) => ({
   id: 5,
@@ -30,5 +31,20 @@ describe("parseChannel", () => {
     ["bad playlist", channel({ playlists: [{ id: 1 }] })],
   ])("refuses %s", (_, data) => {
     expect(() => parseChannel(data)).toThrow();
+  });
+});
+
+describe("searchPeople", () => {
+  it("asks for the words and checks the people found", async () => {
+    const { requests } = fakeServer({
+      "GET /api/channels": { body: { people: [{ id: 3, name: "Anna", avatar: 0 }] } },
+    });
+    expect(await searchPeople("anna rossi")).toEqual([{ id: 3, name: "Anna", avatar: 0 }]);
+    expect(new URL(requests[0]?.url ?? "").searchParams.get("q")).toBe("anna rossi");
+  });
+
+  it("refuses an answer without people", async () => {
+    fakeServer({ "GET /api/channels": { body: { people: [{ id: 0 }] } } });
+    await expect(searchPeople("anna")).rejects.toThrow();
   });
 });

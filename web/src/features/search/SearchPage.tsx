@@ -5,10 +5,11 @@ import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
+import { PeopleFound, usePeopleFound } from "./PeopleFound";
 import styles from "./SearchPage.module.css";
 
-// SearchPage shows the videos whose title or category contain every
-// searched word. On phones it has its own search box, since the top bar
+// SearchPage shows the people whose name, and the videos whose title or
+// category, contain every searched word. On phones it has its own search box, since the top bar
 // only has room for the icon.
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -31,10 +32,10 @@ export function SearchPage() {
         <form onSubmit={onSubmit}>
           <label className={`glass ${styles.box}`}>
             <Icon name="search" size={18} />
-            <span className="visually-hidden">Cerca tra i tuoi video</span>
+            <span className="visually-hidden">Cerca video e persone</span>
             <input
               type="search"
-              placeholder="Cerca tra i tuoi video"
+              placeholder="Cerca video e persone"
               value={text}
               enterKeyHint="search"
               onChange={(event) => setText(event.target.value)}
@@ -45,8 +46,8 @@ export function SearchPage() {
       {query ? (
         <Results key={query} query={query} />
       ) : (
-        <EmptyState title="Cerca tra i tuoi video">
-          Scrivi una o più parole del titolo o della categoria.
+        <EmptyState title="Cerca video e persone">
+          Scrivi una o più parole del titolo, della categoria o del nome di una persona.
         </EmptyState>
       )}
     </>
@@ -55,12 +56,26 @@ export function SearchPage() {
 
 function Results({ query }: { query: string }) {
   const { state, loadMore } = useVideoList({ q: query });
+  const people = usePeopleFound(query);
+  // People found and no video: "no result" would be untrue, so only the
+  // people show.
+  if (people.length > 0 && state.kind === "ready" && state.videos.length === 0) {
+    return <PeopleFound people={people} />;
+  }
   return (
-    <VideoGrid
-      state={state}
-      onMore={loadMore}
-      label={`Risultati per «${query}»`}
-      empty={{ title: "Nessun risultato", text: `Nessun video trovato per «${query}».` }}
-    />
+    <>
+      {people.length > 0 && (
+        <>
+          <PeopleFound people={people} />
+          <h2 className={styles.heading}>Video</h2>
+        </>
+      )}
+      <VideoGrid
+        state={state}
+        onMore={loadMore}
+        label={`Risultati per «${query}»`}
+        empty={{ title: "Nessun risultato", text: `Nessun video trovato per «${query}».` }}
+      />
+    </>
   );
 }

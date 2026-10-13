@@ -2,6 +2,7 @@
 // show to everyone.
 
 import { request } from "./client";
+import { parseSharePeople, type SharePerson } from "./people";
 import { type Playlist, parsePlaylist } from "./playlists";
 
 export type Channel = {
@@ -36,4 +37,12 @@ export function parseChannel(data: unknown): Channel {
 
 export async function fetchChannel(id: number, signal?: AbortSignal): Promise<Channel> {
   return parseChannel(await request(`/api/channels/${id}`, { signal }));
+}
+
+// searchPeople returns, by name, the people whose name contains every
+// word searched: at most a few, so the search page stays about videos.
+export async function searchPeople(q: string, signal?: AbortSignal): Promise<SharePerson[]> {
+  const data = await request(`/api/channels?${new URLSearchParams({ q })}`, { signal });
+  if (typeof data !== "object" || data === null) throw new Error("people found: not an object");
+  return parseSharePeople((data as Record<string, unknown>).people, "people found");
 }
