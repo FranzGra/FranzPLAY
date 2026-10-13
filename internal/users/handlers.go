@@ -15,7 +15,7 @@ const maxBody = 4 << 10
 // Routes adds the users API to mux:
 //
 //	GET    /api/setup         does FranzPLAY still need its administrator? may people register?
-//	POST   /api/setup         create the administrator {code, name, password}
+//	POST   /api/setup         create the administrator {name, password, code if asked}
 //	POST   /api/login         {name, password}
 //	POST   /api/logout
 //	GET    /api/me            the logged-in user (401 if nobody)
@@ -113,6 +113,8 @@ func (s *Service) badRequest(w http.ResponseWriter, r *http.Request) {
 
 type setupStatus struct {
 	Needed bool `json:"needed"`
+	// CodeNeeded says the setup form must ask for the code in the log.
+	CodeNeeded bool `json:"codeNeeded"`
 	// OpenRegistration says the login page may offer to create an account.
 	OpenRegistration bool `json:"openRegistration"`
 }
@@ -123,7 +125,11 @@ func (s *Service) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	respond.JSON(w, r, s.logger, http.StatusOK, setupStatus{Needed: s.needsSetup(), OpenRegistration: open})
+	respond.JSON(w, r, s.logger, http.StatusOK, setupStatus{
+		Needed:           s.needsSetup(),
+		CodeNeeded:       s.needsSetupCode(),
+		OpenRegistration: open,
+	})
 }
 
 type setupRequest struct {

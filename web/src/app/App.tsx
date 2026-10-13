@@ -60,6 +60,7 @@ function Gate() {
       return (
         <AuthPage
           mode={state.setupNeeded ? "setup" : "login"}
+          setupCode={state.setupCodeNeeded}
           openRegistration={state.openRegistration}
         />
       );

@@ -55,7 +55,7 @@ describe("site name and color", () => {
     renderApp("/", {
       ...signedIn(),
       "GET /api/me": { status: 401, body: { error: "login required" } },
-      "GET /api/setup": { body: { needed: false, openRegistration: false } },
+      "GET /api/setup": { body: { needed: false, codeNeeded: false, openRegistration: false } },
       "GET /api/site": { body: { ...franz, nameFirst: "Cinema", nameSecond: "" } },
     });
     expect(await screen.findByRole("heading", { name: "Accedi a Cinema" })).toBeInTheDocument();
