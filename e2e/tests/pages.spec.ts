@@ -87,3 +87,17 @@ test("on the computer the side menu stays in place while the page scrolls", asyn
   expect((await menu.boundingBox())?.y).toBeCloseTo(before?.y ?? -1, 0);
   await expect(menu.getByRole("link", { name: "Home" })).toBeInViewport();
 });
+
+test("the administration tabs stay on one line and show the open page", async ({ page }) => {
+  await logIn(page, ADMIN);
+  await page.goto("/admin/sito");
+  const tabs = page.getByRole("navigation", { name: "Sezioni dell'amministrazione" });
+  // One line: on a phone the row slides sideways instead of piling up.
+  // Both are measured at once, as the page may still be sliding in.
+  const tops = await tabs.evaluate((row) =>
+    [...row.querySelectorAll("a")].map((a) => a.getBoundingClientRect().top),
+  );
+  expect(new Set(tops).size).toBe(1);
+  // The last tab is the open page: it was brought into view.
+  await expect(tabs.getByRole("link", { name: "Sito" })).toBeInViewport();
+});

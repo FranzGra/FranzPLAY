@@ -83,6 +83,47 @@ export function ProfilePage() {
 
       <AccentPicker />
 
+      <section className={`glass ${styles.rows}`} aria-label="Il tuo account">
+        {editing === null && (
+          <>
+            <button
+              type="button"
+              className={styles.row}
+              onClick={() => {
+                setDone("");
+                setEditing("name");
+              }}
+            >
+              Cambia nome
+              <span className={styles.chevron} aria-hidden="true">
+                ›
+              </span>
+            </button>
+            <button
+              type="button"
+              className={styles.row}
+              onClick={() => {
+                setDone("");
+                setEditing("password");
+              }}
+            >
+              Cambia password
+              <span className={styles.chevron} aria-hidden="true">
+                ›
+              </span>
+            </button>
+          </>
+        )}
+        <button type="button" className={styles.row} onClick={onSignOut}>
+          Esci
+        </button>
+      </section>
+      {signOutFailed && (
+        <p className={styles.signOutError} role="alert">
+          Uscita non riuscita: il server non risponde. Riprova.
+        </p>
+      )}
+
       {editing === "name" && (
         <NameForm
           current={account.name}
@@ -103,42 +144,9 @@ export function ProfilePage() {
           onCancel={() => setEditing(null)}
         />
       )}
-      {editing === null && (
-        <div className={styles.formButtons}>
-          <button
-            type="button"
-            className={`glass ${styles.signOut}`}
-            onClick={() => {
-              setDone("");
-              setEditing("name");
-            }}
-          >
-            Cambia nome
-          </button>
-          <button
-            type="button"
-            className={`glass ${styles.signOut}`}
-            onClick={() => {
-              setDone("");
-              setEditing("password");
-            }}
-          >
-            Cambia password
-          </button>
-        </div>
-      )}
       {done && (
         <p className={styles.hint} role="status">
           {done}
-        </p>
-      )}
-
-      <button type="button" className={`glass ${styles.signOut}`} onClick={onSignOut}>
-        Esci
-      </button>
-      {signOutFailed && (
-        <p className={styles.signOutError} role="alert">
-          Uscita non riuscita: il server non risponde. Riprova.
         </p>
       )}
 

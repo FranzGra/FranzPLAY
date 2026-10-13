@@ -41,9 +41,11 @@ make run     # start FranzPLAY
 # then open http://localhost:8090
 ```
 
-On the first start FranzPLAY has no users: it writes a one-time **setup code** in its log
-(`setup_code=XXXX-XXXX-XXXX`), which is needed to create the administrator. Everything else
-needs a login.
+On the first start FranzPLAY has no users: the first person who opens the site creates the
+administrator, with just a name and a password. That page exists only until the administrator
+exists; everything else needs a login. If the site is reachable from the internet before that,
+set `FRANZPLAY_SETUP_CODE=true`: FranzPLAY then also asks for a one-time code it writes in its log
+(`setup_code=XXXX-XXXX-XXXX`).
 
 Step-by-step guide for Windows, Mac and Linux (in Italian): [`docs/provare-sul-pc.md`](docs/provare-sul-pc.md).
 Moving from the old FranzPLAY (in Italian): [`docs/importare-dal-vecchio.md`](docs/importare-dal-vecchio.md).
@@ -72,6 +74,7 @@ Full guide (in Italian): [`docs/copertine-e-anteprime.md`](docs/copertine-e-ante
 | `FRANZPLAY_WHISPER` | `whisper-cli` | whisper.cpp program for automatic subtitles; when missing, they are off |
 | `FRANZPLAY_TRANSLATE_URL` | none | Address of a LibreTranslate server that translates subtitles, like `http://localhost:5000` |
 | `FRANZPLAY_TRANSLATE_KEY` | none | LibreTranslate key, when the server asks for one |
+| `FRANZPLAY_SETUP_CODE` | `false` | `true` asks for a one-time code from the log to create the first administrator |
 
 ## Contributing
 

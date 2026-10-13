@@ -172,3 +172,28 @@ func TestLoadRejectsBadTranslateURL(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadSetupCode(t *testing.T) {
+	tests := []struct {
+		value string
+		want  bool
+	}{
+		{"", false},
+		{"false", false},
+		{"0", false},
+		{"true", true},
+		{" 1 ", true}, // spaces around are fine
+	}
+	for _, tc := range tests {
+		cfg, err := Load(fakeEnv(map[string]string{EnvSetupCode: tc.value}))
+		if err != nil {
+			t.Fatalf("%s=%q: %v", EnvSetupCode, tc.value, err)
+		}
+		if cfg.SetupCode != tc.want {
+			t.Errorf("%s=%q: SetupCode = %v, want %v", EnvSetupCode, tc.value, cfg.SetupCode, tc.want)
+		}
+	}
+	if _, err := Load(fakeEnv(map[string]string{EnvSetupCode: "maybe"})); !errors.Is(err, ErrInvalidConfig) {
+		t.Errorf("%s=maybe error = %v, want ErrInvalidConfig", EnvSetupCode, err)
+	}
+}

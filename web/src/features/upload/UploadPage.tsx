@@ -126,7 +126,10 @@ export function UploadPage() {
 
   return (
     <div className={styles.root}>
-      <h1 className={styles.heading}>Carica un video</h1>
+      <h1 className={styles.heading}>
+        <Icon name="upload" size={26} />
+        Carica un video
+      </h1>
       <SpaceBar used={space.used + space.reserved} quota={space.quota} />
 
       {sending ? (

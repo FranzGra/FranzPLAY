@@ -156,6 +156,7 @@ Impostazioni:
 | `FRANZPLAY_WHISPER` | `whisper-cli` | Programma di whisper.cpp per i sottotitoli automatici; se manca, la funzione è spenta |
 | `FRANZPLAY_TRANSLATE_URL` | nessuno | Indirizzo di un server LibreTranslate per tradurre i sottotitoli (es. `http://localhost:5000`) |
 | `FRANZPLAY_TRANSLATE_KEY` | nessuna | Chiave di LibreTranslate, se il server la chiede |
+| `FRANZPLAY_SETUP_CODE` | `false` | `true` chiede un codice scritto nel log per creare il primo amministratore |
 
 ## Prima di aprire una pull request
 

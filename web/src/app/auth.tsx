@@ -8,7 +8,12 @@ import { useSite } from "./site";
 export type AuthState =
   | { kind: "loading" }
   | { kind: "error" } // the server does not answer
-  | { kind: "signed-out"; setupNeeded: boolean; openRegistration: boolean }
+  | {
+      kind: "signed-out";
+      setupNeeded: boolean;
+      setupCodeNeeded: boolean; // the setup asks for the code in the log
+      openRegistration: boolean;
+    }
   | { kind: "signed-in"; account: Account };
 
 type AuthContextValue = {
@@ -25,6 +30,7 @@ type AuthContextValue = {
 const signedOut: Extract<AuthState, { kind: "signed-out" }> = {
   kind: "signed-out",
   setupNeeded: false,
+  setupCodeNeeded: false,
   openRegistration: false,
 };
 
@@ -101,6 +107,7 @@ async function load(signal: AbortSignal): Promise<AuthState> {
   return {
     kind: "signed-out",
     setupNeeded: setup.needed,
+    setupCodeNeeded: setup.codeNeeded,
     openRegistration: setup.openRegistration,
   };
 }

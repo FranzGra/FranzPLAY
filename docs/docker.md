@@ -79,15 +79,14 @@ Apri il browser su **http://indirizzo-del-computer:8090**: sullo stesso computer
 <http://localhost:8090>, da un telefono in casa è l'indirizzo del Raspberry Pi, per esempio
 `http://192.168.1.20:8090`.
 
-**Il primo accesso.** FranzPLAY chiede un **codice di installazione**, per essere sicuro che sei
-tu. Lo trovi così:
+**Il primo accesso.** Compare la pagina **Benvenuto in FranzPLAY**: scrivi il tuo nome e una
+password e sei l'amministratore. Non serve nessun codice. Fallo subito dopo l'installazione:
+finché l'amministratore non esiste, il primo che apre il sito lo diventa. Da qui in poi tutto è
+come spiegato in [provare-sul-pc.md](provare-sul-pc.md#il-primo-accesso).
 
-```sh
-docker compose logs franzplay | grep setup_code
-```
-
-Scrivi il codice, il tuo nome e una password: sei l'amministratore. Da qui in poi tutto è come
-spiegato in [provare-sul-pc.md](provare-sul-pc.md#il-primo-accesso).
+> **Se il sito è già raggiungibile da internet** prima che tu crei l'amministratore, accendi il
+> codice di installazione: in `.env` scrivi `FRANZPLAY_SETUP_CODE=true`. FranzPLAY allora chiede
+> anche un codice che trovi con `docker compose logs franzplay | grep setup_code`.
 
 ## Tutti i giorni
 
