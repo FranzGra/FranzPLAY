@@ -33,7 +33,7 @@ const adminPages = [
   "/admin/sito",
 ];
 
-async function checkPages(page: import("@playwright/test").Page, paths: string[]) {
+async function checkPages(page: import("@playwright/test").Page, paths: string[], phone: boolean) {
   const errors = watchErrors(page);
   const all = await videos(page);
   for (const path of [...paths, `/video/${all[0].id}`, "/canale/1"]) {
@@ -48,18 +48,34 @@ async function checkPages(page: import("@playwright/test").Page, paths: string[]
       }));
       expect(scroll, `${path} is wider than the window`).toBeLessThanOrEqual(width);
       expect(errors, `${path} had errors`).toEqual([]);
+      // On a phone a field with letters smaller than 16px makes Safari
+      // zoom the whole page in when touched.
+      if (phone) {
+        const small = await page.evaluate(() =>
+          Array.from(document.querySelectorAll("input, textarea, select"))
+            .filter(
+              (field) =>
+                !/^(checkbox|radio|range|color|file|hidden)$/.test(
+                  field.getAttribute("type") ?? "",
+                ),
+            )
+            .filter((field) => Number.parseFloat(getComputedStyle(field).fontSize) < 16)
+            .map((field) => field.outerHTML.slice(0, 80)),
+        );
+        expect(small, `${path} has fields Safari zooms into`).toEqual([]);
+      }
     });
   }
 }
 
-test("a person's pages open and fit the screen", async ({ page }) => {
+test("a person's pages open and fit the screen", async ({ page, isMobile }) => {
   await logIn(page, PEOPLE[0]);
-  await checkPages(page, userPages);
+  await checkPages(page, userPages, isMobile);
 });
 
-test("the administration pages open and fit the screen", async ({ page }) => {
+test("the administration pages open and fit the screen", async ({ page, isMobile }) => {
   await logIn(page, ADMIN);
-  await checkPages(page, adminPages);
+  await checkPages(page, adminPages, isMobile);
 });
 
 test("on the phone the bottom bar is on screen", async ({ page, isMobile }) => {
