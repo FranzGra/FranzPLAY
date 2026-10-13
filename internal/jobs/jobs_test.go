@@ -189,6 +189,33 @@ func TestWorkerPermanentFailure(t *testing.T) {
 	}
 }
 
+func TestWorkerPostponesAJobNotDueYet(t *testing.T) {
+	fx := newFixture(t, 1)
+	video := fx.videos[0]
+	fx.enqueue(t, video, Online)
+	calls := 0
+	w := fx.worker(map[Kind]Handler{Online: func(context.Context, int64) error {
+		calls++
+		if calls == 1 {
+			return fmt.Errorf("asking: %w", &LaterError{Until: fx.clock.Add(time.Hour)})
+		}
+		return nil
+	}})
+
+	runNext(t, w)
+	if j := fx.job(t, video, Online); j.state != pending || j.attempts != 0 || j.lastError != "" {
+		t.Fatalf("postponed job = %+v, want pending with no failed attempt", j)
+	}
+	fx.clock = fx.clock.Add(59 * time.Minute)
+	if runNext(t, w) {
+		t.Fatal("the job ran before its time")
+	}
+	fx.clock = fx.clock.Add(time.Minute)
+	if !runNext(t, w) || fx.job(t, video, Online).state != done {
+		t.Errorf("at its time the job did not run: %+v", fx.job(t, video, Online))
+	}
+}
+
 func TestWorkerRunsTheKindsInOrder(t *testing.T) {
 	fx := newFixture(t, 7)
 	fx.enqueue(t, fx.videos[5], Details)

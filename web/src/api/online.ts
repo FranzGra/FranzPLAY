@@ -9,20 +9,59 @@ export type OnlineSources = {
   tpdb: boolean;
 };
 
-// OnlineStatus is what the server says: the sources, and if a key is
-// saved. A key never comes back from the server.
-export type OnlineStatus = OnlineSources & {
-  tmdbKey: boolean;
-  tpdbKey: boolean;
-};
+// SourceName names a source on the internet.
+export type SourceName = keyof OnlineSources;
 
 // KeySource is a source that needs a key: TMDB or ThePornDB.
 export type KeySource = "tmdb" | "tpdb";
 
+// OnlineRules are the administrator's limits on the questions: the hours
+// (from up to to; the same hour twice means at any time), the most videos
+// a day (0: no limit) and the order the sources are asked in.
+export type OnlineRules = {
+  from: number;
+  to: number;
+  daily: number;
+  order: SourceName[];
+};
+
+// OnlineStatus is what the server says: the sources, if a key is saved,
+// the rules, and how many videos were asked about today. A key never
+// comes back from the server.
+export type OnlineStatus = OnlineSources & {
+  tmdbKey: boolean;
+  tpdbKey: boolean;
+  rules: OnlineRules;
+  askedToday: number;
+};
+
+const sourceNames: readonly string[] = ["youtube", "tmdb", "tpdb"];
+
+function parseRules(data: unknown): OnlineRules {
+  if (typeof data !== "object" || data === null) throw new Error("online rules: not an object");
+  const fields = data as Record<string, unknown>;
+  const whole = (name: string, max: number): number => {
+    const value = fields[name];
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > max) {
+      throw new Error(`online rules ${name}: not a whole number from 0 to ${max}`);
+    }
+    return value;
+  };
+  const { order } = fields;
+  if (
+    !Array.isArray(order) ||
+    order.length !== sourceNames.length ||
+    !sourceNames.every((name) => order.includes(name))
+  ) {
+    throw new Error("online rules order: not every source once");
+  }
+  return { from: whole("from", 23), to: whole("to", 23), daily: whole("daily", 100000), order };
+}
+
 export function parseStatus(data: unknown): OnlineStatus {
   if (typeof data !== "object" || data === null) throw new Error("online: not an object");
   const fields = data as Record<string, unknown>;
-  const flag = (name: keyof OnlineStatus): boolean => {
+  const flag = (name: keyof OnlineSources | "tmdbKey" | "tpdbKey"): boolean => {
     const value = fields[name];
     if (typeof value !== "boolean") throw new Error(`online ${name}: not true or false`);
     return value;
@@ -33,7 +72,16 @@ export function parseStatus(data: unknown): OnlineStatus {
     tpdb: flag("tpdb"),
     tmdbKey: flag("tmdbKey"),
     tpdbKey: flag("tpdbKey"),
+    rules: parseRules(fields.rules),
+    askedToday: asked(fields.askedToday),
   };
+}
+
+function asked(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error("online askedToday: not a count");
+  }
+  return value;
 }
 
 export async function fetchSources(signal?: AbortSignal): Promise<OnlineStatus> {
@@ -43,6 +91,13 @@ export async function fetchSources(signal?: AbortSignal): Promise<OnlineStatus> 
 export async function saveSources({ youtube, tmdb, tpdb }: OnlineSources): Promise<OnlineStatus> {
   return parseStatus(
     await request("/api/online", { method: "PUT", body: { youtube, tmdb, tpdb } }),
+  );
+}
+
+// saveRules saves the administrator's rules.
+export async function saveRules({ from, to, daily, order }: OnlineRules): Promise<OnlineStatus> {
+  return parseStatus(
+    await request("/api/online/rules", { method: "PUT", body: { from, to, daily, order } }),
   );
 }
 

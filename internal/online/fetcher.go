@@ -50,11 +50,12 @@ func NewFetcher(db *sql.DB, dataDir string) *Fetcher {
 var errVideoGone = errors.New("video no longer in the catalog")
 
 // Handle is the job handler for jobs.Online. The name of the file says
-// which source knows the video: a YouTube code goes to YouTube, a film's
-// title and year to TMDB, every other video to ThePornDB, by a
-// fingerprint of the file. With that source off nothing is asked, and
-// what was found before is kept. With it on, what it finds replaces what
-// was there; finding nothing clears it.
+// which sources can know the video: a YouTube code YouTube, a film's
+// title and year TMDB, and ThePornDB any video, by a fingerprint of the
+// file. They are asked in the administrator's order, until one finds it,
+// within the hours and the daily limit they chose. With no such source
+// on nothing is asked, and what was found before is kept. Otherwise what
+// is found replaces what was there; finding nothing clears it.
 func (f *Fetcher) Handle(ctx context.Context, videoID int64) error {
 	s, err := loadSettings(ctx, f.db)
 	if err != nil {
@@ -77,39 +78,82 @@ func (f *Fetcher) Handle(ctx context.Context, videoID int64) error {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
 
-	var what found
-	if id, ok := video.YouTubeID(rel); ok {
-		if !s.YouTube {
-			return nil
-		}
-		what, _, err = f.youtube.lookup(ctx, id)
-	} else if film, ok := video.FilmInName(rel); ok {
-		if !s.TMDB || s.tmdbKey == "" {
-			return nil
-		}
-		what, _, err = f.tmdb.lookup(ctx, s.tmdbKey, film)
-	} else {
-		if !s.TPDB || s.tpdbKey == "" {
-			return nil
-		}
-		if missing {
-			// Not permanent: if the disk comes back, so does the video.
-			return fmt.Errorf("video %d: %w", videoID, errVideoMissing)
-		}
-		var hash string
-		if hash, err = osHash(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
-			return fmt.Errorf("video %d: %w", videoID, err)
-		}
-		what, _, err = f.tpdb.lookup(ctx, s.tpdbKey, hash)
+	asks := f.asks(s, filepath.Join(root, filepath.FromSlash(rel)), rel, missing)
+	if len(asks) == 0 {
+		return nil
 	}
-	if errors.Is(err, errKeyRefused) {
-		// Trying again cannot help: saving a new key asks again.
-		return fmt.Errorf("video %d: %w: %w", videoID, err, jobs.ErrPermanent)
-	}
-	if err != nil {
+	if err := f.mayAsk(ctx, s); err != nil {
 		return err
 	}
+	var what found
+	for _, ask := range asks {
+		var ok bool
+		what, ok, err = ask(ctx)
+		if errors.Is(err, errKeyRefused) {
+			// Trying again cannot help: saving a new key asks again.
+			return fmt.Errorf("video %d: %w: %w", videoID, err, jobs.ErrPermanent)
+		}
+		if err != nil {
+			return fmt.Errorf("video %d: %w", videoID, err)
+		}
+		if ok {
+			break
+		}
+	}
 	return f.save(ctx, videoID, fingerprint, oldImage.String, what)
+}
+
+// ask is one question to a source about a video. ok is false when the
+// source does not surely know it.
+type ask func(ctx context.Context) (_ found, ok bool, err error)
+
+// asks are the questions about a video to the sources that are on and
+// can know it, in the administrator's order. Nothing is asked yet.
+func (f *Fetcher) asks(s settings, file, rel string, missing bool) []ask {
+	var asks []ask
+	for _, source := range s.rules.Order {
+		switch source {
+		case "youtube":
+			if id, ok := video.YouTubeID(rel); ok && s.YouTube {
+				asks = append(asks, func(ctx context.Context) (found, bool, error) { return f.youtube.lookup(ctx, id) })
+			}
+		case "tmdb":
+			if film, ok := video.FilmInName(rel); ok && s.TMDB && s.tmdbKey != "" {
+				asks = append(asks, func(ctx context.Context) (found, bool, error) {
+					return f.tmdb.lookup(ctx, s.tmdbKey, film)
+				})
+			}
+		case "tpdb":
+			if s.TPDB && s.tpdbKey != "" {
+				asks = append(asks, func(ctx context.Context) (found, bool, error) {
+					if missing {
+						// Not permanent: if the disk comes back, so does the video.
+						return found{}, false, errVideoMissing
+					}
+					hash, err := osHash(file)
+					if err != nil {
+						return found{}, false, err
+					}
+					return f.tpdb.lookup(ctx, s.tpdbKey, hash)
+				})
+			}
+		}
+	}
+	return asks
+}
+
+// mayAsk checks the administrator's hours and daily limit, and counts the
+// video as asked about today. When it is not the time, the job waits.
+func (f *Fetcher) mayAsk(ctx context.Context, s settings) error {
+	now := f.now()
+	asked := askedOn(s.asked, now)
+	if until, wait := s.rules.wait(now, asked); wait {
+		return &jobs.LaterError{Until: until}
+	}
+	if err := saveSetting(ctx, f.db, keyAsked, askedText(now, asked+1)); err != nil {
+		return fmt.Errorf("count today's questions: %w", err)
+	}
+	return nil
 }
 
 // errVideoMissing means the video's file is not where it was last seen.

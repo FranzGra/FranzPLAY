@@ -692,6 +692,37 @@ label.action:focus-within {
   gap: 12px;
 }
 
+/* The rules of the questions to the internet. */
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: var(--radius-l);
+}
+
+.rules h2 {
+  margin: 0;
+}
+
+.order {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
 /* Searching a cover on the internet. */
 .searchBox {
   display: flex;

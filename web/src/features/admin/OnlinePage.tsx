@@ -10,6 +10,7 @@ import {
 } from "../../api/online";
 import { EmptyState } from "../../components/EmptyState";
 import styles from "./Admin.module.css";
+import { OnlineRulesForm } from "./OnlineRules";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; status: OnlineStatus };
 
@@ -146,10 +147,10 @@ export function OnlinePage() {
           <div>
             <p className={styles.name}>ThePornDB</p>
             <p className={styles.role}>
-              Per tutti gli altri video, né da YouTube né film. FranzPLAY calcola un'impronta del
-              file (un numero che dipende solo dal suo contenuto) e manda solo quella. Si usa una
-              scena solo se ThePornDB conosce proprio quel file. Dà immagine, titolo, descrizione,
-              studio e data.
+              Per qualsiasi video, di solito quelli né da YouTube né film. FranzPLAY calcola
+              un'impronta del file (un numero che dipende solo dal suo contenuto) e manda solo
+              quella. Si usa una scena solo se ThePornDB conosce proprio quel file. Dà immagine,
+              titolo, descrizione, studio e data.
             </p>
             <p className={styles.role}>
               Serve una chiave gratuita: crea un account su{" "}
@@ -173,6 +174,14 @@ export function OnlinePage() {
           <KeyForm source="tpdb" name="ThePornDB" hasKey={before.tpdbKey} onSaved={keySaved} />
         </li>
       </ul>
+      <OnlineRulesForm
+        status={before}
+        onSaved={(status) => {
+          setState({ kind: "ready", status });
+          setProblem("");
+          setDone("Regole salvate.");
+        }}
+      />
       {problem && (
         <p role="alert" className={styles.problem}>
           {problem}
