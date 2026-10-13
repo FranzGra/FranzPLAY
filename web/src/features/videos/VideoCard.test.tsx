@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { parseVideo, type Video } from "../../api/videos";
 import { videoJSON } from "../../test/fixtures";
-import { hoverDelay, pressDelay } from "./useClipPreview";
+import { hoverDelay, middleCard, settleDelay } from "./useClipPreview";
 import { VideoCard } from "./VideoCard";
 
 const now = new Date("2026-10-12T08:00:00Z");
@@ -78,49 +78,131 @@ describe("clip on the video card", () => {
     show(video(), video({ id: 8, title: "Neve", clip: "/api/clips/8-0a.mp4" }));
     fireEvent.pointerEnter(card(), { pointerType: "mouse" });
     wait(hoverDelay);
-    // A finger on another card: the first clip stops.
-    fireEvent.pointerDown(card("Neve"), { pointerType: "touch", clientX: 0, clientY: 0 });
-    wait(pressDelay);
+    fireEvent.pointerEnter(card("Neve"), { pointerType: "mouse" });
+    wait(hoverDelay);
     const clips = screen.getAllByTestId("clip");
     expect(clips).toHaveLength(1);
     expect(clips[0]).toHaveAttribute("src", "/api/clips/8-0a.mp4");
   });
 
-  it("plays while a finger presses the card, and stays on the page", () => {
+  it("does not play under a finger: a finger on a card is scrolling", () => {
     show(video());
+    fireEvent.pointerEnter(card(), { pointerType: "touch" });
     fireEvent.pointerDown(card(), { pointerType: "touch", clientX: 10, clientY: 10 });
-    wait(pressDelay);
-    expect(screen.getByTestId("clip")).toBeInTheDocument();
+    wait(hoverDelay);
+    expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
+  });
+});
 
-    fireEvent.pointerUp(card(), { pointerType: "touch" });
-    fireEvent.click(card());
-    expect(screen.queryByText("Pagina del video")).not.toBeInTheDocument();
-    expect(screen.getByTestId("clip")).toBeInTheDocument();
+describe("clip on a touch screen", () => {
+  // A phone 400 wide and 800 tall; each card's cover is where boxes says,
+  // by title.
+  function phone<T extends Record<string, { top: number; left?: number }>>(boxes: T): T {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
+    vi.stubGlobal("innerWidth", 400);
+    vi.stubGlobal("innerHeight", 800);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const title = this.closest("a")?.querySelector("h3")?.textContent ?? "";
+      const at = (boxes as Record<string, { top: number; left?: number }>)[title] ?? {
+        top: -1000,
+      };
+      return { left: at.left ?? 16, top: at.top, width: 368, height: 207 } as DOMRect;
+    });
+    return boxes;
+  }
 
-    // A tap after that opens the video, as always.
-    fireEvent.pointerDown(card(), { pointerType: "touch", clientX: 10, clientY: 10 });
-    fireEvent.pointerUp(card(), { pointerType: "touch" });
-    fireEvent.click(card());
-    expect(screen.getByText("Pagina del video")).toBeInTheDocument();
+  const two = () => [video(), video({ id: 8, title: "Neve", clip: "/api/clips/8-0a.mp4" })];
+
+  it("plays the card in the middle of the screen once the page is still", () => {
+    phone({ "Mare 2024": { top: 20 }, Neve: { top: 300 } });
+    show(...two());
+    wait(settleDelay - 1);
+    expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
+    wait(1);
+    const clips = screen.getAllByTestId("clip");
+    expect(clips).toHaveLength(1);
+    expect(clips[0]).toHaveAttribute("src", "/api/clips/8-0a.mp4");
   });
 
-  it("opens the video on a quick tap", () => {
-    show(video());
-    fireEvent.pointerDown(card(), { pointerType: "touch", clientX: 10, clientY: 10 });
-    wait(pressDelay / 2);
-    fireEvent.pointerUp(card(), { pointerType: "touch" });
-    fireEvent.click(card());
-    expect(screen.getByText("Pagina del video")).toBeInTheDocument();
+  it("waits while the page scrolls, then moves to the new middle card", () => {
+    const boxes = phone({ "Mare 2024": { top: 20 }, Neve: { top: 300 } });
+    show(...two());
+    wait(settleDelay);
+    // The finger scrolls back up: Mare comes to the middle.
+    boxes["Mare 2024"].top = 300;
+    boxes.Neve.top = 580;
+    for (let i = 0; i < 5; i++) {
+      fireEvent.scroll(document);
+      wait(settleDelay / 2);
+    }
+    expect(screen.getByTestId("clip")).toHaveAttribute("src", "/api/clips/8-0a.mp4");
+    wait(settleDelay);
+    const clips = screen.getAllByTestId("clip");
+    expect(clips).toHaveLength(1);
+    expect(clips[0]).toHaveAttribute("src", "/api/clips/7-0a1b2c3d.mp4");
   });
 
-  it("does not play while the finger scrolls the page", () => {
+  it("counts a row of cards sliding sideways too", () => {
+    const boxes = phone({ "Mare 2024": { top: 300, left: 16 }, Neve: { top: 300, left: 400 } });
+    show(...two());
+    wait(settleDelay);
+    expect(screen.getByTestId("clip")).toHaveAttribute("src", "/api/clips/7-0a1b2c3d.mp4");
+    boxes["Mare 2024"].left = -370;
+    boxes.Neve.left = 16;
+    fireEvent.scroll(card());
+    wait(settleDelay);
+    expect(screen.getByTestId("clip")).toHaveAttribute("src", "/api/clips/8-0a.mp4");
+  });
+
+  it("stops when no card is in view enough", () => {
+    const boxes = phone({ "Mare 2024": { top: 300 } });
     show(video());
-    fireEvent.pointerDown(card(), { pointerType: "touch", clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(card(), { pointerType: "touch", clientX: 10, clientY: 60 });
-    wait(pressDelay);
+    wait(settleDelay);
+    expect(screen.getByTestId("clip")).toBeInTheDocument();
+    boxes["Mare 2024"].top = 700; // mostly below the screen
+    fireEvent.scroll(document);
+    wait(settleDelay);
     expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
   });
 
+  it("leaves the small cards beside the player still", () => {
+    phone({ "Mare 2024": { top: 300 } });
+    render(
+      <MemoryRouter>
+        <VideoCard video={video()} now={now} layout="row" />
+      </MemoryRouter>,
+    );
+    wait(settleDelay);
+    expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
+  });
+
+  it("opens the video on a tap, as always", () => {
+    phone({ "Mare 2024": { top: 300 } });
+    show(video());
+    wait(settleDelay);
+    fireEvent.click(card());
+    expect(screen.getByText("Pagina del video")).toBeInTheDocument();
+  });
+});
+
+describe("the middle card", () => {
+  const screenSize = { width: 400, height: 800 };
+  const box = (top: number, left = 16) => ({ top, left, width: 368, height: 207 });
+
+  it.each([
+    ["the one nearest the middle", [box(0), box(300), box(600)], 1],
+    ["one well in view over one cut in half", [box(-100), box(600)], 1],
+    ["none when all are mostly out of view", [box(-150), box(700)], null],
+    ["not a folded-away card", [{ top: 300, left: 16, width: 0, height: 0 }, box(10)], 1],
+    ["none from no cards", [], null],
+  ])("is %s", (_, covers, want) => {
+    expect(middleCard(covers, screenSize)).toBe(want);
+  });
+});
+
+describe("which clip plays", () => {
   it("plays the sharp clip on a good connection", () => {
     show(video({ clipHD: "/api/clips-hd/7-0a1b2c3d.mp4" }));
     fireEvent.pointerEnter(card(), { pointerType: "mouse" });
