@@ -183,7 +183,7 @@ export function VideosPage() {
           {view === "table" ? (
             <VideoTable videos={state.videos} />
           ) : (
-            <ul className={styles.list} aria-label="Video">
+            <ul className={`stagger ${styles.list}`} aria-label="Video">
               {state.videos.map((video) => (
                 <li key={video.id}>
                   <VideoRow video={video} onChanged={replace} />

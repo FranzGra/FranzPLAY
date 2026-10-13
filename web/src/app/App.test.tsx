@@ -74,6 +74,45 @@ describe("navigation", () => {
     );
   });
 
+  describe("moving to another page", () => {
+    // jsdom cannot animate: a stand-in records what the page asked for.
+    const animate = vi.fn(() => ({ cancel: vi.fn() }));
+    beforeEach(() => {
+      animate.mockClear();
+      Element.prototype.animate = animate as unknown as Element["animate"];
+    });
+    afterEach(() => {
+      delete (Element.prototype as Partial<Element>).animate;
+    });
+
+    async function goToProfile() {
+      const { user } = renderApp("/");
+      const tabbar = await screen.findByRole("navigation", { name: "Menu del telefono" });
+      animate.mockClear();
+      await user.click(within(tabbar).getByRole("link", { name: "Profilo" }));
+    }
+
+    it("lets the new page rise softly into place", async () => {
+      await goToProfile();
+      expect(animate).toHaveBeenCalledTimes(1);
+      expect(animate).toHaveBeenCalledWith(
+        [
+          { opacity: 0, translate: "0 10px" },
+          { opacity: 1, translate: "0 0" },
+        ],
+        expect.objectContaining({ duration: 320 }),
+      );
+    });
+
+    it("moves nothing for whoever asked for less motion", async () => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: query === "(prefers-reduced-motion: reduce)",
+      }));
+      await goToProfile();
+      expect(animate).not.toHaveBeenCalled();
+    });
+  });
+
   it("shows my initial in the top bar, as on my profile", async () => {
     renderApp("/");
     expect(await screen.findByRole("link", { name: "Il tuo profilo" })).toHaveTextContent("F");

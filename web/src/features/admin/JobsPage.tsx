@@ -188,7 +188,7 @@ function Failed({ jobs, onRetried }: { jobs: JobsOverview; onRetried: () => void
       {jobs.failed.length === 0 ? (
         <p className={styles.lead}>Nessun lavoro fallito. Tutto bene.</p>
       ) : (
-        <ul className={styles.list} aria-label="Lavori falliti">
+        <ul className={`stagger ${styles.list}`} aria-label="Lavori falliti">
           {jobs.failed.map((job) => (
             <li key={job.id}>
               <FailedJob job={job} busy={busy} onRetry={() => run(() => retryJob(job.id))} />

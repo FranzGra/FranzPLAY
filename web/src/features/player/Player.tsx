@@ -778,7 +778,9 @@ export function Player({
             onClick={() => run({ kind: "toggle-play" })}
             aria-label={playing ? "Pausa (k)" : "Riproduci (k)"}
           >
-            <Icon name={playing ? "pause" : "play"} size={26} />
+            <span key={playing ? "pause" : "play"} className={styles.swap}>
+              <Icon name={playing ? "pause" : "play"} size={26} />
+            </span>
           </button>
           <button
             type="button"
@@ -803,7 +805,9 @@ export function Player({
               onClick={() => run({ kind: "toggle-mute" })}
               aria-label={muted || silenced ? "Riattiva l'audio (m)" : "Disattiva l'audio (m)"}
             >
-              <Icon name={muted || silenced || volume === 0 ? "muted" : "volume"} size={26} />
+              <span key={String(muted || silenced || volume === 0)} className={styles.swap}>
+                <Icon name={muted || silenced || volume === 0 ? "muted" : "volume"} size={26} />
+              </span>
             </button>
             <input
               type="range"

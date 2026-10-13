@@ -46,7 +46,7 @@ export function CategoriesPage() {
         </EmptyState>
       )}
       {state.kind === "ready" && state.categories.length > 0 && (
-        <ul className={styles.list}>
+        <ul className={`stagger ${styles.list}`}>
           {state.categories.map((category) => (
             <li key={category.name}>
               <Link

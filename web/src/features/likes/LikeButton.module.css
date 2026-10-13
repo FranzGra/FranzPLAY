@@ -17,9 +17,6 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition:
-    background-color 150ms,
-    color 150ms;
 }
 
 /* How many people like it, after a thin line, as on YouTube. */
@@ -37,8 +34,10 @@
   color: var(--color-bg);
 }
 
+/* The thumb pops when it turns on. */
 .button[aria-pressed="true"] svg {
   fill: currentColor;
+  animation: var(--motion-pop);
 }
 
 .button:disabled {

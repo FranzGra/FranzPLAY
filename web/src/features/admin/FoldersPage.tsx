@@ -94,7 +94,7 @@ export function FoldersPage() {
         </p>
       )}
 
-      <ul className={styles.list} aria-label="Cartelle video">
+      <ul className={`stagger ${styles.list}`} aria-label="Cartelle video">
         {library.folders.map((folder) => (
           <li key={folder.path}>
             <Folder folder={folder} />

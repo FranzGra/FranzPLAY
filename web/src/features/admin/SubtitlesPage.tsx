@@ -147,7 +147,7 @@ export function SubtitlesPage() {
       {state.kind === "ready" && state.videos.length > 0 && (
         <>
           <p className={styles.count}>{state.total.toLocaleString("it-IT")} video</p>
-          <ul className={styles.list} aria-label="Video">
+          <ul className={`stagger ${styles.list}`} aria-label="Video">
             {state.videos.map((video) => (
               <li key={video.id}>
                 <VideoRow video={video} setup={state.setup} onChanged={reload} />

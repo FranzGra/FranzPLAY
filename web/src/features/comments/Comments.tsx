@@ -34,7 +34,7 @@ export function Comments({ videoId }: { videoId: number }) {
           {state.comments.length === 0 ? (
             <p className={styles.muted}>Ancora nessun commento. Scrivi il primo!</p>
           ) : (
-            <ul className={styles.list}>
+            <ul className={`stagger ${styles.list}`}>
               {state.comments.map((c) => (
                 <li key={c.id}>
                   <Conversation comment={c} now={now} add={add} remove={remove} />
@@ -63,7 +63,10 @@ function Conversation({ comment, now, add, remove }: { comment: Comment; now: Da
       {(comment.replies.length > 0 || replying) && (
         <div className={styles.replies}>
           {comment.replies.length > 0 && (
-            <ul className={styles.list} aria-label={`Risposte a ${comment.author.name}`}>
+            <ul
+              className={`stagger ${styles.list}`}
+              aria-label={`Risposte a ${comment.author.name}`}
+            >
               {comment.replies.map((r) => (
                 <li key={r.id}>
                   <CommentView comment={r} now={now} onReply={reply} remove={remove} />

@@ -58,7 +58,7 @@ export function HistoryPage() {
         byDay(state.items, now).map(({ day, items }) => (
           <section key={day} className={styles.day} aria-label={day}>
             <h2 className={styles.dayTitle}>{day}</h2>
-            <ul className={styles.list}>
+            <ul className={`stagger ${styles.list}`}>
               {items.map((w) => (
                 <li key={w.video.id} className={styles.item}>
                   <VideoCard

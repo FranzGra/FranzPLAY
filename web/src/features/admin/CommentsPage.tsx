@@ -74,7 +74,7 @@ export function CommentsPage() {
       <p className={styles.count}>
         {state.total.toLocaleString("it-IT")} {state.total === 1 ? "commento" : "commenti"}
       </p>
-      <ul className={styles.list} aria-label="Commenti">
+      <ul className={`stagger ${styles.list}`} aria-label="Commenti">
         {state.comments.map((c) => (
           <li key={c.id}>
             <CommentRow comment={c} onRemoved={() => removed(c)} />

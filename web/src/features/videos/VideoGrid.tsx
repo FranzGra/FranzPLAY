@@ -40,7 +40,7 @@ export function VideoGrid({ state, onMore, label, empty }: VideoGridProps) {
       }
       return (
         <>
-          <ul className={styles.grid} aria-label={label}>
+          <ul className={`stagger ${styles.grid}`} aria-label={label}>
             {state.videos.map((video) => (
               <li key={video.id}>
                 <VideoCard video={video} now={now} />

@@ -37,7 +37,7 @@
 .toggle svg {
   color: var(--color-text-muted);
   transform: rotate(90deg);
-  transition: transform 200ms ease;
+  transition: transform var(--duration-normal) var(--ease-out);
 }
 
 .toggle[aria-expanded="false"] svg {
@@ -77,9 +77,6 @@
   background: rgb(255 255 255 / 0.06);
   color: var(--color-text);
   cursor: pointer;
-  transition:
-    background-color 150ms,
-    opacity 150ms;
 }
 
 .arrow:hover:not(:disabled) {

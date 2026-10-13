@@ -8,6 +8,7 @@
   padding: 40px 28px;
   border-radius: var(--radius-l);
   text-align: center;
+  animation: var(--motion-enter);
 }
 
 .title {

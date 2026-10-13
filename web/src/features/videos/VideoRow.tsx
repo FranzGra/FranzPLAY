@@ -78,7 +78,7 @@ export function VideoRow({ title, more, fold, children }: VideoRowProps) {
         )}
       </div>
       {open && (
-        <ul ref={list} className={styles.list}>
+        <ul ref={list} className={`stagger ${styles.list}`}>
           {children}
         </ul>
       )}

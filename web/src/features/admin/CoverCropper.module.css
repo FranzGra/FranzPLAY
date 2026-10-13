@@ -8,6 +8,7 @@
   padding: 16px;
   background: rgb(0 0 0 / 0.6);
   backdrop-filter: blur(6px);
+  animation: var(--motion-fade-in);
 }
 
 .dialog {
@@ -20,6 +21,7 @@
   padding: 24px 20px;
   border-radius: var(--radius-l);
   background: var(--glass-bg-bar);
+  animation: var(--motion-pop-in);
 }
 
 .title {

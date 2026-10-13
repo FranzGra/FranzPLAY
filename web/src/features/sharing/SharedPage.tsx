@@ -27,7 +27,7 @@ export function SharedPage() {
       {lists.length > 0 && (
         <section className={styles.section} aria-label="Playlist condivise con te">
           <h2 className={styles.subheading}>Playlist</h2>
-          <ul className={styles.lists}>
+          <ul className={`stagger ${styles.lists}`}>
             {lists.map((list) => (
               <li key={list.id}>
                 <PlaylistCard list={list} showOwner />

@@ -44,7 +44,7 @@ export function OverviewPage() {
           Tutto a posto: non c'è niente da sistemare.
         </p>
       ) : (
-        <ul className={styles.list} aria-label="Da sistemare">
+        <ul className={`stagger ${styles.list}`} aria-label="Da sistemare">
           {o.problems.map((p) => (
             <li
               key={`${p.kind}-${p.folder}`}
@@ -87,7 +87,7 @@ export function OverviewPage() {
       </dl>
 
       <h2 className={styles.groupTitle}>Spazio sui dischi</h2>
-      <ul className={styles.list} aria-label="Dischi">
+      <ul className={`stagger ${styles.list}`} aria-label="Dischi">
         {o.disks.map((d) => (
           <li key={d.folder} className={`glass ${styles.person}`}>
             <DiskRow disk={d} />

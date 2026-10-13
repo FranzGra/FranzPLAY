@@ -29,6 +29,9 @@
   border-radius: var(--radius-m);
   /* Solid: the comments below must not show through the choices. */
   background: var(--color-surface);
+  /* It grows out of the button. */
+  transform-origin: top left;
+  animation: var(--motion-pop-in);
 }
 
 .head {
@@ -211,5 +214,7 @@
     bottom: calc(var(--tabbar-height) + 24px);
     left: 16px;
     width: auto;
+    /* On phones it rises from below instead. */
+    animation: var(--motion-enter);
   }
 }

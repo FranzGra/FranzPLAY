@@ -79,7 +79,7 @@ export function InvitesPage() {
           </EmptyState>
         )
       ) : (
-        <ul className={styles.list} aria-label="Inviti">
+        <ul className={`stagger ${styles.list}`} aria-label="Inviti">
           {state.invites.map((invite) => (
             <li key={invite.id}>
               <InviteRow invite={invite} onRemoved={() => remove(invite.id)} />

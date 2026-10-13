@@ -148,7 +148,7 @@ function RegistrationSettings() {
   return (
     <>
       <h2 className={styles.groupTitle}>Accesso al sito</h2>
-      <ul className={styles.list} aria-label="Accesso al sito">
+      <ul className={`stagger ${styles.list}`} aria-label="Accesso al sito">
         <li className={`glass ${styles.person}`}>
           <div>
             <p className={styles.name}>Chiunque può registrarsi</p>
