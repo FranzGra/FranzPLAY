@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router";
+import { useEffect, useRef } from "react";
+import { NavLink, Outlet, useLocation } from "react-router";
 import { useAccount } from "../../app/auth";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
@@ -26,6 +27,17 @@ const sections = [
 export function AdminPage() {
   usePageTitle("Amministrazione");
   const account = useAccount();
+  const tabs = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+  // On a narrow screen the row of tabs slides sideways: bring the open
+  // page's tab to the middle, so the person always sees where they are.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new page is the reason to scroll
+  useEffect(() => {
+    const row = tabs.current;
+    const open = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row || !open || row.scrollWidth <= row.clientWidth) return;
+    row.scrollLeft = open.offsetLeft - (row.clientWidth - open.offsetWidth) / 2;
+  }, [pathname]);
   if (account.role !== "admin") {
     return (
       <EmptyState title="Solo per l'amministratore" headingLevel={1}>
@@ -39,9 +51,9 @@ export function AdminPage() {
         <Icon name="shield" size={26} />
         Amministrazione
       </h1>
-      <nav className={styles.sections} aria-label="Sezioni dell'amministrazione">
+      <nav ref={tabs} className={`glass ${styles.tabs}`} aria-label="Sezioni dell'amministrazione">
         {sections.map((s) => (
-          <NavLink key={s.to} to={s.to} className={styles.section}>
+          <NavLink key={s.to} to={s.to} className={styles.tab}>
             {s.label}
           </NavLink>
         ))}

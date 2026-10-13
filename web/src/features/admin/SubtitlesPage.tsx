@@ -106,33 +106,33 @@ export function SubtitlesPage() {
             </label>
           </form>
         </search>
-        <fieldset className={styles.sections}>
+        <fieldset className={`glass ${styles.segmented}`}>
           <legend className="visually-hidden">Quali video</legend>
           {filters.map((f) => (
             <button
               key={f.have}
               type="button"
-              className={styles.section}
+              className={styles.segment}
               aria-pressed={have === f.have}
               onClick={() => setHave(f.have)}
             >
               {f.label}
             </button>
           ))}
-          <select
-            className={`${styles.section} ${styles.select}`}
-            aria-label="Lingua dei sottotitoli"
-            value={lang}
-            onChange={(e) => setLang(e.target.value)}
-          >
-            <option value="">Tutte le lingue</option>
-            {(state.kind === "ready" ? state.setup.languages : []).map((l) => (
-              <option key={l} value={l}>
-                {languageName(l)}
-              </option>
-            ))}
-          </select>
         </fieldset>
+        <select
+          className={`glass ${styles.select} ${styles.toolSelect}`}
+          aria-label="Lingua dei sottotitoli"
+          value={lang}
+          onChange={(e) => setLang(e.target.value)}
+        >
+          <option value="">Tutte le lingue</option>
+          {(state.kind === "ready" ? state.setup.languages : []).map((l) => (
+            <option key={l} value={l}>
+              {languageName(l)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
