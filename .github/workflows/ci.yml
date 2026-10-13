@@ -36,6 +36,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Run tests
         run: go test -race ./...
+      # The benchmarks measure what must stay fast on a Raspberry Pi (the
+      # job queue, the suggestions). Here each runs once: so they never
+      # break, and their numbers are in the log to compare.
+      - name: Run benchmarks once
+        run: go test -run '^$' -bench . -benchtime 1x -benchmem ./...
 
   web:
     name: Web interface
