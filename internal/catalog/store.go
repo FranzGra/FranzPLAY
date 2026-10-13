@@ -119,7 +119,7 @@ const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name =
 
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
-	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
+	v.path, v.video_codec, v.audio_codec, v.pixel_format, v.preview, v.preview_gap, v.preview_count, v.converted,
 	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private,
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
@@ -139,13 +139,13 @@ func (m moreColumns) Scan(dest ...any) error { return m.row.Scan(append(dest, m.
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
 	var duration, width, height, previewGap, previewCount sql.NullInt64
-	var cover, videoCodec, audioCodec, preview, converted, author, published, clip, clipHD sql.NullString
+	var cover, videoCodec, audioCodec, pixels, preview, converted, author, published, clip, clipHD sql.NullString
 	var addedAt int64
 	var relPath string
 	var uploaderID sql.NullInt64
 	var uploaderName sql.NullString
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
-		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
+		&relPath, &videoCodec, &audioCodec, &pixels, &preview, &previewGap, &previewCount, &converted,
 		&author, &published, &clip, &clipHD, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
 		return Video{}, err
 	}
@@ -186,7 +186,7 @@ func scanVideo(row rowScanner) (Video, error) {
 		v.PublishedOn = &published.String
 	}
 	v.Playable = converted.Valid || video.DirectlyPlayable(path.Ext(relPath),
-		video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String})
+		video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String, PixelFormat: pixels.String})
 	return v, nil
 }
 

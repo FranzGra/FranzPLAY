@@ -1,8 +1,10 @@
 package media
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -26,12 +28,12 @@ type convertFixture struct {
 func newConvertFixture(t *testing.T, rel, videoCodec, audioCodec string) *convertFixture {
 	t.Helper()
 	db, id := catalog(t, "/videos", rel)
-	if _, err := db.Exec(`UPDATE videos SET video_codec = ?, audio_codec = ? WHERE id = ?`,
+	if _, err := db.Exec(`UPDATE videos SET video_codec = ?, audio_codec = ?, pixel_format = 'yuv420p' WHERE id = ?`,
 		videoCodec, audioCodec, id); err != nil {
 		t.Fatal(err)
 	}
 	dataDir := t.TempDir()
-	return &convertFixture{db: db, id: id, dataDir: dataDir, c: NewConverter(db, "ffmpeg", dataDir)}
+	return &convertFixture{db: db, id: id, dataDir: dataDir, c: NewConverter(db, "ffmpeg", "ffprobe", dataDir)}
 }
 
 func (fx *convertFixture) converted(t *testing.T) sql.NullString {
@@ -68,7 +70,8 @@ func TestConvertArgs(t *testing.T) {
 	}
 
 	encode := strings.Join(convertArgs("/v/film.avi", video.ConvertPlan{Needed: true}, nil, 1, "out.mp4"), " ")
-	for _, part := range []string{"-c:v libx264", "-pix_fmt yuv420p", "min(1080,ih)", "-map 0:a? -c:a aac -ac 2"} {
+	for _, part := range []string{"-c:v libx264", "-pix_fmt yuv420p", "yadif=deint=interlaced",
+		"min(1080,trunc(ih/2)*2)", "-map 0:a? -c:a aac -ac 2"} {
 		if !strings.Contains(encode, part) {
 			t.Errorf("encode again: %q lacks %q", encode, part)
 		}
@@ -91,7 +94,7 @@ func TestConvertSkipsVideosThatPlayAsTheyAre(t *testing.T) {
 
 func TestConvertWaitsForFFprobe(t *testing.T) {
 	db, id := catalog(t, "/videos", "a.mkv")
-	c := NewConverter(db, "ffmpeg", t.TempDir())
+	c := NewConverter(db, "ffmpeg", "ffprobe", t.TempDir())
 	if err := c.Handle(context.Background(), id); err == nil {
 		t.Error("converted a video whose formats are not known")
 	}
@@ -136,6 +139,38 @@ func TestConvertMakesACopyAndReplacesTheOldOne(t *testing.T) {
 	}
 	if fx.converted(t).Valid || len(fx.files(t)) != 0 {
 		t.Errorf("old copy kept: %v %q", fx.converted(t), fx.files(t))
+	}
+}
+
+// A video read before FranzPLAY kept pixel formats: the converter asks
+// ffprobe, keeps the answer, and a 10-bit H.264 is encoded again.
+func TestConvertReadsThePixelsOfVideosReadBefore(t *testing.T) {
+	fx := newConvertFixture(t, "anime.mp4", "h264", "aac")
+	if _, err := fx.db.Exec(`UPDATE videos SET pixel_format = NULL WHERE id = ?`, fx.id); err != nil {
+		t.Fatal(err)
+	}
+	var encoded bool
+	write := fakeFFmpeg("mp4", nil)
+	fx.c.run = func(ctx context.Context, program string, args ...string) ([]byte, error) {
+		if program == "ffprobe" {
+			return []byte(`{"format":{"duration":"5"},"streams":[
+				{"codec_type":"video","codec_name":"h264","width":1280,"height":720,"pix_fmt":"yuv420p10le"}]}`), nil
+		}
+		encoded = slices.Contains(args, "libx264")
+		return write(ctx, program, args...)
+	}
+	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if !fx.converted(t).Valid || !encoded {
+		t.Errorf("copy %v, encoded again %v", fx.converted(t), encoded)
+	}
+	var pixels string
+	if err := fx.db.QueryRow(`SELECT pixel_format FROM videos WHERE id = ?`, fx.id).Scan(&pixels); err != nil {
+		t.Fatal(err)
+	}
+	if pixels != "yuv420p10le" {
+		t.Errorf("pixel format saved %q", pixels)
 	}
 }
 
@@ -214,29 +249,43 @@ func TestConvertWithRealFFmpeg(t *testing.T) {
 	}
 	root := t.TempDir()
 	films := []struct {
-		name, video, audio string
-		sounds             []string // as the tracks job lists them
-		wantSounds         []string
+		name   string
+		make   []string // how ffmpeg makes the film, after its picture and two sounds
+		codec  string   // its picture, as ffprobe names it
+		pixels string
+		sounds []string // as the tracks job lists them
+		want   []string // what the copy holds
 	}{
-		// H.264 in Matroska with AC3 and Opus: the picture is copied.
-		{"due lingue.mkv", "libx264", "ac3", []string{"ac3", "opus"}, []string{"aac", "opus"}},
+		// H.264 in Matroska with AC3 and Opus: the picture is copied, the
+		// sounds become AAC (Safari plays no Opus in MP4 before 2023).
+		{"due lingue.mkv", []string{"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a:0", "ac3", "-c:a:1", "libopus"},
+			"h264", "yuv420p", []string{"ac3", "opus"}, []string{"h264 yuv420p", "aac", "aac"}},
 		// MPEG-4 in AVI: the picture is encoded again; sound tracks not listed yet.
-		{"vecchio.avi", "mpeg4", "mp3", nil, []string{"aac", "aac"}},
+		{"vecchio.avi", []string{"-c:v", "mpeg4", "-c:a", "mp3"},
+			"mpeg4", "yuv420p", nil, []string{"h264 yuv420p", "aac", "aac"}},
+		// 10-bit H.264 plays almost nowhere: encoded again, in 8 bits.
+		{"anime.mkv", []string{"-c:v", "libx264", "-pix_fmt", "yuv420p10le", "-c:a", "aac"},
+			"h264", "yuv420p10le", []string{"aac", "aac"}, []string{"h264 yuv420p", "aac", "aac"}},
+		// VP9 and Opus in WebM: no iPhone before 2024 plays it.
+		{"web.webm", []string{"-c:v", "libvpx-vp9", "-deadline", "realtime", "-c:a", "libopus"},
+			"vp9", "yuv420p", []string{"opus", "opus"}, []string{"h264 yuv420p", "aac", "aac"}},
+		// An odd size, as some old videos have: H.264 needs even numbers.
+		{"strano.mov", []string{"-vf", "scale=161:121", "-c:v", "mjpeg", "-c:a", "pcm_s16le"},
+			"mjpeg", "yuvj444p", []string{"pcm_s16le", "pcm_s16le"}, []string{"h264 yuv420p", "aac", "aac"}},
 	}
 	for _, f := range films {
 		t.Run(f.name, func(t *testing.T) {
-			if _, err := run(context.Background(), ffmpeg, "-v", "error",
+			args := append([]string{"-v", "error",
 				"-f", "lavfi", "-i", "testsrc=duration=2:size=160x120:rate=10",
 				"-f", "lavfi", "-i", "sine=frequency=440:duration=2",
 				"-f", "lavfi", "-i", "sine=frequency=880:duration=2",
-				"-map", "0", "-map", "1", "-map", "2", "-c:v", f.video,
-				"-c:a:0", f.audio, "-c:a:1", map[bool]string{true: "libopus", false: "mp3"}[f.sounds != nil],
-				"file:"+filepath.Join(root, f.name)); err != nil {
+				"-map", "0", "-map", "1", "-map", "2"}, f.make...)
+			if _, err := run(context.Background(), ffmpeg, append(args, "file:"+filepath.Join(root, f.name))...); err != nil {
 				t.Fatal(err)
 			}
 			db, id := catalog(t, root, f.name)
-			codec := map[string]string{"libx264": "h264", "mpeg4": "mpeg4"}[f.video]
-			if _, err := db.Exec(`UPDATE videos SET video_codec = ?, audio_codec = ? WHERE id = ?`, codec, f.audio, id); err != nil {
+			if _, err := db.Exec(`UPDATE videos SET video_codec = ?, audio_codec = ?, pixel_format = ? WHERE id = ?`,
+				f.codec, cmp.Or(firstOf(f.sounds), "mp3"), f.pixels, id); err != nil {
 				t.Fatal(err)
 			}
 			for i, s := range f.sounds {
@@ -246,22 +295,47 @@ func TestConvertWithRealFFmpeg(t *testing.T) {
 				}
 			}
 			dataDir := t.TempDir()
-			if err := NewConverter(db, ffmpeg, dataDir).Handle(context.Background(), id); err != nil {
+			if err := NewConverter(db, ffmpeg, ffprobe, dataDir).Handle(context.Background(), id); err != nil {
 				t.Fatal(err)
 			}
 			var name string
 			if err := db.QueryRow(`SELECT converted FROM videos WHERE id = ?`, id).Scan(&name); err != nil {
 				t.Fatal(err)
 			}
-			out, err := run(context.Background(), ffprobe, "-v", "error", "-show_entries", "stream=codec_name",
-				"-of", "csv=p=0", filepath.Join(dataDir, ConvertedDir, name))
+			out, err := run(context.Background(), ffprobe, "-v", "error", "-show_entries",
+				"stream=codec_name,pix_fmt,width,height", "-of", "json", filepath.Join(dataDir, ConvertedDir, name))
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := append([]string{"h264"}, f.wantSounds...)
-			if got := strings.Fields(string(out)); !slices.Equal(got, want) {
-				t.Errorf("copy holds %q, want %q", got, want)
+			var probed struct {
+				Streams []struct {
+					Codec  string `json:"codec_name"`
+					Pixels string `json:"pix_fmt"`
+					Width  int    `json:"width"`
+					Height int    `json:"height"`
+				} `json:"streams"`
+			}
+			if err := json.Unmarshal(out, &probed); err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, s := range probed.Streams {
+				got = append(got, strings.TrimSpace(s.Codec+" "+s.Pixels))
+				if s.Width%2 != 0 || s.Height%2 != 0 {
+					t.Errorf("picture %dx%d: H.264 needs even sizes", s.Width, s.Height)
+				}
+			}
+			if !slices.Equal(got, f.want) {
+				t.Errorf("copy holds %q, want %q", got, f.want)
 			}
 		})
 	}
+}
+
+// firstOf is the first item of a list, or "" when it is empty.
+func firstOf(list []string) string {
+	if len(list) == 0 {
+		return ""
+	}
+	return list[0]
 }

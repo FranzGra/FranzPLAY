@@ -144,9 +144,9 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
 		// A ready clip plays on the video's card: the pages hear about it.
 		handlers[jobs.Clip] = tell(media.NewClipper(db, ffmpeg, cfg.DataDir).Handle)
-		// A ready copy makes a video playable: the pages hear about it.
-		handlers[jobs.Convert] = tell(media.NewConverter(db, ffmpeg, cfg.DataDir).Handle)
 		if ffprobe, err := exec.LookPath(cfg.FFprobe); err == nil {
+			// A ready copy makes a video playable: the pages hear about it.
+			handlers[jobs.Convert] = tell(media.NewConverter(db, ffmpeg, ffprobe, cfg.DataDir).Handle)
 			handlers[jobs.Tracks] = media.NewTracker(db, ffprobe, ffmpeg, cfg.DataDir).Handle
 			remux = media.NewRemuxer(ffmpeg, remuxPlayers)
 		}

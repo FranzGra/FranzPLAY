@@ -10,7 +10,8 @@ o con l'audio AC3. Il file non si può modificare (regola 1).
 ## Cosa abbiamo deciso
 
 - Dopo aver letto un video, FranzPLAY decide da solo se serve una **copia**: un file MP4 con
-  immagine H.264 (o VP9/AV1, se il video li ha già) e audio che i browser conoscono. La copia sta
+  immagine H.264 e audio AAC o MP3, che si vede ovunque, anche su iPhone, iPad e Mac (vedi la
+  decisione 0021). La copia sta
   nella cartella dati, in `converted/`, e prende il nome dal contenuto, come le copertine.
 - **Due casi.** Se l'immagine va già bene e cambia solo la "scatola", l'immagine viene copiata:
   pochi minuti anche per un film. Se l'immagine va rifatta, ffmpeg la codifica di nuovo in H.264,

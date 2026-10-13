@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -31,16 +32,18 @@ func convertedName(videoID int64, fingerprint string) string {
 type Converter struct {
 	db      *sql.DB
 	ffmpeg  string // program to run
+	ffprobe string // program that reads the picture of videos read before pixel formats were kept
 	dataDir string
 	threads int // how many processor cores ffmpeg may use
 	run     runFunc
 }
 
-// NewConverter returns a converter that runs the given ffmpeg program and
-// writes in dataDir/converted. ffmpeg uses half the processor cores, so
-// the site stays quick while a film is being encoded.
-func NewConverter(db *sql.DB, ffmpeg, dataDir string) *Converter {
-	return &Converter{db: db, ffmpeg: ffmpeg, dataDir: dataDir, threads: max(1, runtime.NumCPU()/2), run: runInBackground}
+// NewConverter returns a converter that runs the given ffmpeg and ffprobe
+// programs and writes in dataDir/converted. ffmpeg uses half the
+// processor cores, so the site stays quick while a film is being encoded.
+func NewConverter(db *sql.DB, ffmpeg, ffprobe, dataDir string) *Converter {
+	return &Converter{db: db, ffmpeg: ffmpeg, ffprobe: ffprobe, dataDir: dataDir,
+		threads: max(1, runtime.NumCPU()/2), run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Convert. For a video that plays as it
@@ -50,15 +53,21 @@ func (c *Converter) Handle(ctx context.Context, videoID int64) (err error) {
 	if err != nil {
 		return err
 	}
-	var videoCodec, audioCodec, old sql.NullString
-	if err := c.db.QueryRowContext(ctx, `SELECT video_codec, audio_codec, converted FROM videos WHERE id = ?`,
-		videoID).Scan(&videoCodec, &audioCodec, &old); err != nil {
+	var videoCodec, audioCodec, pixels, old sql.NullString
+	if err := c.db.QueryRowContext(ctx, `SELECT video_codec, audio_codec, pixel_format, converted
+		FROM videos WHERE id = ?`, videoID).Scan(&videoCodec, &audioCodec, &pixels, &old); err != nil {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
 	if !videoCodec.Valid {
 		return fmt.Errorf("convert video %d: not read by ffprobe yet", videoID)
 	}
-	plan := video.PlanConversion(filepath.Ext(file), video.Info{VideoCodec: videoCodec.String, AudioCodec: audioCodec.String})
+	if !pixels.Valid {
+		if pixels.String, err = c.readPixelFormat(ctx, videoID, file, fingerprint); err != nil {
+			return err
+		}
+	}
+	plan := video.PlanConversion(filepath.Ext(file), video.Info{
+		VideoCodec: videoCodec.String, AudioCodec: audioCodec.String, PixelFormat: pixels.String})
 	dir := filepath.Join(c.dataDir, ConvertedDir)
 	name := ""
 	if plan.Needed {
@@ -100,6 +109,24 @@ func (c *Converter) Handle(ctx context.Context, videoID int64) (err error) {
 		return removeFile(dir, old.String)
 	}
 	return nil
+}
+
+// readPixelFormat asks ffprobe how the picture of a video read before
+// FranzPLAY kept pixel formats stores its colours, and keeps the answer.
+func (c *Converter) readPixelFormat(ctx context.Context, videoID int64, file, fingerprint string) (string, error) {
+	out, err := c.run(ctx, c.ffprobe, append(slices.Clone(video.ProbeArgs), "file:"+file)...)
+	if err != nil {
+		return "", fmt.Errorf("read picture of video %d: %w", videoID, err)
+	}
+	info, err := video.ParseProbe(out)
+	if err != nil {
+		return "", fmt.Errorf("read picture of video %d: %w", videoID, err)
+	}
+	if _, err := c.db.ExecContext(ctx, `UPDATE videos SET pixel_format = ? WHERE id = ? AND fingerprint = ?`,
+		info.PixelFormat, videoID, fingerprint); err != nil {
+		return "", fmt.Errorf("save picture of video %d: %w", videoID, err)
+	}
+	return info.PixelFormat, nil
 }
 
 // convert runs ffmpeg into a temporary file, renamed to name only when
@@ -165,6 +192,15 @@ func (c *Converter) soundCodecs(ctx context.Context, videoID int64) (codecs []st
 	return codecs, nil
 }
 
+// encodeFilter prepares the picture to be encoded again:
+//   - yadif joins the two halves of the pictures of old TV recordings and
+//     DVDs (interlaced), which would show as comb-like stripes; it leaves
+//     the other pictures alone;
+//   - scale makes it at most MaxConvertHeight tall, and of even width and
+//     height, which H.264 needs (a 853x481 video would make it fail).
+var encodeFilter = "yadif=deint=interlaced," +
+	"scale=-2:'min(" + strconv.Itoa(video.MaxConvertHeight) + ",trunc(ih/2)*2)'"
+
 // convertArgs builds the ffmpeg command. The copy keeps the first picture
 // (V:0 leaves out cover images) and every sound track, in the same order,
 // so the choice of language works on it too. Subtitles stay out: FranzPLAY
@@ -177,7 +213,7 @@ func convertArgs(file string, plan video.ConvertPlan, sounds []string, threads i
 		// veryfast: a good picture in a time a Raspberry Pi can manage.
 		args = append(args,
 			"-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
-			"-vf", "scale=-2:'min("+strconv.Itoa(video.MaxConvertHeight)+",ih)'")
+			"-vf", encodeFilter)
 	}
 	if len(sounds) == 0 {
 		// Sound tracks not listed yet: every one becomes stereo AAC.

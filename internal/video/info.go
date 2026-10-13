@@ -22,7 +22,10 @@ type Info struct {
 	Height     int    // as shown on screen
 	VideoCodec string // like "h264", "hevc", "vp9"
 	AudioCodec string // like "aac", "opus"; "" when there is no sound
-	Container  string // ffprobe format names, like "mov,mp4,m4a,3gp,3g2,mj2"
+	// PixelFormat is how the picture stores its colours, like "yuv420p";
+	// "yuv420p10le" is a 10-bit picture. "" = not known.
+	PixelFormat string
+	Container   string // ffprobe format names, like "mov,mp4,m4a,3gp,3g2,mj2"
 }
 
 // ProbeArgs are the ffprobe arguments whose output ParseProbe reads.
@@ -32,7 +35,7 @@ var ProbeArgs = []string{
 	"-print_format", "json",
 	"-show_entries",
 	"format=format_name,duration:" +
-		"stream=codec_type,codec_name,width,height,duration:" +
+		"stream=codec_type,codec_name,width,height,duration,pix_fmt:" +
 		"stream_disposition=attached_pic:" +
 		"stream_tags=rotate:" +
 		"stream_side_data=rotation",
@@ -53,6 +56,7 @@ type probeStream struct {
 	Width       int    `json:"width"`
 	Height      int    `json:"height"`
 	Duration    string `json:"duration"`
+	PixFmt      string `json:"pix_fmt"`
 	Disposition struct {
 		AttachedPic int `json:"attached_pic"`
 	} `json:"disposition"`
@@ -92,6 +96,7 @@ func ParseProbe(data []byte) (Info, error) {
 	}
 
 	info.VideoCodec = picture.CodecName
+	info.PixelFormat = pixelFormat(picture.PixFmt)
 	info.Container = out.Format.FormatName
 	info.Width, info.Height = picture.Width, picture.Height
 	if quarterTurn(rotation(picture)) {
@@ -128,4 +133,19 @@ func rotation(s *probeStream) float64 {
 func quarterTurn(degrees float64) bool {
 	turns := int(degrees) / 90
 	return int(degrees)%90 == 0 && turns%2 != 0
+}
+
+// pixelFormat keeps ffprobe's name of a pixel format, like "yuv420p",
+// when it looks like one: a short name in lower case letters, digits and
+// "_". Anything else is "" (not known).
+func pixelFormat(s string) string {
+	if len(s) > 32 {
+		return ""
+	}
+	for _, r := range s {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return ""
+		}
+	}
+	return s
 }

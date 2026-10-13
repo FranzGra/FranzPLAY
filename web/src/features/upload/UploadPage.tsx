@@ -23,7 +23,7 @@ import styles from "./UploadPage.module.css";
 // The files the server takes, as the file chooser should offer them. On a
 // phone "video/*" opens the gallery.
 const accept =
-  "video/*,.3gp,.avi,.flv,.m2ts,.m4v,.mkv,.mov,.mp4,.mpeg,.mpg,.mts,.ogv,.ts,.webm,.wmv";
+  "video/*,.3g2,.3gp,.asf,.avi,.divx,.dv,.f4v,.flv,.m2ts,.m4v,.mkv,.mov,.mp4,.mpeg,.mpg,.mts,.mxf,.ogm,.ogv,.rm,.rmvb,.ts,.webm,.wmv";
 
 type Loaded = { kind: "loading" } | { kind: "error" } | { kind: "ready"; mine: MyUploads };
 
