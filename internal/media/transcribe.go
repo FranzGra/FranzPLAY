@@ -90,7 +90,7 @@ type Transcriber struct {
 // gives way to any other, so it only runs when nothing else needs doing.
 func NewTranscriber(db *sql.DB, ffmpeg, whisper, dataDir string, translator Translator) *Transcriber {
 	return &Transcriber{db: db, ffmpeg: ffmpeg, whisper: whisper, dataDir: dataDir, translator: translator,
-		threads: max(1, runtime.NumCPU()-1), run: run, now: time.Now, changed: func() {}}
+		threads: max(1, runtime.NumCPU()-1), run: runInBackground, now: time.Now, changed: func() {}}
 }
 
 // OnStage sets a function called when a transcription moves to another

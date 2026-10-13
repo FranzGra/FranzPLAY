@@ -28,7 +28,7 @@ type Previewer struct {
 // NewPreviewer returns a previewer that runs the given ffmpeg program and
 // writes previews in dataDir/previews.
 func NewPreviewer(db *sql.DB, ffmpeg, dataDir string) *Previewer {
-	return &Previewer{db: db, ffmpeg: ffmpeg, dataDir: dataDir, run: run}
+	return &Previewer{db: db, ffmpeg: ffmpeg, dataDir: dataDir, run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Preview. It works in two steps:
