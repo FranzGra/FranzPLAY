@@ -5,7 +5,7 @@ Per ogni video FranzPLAY prepara tre cose da guardare:
 | Cosa | Dove si vede | Com'è fatta |
 |---|---|---|
 | **Copertina** | la foto ferma del video, in ogni pagina | un'immagine JPEG larga **640** pixel |
-| **Anteprima** | i secondi che partono tenendo il mouse sulla copertina, o tenendo premuto col dito sul telefono | un video MP4 di **6 secondi**, senza audio, in due versioni: **360p** e **720p** |
+| **Anteprima** | i secondi che partono tenendo il mouse sulla copertina; sul telefono parte da sola la scheda che resta al centro dello schermo quando smetti di scorrere | un video MP4 di **6 secondi**, senza audio, in due versioni: **360p** e **720p** |
 | **Fotogrammi della timeline** | la miniatura sopra la barra del tempo, mentre ci passi sopra col mouse | una sola immagine JPEG a griglia, con fino a **100** fotogrammi da **480×270** |
 
 Le crea da solo, in sottofondo, uno alla volta, appena trova un video nuovo o cambiato. Puoi

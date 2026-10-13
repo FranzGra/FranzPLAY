@@ -92,3 +92,17 @@ test("the timeline shows a sharp frame of the time pointed at", async ({ page, i
   expect(image.height % 270).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("on a phone the card in the middle of the screen plays its clip", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "with a mouse a clip plays when the mouse rests on a card");
+  await logIn(page, PEOPLE[0]);
+  await page.goto("/");
+  // Scrolling starts nothing; once the page is still, one clip plays.
+  await page.mouse.wheel(0, 500);
+  // (Clips are MP4 with H.264, which the test browser cannot play: the
+  // clip being there is what this checks.)
+  await expect(page.getByTestId("clip")).toHaveCount(1);
+});
