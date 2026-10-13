@@ -1,4 +1,4 @@
-# 0019 · Anteprime in alta e bassa qualità
+# 0020 · Anteprime in alta e bassa qualità
 
 **Data:** 13 ottobre 2026 · **Stato:** decisa
 
