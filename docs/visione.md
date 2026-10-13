@@ -413,8 +413,9 @@ Questo è anche un percorso di studio. Per questo:
 - **Funziona bene ovunque**: telefono, tablet, PC e TV.
 - **Niente iscrizioni ai canali**: gli utenti sono pochi. Restano cronologia, categorie, il mio
   canale e le mie playlist.
-- **Sul telefono, solo tre tasti in basso**: Home, Playlist, Profilo. Il tasto "Carica un video"
-  sta nella pagina del profilo, non nella barra.
+- **Sul telefono, quattro tasti in basso**: Home, Categorie, Playlist, Profilo (Categorie
+  aggiunta il 13 ottobre 2026, su richiesta di Francesco). Il tasto "Carica un video" sta nella
+  pagina del profilo, non nella barra.
 - Proposta grafica: https://claude.ai/artifact/TRM8naidqDGSB8qjMGjUyT
 - **Veloce anche su telefoni economici** e connessioni lente.
 - Prima di scrivere il codice di una pagina, si disegna com'è fatta e la si approva insieme.

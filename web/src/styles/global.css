@@ -70,7 +70,7 @@
   --motion-swap-in: swap-in var(--duration-normal) var(--ease-spring) both;
 
   --header-height: 72px;
-  --tabbar-height: 64px;
+  --tabbar-height: 68px;
   --touch: 44px;
 }
 

@@ -71,6 +71,9 @@ func TestAdministratorRenamesAndColorsACategory(t *testing.T) {
 		t.Errorf("pages told %d times, want 1", s.changed)
 	}
 	got := decode[[]Category](t, s.get(t, "/api/categories"))
+	for i := range got {
+		got[i].Cover = nil // the covers have their own test
+	}
 	want := []Category{{Name: "Corsi", Videos: 1}, {Name: "Vacanze", Videos: 1, Color: "#e11d48"},
 		{Name: "Vacanze 2024", Videos: 1}}
 	if !reflect.DeepEqual(got, want) {

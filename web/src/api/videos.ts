@@ -80,6 +80,8 @@ export type Category = {
   videos: number;
   color: string; // chosen by the administrator, like "#2997ff"; "" = none
   image: string | null; // address of its image; null = none
+  // cover is the cover of its newest video, for a card without an image.
+  cover: string | null;
 };
 
 function record(data: unknown, what: string): Record<string, unknown> {
@@ -238,11 +240,16 @@ export function parseCategories(data: unknown): Category[] {
     ) {
       throw new Error("category image: not an image address");
     }
+    const cover = c.cover ?? null;
+    if (cover !== null && (typeof cover !== "string" || !cover.startsWith("/api/covers/"))) {
+      throw new Error("category cover: not a cover address");
+    }
     return {
       name: c.name,
       videos: count(c.videos, "category videos"),
       color: c.color,
       image: c.image,
+      cover,
     };
   });
 }

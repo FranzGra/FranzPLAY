@@ -99,7 +99,7 @@ export function PlaylistsPage() {
 }
 
 // LikedCard leads to the videos I like: on phones this page is the way
-// there, since the bottom bar has only three tabs.
+// there, since the bottom bar has only a few tabs.
 function LikedCard() {
   return (
     <li>

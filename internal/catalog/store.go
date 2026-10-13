@@ -88,6 +88,9 @@ type Category struct {
 	Videos int     `json:"videos"`
 	Color  string  `json:"color"`
 	Image  *string `json:"image"` // address of the image
+	// Cover is the cover of its newest video, for a category the
+	// administrator gave no image: its card still shows a picture.
+	Cover *string `json:"cover"`
 }
 
 // store reads the catalog. It never writes: the library scan and the job
@@ -371,14 +374,19 @@ func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 }
 
 // categories returns the categories that have visible videos, by the
-// name people see, with the color and image the administrator chose.
+// name people see, with the color and image the administrator chose, and
+// the cover of the newest video that has one.
 func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT coalesce(c.label, g.category) AS shown, sum(g.videos), coalesce(max(c.color), ''), max(c.image)
+		SELECT coalesce(c.label, g.category) AS shown, sum(g.videos), coalesce(max(c.color), ''), max(c.image),
+			max(g.cover)
 		FROM (
-			-- Counted first by the folder name, from the videos_shown index,
-			-- then joined to the names the administrator chose.
-			SELECT v.category, count(*) AS videos FROM videos v
+			-- Counted first by the folder name, then joined to the names the
+			-- administrator chose. With max(), SQLite takes v.cover from the
+			-- row of the max: the newest video with a cover.
+			SELECT v.category, count(*) AS videos,
+				max(iif(v.cover IS NULL, NULL, v.added_at)), v.cover
+			FROM videos v
 			WHERE v.visible AND v.category != '' GROUP BY v.category
 		) g LEFT JOIN categories c ON c.name = g.category
 		GROUP BY shown ORDER BY shown COLLATE NOCASE`)
@@ -389,12 +397,16 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	out := []Category{}
 	for rows.Next() {
 		var c Category
-		var image sql.NullString
-		if err := rows.Scan(&c.Name, &c.Videos, &c.Color, &image); err != nil {
+		var image, cover sql.NullString
+		if err := rows.Scan(&c.Name, &c.Videos, &c.Color, &image, &cover); err != nil {
 			return nil, fmt.Errorf("list categories: %w", err)
 		}
 		if image.Valid {
 			c.Image = categoryImageURL(image.String)
+		}
+		if cover.Valid {
+			address := "/api/covers/" + cover.String
+			c.Cover = &address
 		}
 		out = append(out, c)
 	}

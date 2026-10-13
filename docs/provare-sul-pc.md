@@ -100,7 +100,7 @@ Vedrai una riga come `msg="FranzPLAY started" ... addr=:8090`. Ora apri il brows
 **<http://localhost:8090>**
 
 Compare FranzPLAY in tema scuro. Per vederlo come su un telefono, restringi la finestra del
-browser: il menu laterale sparisce e compare la barra in basso con Home, Playlist e Profilo.
+browser: il menu laterale sparisce e compare la barra in basso con Home, Categorie, Playlist e Profilo.
 
 Per controllare solo il server, apri <http://localhost:8090/api/health>: deve comparire qualcosa
 come `{"status":"ok","version":"dev"}`.

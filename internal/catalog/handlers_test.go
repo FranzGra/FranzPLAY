@@ -328,6 +328,32 @@ func TestCategories(t *testing.T) {
 	}
 }
 
+// A category without an image of its own shows the cover of its newest
+// video that has one.
+func TestCategoriesShowTheNewestCover(t *testing.T) {
+	s := newSite(t)
+	old := s.addVideo(t, "Corsi/a.mp4", "a", "Corsi", 1, false)
+	newer := s.addVideo(t, "Corsi/b.mp4", "b", "Corsi", 1, false)
+	s.addVideo(t, "Corsi/c.mp4", "c", "Corsi", 1, false) // newest, no cover yet
+	for _, v := range []struct {
+		id    int64
+		cover string
+		added int64 // Unix seconds
+	}{{old, "1-old.jpg", 100}, {newer, "2-new.jpg", 200}} {
+		if _, err := s.db.Exec(`UPDATE videos SET cover = ?, added_at = ? WHERE id = ?`, v.cover, v.added, v.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE videos SET added_at = 300 WHERE cover IS NULL`); err != nil {
+		t.Fatal(err)
+	}
+
+	got := decode[[]Category](t, s.get(t, "/api/categories"))
+	if len(got) != 1 || got[0].Cover == nil || *got[0].Cover != "/api/covers/2-new.jpg" {
+		t.Errorf("categories = %+v, want the cover of b", got)
+	}
+}
+
 func TestStreamSupportsJumping(t *testing.T) {
 	s := newSite(t)
 	s.addVideo(t, "Viaggi/mare.mp4", "0123456789", "Viaggi", 1, true)

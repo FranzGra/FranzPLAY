@@ -8,13 +8,13 @@ describe("navigation", () => {
     expect(await screen.findByRole("heading", { name: "Ancora nessun video" })).toBeInTheDocument();
   });
 
-  it("has exactly three tabs on the phone bar: Home, Playlist, Profilo", async () => {
+  it("has four tabs on the phone bar: Home, Categorie, Playlist, Profilo", async () => {
     renderApp("/");
     const tabbar = await screen.findByRole("navigation", { name: "Menu del telefono" });
     const labels = within(tabbar)
       .getAllByRole("link")
       .map((link) => link.textContent);
-    expect(labels).toEqual(["Home", "Playlist", "Profilo"]);
+    expect(labels).toEqual(["Home", "Categorie", "Playlist", "Profilo"]);
   });
 
   it("marks the current page in the menus", async () => {
@@ -32,16 +32,17 @@ describe("navigation", () => {
 
   it.each([
     ["/", 0],
-    ["/categorie/Vacanze", 0],
     ["/cerca", 0],
-    ["/playlist", 1],
-    ["/playlist/4", 1],
-    ["/mi-piace", 1],
-    ["/condivisi", 1],
-    ["/profilo", 2],
-    ["/cronologia", 2],
-    ["/carica", 2],
-    ["/admin/persone", 2],
+    ["/categorie", 1],
+    ["/categorie/Vacanze", 1],
+    ["/playlist", 2],
+    ["/playlist/4", 2],
+    ["/mi-piace", 2],
+    ["/condivisi", 2],
+    ["/profilo", 3],
+    ["/cronologia", 3],
+    ["/carica", 3],
+    ["/admin/persone", 3],
     ["/video/7", null],
     ["/canale/3", null],
     ["/playlists-old", null],

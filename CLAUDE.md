@@ -98,7 +98,8 @@ web/src/styles/       colori, misure e caratteri, tutti in un posto solo (variab
 
 - **Niente dati finti** nell'interfaccia: una pagina senza dati mostra uno stato vuoto che spiega
   cosa comparirà.
-- Sul telefono la barra in basso ha **solo tre tasti**: Home, Playlist, Profilo.
+- Sul telefono la barra in basso ha **quattro tasti**: Home, Categorie, Playlist, Profilo
+  (Categorie aggiunta da Francesco il 13 ottobre 2026).
   "Carica un video" sta nella pagina Profilo. Non esistono iscrizioni ai canali.
 - Stili con **CSS Modules** (`Nome.module.css` accanto al componente) e i colori solo da
   `styles/global.css`. Per un pannello di vetro si usa la classe `glass`.
