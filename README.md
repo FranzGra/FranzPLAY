@@ -16,7 +16,22 @@ Runs smoothly on a Raspberry Pi.
 
 The full vision (in Italian) is in [`docs/visione.md`](docs/visione.md).
 
-## Try it
+## Install it with Docker
+
+The image has everything inside (FFmpeg and whisper.cpp included) and runs on amd64 and arm64
+(Raspberry Pi 4/5, ZimaBlade):
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/FranzGra/FranzPLAY/main/compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/FranzGra/FranzPLAY/main/.env.example
+cp .env.example .env   # then write your video folder in .env
+docker compose up -d   # then open http://localhost:8090
+```
+
+Every setting is explained in [`.env.example`](.env.example). Full guide (in Italian):
+[`docs/docker.md`](docs/docker.md).
+
+## Try it from the source code
 
 You need [Go](https://go.dev/dl/) 1.26 or newer and [Node.js](https://nodejs.org/) 22. [FFmpeg](https://ffmpeg.org/) is needed to read video details and make covers.
 
