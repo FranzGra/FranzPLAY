@@ -1,12 +1,15 @@
 import type { ReactNode, RefObject } from "react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Children, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Icon } from "../../components/Icon";
+import { Icon, type IconName } from "../../components/Icon";
+import { useSections } from "../home/look";
 import type { Fold } from "../home/useHomeLayout";
 import styles from "./VideoRow.module.css";
 
 type VideoRowProps = {
   title: string;
+  // icon is drawn in a small tile before the title.
+  icon?: IconName;
   // more leads to the page with all the videos of the row.
   more?: string;
   // fold lets the person close the row by its title, and open it again.
@@ -14,13 +17,25 @@ type VideoRowProps = {
   children: ReactNode;
 };
 
-// VideoRow is a titled row of video cards that scrolls sideways, like the
-// rows of YouTube's Home. children are the <li> of the cards.
-export function VideoRow({ title, more, fold, children }: VideoRowProps) {
+// VideoRow is a big titled section of video cards, like the sections of
+// the old FranzPLAY's Home. On a computer or tablet it shows one or two
+// lines of cards, or one line that scrolls sideways, as the person chose;
+// on a phone it is always a line that scrolls. children are the <li> of
+// the cards. A closed section folds away softly.
+export function VideoRow({ title, icon, more, fold, children }: VideoRowProps) {
   const id = useId();
   const open = fold?.open ?? true;
+  const sections = useSections();
+  const scroll = sections === "scroll";
   const list = useRef<HTMLUListElement>(null);
-  const ends = useScrollEnds(list, open);
+  const ends = useScrollEnds(list, open && scroll);
+  const columns = useColumns(list, !scroll);
+  const [all, setAll] = useState(false);
+  const cards = Children.toArray(children);
+  // Unknown columns (the grid not drawn yet) show every card.
+  const fits = columns * (sections === "two" ? 2 : 1);
+  const cut = !scroll && !all && fits > 0 && cards.length > fits;
+  const extra = !scroll && fits > 0 && cards.length > fits;
   // One press moves by almost a screen of cards, keeping one in sight.
   const move = (direction: 1 | -1) => {
     const el = list.current;
@@ -36,13 +51,19 @@ export function VideoRow({ title, more, fold, children }: VideoRowProps) {
               className={styles.toggle}
               aria-expanded={open}
               onClick={fold.onToggle}
-              title={open ? "Chiudi questa riga" : "Apri questa riga"}
+              title={open ? "Chiudi questa sezione" : "Apri questa sezione"}
             >
-              {title}
-              <Icon name="chevronRight" size={18} />
+              {icon && <TitleIcon name={icon} />}
+              <span className={styles.titleText}>{title}</span>
+              <span className={styles.chevron}>
+                <Icon name="chevronRight" size={20} />
+              </span>
             </button>
           ) : (
-            title
+            <span className={styles.plain}>
+              {icon && <TitleIcon name={icon} />}
+              {title}
+            </span>
           )}
         </h2>
         {open && (
@@ -52,7 +73,7 @@ export function VideoRow({ title, more, fold, children }: VideoRowProps) {
                 Vedi tutti
               </Link>
             )}
-            {(ends.left || ends.right) && (
+            {scroll && (ends.left || ends.right) && (
               <div className={styles.arrows}>
                 <button
                   type="button"
@@ -77,13 +98,63 @@ export function VideoRow({ title, more, fold, children }: VideoRowProps) {
           </div>
         )}
       </div>
-      {open && (
-        <ul ref={list} className={`stagger ${styles.list}`}>
-          {children}
-        </ul>
-      )}
+      {/* Closed, the cards stay in the page but fold away, so the section
+          can open and close with a soft movement. */}
+      <div className={styles.body} aria-hidden={!open} inert={!open}>
+        <div className={styles.inner}>
+          <ul ref={list} className={`stagger ${styles.list}`} data-sections={sections}>
+            {cut ? cards.slice(0, fits) : cards}
+          </ul>
+          {extra && (
+            <button
+              type="button"
+              className={styles.all}
+              aria-expanded={all}
+              onClick={() => setAll((a) => !a)}
+            >
+              {all ? "Mostra meno" : `Mostra tutti (${cards.length})`}
+            </button>
+          )}
+        </div>
+      </div>
     </section>
   );
+}
+
+function TitleIcon({ name }: { name: IconName }) {
+  return (
+    <span className={styles.icon}>
+      <Icon name={name} size={20} />
+    </span>
+  );
+}
+
+// useColumns counts the cards that fit in a line of the grid, and keeps
+// counting while the window changes size. 0 means not known yet.
+function useColumns(list: RefObject<HTMLUListElement | null>, grid: boolean): number {
+  const [columns, setColumns] = useState(0);
+  useEffect(() => {
+    const el = list.current;
+    if (!grid || !el) {
+      setColumns(0);
+      return;
+    }
+    const count = () => {
+      const tracks = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean);
+      // Without real measures (as in tests) the template is not a list
+      // of widths in pixels: then every card shows.
+      setColumns(tracks.every((t) => t.endsWith("px")) ? tracks.length : 0);
+    };
+    count();
+    if (typeof ResizeObserver === "undefined") return;
+    // A card changes width when another look changes the columns, even
+    // if the line keeps its width.
+    const watch = new ResizeObserver(count);
+    watch.observe(el);
+    if (el.firstElementChild) watch.observe(el.firstElementChild);
+    return () => watch.disconnect();
+  }, [list, grid]);
+  return columns;
 }
 
 type Ends = { left: boolean; right: boolean };

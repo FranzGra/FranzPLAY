@@ -53,7 +53,7 @@ export const emptyLibrary: Routes = {
   "GET /api/videos": { body: { videos: [], total: 0 } },
   "GET /api/categories": { body: [] },
   "GET /api/continue": { body: [] },
-  "GET /api/home": { body: { closed: [] } },
+  "GET /api/home": { body: { closed: [], look: { columns: 0, size: 3, sections: "one" } } },
   "GET /api/health": { body: { status: "ok", version: "test" } },
   "GET /api/site": { body: { nameFirst: "Franz", nameSecond: "PLAY", color: "#2997ff" } },
 };
