@@ -18,7 +18,12 @@ type Report struct {
 	Logins   LoginCounts
 	Photos   PhotoCounts
 	Look     LookOutcome
-	LeftOut  LeftOut
+	// What the administrator changed by hand.
+	Titles     Counts // titles of videos
+	Categories Counts // names of categories (Skipped: no video has their folder)
+	Covers     CoverCounts
+	// LeftOut is what was not brought.
+	LeftOut LeftOut
 	// Problems are rows of the old database that could not be read.
 	Problems []string
 }
@@ -68,6 +73,13 @@ type PhotoCounts struct {
 	Failed   []string // "name (file): why"
 }
 
+// CoverCounts are the covers chosen by hand.
+type CoverCounts struct {
+	Added    int      // brought over
+	Existing int      // the video already had a cover chosen in the new FranzPLAY: kept
+	Failed   []string // "path: why"
+}
+
 // LookOutcome is what happened to the old site's name and color.
 type LookOutcome int
 
@@ -79,13 +91,10 @@ const (
 	LookUnreadable                    // the new site cannot show it
 )
 
-// LeftOut counts what the new FranzPLAY cannot hold yet.
+// LeftOut counts what the new FranzPLAY does not bring.
 type LeftOut struct {
-	Titles     int // video titles changed by hand
-	Categories int // category names changed by hand
-	Covers     int // covers chosen by hand
-	Photos     int // profile photos
-	Subtitles  int // subtitles made by Whisper
+	Photos    int // profile photos, when their folder was not given
+	Subtitles int // subtitles made by Whisper
 }
 
 // maxListed is how many paths or problems are written out; the rest are
@@ -147,12 +156,31 @@ func (r *Report) Write(w io.Writer) error {
 	case LookDefault:
 	}
 
+	if r.Titles != (Counts{}) {
+		fmt.Fprintf(&b, "Titoli cambiati a mano: %d aggiunti, %d video avevano già un titolo scelto nel nuovo",
+			r.Titles.Added, r.Titles.Existing)
+		if r.Titles.Skipped > 0 {
+			fmt.Fprintf(&b, ", %d lasciati fuori perché il video non c'è", r.Titles.Skipped)
+		}
+		b.WriteString(".\n")
+	}
+	if r.Categories != (Counts{}) {
+		fmt.Fprintf(&b, "Nomi delle categorie cambiati a mano: %d aggiunti, %d categorie avevano già un nome scelto nel nuovo",
+			r.Categories.Added, r.Categories.Existing)
+		if r.Categories.Skipped > 0 {
+			fmt.Fprintf(&b, ", %d lasciati fuori perché nessun video ha più la loro cartella", r.Categories.Skipped)
+		}
+		b.WriteString(".\n")
+	}
+	if r.Covers.Added > 0 || r.Covers.Existing > 0 || len(r.Covers.Failed) > 0 {
+		fmt.Fprintf(&b, "Copertine scelte a mano: %d aggiunte, %d video ne avevano già una scelta nel nuovo.\n",
+			r.Covers.Added, r.Covers.Existing)
+		list(&b, "  Copertine non portate", r.Covers.Failed)
+	}
+
 	lo := r.LeftOut
 	if lo != (LeftOut{}) {
-		b.WriteString("\nIl nuovo FranzPLAY non sa ancora tenere queste cose del vecchio (restano fuori, per ora):\n")
-		item(&b, lo.Titles, "titoli di video cambiati a mano")
-		item(&b, lo.Categories, "nomi di categorie cambiati a mano")
-		item(&b, lo.Covers, "copertine scelte a mano")
+		b.WriteString("\nQueste cose del vecchio restano fuori:\n")
 		item(&b, lo.Photos, "foto del profilo (per portarle serve -photos, vedi la guida)")
 		item(&b, lo.Subtitles, "sottotitoli fatti da Whisper (il nuovo li può rifare)")
 	}

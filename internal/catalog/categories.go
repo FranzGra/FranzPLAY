@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 )
 
@@ -133,14 +134,14 @@ func (a admin) handleCategoryImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := filepath.Join(a.dataDir, CategoryImagesDir)
-	file, err := saveOwnFile(dir, id, ".jpg", bytes.NewReader(data))
+	file, err := media.SaveOwnFile(dir, id, ".jpg", bytes.NewReader(data))
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
 	old, err := a.store.setCategoryImage(r.Context(), id, &file)
 	if err != nil {
-		a.categoryFailed(w, r, errors.Join(err, removeOwnFile(dir, file)))
+		a.categoryFailed(w, r, errors.Join(err, media.RemoveOwnFile(dir, file)))
 		return
 	}
 	a.categoryImageChanged(w, r, name, dir, old)
@@ -163,7 +164,7 @@ func (a admin) handleRemoveCategoryImage(w http.ResponseWriter, r *http.Request)
 
 func (a admin) categoryImageChanged(w http.ResponseWriter, r *http.Request, name, dir, old string) {
 	if old != "" {
-		if err := removeOwnFile(dir, old); err != nil {
+		if err := media.RemoveOwnFile(dir, old); err != nil {
 			// The change is saved; the old image is removed at the next start.
 			a.logger.WarnContext(r.Context(), "remove old category image", "category", name, "error", err)
 		}
@@ -305,7 +306,7 @@ func RemoveOrphanCategoryImages(ctx context.Context, db *sql.DB, dataDir string)
 		if used[e.Name()] || e.IsDir() {
 			continue
 		}
-		if err := removeOwnFile(dir, e.Name()); err != nil {
+		if err := media.RemoveOwnFile(dir, e.Name()); err != nil {
 			return removed, err
 		}
 		removed++

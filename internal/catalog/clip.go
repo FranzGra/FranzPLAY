@@ -57,7 +57,7 @@ func (a admin) handleOwnClip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := filepath.Join(a.dataDir, media.OwnClipsDir)
-	name, err := saveOwnFile(dir, id, ext, body)
+	name, err := media.SaveOwnFile(dir, id, ext, body)
 	if maxErr := (*http.MaxBytesError)(nil); errors.As(err, &maxErr) {
 		respond.Error(w, r, a.logger, http.StatusRequestEntityTooLarge, errClipTooLarge.Error())
 		return
@@ -69,7 +69,7 @@ func (a admin) handleOwnClip(w http.ResponseWriter, r *http.Request) {
 	old, err := a.store.setClip(r.Context(), id, &name, false, a.now())
 	if err != nil {
 		// Nobody uses the new video: it goes.
-		a.choiceFailed(w, r, errors.Join(err, removeOwnFile(dir, name)))
+		a.choiceFailed(w, r, errors.Join(err, media.RemoveOwnFile(dir, name)))
 		return
 	}
 	a.chosen(w, r, id, "clip", "video", dir, old)

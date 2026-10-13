@@ -40,8 +40,12 @@ func newFranzPLAY(t *testing.T) *sql.DB {
 		{"Tom & Jerry #2.mp4", 420},
 		{"Altro/Mare 2019.mp4", 30}, // same name, other folder: must not be confused
 	} {
-		exec(t, db, `INSERT INTO videos (id, fingerprint, library_id, path, size, mod_time, title, added_at, duration)
-			VALUES (?, ?, 1, ?, 1, 0, 'x', 0, ?)`, i+1, "fp"+v.path, v.path, v.duration)
+		folder, _, _ := strings.Cut(v.path, "/")
+		if folder == v.path {
+			folder = ""
+		}
+		exec(t, db, `INSERT INTO videos (id, fingerprint, library_id, path, size, mod_time, title, folder_category, added_at, duration)
+			VALUES (?, ?, 1, ?, 1, 0, 'x', ?, 0, ?)`, i+1, "fp"+v.path, v.path, folder, v.duration)
 	}
 	return db
 }
@@ -69,7 +73,7 @@ func runImport(t *testing.T, db *sql.DB, try bool) *Report {
 		t.Fatal(err)
 	}
 	defer f.Close() //nolint:errcheck // read only
-	r, err := Import(context.Background(), db, f, Options{Try: try, Now: importDay})
+	r, err := Import(context.Background(), db, f, Options{Try: try, Now: importDay, DataDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,8 +215,22 @@ func TestImportBringsEverything(t *testing.T) {
 		t.Error("site look not brought")
 	}
 
-	// What the new FranzPLAY cannot hold yet is counted.
-	if r.LeftOut != (LeftOut{Titles: 3, Categories: 1, Photos: 1}) {
+	// What the administrator changed by hand: titles that are not the file
+	// name, and the name of the folder "Film". The file is not touched.
+	if r.Titles != (Counts{Added: 2, Skipped: 1}) || r.Categories != (Counts{Added: 1}) {
+		t.Errorf("titles = %+v, categories = %+v", r.Titles, r.Categories)
+	}
+	if got := count(t, db, `SELECT count(*) FROM videos WHERE
+		(id = 2 AND shown_title = 'Il sorpasso' AND path = 'Film/Il sorpasso (1962).mp4') OR
+		(id = 3 AND shown_title = 'Tom & Jerry') OR (id = 1 AND admin_title IS NULL)`); got != 3 {
+		t.Error("titles not brought")
+	}
+	if got := count(t, db, `SELECT count(*) FROM categories WHERE name = 'Film' AND label = 'Film belli'`); got != 1 {
+		t.Error("category name not brought")
+	}
+
+	// What the new FranzPLAY does not bring is counted.
+	if r.LeftOut != (LeftOut{Photos: 1}) {
 		t.Errorf("left out = %+v", r.LeftOut)
 	}
 	if len(r.Problems) != 0 {
@@ -235,7 +253,8 @@ func TestImportTwiceAddsNothing(t *testing.T) {
 		}
 	}
 	if len(r.People.Added) != 0 || len(r.People.Existing) != 3 || r.Likes.Added != 0 || r.Likes.Existing != 3 ||
-		r.Comments.Added != 0 || r.Comments.Existing != 3 || r.Comments.Shortened != 0 || r.Saved.Added != 0 || r.Logins.Added != 0 || r.Look != LookKept {
+		r.Comments.Added != 0 || r.Comments.Existing != 3 || r.Comments.Shortened != 0 || r.Saved.Added != 0 || r.Logins.Added != 0 || r.Look != LookKept ||
+		r.Titles != (Counts{Existing: 2, Skipped: 1}) || r.Categories != (Counts{Existing: 1}) {
 		t.Errorf("second import = %+v", r)
 	}
 }
@@ -246,8 +265,16 @@ func TestImportKeepsWhatTheNewFranzPLAYAlreadyHas(t *testing.T) {
 	exec(t, db, `INSERT INTO users (id, name, password_hash, role, created_at) VALUES (7, 'francesco', 'argon2id$new', 'admin', 0)`)
 	newer := time.Date(2026, 10, 12, 21, 0, 0, 0, time.UTC).Unix()
 	exec(t, db, `INSERT INTO watch_progress (user_id, video_id, position, updated_at) VALUES (7, 2, 4000, ?)`, newer)
+	// He also gave the film a title, and the folder a name.
+	exec(t, db, `UPDATE videos SET admin_title = 'Il sorpasso di Risi' WHERE id = 2`)
+	exec(t, db, `INSERT INTO categories (name, label) VALUES ('Film', 'Cinema')`)
 
 	r := runImport(t, db, false)
+	if r.Titles.Existing != 1 || r.Categories.Existing != 1 ||
+		count(t, db, `SELECT count(*) FROM videos WHERE id = 2 AND admin_title = 'Il sorpasso di Risi'`) != 1 ||
+		count(t, db, `SELECT count(*) FROM categories WHERE name = 'Film' AND label = 'Cinema'`) != 1 {
+		t.Errorf("the new title or category name was changed: titles %+v, categories %+v", r.Titles, r.Categories)
+	}
 	if len(r.People.Existing) != 1 || r.People.Existing[0] != "Francesco" {
 		t.Errorf("existing = %v", r.People.Existing)
 	}
@@ -336,7 +363,8 @@ func TestReportText(t *testing.T) {
 		"«Al» ora si chiama «Al_»",
 		"Mi piace: 3 aggiunti, 0 c'erano già, 1 lasciati fuori",
 		"Nome e colore del sito: presi dal vecchio.",
-		"  - 3 titoli di video cambiati a mano",
+		"Titoli cambiati a mano: 2 aggiunti, 0 video avevano già un titolo scelto nel nuovo, 1 lasciati fuori",
+		"Nomi delle categorie cambiati a mano: 1 aggiunti",
 		"Si può rilanciare",
 	} {
 		if !strings.Contains(b.String(), want) {

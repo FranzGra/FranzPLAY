@@ -3,18 +3,13 @@ package catalog
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
-	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
@@ -82,7 +77,7 @@ func (a admin) handleOwnCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := filepath.Join(a.dataDir, media.OwnCoversDir)
-	name, err := saveOwnFile(dir, id, ext, bytes.NewReader(data))
+	name, err := media.SaveOwnFile(dir, id, ext, bytes.NewReader(data))
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
@@ -90,7 +85,7 @@ func (a admin) handleOwnCover(w http.ResponseWriter, r *http.Request) {
 	old, err := a.store.setCover(r.Context(), id, &name, nil, a.now())
 	if err != nil {
 		// Nobody uses the new image: it goes.
-		err = errors.Join(err, removeOwnFile(dir, name))
+		err = errors.Join(err, media.RemoveOwnFile(dir, name))
 		a.choiceFailed(w, r, err)
 		return
 	}
@@ -136,7 +131,7 @@ func (a admin) handleResetCover(w http.ResponseWriter, r *http.Request) {
 // goes, the job worker and the pages are told. what is "cover" or "clip".
 func (a admin) chosen(w http.ResponseWriter, r *http.Request, id int64, what, choice, dir, old string) {
 	if old != "" {
-		if err := removeOwnFile(dir, old); err != nil {
+		if err := media.RemoveOwnFile(dir, old); err != nil {
 			// The choice is saved; the old file is removed at the next start.
 			a.logger.WarnContext(r.Context(), "remove old uploaded file", "video", id, "what", what, "error", err)
 		}
@@ -161,48 +156,6 @@ func (a admin) choiceFailed(w http.ResponseWriter, r *http.Request, err error) {
 	default:
 		respond.InternalError(w, r, a.logger, err)
 	}
-}
-
-// saveOwnFile writes a file uploaded by the administrator in dir, all or
-// nothing (rule 6), with a new name each time, and returns the name.
-func saveOwnFile(dir string, id int64, ext string, body io.Reader) (name string, err error) {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return "", fmt.Errorf("create %s folder: %w", filepath.Base(dir), err)
-	}
-	random := make([]byte, 8)
-	if _, err := rand.Read(random); err != nil {
-		return "", fmt.Errorf("name uploaded file: %w", err)
-	}
-	name = strconv.FormatInt(id, 10) + "-" + hex.EncodeToString(random) + ext
-	tmp, err := os.CreateTemp(dir, ".new-*")
-	if err != nil {
-		return "", fmt.Errorf("save uploaded file: %w", err)
-	}
-	defer func() {
-		// Left over only when something failed; after success it was renamed.
-		if rmErr := os.Remove(tmp.Name()); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
-			err = errors.Join(err, rmErr)
-		}
-	}()
-	if _, err := io.Copy(tmp, body); err != nil {
-		return "", errors.Join(fmt.Errorf("save uploaded file: %w", err), tmp.Close())
-	}
-	if err := tmp.Close(); err != nil {
-		return "", fmt.Errorf("save uploaded file: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), filepath.Join(dir, name)); err != nil {
-		return "", fmt.Errorf("save uploaded file: %w", err)
-	}
-	return name, nil
-}
-
-// removeOwnFile deletes a file uploaded by the administrator, from the
-// data folder. One already gone is fine.
-func removeOwnFile(dir, name string) error {
-	if err := os.Remove(filepath.Join(dir, filepath.Base(name))); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("remove uploaded file: %w", err)
-	}
-	return nil
 }
 
 // setCover saves the administrator's choice of cover: an uploaded image
