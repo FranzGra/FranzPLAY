@@ -301,6 +301,11 @@ crea un «API token», incollalo nel riquadro di ThePornDB in **Amministrazione 
 lettura), ne calcola un'impronta e manda solo quella: se ThePornDB conosce proprio quel file, dà
 immagine, titolo, descrizione, studio e data.
 
+**Chiedi conferma.** Se preferisci vedere quello che trova prima che FranzPLAY lo usi, nelle
+**Regole** di **Amministrazione › Internet** spunta **Chiedi conferma prima di usare quello che
+trova** e salva. Da quel momento copertina e titolo trovati aspettano in **Da confermare**: per
+ognuno premi **Usa** o **Scarta**. Se scarti, il video resta com'era.
+
 **Invitare familiari e amici.** In **Amministrazione › Inviti** premi **Crea un invito**. Se vuoi,
 scrivi per chi è e se potrà caricare video, poi premi **Crea il link** e copialo: FranzPLAY lo mostra
 una volta sola. Mandalo con un messaggio. Chi lo apre sceglie nome e password ed entra subito. Ogni

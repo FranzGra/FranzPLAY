@@ -846,3 +846,18 @@ label.action:focus-within {
     transparent calc(50% + 1px)
   );
 }
+
+/* What the internet found, waiting for a yes. */
+.proposal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+}
+
+.proposal > div:nth-child(2) {
+  flex: 1 1 200px;
+  min-width: 0;
+}

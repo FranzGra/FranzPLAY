@@ -28,7 +28,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 		VALUES ('fingerprint-2', 1, 'via.mp4', 1, 1, 'via', 1, 5)`); err != nil {
 		t.Fatal(err)
 	}
-	a := api{db: fx.db, newJobs: func() { fx.woken++ }, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	a := api{db: fx.db, dataDir: fx.dataDir, newJobs: func() { fx.woken++ }, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		now:     func() time.Time { return time.Unix(1000, 0) },
 		account: func(context.Context) (users.Account, bool) { return fx.who, true },
 		tmdb:    fx.f.tmdb, tpdb: fx.f.tpdb}
@@ -63,7 +63,7 @@ func TestAdministratorTurnsSourcesOn(t *testing.T) {
 	fx := newAdminFixture(t)
 
 	if rec := fx.do("GET", "/api/online", ""); rec.Code != http.StatusOK ||
-		strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":false,"tpdbKey":false,"rules":{"from":0,"to":0,"daily":0,"order":["youtube","tmdb","tpdb"]},"askedToday":0}` {
+		strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":false,"tpdbKey":false,"rules":{"from":0,"to":0,"daily":0,"order":["youtube","tmdb","tpdb"],"confirm":false},"askedToday":0,"proposals":0}` {
 		t.Fatalf("GET = %d %s", rec.Code, rec.Body)
 	}
 	if rec := fx.do("PUT", "/api/online", `{"youtube": true, "tmdb": false}`); rec.Code != http.StatusOK {
@@ -109,7 +109,7 @@ func TestAdministratorSavesTheTMDBKey(t *testing.T) {
 	}
 
 	rec := fx.do("PUT", "/api/online/tmdb-key", `{"key": " `+testKey+` "}`)
-	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":true,"tpdbKey":false,"rules":{"from":0,"to":0,"daily":0,"order":["youtube","tmdb","tpdb"]},"askedToday":0}` {
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != `{"youtube":false,"tmdb":false,"tpdb":false,"tmdbKey":true,"tpdbKey":false,"rules":{"from":0,"to":0,"daily":0,"order":["youtube","tmdb","tpdb"],"confirm":false},"askedToday":0,"proposals":0}` {
 		t.Fatalf("save key = %d %s", rec.Code, rec.Body)
 	}
 	if got := fx.tm.asked[0]; got.URL.Path != "/3/authentication" || got.URL.Query().Get("api_key") != testKey {

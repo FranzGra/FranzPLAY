@@ -7,8 +7,9 @@ const allOff = {
   tpdb: false,
   tmdbKey: false,
   tpdbKey: false,
-  rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"] },
+  rules: { from: 0, to: 0, daily: 0, order: ["youtube", "tmdb", "tpdb"], confirm: false },
   askedToday: 0,
+  proposals: 0,
 };
 
 describe("online sources page", () => {
@@ -128,7 +129,7 @@ describe("online sources page", () => {
   it("saves the hours, the daily limit and the order of the sources", async () => {
     const saved = {
       ...allOff,
-      rules: { from: 22, to: 6, daily: 50, order: ["tmdb", "youtube", "tpdb"] },
+      rules: { from: 22, to: 6, daily: 50, order: ["tmdb", "youtube", "tpdb"], confirm: false },
     };
     const { user, server } = renderApp("/admin/internet", {
       ...signedIn(),

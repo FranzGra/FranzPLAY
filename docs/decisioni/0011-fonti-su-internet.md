@@ -31,6 +31,11 @@ Per tutte vale:
   da ffmpeg come tutte le altre. L'ordine è questo: l'immagine accanto al video, poi quella di
   internet, poi un fotogramma del video. Passare da ffmpeg vuol dire anche che un file che non è
   davvero un'immagine non diventa mai una copertina.
+- Con **«chiedi conferma»** quello che si trova non va in quelle colonne: aspetta nella tabella
+  `online_proposals`, una proposta per video, finché l'amministratore sceglie «Usa» (diventa come
+  se fosse arrivato da solo) o «Scarta» (il video resta com'era). Non c'è una **soglia di
+  fiducia** da regolare: le fonti rispondono solo quando riconoscono proprio quel video (stesso
+  codice, stesso titolo e anno, o stessa impronta del file), quindi non c'è un punteggio.
 
 **YouTube** non chiede chiavi:
 - Il titolo e il canale vengono dall'indirizzo pubblico «oEmbed».

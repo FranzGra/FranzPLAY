@@ -171,9 +171,10 @@ func TestAdministratorSavesTheRules(t *testing.T) {
 		VALUES (?, 'online', 'pending', 99999999999, 1)`, fx.id); err != nil {
 		t.Fatal(err)
 	}
-	rec := fx.do("PUT", "/api/online/rules", `{"from": 22, "to": 6, "daily": 100, "order": ["tpdb", "tmdb", "youtube"]}`)
+	rec := fx.do("PUT", "/api/online/rules",
+		`{"from": 22, "to": 6, "daily": 100, "order": ["tpdb", "tmdb", "youtube"], "confirm": true}`)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(),
-		`"rules":{"from":22,"to":6,"daily":100,"order":["tpdb","tmdb","youtube"]}`) {
+		`"rules":{"from":22,"to":6,"daily":100,"order":["tpdb","tmdb","youtube"],"confirm":true}`) {
 		t.Fatalf("PUT rules = %d %s", rec.Code, rec.Body)
 	}
 	// The question waiting for the old rules looks again at once.
