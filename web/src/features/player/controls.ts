@@ -162,3 +162,15 @@ export function pickAudio<T extends { stream: number; lang: string; default: boo
       : (tracks.find((t) => t.lang === lang) ?? tracks.find((t) => base(t.lang) === base(lang)));
   return (same ?? originalAudio(tracks))?.stream ?? null;
 }
+
+// NativeAudioTrack is a sound track the browser itself can switch on and
+// off (HTMLMediaElement.audioTracks): Safari can, Chrome and Firefox not.
+export type NativeAudioTrack = { enabled: boolean };
+
+// nativeAudio returns the sound tracks the browser can switch by itself,
+// or null when it cannot. Browsers that can have AudioTrackList; others
+// may still have an empty audioTracks that does nothing.
+export function nativeAudio(v: HTMLVideoElement): ArrayLike<NativeAudioTrack> | null {
+  if (!("AudioTrackList" in window)) return null;
+  return (v as { audioTracks?: ArrayLike<NativeAudioTrack> }).audioTracks ?? null;
+}

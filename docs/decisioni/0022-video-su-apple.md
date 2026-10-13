@@ -104,6 +104,8 @@ vuole adesso.
 Un lavoro si segna urgente solo per un video che quella persona può vedere, e solo se gli serve
 davvero una copia.
 
-## Cosa resta da fare
+## Cambiare lingua su Safari
 
-- Cambiare lingua audio su Safari, che vuole ricevere il video a pezzi (passo separato).
+Il cambio di lingua (decisione [0006](0006-piu-lingue-audio.md)) rimonta il video al volo, e Safari
+non lo sa guardare. Su Safari ora il player chiede al browser stesso di suonare l'altra traccia,
+che è già nel file o nella copia.

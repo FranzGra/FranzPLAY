@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SubtitleTrack } from "../../api/videos";
 import { doubleTapWithin, failureText, hideAfter, Player, pickTrack } from "./Player";
@@ -449,6 +449,39 @@ describe("sound tracks", () => {
     const { user } = setup({ audio: audio.slice(0, 1), findAudio });
     await user.click(screen.getByRole("button", { name: "Impostazioni" }));
     expect(screen.queryByRole("button", { name: /^Audio/ })).not.toBeInTheDocument();
+  });
+
+  it("lets Safari switch the language itself, with no video made by the server", async () => {
+    vi.stubGlobal("AudioTrackList", class {});
+    const { user, video } = setup({ audio, findAudio, length: 245 });
+    const tracks = [{ enabled: true }, { enabled: false }];
+    Object.defineProperty(video, "audioTracks", { value: tracks });
+    Object.defineProperty(video, "readyState", { value: HTMLMediaElement.HAVE_METADATA });
+    const src = video.getAttribute("src");
+    await chooseInSettings(user, "Inglese");
+
+    await waitFor(() => expect(tracks).toEqual([{ enabled: false }, { enabled: true }]));
+    expect(findAudio).not.toHaveBeenCalled();
+    expect(video.getAttribute("src")).toBe(src);
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^Audio/ }),
+    ).toHaveTextContent("Inglese");
+    vi.unstubAllGlobals();
+  });
+
+  it("on Safari, opens in the language chosen last time once the file is read", async () => {
+    vi.stubGlobal("AudioTrackList", class {});
+    window.localStorage.setItem("franzplay.audio", '"en"');
+    const { video } = setup({ audio, findAudio });
+    const tracks = [{ enabled: true }, { enabled: false }];
+    Object.defineProperty(video, "audioTracks", { value: tracks });
+    expect(tracks[1]?.enabled).toBe(false); // not read yet
+    Object.defineProperty(video, "readyState", { value: HTMLMediaElement.HAVE_METADATA });
+    fireEvent.loadedMetadata(video);
+    await waitFor(() => expect(tracks).toEqual([{ enabled: false }, { enabled: true }]));
+    expect(findAudio).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("plays another language from where the video was, and remembers it", async () => {
