@@ -59,7 +59,7 @@ export function MyVideos({ version, onChange }: { version: number; onChange: () 
           vede o eliminarli.
         </p>
       ) : (
-        <ul className={styles.list}>
+        <ul className={`stagger ${styles.list}`}>
           {state.videos.map((video) => (
             <li key={video.id}>
               <VideoRow video={video} onChanged={replace} onDeleted={() => remove(video.id)} />

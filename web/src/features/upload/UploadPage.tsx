@@ -151,7 +151,7 @@ export function UploadPage() {
             Scegli di nuovo lo stesso file per continuare da dove si era fermato. Dopo 7 giorni
             senza novità vengono cancellati.
           </p>
-          <ul className={styles.list}>
+          <ul className={`stagger ${styles.list}`}>
             {waiting.map((u) => (
               <li key={u.id}>
                 <WaitingRow

@@ -99,7 +99,7 @@ export function AccessPage() {
       )}
       {state.kind === "ready" && state.logins.length > 0 && (
         <>
-          <ul className={styles.list} aria-label="Accessi">
+          <ul className={`stagger ${styles.list}`} aria-label="Accessi">
             {state.logins.map((l) => (
               <li key={l.id} className={`glass ${styles.person}`}>
                 <div>

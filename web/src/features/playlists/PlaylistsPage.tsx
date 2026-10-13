@@ -72,7 +72,7 @@ export function PlaylistsPage() {
         </EmptyState>
       )}
       {state.kind === "ready" && (
-        <ul className={styles.grid}>
+        <ul className={`stagger ${styles.grid}`}>
           {state.lists.map((list) => (
             <Fragment key={list.id}>
               <li>

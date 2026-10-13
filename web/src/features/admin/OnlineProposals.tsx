@@ -69,7 +69,7 @@ export function OnlineProposals({ onChange }: { onChange: (left: number) => void
         </p>
       )}
       {state.kind === "ready" && state.list.length > 0 && (
-        <ul className={styles.list} aria-label="Proposte">
+        <ul className={`stagger ${styles.list}`} aria-label="Proposte">
           {state.list.map((p) => (
             <li key={p.videoId} className={`glass ${styles.proposal}`}>
               <div className={styles.thumb}>

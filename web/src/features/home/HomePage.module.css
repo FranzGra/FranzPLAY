@@ -31,9 +31,6 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    background-color 150ms,
-    color 150ms;
 }
 
 .chip:hover {

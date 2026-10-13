@@ -90,7 +90,7 @@ export function OnlinePage() {
           FranzPLAY. Quello che c'è nei file accanto ai video conta sempre di più.
         </p>
       </div>
-      <ul className={styles.list} aria-label="Fonti su internet">
+      <ul className={`stagger ${styles.list}`} aria-label="Fonti su internet">
         <li className={`glass ${styles.person}`}>
           <div>
             <p className={styles.name}>YouTube</p>

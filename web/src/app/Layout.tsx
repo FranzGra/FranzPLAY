@@ -1,5 +1,5 @@
-import { type FormEvent, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { avatarUrl } from "../api/auth";
 import { fetchPlaylists, onPlaylistsChanged, type Playlist, playlistName } from "../api/playlists";
 import { Avatar } from "../components/Avatar";
@@ -33,6 +33,8 @@ export function Layout() {
   const account = useAccount();
   const lists = useMyPlaylists();
   const [query, setQuery] = useState("");
+  const page = useRef<HTMLDivElement>(null);
+  useEnterOnNavigate(page);
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,7 +109,7 @@ export function Layout() {
         </nav>
 
         <main className={styles.main}>
-          <div className={styles.page}>
+          <div ref={page} className={styles.page}>
             <Outlet />
           </div>
         </main>
@@ -123,6 +125,29 @@ export function Layout() {
       </nav>
     </div>
   );
+}
+
+// useEnterOnNavigate makes each new page rise softly into place. It moves
+// the page with the browser's own animations instead of drawing it again,
+// so what the page already loaded stays as it is. Nothing moves for whoever
+// asked their device for less motion.
+function useEnterOnNavigate(page: RefObject<HTMLDivElement | null>) {
+  const { pathname } = useLocation();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the animation runs on every new address
+  useEffect(() => {
+    const element = page.current;
+    if (!element?.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const move = element.animate(
+      [
+        { opacity: 0, translate: "0 10px" },
+        { opacity: 1, translate: "0 0" },
+      ],
+      { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+    return () => move.cancel();
+  }, [pathname, page]);
 }
 
 // useMyPlaylists loads my lists for the side menu, again after I create,

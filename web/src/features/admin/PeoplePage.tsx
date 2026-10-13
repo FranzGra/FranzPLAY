@@ -90,7 +90,7 @@ export function PeoplePage() {
         )}
       </div>
       {adding && <NewPersonForm onAdded={add} onCancel={() => setAdding(false)} />}
-      <ul className={styles.list} aria-label="Persone">
+      <ul className={`stagger ${styles.list}`} aria-label="Persone">
         {state.people.map((person) => (
           <li key={person.id}>
             <PersonRow person={person} onChanged={replace} onRemoved={() => remove(person.id)} />

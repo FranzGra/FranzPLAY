@@ -221,7 +221,7 @@ function UpNext({ video, now }: { video: Video; now: Date }) {
   return (
     <>
       <h2 className={styles.sideTitle}>Da guardare dopo</h2>
-      <ul className={styles.list}>
+      <ul className={`stagger ${styles.list}`}>
         {similar.map((s) => (
           <li key={s.video.id}>
             <VideoCard video={s.video} now={now} layout="row" note={reasonText(s)} />

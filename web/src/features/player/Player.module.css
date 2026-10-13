@@ -54,11 +54,19 @@
   color: #fff;
   cursor: pointer;
   transform: translate(-50%, -50%);
-  transition: transform 150ms;
+  transition:
+    scale var(--duration-normal) var(--ease-spring),
+    background-color var(--duration-fast);
+  animation: var(--motion-pop-in);
 }
 
 .bigPlay:hover {
-  transform: translate(-50%, -50%) scale(1.06);
+  scale: 1.08;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.bigPlay:active {
+  scale: var(--press-scale);
 }
 
 /* What a key or a double tap just did, shown for a moment in the middle. */
@@ -115,6 +123,13 @@
   }
 }
 
+/* Messages over the video appear softly. */
+.notice,
+.unmute,
+.failure {
+  animation: var(--motion-fade-in);
+}
+
 /* A short message over the video, at the top. */
 .notice {
   position: absolute;
@@ -162,19 +177,25 @@
   left: 0;
   padding: 48px 16px 8px;
   background: linear-gradient(transparent, rgb(0 0 0 / 0.75));
-  transition: opacity 200ms;
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    translate var(--duration-normal) var(--ease-out);
 }
 
+/* The controls sink a little as they fade away, and rise as they return. */
 .root[data-controls="hidden"] .controls {
   opacity: 0;
+  translate: 0 6px;
   pointer-events: none;
 }
 
+/* The area that answers the mouse or the finger is taller than the bar
+   itself, so the bar is easy to hit. */
 .timeline {
   position: relative;
   display: flex;
   align-items: center;
-  height: 24px;
+  height: 32px;
   cursor: pointer;
   touch-action: none;
 }
@@ -186,16 +207,16 @@
 .track {
   position: relative;
   width: 100%;
-  height: 5px;
-  border-radius: 3px;
+  height: 8px;
+  border-radius: var(--radius-pill);
   background: rgb(255 255 255 / 0.25);
   overflow: hidden;
-  transition: height 120ms;
+  transition: height var(--duration-fast) var(--ease-out);
 }
 
-/* Bigger under the pointer, so it is easy to hit. */
+/* Even taller under the pointer. */
 .timeline[data-active] .track {
-  height: 8px;
+  height: 12px;
 }
 
 .buffered,
@@ -216,20 +237,22 @@
 }
 
 .played {
+  border-radius: inherit;
   background: var(--color-accent);
+  box-shadow: 0 0 10px rgb(var(--color-accent-rgb) / 0.6);
 }
 
 .thumb {
   position: absolute;
   top: 50%;
-  width: 16px;
-  height: 16px;
-  margin-left: -8px;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
   border-radius: 50%;
   background: var(--color-accent);
-  box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.3);
-  transform: translateY(-50%) scale(0.75);
-  transition: transform 120ms;
+  box-shadow: 0 0 0 4px rgb(var(--color-accent-rgb) / 0.3);
+  transform: translateY(-50%) scale(0.8);
+  transition: transform var(--duration-normal) var(--ease-spring);
 }
 
 .timeline[data-active] .thumb {
@@ -238,7 +261,8 @@
 
 .tooltip {
   position: absolute;
-  bottom: 26px;
+  bottom: 30px;
+  animation: var(--motion-fade-in);
   padding: 3px 8px;
   border-radius: 6px;
   background: rgb(0 0 0 / 0.8);
@@ -252,13 +276,14 @@
 /* A small frame of the video above the timeline, with its time. */
 .frame {
   position: absolute;
-  bottom: 30px;
+  bottom: 34px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   pointer-events: none;
   transform: translateX(-50%);
+  animation: var(--motion-fade-in);
 }
 
 .frameImage {
@@ -297,11 +322,35 @@
   background: transparent;
   color: #fff;
   cursor: pointer;
-  transition: background-color 150ms;
+  transition:
+    background-color var(--duration-fast),
+    scale var(--duration-fast) var(--ease-out);
 }
 
 .button:hover {
   background: rgb(255 255 255 / 0.12);
+}
+
+/* Under the mouse the icon grows a touch, with a little bounce; the gear
+   turns a little while its menu is open. */
+.button svg {
+  transition:
+    scale var(--duration-normal) var(--ease-spring),
+    rotate var(--duration-slow) var(--ease-out);
+}
+
+.button[aria-expanded="true"] svg {
+  rotate: 60deg;
+}
+
+.button:hover:not(:disabled) svg {
+  scale: 1.12;
+}
+
+/* An icon that changes (play and pause, sound on and off) pops in. */
+.swap {
+  display: flex;
+  animation: var(--motion-pop-in);
 }
 
 .volume {
@@ -315,8 +364,8 @@
   opacity: 0;
   accent-color: #fff;
   transition:
-    width 150ms,
-    opacity 150ms;
+    width var(--duration-normal) var(--ease-out),
+    opacity var(--duration-normal);
 }
 
 .volume:hover .volumeSlider,
@@ -360,15 +409,22 @@
 .menu {
   position: absolute;
   right: 12px;
-  bottom: 72px;
+  bottom: 80px;
   z-index: 2;
   width: 240px;
   max-width: calc(100% - 24px);
-  max-height: calc(100% - 84px);
+  max-height: calc(100% - 92px);
   padding: 6px;
   overflow-y: auto;
   border-radius: var(--radius-m);
   background: rgb(24 24 27 / 0.85);
+  transform-origin: bottom right;
+  animation: var(--motion-pop-in);
+}
+
+/* Moving to another page of the menu: the new rows fade in. */
+.menu > * {
+  animation: var(--motion-fade-in);
 }
 
 .menuRow,
@@ -386,6 +442,7 @@
   font-size: 14px;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-fast);
 }
 
 .menuRow:hover,
@@ -419,7 +476,7 @@
   height: 20px;
   border-radius: var(--radius-pill);
   background: rgb(255 255 255 / 0.25);
-  transition: background-color 150ms;
+  transition: background-color var(--duration-normal);
 }
 
 .switch::after {
@@ -431,7 +488,7 @@
   height: 16px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 150ms;
+  transition: transform var(--duration-normal) var(--ease-spring);
 }
 
 [aria-checked="true"] > .switch {
@@ -467,8 +524,8 @@
   }
 
   .menu {
-    bottom: 64px;
-    max-height: calc(100% - 72px);
+    bottom: 72px;
+    max-height: calc(100% - 80px);
   }
 
   .button {
@@ -517,11 +574,11 @@
   align-items: center;
   gap: 2px;
   pointer-events: none;
-  transition: bottom 200ms;
+  transition: bottom var(--duration-normal) var(--ease-out);
 }
 
 .root[data-controls="visible"] .captions[data-position="bottom"] {
-  bottom: max(6%, 96px);
+  bottom: max(6%, 104px);
 }
 
 .captions[data-position="top"] {
@@ -552,6 +609,7 @@
   margin-left: -10px;
   border-radius: 2px;
   background: var(--color-accent);
+  animation: var(--motion-pop-in);
 }
 
 .button:disabled {

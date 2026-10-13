@@ -59,7 +59,7 @@ export function CategoriesAdminPage() {
       {state.list.length === 0 ? (
         <p className={styles.lead}>Ancora nessuna categoria.</p>
       ) : (
-        <ul className={styles.list} aria-label="Categorie">
+        <ul className={`stagger ${styles.list}`} aria-label="Categorie">
           {state.list.map((c) => (
             <li key={c.name}>
               <CategoryRow category={c} onChanged={() => load()} />

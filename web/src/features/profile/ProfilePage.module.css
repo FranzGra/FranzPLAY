@@ -68,7 +68,6 @@
   min-height: 52px;
   padding: 0 16px;
   color: var(--color-text);
-  transition: background-color 150ms;
 }
 
 .row + .row {
