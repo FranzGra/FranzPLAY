@@ -71,8 +71,11 @@
   background: var(--glass-bg-strong);
 }
 
-.tile:active {
-  scale: 0.98;
+/* Clicked, it sinks a little; not under a finger, which may be scrolling. */
+@media (hover: hover) {
+  .tile:active {
+    scale: 0.98;
+  }
 }
 
 .withImage:hover {

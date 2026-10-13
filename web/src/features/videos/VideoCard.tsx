@@ -20,10 +20,11 @@ type VideoCardProps = {
 };
 
 // VideoCard is a video in a grid: cover with its duration, title, and
-// category with how long ago it arrived and how many people like it. Resting the mouse on it, or
-// pressing it with a finger, plays a few silent seconds of the video.
+// category with how long ago it arrived and how many people like it. Resting the mouse on it
+// plays a few silent seconds of the video; on a touch screen the card that
+// stays in the middle of the screen plays them.
 export function VideoCard({ video, now, layout = "grid", position, note }: VideoCardProps) {
-  const { playing, handlers } = useClipPreview(video.clip);
+  const { playing, handlers, coverRef } = useClipPreview(video.clip);
   const details = [video.category, formatAge(video.addedAt, now)].filter(Boolean).join(" · ");
   const watched =
     position !== undefined && video.duration ? Math.min(1, position / video.duration) : null;
@@ -32,10 +33,9 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
       to={`/video/${video.id}`}
       className={`glow ${styles.root}`}
       data-layout={layout}
-      data-clip={video.clip !== null || undefined}
       {...handlers}
     >
-      <div className={styles.cover}>
+      <div ref={coverRef} className={styles.cover}>
         {video.cover ? (
           <img src={video.cover} alt="" loading="lazy" decoding="async" />
         ) : (

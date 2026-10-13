@@ -22,9 +22,13 @@
 }
 
 /* Under the mouse the whole card lights up (the global glow class) and
-   keeps its size; pressed, the cover sinks a little. */
-.root:active .cover {
-  scale: 0.98;
+   keeps its size; clicked, the cover sinks a little. Only with a mouse: on
+   a touch screen a finger on a card is mostly scrolling the page, and the
+   card must not look pressed. */
+@media (hover: hover) {
+  .root:active .cover {
+    scale: 0.98;
+  }
 }
 
 .cover img {
@@ -48,13 +52,6 @@
 
 .clip[data-moving] {
   opacity: 1;
-}
-
-/* On a phone a long press plays the clip: no menu, no text selection. */
-.root[data-clip] {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .noCover {
