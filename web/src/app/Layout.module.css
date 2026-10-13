@@ -331,3 +331,16 @@
     background: var(--glass-bg-bar);
   }
 }
+
+/* A phone held sideways has little height: the phone bar sits at the end
+   of the page instead of over it, so it does not hide half the player. */
+@media (max-width: 899px) and (max-height: 500px) {
+  .main {
+    padding-bottom: 24px;
+  }
+
+  .tabbar {
+    position: static;
+    margin-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
