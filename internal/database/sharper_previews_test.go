@@ -13,7 +13,7 @@ import (
 // left as they were.
 func TestSharperPreviewsKeepOldOnesWorking(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "x.db")
-	before, err := open(context.Background(), file, migrationsUpTo(t, 38))
+	before, err := open(context.Background(), file, migrationsUpTo(t, 39))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestSharperPreviewsKeepOldOnesWorking(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db := openTest(t, file, migrationsUpTo(t, 39))
+	db := openTest(t, file, migrationsUpTo(t, 40))
 	sizes := map[int64][2]sql.NullInt64{}
 	rows, err := db.Query(`SELECT id, preview_width, preview_height FROM videos`)
 	if err != nil {

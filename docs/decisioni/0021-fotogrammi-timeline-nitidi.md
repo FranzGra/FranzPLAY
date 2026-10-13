@@ -45,5 +45,5 @@ leggere il video, non rimpicciolire.
 ## Se un giorno si vuole cambiare
 
 Basta cambiare le due costanti in `internal/video/preview.go` (con numeri pari) e aggiungere
-una migrazione che rimette in coda i lavori `preview`, come la 0039. Per fotogrammi molto più
+una migrazione che rimette in coda i lavori `preview`, come la 0040. Per fotogrammi molto più
 grandi bisognerebbe prima dividere l'immagine in più pezzi, come fa YouTube.
