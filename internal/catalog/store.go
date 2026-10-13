@@ -32,15 +32,15 @@ type Video struct {
 	// FileType describes the file for the browser's canPlayType, like
 	// `video/webm; codecs="vp9, opus"`; "" = no browser is worth asking.
 	// A browser that can play it may ask for the file instead of the copy.
-	FileType string `json:"fileType"`
-	Copy     bool   `json:"copy"` // a copy for every device is ready
-	Preview  *Preview  `json:"preview"`  // frames for the timeline; null = none yet
-	Clip     *string   `json:"clip"`     // address of the seconds that play on the card; null = none yet
-	ClipHD   *string   `json:"clipHD"`   // the same clip, sharper, for a good connection; null = none yet
-	Format   string    `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
-	Likes    int64     `json:"likes"`    // how many people like it
-	Private  bool      `json:"private"`  // only its uploader, and the people they chose, see it
-	Uploader *Person   `json:"uploader"` // who uploaded it from the browser; null = from a video folder
+	FileType string   `json:"fileType"`
+	Copy     bool     `json:"copy"`     // a copy for every device is ready
+	Preview  *Preview `json:"preview"`  // frames for the timeline; null = none yet
+	Clip     *string  `json:"clip"`     // address of the seconds that play on the card; null = none yet
+	ClipHD   *string  `json:"clipHD"`   // the same clip, sharper, for a good connection; null = none yet
+	Format   string   `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
+	Likes    int64    `json:"likes"`    // how many people like it
+	Private  bool     `json:"private"`  // only its uploader, and the people they chose, see it
+	Uploader *Person  `json:"uploader"` // who uploaded it from the browser; null = from a video folder
 	// Owner is whose video it is, shown under the title: its uploader, or
 	// for a video from a folder the main administrator. Only for one video;
 	// null if FranzPLAY has nobody yet.
