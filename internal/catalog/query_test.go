@@ -93,6 +93,11 @@ func TestValidMadeName(t *testing.T) {
 		"12-0a1b2c3d-s30-s30.jpg":      false,
 		"12-0a1b2c3d-s30/../../x.jpg":  false,
 		"12-0a1b2c3d-s12345678901.jpg": false,
+		// Previews, with the width of their frames.
+		"12-0a1b2c3d-w480.jpg":   true,
+		"12-0a1b2c3d-w.jpg":      false,
+		"12-0a1b2c3d-w48x.jpg":   false,
+		"12-0a1b2c3d-w12345.jpg": false,
 	}
 	for name, want := range tests {
 		if got := validMadeName(name, ".jpg"); got != want {

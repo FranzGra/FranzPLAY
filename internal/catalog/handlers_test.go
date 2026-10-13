@@ -627,13 +627,17 @@ func TestPreviews(t *testing.T) {
 		t.Errorf("preview before it is made: %+v", got.Preview)
 	}
 
-	if _, err := s.db.Exec(`UPDATE videos SET preview = '1-abc.jpg', preview_gap = 2, preview_count = 45 WHERE id = ?`, id); err != nil {
-		t.Fatal(err)
-	}
-	got = decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(id, 10)))
-	want := Preview{Src: "/api/previews/1-abc.jpg", Gap: 2, Count: 45, Columns: 10, Width: 160, Height: 90}
-	if got.Preview == nil || *got.Preview != want {
-		t.Errorf("preview = %+v, want %+v", got.Preview, want)
+	// Each image tells its own frame size: old ones have small frames.
+	for _, size := range [][2]int{{480, 270}, {160, 90}} {
+		if _, err := s.db.Exec(`UPDATE videos SET preview = '1-abc.jpg', preview_gap = 2, preview_count = 45,
+			preview_width = ?, preview_height = ? WHERE id = ?`, size[0], size[1], id); err != nil {
+			t.Fatal(err)
+		}
+		got = decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(id, 10)))
+		want := Preview{Src: "/api/previews/1-abc.jpg", Gap: 2, Count: 45, Columns: 10, Width: size[0], Height: size[1]}
+		if got.Preview == nil || *got.Preview != want {
+			t.Errorf("preview = %+v, want %+v", got.Preview, want)
+		}
 	}
 
 	dir := filepath.Join(s.dataDir, media.PreviewsDir)

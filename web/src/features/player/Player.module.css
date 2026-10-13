@@ -312,8 +312,12 @@
   transform: translateX(-50%);
 }
 
-/* A small frame of the video above the timeline, with its time. */
+/* A small frame of the video above the timeline, with its time. The image
+   has sharper frames than this (see video.PreviewWidth), so it stays crisp
+   on screens with 2 or 3 real pixels per point. */
 .frame {
+  --preview-width: 240px;
+  --preview-half: calc(var(--preview-width) / 2);
   position: absolute;
   bottom: 34px;
   display: flex;
@@ -326,6 +330,7 @@
 }
 
 .frameImage {
+  width: var(--preview-width);
   box-sizing: content-box; /* the border goes around the whole frame */
   border: 2px solid rgb(255 255 255 / 0.9);
   border-radius: 8px;
@@ -623,6 +628,10 @@
   /* On phones the volume is the phone's own buttons. */
   .volume {
     display: none;
+  }
+
+  .frame {
+    --preview-width: 160px;
   }
 }
 

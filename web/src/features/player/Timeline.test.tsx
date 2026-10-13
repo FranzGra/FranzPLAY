@@ -6,8 +6,8 @@ const preview = {
   gap: 2,
   count: 45,
   columns: 10,
-  width: 160,
-  height: 90,
+  width: 480,
+  height: 270,
 };
 
 // point moves the pointer over the timeline, at fraction of its width.
@@ -26,7 +26,8 @@ describe("timeline", () => {
     expect(frame).toHaveTextContent("0:45");
     const image = frame.firstElementChild as HTMLElement;
     expect(image.style.backgroundImage).toBe('url("/api/previews/7-0a1b2c3d.jpg")');
-    expect(image.style.backgroundPosition).toBe("-320px -180px");
+    expect(image.style.backgroundPosition).toBe("22.2222% 50%");
+    expect(image.style.backgroundSize).toBe("1000% 500%");
 
     fireEvent.pointerLeave(screen.getByRole("slider"));
     expect(screen.queryByTestId("preview")).not.toBeInTheDocument();
