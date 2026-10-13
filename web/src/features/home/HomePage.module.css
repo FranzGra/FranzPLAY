@@ -1,3 +1,91 @@
+/* The title of the Home, as in the old FranzPLAY: a shining icon, the
+   name of the page and a welcome, over a thin line. */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 20px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--color-border);
+  animation: var(--motion-enter);
+}
+
+.headerIcon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgb(var(--color-star-rgb) / 0.25);
+  border-radius: 14px;
+  background: rgb(var(--color-star-rgb) / 0.1);
+  color: var(--color-star);
+}
+
+.headerText {
+  flex: 1;
+  min-width: 0;
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.headerSub {
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--color-text-muted);
+}
+
+.customize {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.customize:hover,
+.customize[aria-expanded="true"] {
+  background: var(--glass-bg-strong);
+}
+
+@media (max-width: 599px) {
+  .header {
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+  }
+
+  .headerIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .headerTitle {
+    font-size: 23px;
+  }
+
+  .headerSub {
+    font-size: 14px;
+  }
+}
+
+/* The big sections come in one after the other. */
+.sections {
+  margin: 0 0 8px;
+}
+
 /* The row of categories: it scrolls sideways on small screens. */
 .chips {
   position: relative;
@@ -42,9 +130,19 @@
   color: var(--color-bg);
 }
 
-/* Like the titles of the rows above it. */
+/* "Tutti i video", with a bar in the accent color, as in the old
+   FranzPLAY. */
 .gridTitle {
-  margin: 0 0 12px;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 28px 0 18px;
+  padding-left: 14px;
+  border-left: 4px solid var(--color-accent);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+@media (max-width: 599px) {
+  .gridTitle {
+    font-size: 19px;
+  }
 }

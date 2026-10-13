@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { type Category, fetchCategories } from "../../api/videos";
+import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
+import { SiteName } from "../../components/SiteName";
 import { ContinueRow } from "../continue/ContinueRow";
 import { LikedRow } from "../likes/LikedRow";
 import { SavedRow } from "../playlists/SavedRow";
@@ -9,17 +11,23 @@ import { LatestRow } from "../videos/LatestRow";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
 import styles from "./HomePage.module.css";
+import { LookPanel } from "./LookPanel";
+import { lookStyle, SectionsContext, useWide } from "./look";
 import { useHomeLayout } from "./useHomeLayout";
 
-// HomePage shows the categories on top to see only one of them, then
-// rows (to continue, saved, liked, newest, suggested) and all the videos
-// in a mixed order, like on YouTube. Each row can be closed by its title, and
-// stays closed for the person on every device.
+// HomePage looks like the old FranzPLAY's: a title, the categories to see
+// only one of them, then big sections (to continue, saved, liked, newest,
+// suggested) and all the videos in a mixed order. Each section can be
+// closed by its title, and stays closed for the person on every device.
+// On a computer or tablet the person also chooses how many cards in a line,
+// how big, and how much of each section to show.
 export function HomePage() {
   usePageTitle("");
   const [category, setCategory] = useState("");
   const categories = useCategories();
   const layout = useHomeLayout();
+  const wide = useWide();
+  const [choosing, setChoosing] = useState(false);
   // A new order at every visit of the Home, the same while it is open.
   const [seed] = useState(() => 1 + Math.floor(Math.random() * 2 ** 31));
   // "Tutti i video" are mixed, as in the old FranzPLAY: the newest have
@@ -27,8 +35,30 @@ export function HomePage() {
   const { state, loadMore } = useVideoList(category ? { category } : { seed });
 
   return (
-    <>
-      <h1 className="visually-hidden">Home</h1>
+    <div style={lookStyle(layout.look)}>
+      <header className={styles.header}>
+        <span className={styles.headerIcon}>
+          <Icon name="sparkles" size={24} />
+        </span>
+        <div className={styles.headerText}>
+          <h1 className={styles.headerTitle}>Esplora la libreria</h1>
+          <p className={styles.headerSub}>
+            Benvenuto su <SiteName />
+          </p>
+        </div>
+        {wide && layout.ready && (
+          <button
+            type="button"
+            className={`glass ${styles.customize}`}
+            aria-expanded={choosing}
+            onClick={() => setChoosing((c) => !c)}
+          >
+            <Icon name="sliders" size={18} />
+            Personalizza
+          </button>
+        )}
+      </header>
+      {wide && choosing && <LookPanel look={layout.look} onChange={layout.setLook} />}
       {categories.length > 0 && (
         <ul className={styles.chips} aria-label="Categorie">
           {["", ...categories.map((c) => c.name)].map((name) => (
@@ -46,13 +76,15 @@ export function HomePage() {
         </ul>
       )}
       {category === "" && layout.ready && (
-        <>
-          <ContinueRow fold={layout.fold("continue")} />
-          <SavedRow fold={layout.fold("saved")} />
-          <LikedRow fold={layout.fold("liked")} />
-          <LatestRow fold={layout.fold("latest")} />
-          <RecommendedRow fold={layout.fold("recommended")} />
-        </>
+        <SectionsContext.Provider value={layout.look.sections}>
+          <div className={`stagger ${styles.sections}`}>
+            <ContinueRow fold={layout.fold("continue")} />
+            <SavedRow fold={layout.fold("saved")} />
+            <LikedRow fold={layout.fold("liked")} />
+            <LatestRow fold={layout.fold("latest")} />
+            <RecommendedRow fold={layout.fold("recommended")} />
+          </div>
+        </SectionsContext.Provider>
       )}
       {category === "" && <h2 className={styles.gridTitle}>Tutti i video</h2>}
       <VideoGrid
@@ -64,7 +96,7 @@ export function HomePage() {
           text: "Quando colleghi una cartella video, i tuoi video compariranno qui, con i nuovi arrivi e quelli da continuare a guardare.",
         }}
       />
-    </>
+    </div>
   );
 }
 

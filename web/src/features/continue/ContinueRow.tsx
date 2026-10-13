@@ -49,7 +49,7 @@ export function ContinueRow({ fold }: { fold?: Fold }) {
           {problem}
         </p>
       )}
-      <VideoRow title="Continua a guardare" fold={fold}>
+      <VideoRow title="Continua a guardare" icon="history" fold={fold}>
         {started.map((w) => (
           <li key={w.video.id} className={styles.item}>
             <VideoCard video={w.video} now={now} position={w.position} />

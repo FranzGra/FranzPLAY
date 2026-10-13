@@ -24,7 +24,7 @@ export function LatestRow({ fold }: { fold?: Fold }) {
   }, []);
   if (videos.length === 0) return null;
   return (
-    <VideoRow title="Ultimi arrivati" fold={fold}>
+    <VideoRow title="Ultimi arrivati" icon="clock" fold={fold}>
       {videos.map((video) => (
         <li key={video.id}>
           <VideoCard video={video} now={now} />
