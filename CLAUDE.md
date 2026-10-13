@@ -73,6 +73,7 @@ internal/oldimport/ porta i dati del vecchio FranzPLAY da una copia .sql del suo
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
 internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)
+docker/             avvio nel contenitore (entrypoint.sh) e prova completa dell'immagine (smoke-test.sh)
 android/            l'app Android: una finestra sull'interfaccia del server (docs/app-android.md)
 docs/               visione, decisioni (docs/decisioni/), guida per provare sul PC e per importare dal vecchio
 e2e/                prove nel browser: il programma vero, con video veri, su computer e telefono
@@ -136,7 +137,12 @@ make check   # tutto quello che controlla la CI: lancialo prima di ogni push
 make web     # prepara l'interfaccia (serve Node.js 22)
 make web-dev # interfaccia in modalità sviluppo su http://localhost:5173 (insieme a make run)
 make build   # il programma completo, interfaccia compresa, in bin/franzplay
+make docker  # costruisce l'immagine Docker e la prova davvero (docker/smoke-test.sh)
 ```
+
+**Docker** è il modo di installare FranzPLAY: `Dockerfile`, `compose.yaml` e `.env.example` nella
+cartella principale, guida in [`docs/docker.md`](docs/docker.md). Una variabile `FRANZPLAY_*`
+nuova va anche in `.env.example` (e in `compose.yaml` se chi installa deve poterla cambiare).
 
 Impostazioni:
 
