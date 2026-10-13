@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchLogins, type Login, type Outcome } from "../../api/logins";
 import { EmptyState } from "../../components/EmptyState";
+import { Icon } from "../../components/Icon";
 import styles from "./Admin.module.css";
 
 type State =
@@ -70,11 +71,19 @@ export function AccessPage() {
           password sbagliate di seguito possono voler dire che qualcuno prova a indovinarle.
         </p>
       </div>
-      <div className={styles.filters}>
-        <label className={styles.field}>
-          Cerca un nome o un indirizzo
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </label>
+      <div className={styles.tools}>
+        <search className={styles.searchForm}>
+          <label className={`glass ${styles.searchBox}`}>
+            <Icon name="search" size={18} />
+            <span className="visually-hidden">Cerca un nome o un indirizzo</span>
+            <input
+              type="search"
+              placeholder="Nome o indirizzo"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+        </search>
         <label className={styles.check}>
           <input
             type="checkbox"

@@ -128,13 +128,13 @@ export function VideosPage() {
             </label>
           </form>
         </search>
-        <fieldset className={styles.sections}>
+        <fieldset className={`glass ${styles.segmented}`}>
           <legend className="visually-hidden">Quali video</legend>
           {filters.map((f) => (
             <button
               key={f.show}
               type="button"
-              className={styles.section}
+              className={styles.segment}
               aria-pressed={show === f.show}
               onClick={() => setShow(f.show)}
             >
@@ -142,11 +142,11 @@ export function VideosPage() {
             </button>
           ))}
         </fieldset>
-        <fieldset className={styles.sections}>
+        <fieldset className={`glass ${styles.segmented}`}>
           <legend className="visually-hidden">Come mostrarli</legend>
           <button
             type="button"
-            className={styles.section}
+            className={styles.segment}
             aria-pressed={view === "cards"}
             onClick={() => changeView("cards")}
           >
@@ -154,7 +154,7 @@ export function VideosPage() {
           </button>
           <button
             type="button"
-            className={styles.section}
+            className={styles.segment}
             aria-pressed={view === "table"}
             onClick={() => changeView("table")}
           >
@@ -272,7 +272,10 @@ function VideoRow({
               Caricato da {video.uploader.name}
             </p>
           ) : (
-            <p className={`${styles.role} ${styles.path}`} title={`${video.folder}/${video.path}`}>
+            <p
+              className={`${styles.role} ${styles.path} ${styles.oneLine}`}
+              title={`${video.folder}/${video.path}`}
+            >
               {video.category && `${video.category} · `}
               {video.path}
             </p>
@@ -314,7 +317,7 @@ function VideoRow({
       <div className={styles.buttons}>
         <button
           type="button"
-          className={`glass ${styles.action}`}
+          className={`glass ${styles.action} ${styles.small}`}
           aria-expanded={editing}
           onClick={() => {
             setDone("");
@@ -325,7 +328,7 @@ function VideoRow({
         </button>
         <button
           type="button"
-          className={`glass ${styles.action}`}
+          className={`glass ${styles.action} ${styles.small}`}
           aria-expanded={choosingCover}
           disabled={video.missing}
           onClick={() => {
@@ -337,7 +340,7 @@ function VideoRow({
         </button>
         <button
           type="button"
-          className={`glass ${styles.action}`}
+          className={`glass ${styles.action} ${styles.small}`}
           aria-expanded={choosingClip}
           disabled={video.missing}
           onClick={() => {
@@ -349,7 +352,7 @@ function VideoRow({
         </button>
         <button
           type="button"
-          className={`glass ${styles.action}`}
+          className={`glass ${styles.action} ${styles.small}`}
           disabled={busy || video.missing}
           onClick={() =>
             run(() => refreshVideo(video.id), "In coda: copertina e anteprime arrivano tra poco.")
@@ -357,7 +360,12 @@ function VideoRow({
         >
           Rifai copertina
         </button>
-        <button type="button" className={`glass ${styles.action}`} disabled={busy} onClick={toggle}>
+        <button
+          type="button"
+          className={`glass ${styles.action} ${styles.small}`}
+          disabled={busy}
+          onClick={toggle}
+        >
           {video.hidden ? "Mostra" : "Nascondi"}
         </button>
       </div>
