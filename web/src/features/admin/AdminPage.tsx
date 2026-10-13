@@ -12,6 +12,7 @@ const sections = [
   { to: "inviti", label: "Inviti" },
   { to: "accessi", label: "Accessi" },
   { to: "video", label: "Video" },
+  { to: "categorie", label: "Categorie" },
   { to: "sottotitoli", label: "Sottotitoli" },
   { to: "commenti", label: "Commenti" },
   { to: "cartelle", label: "Cartelle" },

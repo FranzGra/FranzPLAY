@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { type Category, fetchCategories } from "../../api/videos";
 import { EmptyState } from "../../components/EmptyState";
@@ -9,7 +9,8 @@ import styles from "./CategoriesPage.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; categories: Category[] };
 
-// CategoriesPage lists the categories: the sub-folders of the video folders.
+// CategoriesPage lists the categories: the sub-folders of the video folders,
+// with the name, color and image the administrator may have given them.
 export function CategoriesPage() {
   usePageTitle("Categorie");
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -50,8 +51,15 @@ export function CategoriesPage() {
             <li key={category.name}>
               <Link
                 to={`/categorie/${encodeURIComponent(category.name)}`}
-                className={`glass ${styles.tile}`}
+                className={`glass ${styles.tile} ${category.image ? styles.withImage : ""}`}
+                // The color the administrator chose: a stripe on the tile.
+                style={
+                  category.color ? ({ "--tile-color": category.color } as CSSProperties) : undefined
+                }
               >
+                {category.image && (
+                  <img className={styles.image} src={category.image} alt="" loading="lazy" />
+                )}
                 <span className={styles.name}>{category.name}</span>
                 <span className={styles.count}>{formatVideos(category.videos)}</span>
               </Link>

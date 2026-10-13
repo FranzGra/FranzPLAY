@@ -180,6 +180,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	} else if n > 0 {
 		logger.Info("removed unused uploaded clips", "count", n)
 	}
+	if n, err := catalog.RemoveOrphanCategoryImages(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused category images", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused category images", "count", n)
+	}
 	if n, err := media.RemoveOrphanPreviews(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused previews", "error", err)
 	} else if n > 0 {

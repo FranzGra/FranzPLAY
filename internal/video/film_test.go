@@ -68,7 +68,8 @@ func TestFilmQueryPick(t *testing.T) {
 
 func TestParseTMDBSearch(t *testing.T) {
 	got, err := ParseTMDBSearch([]byte(`{"page": 1, "results": [
-		{"id": 11, "title": "Il\nsorpasso", "original_title": "Il sorpasso", "release_date": "1962-12-05", "adult": false},
+		{"id": 11, "title": "Il\nsorpasso", "original_title": "Il sorpasso", "release_date": "1962-12-05", "adult": false,
+			"backdrop_path": null, "poster_path": "/tall.jpg"},
 		{"id": 0, "title": "senza codice"},
 		{"id": 12, "title": "Senza data", "release_date": ""}
 	]}`))
@@ -76,7 +77,7 @@ func TestParseTMDBSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []FilmHit{
-		{ID: 11, Title: "Il sorpasso", OriginalTitle: "Il sorpasso", ReleaseDate: "1962-12-05"},
+		{ID: 11, Title: "Il sorpasso", OriginalTitle: "Il sorpasso", ReleaseDate: "1962-12-05", Picture: "/tall.jpg"},
 		{ID: 12, Title: "Senza data"},
 	}
 	if len(got) != len(want) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -60,15 +61,17 @@ func TestParseTPDBScenes(t *testing.T) {
 				"background": {"full": "https://cdn.theporndb.net/full.jpg", "large": "https://cdn.theporndb.net/large.jpg"},
 				"posters": {"large": "https://cdn.theporndb.net/poster.jpg"}}]}`,
 			want: Scene{Details: Details{Title: "Una scena", Description: "Prima riga.\nSeconda.", Author: "Uno Studio",
-				Date: "2021-03-15"}, Picture: "https://cdn.theporndb.net/large.jpg"},
+				Date: "2021-03-15"}, Picture: "https://cdn.theporndb.net/large.jpg",
+				Thumb: "https://cdn.theporndb.net/image.jpg"},
 			ok: true,
 		},
 		{
 			name: "its hashes have this one",
 			data: `{"data": [{"title": "A", "hashes": [{"hash": "0000000000000001", "type": "PHASH"},
 				{"hash": "00000000000ABCDE", "type": "OSHASH"}], "image": "https://metadataapi.net/a.png"}]}`,
-			want: Scene{Details: Details{Title: "A"}, Picture: "https://metadataapi.net/a.png"},
-			ok:   true,
+			want: Scene{Details: Details{Title: "A"}, Picture: "https://metadataapi.net/a.png",
+				Thumb: "https://metadataapi.net/a.png"},
+			ok: true,
 		},
 		{
 			name: "its hashes do not have this one",
@@ -101,6 +104,37 @@ func TestParseTPDBScenes(t *testing.T) {
 		}
 	}
 	if _, _, err := ParseTPDBScenes([]byte(`<html>`), "x"); !errors.Is(err, ErrBadDetails) {
+		t.Errorf("error = %v, want ErrBadDetails", err)
+	}
+}
+
+func TestParseTPDBSearch(t *testing.T) {
+	got, err := ParseTPDBSearch([]byte(`{"data": [
+		{"title": "Prima", "date": "2020-01-02", "site": {"name": "Studio"},
+			"background": {"large": "https://cdn.theporndb.net/l.jpg", "small": "https://cdn.theporndb.net/s.jpg"}},
+		{"title": "Seconda", "image": "https://evil.example/x.jpg"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Scene{
+		{Details: Details{Title: "Prima", Author: "Studio", Date: "2020-01-02"},
+			Picture: "https://cdn.theporndb.net/l.jpg", Thumb: "https://cdn.theporndb.net/s.jpg"},
+		{Details: Details{Title: "Seconda"}},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("ParseTPDBSearch = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("scene %d:\n got %+v\nwant %+v", i, got[i], want[i])
+		}
+	}
+
+	many := `{"data": [` + strings.Repeat(`{"title": "x"},`, 20) + `{"title": "x"}]}`
+	if got, err := ParseTPDBSearch([]byte(many)); err != nil || len(got) != maxSearchHits {
+		t.Errorf("a long answer gives %d scenes, %v; want %d", len(got), err, maxSearchHits)
+	}
+	if _, err := ParseTPDBSearch([]byte(`<html>`)); !errors.Is(err, ErrBadDetails) {
 		t.Errorf("error = %v, want ErrBadDetails", err)
 	}
 }

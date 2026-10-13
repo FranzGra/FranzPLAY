@@ -74,6 +74,7 @@ type FilmHit struct {
 	Title         string
 	OriginalTitle string
 	ReleaseDate   string // "2006-01-02", or "" when TMDB does not know it
+	Picture       string // its best picture, like Film.Picture; "" if none
 }
 
 // tmdbSearch are the fields of TMDB's search answer FranzPLAY uses.
@@ -83,6 +84,8 @@ type tmdbSearch struct {
 		Title         string `json:"title"`
 		OriginalTitle string `json:"original_title"`
 		ReleaseDate   string `json:"release_date"`
+		BackdropPath  string `json:"backdrop_path"`
+		PosterPath    string `json:"poster_path"`
 	} `json:"results"`
 }
 
@@ -98,7 +101,7 @@ func ParseTMDBSearch(data []byte) ([]FilmHit, error) {
 			continue
 		}
 		hits = append(hits, FilmHit{ID: r.ID, Title: oneLine(r.Title), OriginalTitle: oneLine(r.OriginalTitle),
-			ReleaseDate: firstDay(r.ReleaseDate)})
+			ReleaseDate: firstDay(r.ReleaseDate), Picture: tmdbBest(r.BackdropPath, r.PosterPath)})
 	}
 	return hits, nil
 }
@@ -164,11 +167,23 @@ func ParseTMDBMovie(data []byte) (Film, error) {
 		Author:      cut(strings.Join(directors, ", "), MaxDetailsAuthor),
 		Date:        firstDay(in.ReleaseDate),
 	}}
-	for _, p := range []string{in.BackdropPath, in.PosterPath} {
-		if tmdbPicture.MatchString(p) {
-			f.Picture = p
-			break
+	f.Picture = tmdbBest(in.BackdropPath, in.PosterPath)
+	return f, nil
+}
+
+// tmdbBest returns the first of a film's pictures that is a picture on
+// TMDB's image server: the wide one, else the poster.
+func tmdbBest(wide, poster string) string {
+	for _, p := range []string{wide, poster} {
+		if TMDBPicture(p) {
+			return p
 		}
 	}
-	return f, nil
+	return ""
+}
+
+// TMDBPicture says if p is the path of a picture on TMDB's image server,
+// like "/abc.jpg".
+func TMDBPicture(p string) bool {
+	return tmdbPicture.MatchString(p)
 }

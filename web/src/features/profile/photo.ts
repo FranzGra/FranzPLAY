@@ -6,7 +6,7 @@ import { outputSide } from "./crop";
 export type LoadedPhoto = { url: string; width: number; height: number };
 
 // loadPhoto opens a picture file. Call URL.revokeObjectURL(url) when done.
-export function loadPhoto(file: File): Promise<LoadedPhoto> {
+export function loadPhoto(file: Blob): Promise<LoadedPhoto> {
   const url = URL.createObjectURL(file);
   return new Promise((resolve, reject) => {
     const img = new Image();
