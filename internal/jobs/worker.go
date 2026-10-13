@@ -235,12 +235,24 @@ func (w *Worker) postpone(ctx context.Context, j job, until time.Time) error {
 	return nil
 }
 
+// claimQuery finds the next job: its arguments are the time now, then the
+// kinds, one per placeholder. The jobs_next index already holds the jobs
+// in the order wanted, so nothing is sorted. SQLite, not knowing how many
+// jobs wait, would rather pick another index and sort: INDEXED BY tells it
+// which one to use.
+func claimQuery(placeholders string) string {
+	return `SELECT id, video_id, kind, attempts FROM jobs INDEXED BY jobs_next
+		WHERE state = 'pending' AND run_after <= ? AND kind IN (` + placeholders + `)
+		ORDER BY priority, id
+		LIMIT 1`
+}
+
 // claim takes the oldest due job of a kind this worker can do and marks it
 // running. Probes go first, since covers and previews need the duration
 // they find; then the details files, read in an instant, then covers,
 // which every page shows, then previews, then the subtitles inside the
 // files, which mean reading the whole file, and last the conversions,
-// which can take hours.
+// which can take hours. That order is the column jobs.priority.
 func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	kinds := make([]any, 0, len(w.handlers))
 	placeholders := ""
@@ -259,12 +271,7 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	args := append([]any{now}, kinds...)
 	var j job
 	var kind string
-	err := w.db.QueryRowContext(ctx, `
-		SELECT id, video_id, kind, attempts FROM jobs
-		WHERE state = 'pending' AND run_after <= ? AND kind IN (`+placeholders+`)
-		ORDER BY CASE kind WHEN 'probe' THEN 0 WHEN 'details' THEN 1 WHEN 'online' THEN 2
-			WHEN 'cover' THEN 3 WHEN 'preview' THEN 4 WHEN 'transcribe' THEN 6 WHEN 'convert' THEN 7 ELSE 5 END, id
-		LIMIT 1`, args...).Scan(&j.id, &j.videoID, &kind, &j.attempts)
+	err := w.db.QueryRowContext(ctx, claimQuery(placeholders), args...).Scan(&j.id, &j.videoID, &kind, &j.attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return job{}, false, nil
 	}
