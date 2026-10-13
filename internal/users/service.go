@@ -37,8 +37,12 @@ type Service struct {
 	registrations *registrations
 	hashing       chan struct{} // one slot per password check in progress
 
-	mu        sync.Mutex
-	setupCode string // "" once FranzPLAY has its administrator
+	mu sync.Mutex
+	// needsAdmin is true until FranzPLAY has its administrator.
+	needsAdmin bool
+	// setupCode, when not "", must be typed to create the administrator.
+	// It exists only when the installer asked for it.
+	setupCode string
 
 	// dummyHash is checked when a name does not exist, so that answering
 	// "wrong name" takes as long as "wrong password" and does not reveal
@@ -46,11 +50,14 @@ type Service struct {
 	dummyHash string
 }
 
-// NewService prepares the users service. When FranzPLAY has no user yet it
-// makes a one-time setup code and writes it in the log: only someone who
-// can read the log (the person who installed FranzPLAY) can create the
-// administrator, not just anyone on the network who opens the page first.
-func NewService(ctx context.Context, db *sql.DB, dataDir string, logger *slog.Logger) (*Service, error) {
+// NewService prepares the users service. When FranzPLAY has no user yet,
+// the first person who opens the site creates the administrator.
+//
+// With requireSetupCode, that person must also type a one-time code that
+// FranzPLAY writes in the log: only someone who can read the log (the
+// person who installed it) can then create the administrator. It is for
+// servers reachable from the internet before the first setup.
+func NewService(ctx context.Context, db *sql.DB, dataDir string, requireSetupCode bool, logger *slog.Logger) (*Service, error) {
 	dummy, err := hashPassword("not a real password")
 	if err != nil {
 		return nil, err
@@ -69,14 +76,19 @@ func NewService(ctx context.Context, db *sql.DB, dataDir string, logger *slog.Lo
 	if err != nil {
 		return nil, err
 	}
-	if n == 0 {
+	switch {
+	case n > 0:
+	case requireSetupCode:
 		code, err := newSetupCode()
 		if err != nil {
 			return nil, err
 		}
-		s.setupCode = code
+		s.needsAdmin, s.setupCode = true, code
 		logger.Warn("FranzPLAY has no administrator yet: open the site and use this setup code",
 			"setup_code", code)
+	default:
+		s.needsAdmin = true
+		logger.Warn("FranzPLAY has no administrator yet: the first person who opens the site creates it")
 	}
 	if err := s.store.deleteExpiredSessions(ctx, s.now()); err != nil {
 		return nil, err
@@ -106,27 +118,38 @@ func newSetupCode() (string, error) {
 func (s *Service) needsSetup() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.setupCode != ""
+	return s.needsAdmin
 }
 
-// setup creates the administrator, if the code is right.
+// needsSetupCode reports whether creating the administrator asks for the
+// code written in the log.
+func (s *Service) needsSetupCode() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.needsAdmin && s.setupCode != ""
+}
+
+// setup creates the administrator, checking the code when there is one.
+// It works only once: the database refuses a first user when one exists.
 func (s *Service) setup(ctx context.Context, code, name, password string) (Account, error) {
 	s.mu.Lock()
-	expected := s.setupCode
+	needed, expected := s.needsAdmin, s.setupCode
 	s.mu.Unlock()
-	if expected == "" {
+	if !needed {
 		return Account{}, errAlreadySetUp
 	}
-	given := strings.ToUpper(strings.TrimSpace(code))
-	if subtle.ConstantTimeCompare([]byte(given), []byte(expected)) != 1 {
-		return Account{}, errBadSetupCode
+	if expected != "" {
+		given := strings.ToUpper(strings.TrimSpace(code))
+		if subtle.ConstantTimeCompare([]byte(given), []byte(expected)) != 1 {
+			return Account{}, errBadSetupCode
+		}
 	}
 	a, err := s.create(ctx, name, password, Admin, true, true)
 	if err != nil {
 		return Account{}, err
 	}
 	s.mu.Lock()
-	s.setupCode = ""
+	s.needsAdmin, s.setupCode = false, ""
 	s.mu.Unlock()
 	s.logger.InfoContext(ctx, "administrator created", "name", a.Name)
 	return a, nil

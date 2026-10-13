@@ -86,12 +86,12 @@ owner="$(docker exec franzplay stat -c '%u:%g' /data/franzplay.db)"
 [ "$owner" = "$uid:$gid" ] || fail "the database belongs to $owner, want $uid:$gid"
 docker exec franzplay whisper-cli --help >/dev/null 2>&1 || fail "whisper-cli does not start"
 
-echo "--- Creating the administrator with the code from the log"
-code="$(compose logs --no-color franzplay | sed -n 's/.*setup_code=\([A-Z0-9-]*\).*/\1/p' | tail -n 1)"
-[ -n "$code" ] || fail "no setup code in the log"
+echo "--- Creating the administrator from the site, with no code from the log"
+compose logs --no-color franzplay | grep -q 'first person who opens the site' ||
+	fail "the log does not say the site creates the administrator"
 jar="$work/cookies"
 curl -fsS -c "$jar" -H "Origin: $base" -H 'Content-Type: application/json' \
-	-d "{\"code\":\"$code\",\"name\":\"francesco\",\"password\":\"una-password-lunga\"}" \
+	-d '{"name":"francesco","password":"una-password-lunga"}' \
 	"$base/api/setup" >/dev/null || fail "setup"
 
 echo "--- Waiting for the video, its duration and its cover"
