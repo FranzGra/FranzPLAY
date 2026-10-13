@@ -761,3 +761,13 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* A phone held sideways: the player fits the screen under the top bar,
+   with black at its sides, so its controls stay in view. Turned this way
+   the phone bar is at the end of the page (Layout.module.css). */
+@media (max-width: 899px) and (max-height: 500px) {
+  .root {
+    aspect-ratio: auto;
+    height: min(100vw * 9 / 16, 100dvh - 60px - env(safe-area-inset-top) - 28px);
+  }
+}

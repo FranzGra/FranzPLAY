@@ -112,6 +112,22 @@ input {
   color: inherit;
 }
 
+/* On a phone, Safari zooms the whole page into a field whose letters are
+   smaller than 16px, as soon as it is touched, and leaves it zoomed. So
+   on touch screens every field writes at least at 16px. The :root makes
+   this win over the sizes the components set. */
+@media (pointer: coarse) {
+  :root
+    :is(input, textarea, select):not(
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="color"]
+    ) {
+    font-size: max(16px, 1em);
+  }
+}
+
 /* Buttons and links change color softly, never with a jump, and a button
    sinks a little under the finger or the mouse, then springs back. `scale`
    is its own property, so it adds to a button's transform instead of

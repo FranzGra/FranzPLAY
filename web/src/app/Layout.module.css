@@ -10,8 +10,11 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: var(--header-height);
-  padding: 0 32px;
+  min-height: calc(var(--header-height) + env(safe-area-inset-top));
+  /* The env() parts keep clear of the notch of an iPhone: above it when
+     FranzPLAY is opened from the home screen, beside it when sideways. */
+  padding: env(safe-area-inset-top) max(32px, env(safe-area-inset-right)) 0
+    max(32px, env(safe-area-inset-left));
   background: rgb(9 9 11 / 0.6);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -284,8 +287,9 @@
 
 @media (max-width: 899px) {
   .header {
-    padding: 0 8px 0 16px;
-    min-height: 60px;
+    padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0
+      max(16px, env(safe-area-inset-left));
+    min-height: calc(60px + env(safe-area-inset-top));
   }
 
   .search,
@@ -306,7 +310,7 @@
 
   .main {
     --page-top: 16px;
-    --page-side: 16px;
+    --page-side: max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
     padding: var(--page-top) var(--page-side)
       calc(var(--tabbar-height) + 40px + env(safe-area-inset-bottom));
   }
@@ -325,5 +329,18 @@
     border-radius: var(--radius-pill);
     /* Stronger than the other glass: the page scrolls under it. */
     background: var(--glass-bg-bar);
+  }
+}
+
+/* A phone held sideways has little height: the phone bar sits at the end
+   of the page instead of over it, so it does not hide half the player. */
+@media (max-width: 899px) and (max-height: 500px) {
+  .main {
+    padding-bottom: 24px;
+  }
+
+  .tabbar {
+    position: static;
+    margin-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 }
