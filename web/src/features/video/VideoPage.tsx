@@ -225,13 +225,16 @@ function Watch({
           </div>
         </div>
         <p className={styles.details}>
+          {/* The category stands out as a chip, leading to its page. */}
           {video.category && (
-            <>
-              <Link to={`/categorie/${encodeURIComponent(video.category)}`}>{video.category}</Link>
-              {" · "}
-            </>
+            <Link
+              to={`/categorie/${encodeURIComponent(video.category)}`}
+              className={styles.category}
+            >
+              {video.category}
+            </Link>
           )}
-          {details.join(" · ")}
+          <span>{details.join(" · ")}</span>
         </p>
         {video.private && <PrivateNote video={video} />}
         {video.description && (
@@ -239,7 +242,7 @@ function Watch({
             <Description text={video.description} />
           </div>
         )}
-        <div className={styles.below}>
+        <div className={`${styles.below} ${styles.comments}`}>
           <Comments key={video.id} videoId={video.id} />
         </div>
       </div>

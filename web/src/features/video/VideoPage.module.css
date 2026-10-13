@@ -129,9 +129,28 @@
 }
 
 .details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   margin: 14px 0 0;
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+/* The category, easy to spot: a chip in the accent color. */
+.category {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--color-accent-rgb) / 0.14);
+  box-shadow: inset 0 0 0 1px rgb(var(--color-accent-rgb) / 0.35);
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.category:hover {
+  background: rgb(var(--color-accent-rgb) / 0.22);
 }
 
 .private {
@@ -215,18 +234,77 @@
     border-radius: 0;
   }
 
-  /* The buttons stay on one line and scroll sideways, like on YouTube,
-     instead of wrapping onto a second line, right to the screen edges. */
+  /* Room to breathe, in the order a person reads: the title, what the
+     video is (category first), whose it is, then big buttons. */
+  .info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .title {
+    margin-top: 20px;
+    font-size: 20px;
+  }
+
+  .details {
+    order: 1;
+    margin-top: 12px;
+  }
+
+  .bar {
+    order: 2;
+    margin-top: 20px;
+  }
+
+  .info > :nth-child(n + 4) {
+    order: 3;
+  }
+
+  /* Big buttons, easy for a thumb, as in the old FranzPLAY: Mi piace and
+     Salva side by side, Condividi under them, smaller and centered. */
   .actions {
+    display: grid;
     flex: 1 1 100%;
-    flex-wrap: nowrap;
-    margin: 0 calc(-1 * var(--page-side));
-    padding: 0 var(--page-side);
-    overflow-x: auto;
-    scrollbar-width: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .actions > * {
-    flex: none;
+    min-width: 0;
+  }
+
+  .actions > :only-child {
+    grid-column: 1 / -1;
+  }
+
+  .actions > :nth-child(-n + 2) button {
+    flex: 1;
+    width: 100%;
+    justify-content: center;
+    height: 52px;
+    font-size: 16px;
+  }
+
+  .actions > :nth-child(3) {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .actions > :nth-child(3) button {
+    height: 44px;
+    padding: 0 24px;
+  }
+
+  /* The comments: their own panel, well apart from the buttons. */
+  .comments {
+    margin-top: 32px;
+    padding: 4px 16px 20px;
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 1px var(--color-border);
+  }
+
+  .comments > section {
+    margin-top: 16px;
   }
 }
