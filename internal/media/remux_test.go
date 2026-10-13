@@ -131,7 +131,7 @@ func TestRemuxWithRealFFmpeg(t *testing.T) {
 		"-f", "lavfi", "-i", "sine=frequency=440:duration=12",
 		"-f", "lavfi", "-i", "sine=frequency=880:duration=12",
 		"-map", "0", "-map", "1", "-map", "2", "-g", "50", "-keyint_min", "50", "-pix_fmt", "yuv420p",
-		"-c:a:0", "ac3", "-c:a:1", "libopus", "file:"+name); err != nil {
+		"-c:a:0", "ac3", "-c:a:1", "libmp3lame", "file:"+name); err != nil {
 		t.Fatal(err)
 	}
 	m := NewRemuxer(ffmpeg, 2)
@@ -143,7 +143,7 @@ func TestRemuxWithRealFFmpeg(t *testing.T) {
 		t.Fatalf("start of 7.5 = %v, %v; want the key frame at 5", start, err)
 	}
 
-	for track, codec := range []string{"ac3", "opus"} {
+	for track, codec := range []string{"ac3", "mp3"} {
 		var out bytes.Buffer
 		if err := m.Stream(context.Background(), &out, name, track, codec, 7.5); err != nil {
 			t.Fatal(err)
@@ -158,8 +158,8 @@ func TestRemuxWithRealFFmpeg(t *testing.T) {
 			t.Fatal(err)
 		}
 		wantSound := "aac"
-		if codec == "opus" {
-			wantSound = "opus"
+		if codec == "mp3" {
+			wantSound = "mp3"
 		}
 		if got := strings.Fields(string(probe)); !slices.Equal(got, []string{"h264,video", wantSound + ",audio"}) {
 			t.Errorf("sound %d: streams %q, want the picture and %s", track, got, wantSound)

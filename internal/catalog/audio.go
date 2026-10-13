@@ -121,7 +121,7 @@ func (h audioHandlers) track(w http.ResponseWriter, r *http.Request) (sound, int
 		respond.Error(w, r, h.logger, http.StatusNotFound, "sound track not found")
 		return sound{}, 0, false
 	}
-	file, isCopy, err := h.store.played(r.Context(), id, h.convertedDir)
+	file, isCopy, err := h.store.played(r.Context(), id, h.convertedDir, false)
 	if err != nil {
 		h.fail(w, r, err)
 		return sound{}, 0, false

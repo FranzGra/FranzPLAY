@@ -9,6 +9,7 @@ import {
   fetchSubtitles,
   fetchVideo,
   type Owner,
+  playsFileItself,
   type SubtitleTrack,
   streamURL,
   type Video,
@@ -37,6 +38,11 @@ type State =
   | { kind: "missing" }
   | { kind: "error" }
   | { kind: "ready"; video: Video; startAt: number };
+
+// canPlayType asks this browser whether it can play a kind of video file.
+function canPlayType(type: string): string {
+  return document.createElement("video").canPlayType(type);
+}
 
 // VideoPage is where a video is watched: the player, its details, and
 // the videos to watch after it next to it.
@@ -183,7 +189,7 @@ function Watch({
       <div className={styles.player}>
         <Player
           key={video.id}
-          src={streamURL(video.id)}
+          src={streamURL(video.id, video.copy && playsFileItself(video, canPlayType))}
           poster={video.cover}
           subtitles={subtitles}
           startAt={startAt}

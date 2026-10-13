@@ -24,12 +24,12 @@ func TestParseProbeRealOutput(t *testing.T) {
 	}{
 		{"probe-mp4.json", Info{
 			Duration: Duration{seconds: 3}, Width: 320, Height: 240,
-			VideoCodec: "h264", AudioCodec: "aac", Container: "mov,mp4,m4a,3gp,3g2,mj2",
+			VideoCodec: "h264", AudioCodec: "aac", Container: "mov,mp4,m4a,3gp,3g2,mj2", PixelFormat: "yuv420p",
 		}},
 		// Filmed with the phone upright: stored 320x240, shown 240x320.
 		{"probe-rotated.json", Info{
 			Duration: Duration{seconds: 3}, Width: 240, Height: 320,
-			VideoCodec: "h264", AudioCodec: "aac", Container: "mov,mp4,m4a,3gp,3g2,mj2",
+			VideoCodec: "h264", AudioCodec: "aac", Container: "mov,mp4,m4a,3gp,3g2,mj2", PixelFormat: "yuv420p",
 		}},
 	}
 	for _, tt := range tests {
@@ -57,6 +57,18 @@ func TestParseProbeCases(t *testing.T) {
 				{"codec_type":"video","codec_name":"mjpeg","width":600,"height":600,"disposition":{"attached_pic":1}},
 				{"codec_type":"video","codec_name":"hevc","width":1920,"height":1080}]}`,
 			want: Info{Duration: Duration{seconds: 10}, Width: 1920, Height: 1080, VideoCodec: "hevc"},
+		},
+		{
+			name: "10-bit picture",
+			json: `{"format":{"duration":"5"},"streams":[
+				{"codec_type":"video","codec_name":"h264","width":1280,"height":720,"pix_fmt":"yuv420p10le"}]}`,
+			want: Info{Duration: Duration{seconds: 5}, Width: 1280, Height: 720, VideoCodec: "h264", PixelFormat: "yuv420p10le"},
+		},
+		{
+			name: "pixel format that is not a name is not kept",
+			json: `{"format":{"duration":"5"},"streams":[
+				{"codec_type":"video","codec_name":"h264","width":1280,"height":720,"pix_fmt":"yuv420p; DROP"}]}`,
+			want: Info{Duration: Duration{seconds: 5}, Width: 1280, Height: 720, VideoCodec: "h264"},
 		},
 		{
 			name: "duration only on the stream",

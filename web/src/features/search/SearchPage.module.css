@@ -3,6 +3,13 @@
   display: none;
 }
 
+/* "Video", above the videos found, when people were found too. */
+.heading {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .box {
   display: flex;
   align-items: center;

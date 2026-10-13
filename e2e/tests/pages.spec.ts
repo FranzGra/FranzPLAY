@@ -9,6 +9,7 @@ const userPages = [
   "/categorie",
   "/categorie/Vacanze",
   "/cerca?q=lezione",
+  "/cerca?q=giulia", // finds a person
   "/playlist",
   "/cronologia",
   "/mi-piace",

@@ -11,6 +11,8 @@ export function videoJSON(overrides: Record<string, unknown> = {}) {
     cover: "/api/covers/7-0a1b2c3d.jpg",
     addedAt: "2026-10-10T08:00:00Z",
     playable: true,
+    fileType: 'video/mp4; codecs="avc1.640028, mp4a.40.2"',
+    copy: false,
     preview: null,
     clip: null,
     clipHD: null,

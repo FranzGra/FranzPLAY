@@ -18,7 +18,8 @@ import (
 //	GET /api/videos                       list, newest first (?category=&uploader=&shared=1&q=&limit=&offset=);
 //	                                      mixed with ?order=random&seed=N
 //	GET /api/videos/{id}                  one video
-//	GET /api/videos/{id}/stream           the video file, with jumps forward and back
+//	GET /api/videos/{id}/stream           the video file, with jumps forward and back: its copy for
+//	                                      every device when there is one, the file itself with ?original=1
 //	GET /api/videos/{id}/subtitles        the subtitles next to the video file, inside it and made by whisper
 //	GET /api/videos/{id}/subtitles/{key}  one subtitle, as WebVTT
 //	GET /api/categories                   categories with their number of videos, color and image
@@ -105,15 +106,17 @@ func (h handlers) categories(w http.ResponseWriter, r *http.Request) {
 // stream sends the video file. http.ServeContent answers the browser's
 // "from byte X to byte Y" requests (Range), which is what lets the player
 // jump forward and back without downloading the whole file.
-// A video not every browser plays is sent as its copy, when it is ready.
-// The file is only opened for reading (rule 1).
+// A video not every browser plays is sent as its copy, when it is ready,
+// unless the browser asks for the file itself (?original=1) because it
+// can play it at its full quality. The file is only opened for reading
+// (rule 1).
 func (h handlers) stream(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
 		return
 	}
-	name, _, err := h.store.played(r.Context(), id, h.convertedDir)
+	name, _, err := h.store.played(r.Context(), id, h.convertedDir, r.URL.Query().Get("original") == "1")
 	if errors.Is(err, errNotFound) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
 		return

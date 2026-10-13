@@ -8,6 +8,7 @@
             "codec_type": "video",
             "width": 320,
             "height": 240,
+            "pix_fmt": "yuv420p",
             "duration": "3.000000",
             "disposition": {
                 "attached_pic": 0

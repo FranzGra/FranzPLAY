@@ -16,8 +16,8 @@ suonano sempre e solo **la prima**: non c'è un modo affidabile per dirgli «usa
 - Per un'altra lingua, FranzPLAY **rimonta il video al volo**: ffmpeg prende l'immagine **così
   com'è** (la copia, non la converte) e ci mette accanto la traccia scelta, mentre il video si
   guarda. Non si scrive niente su disco.
-- La traccia audio si copia se il browser la conosce (AAC, MP3, Opus, FLAC); se no (per esempio
-  l'AC3 dei film) si converte in AAC stereo, che costa poco.
+- La traccia audio si copia se tutti i browser la conoscono (AAC, MP3); se no (per esempio l'AC3
+  dei film, o l'Opus dei video presi dal web) si converte in AAC stereo, che costa poco.
 - Al massimo **3 video** alla volta si guardano così; oltre, il server risponde «occupato» e il
   player torna alla lingua del file, con un messaggio.
 - Il player ricorda la lingua scelta e la usa per i video successivi che ce l'hanno.

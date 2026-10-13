@@ -107,10 +107,10 @@ func (p *Prober) save(ctx context.Context, videoID int64, fingerprint string, in
 
 	res, err := tx.ExecContext(ctx, `
 		UPDATE videos
-		SET duration = ?, width = ?, height = ?, video_codec = ?, audio_codec = ?, container = ?
+		SET duration = ?, width = ?, height = ?, video_codec = ?, audio_codec = ?, container = ?, pixel_format = ?
 		WHERE id = ? AND fingerprint = ?`,
 		info.Duration.Seconds(), info.Width, info.Height, info.VideoCodec, info.AudioCodec, info.Container,
-		videoID, fingerprint)
+		info.PixelFormat, videoID, fingerprint)
 	if err != nil {
 		return fmt.Errorf("save info of video %d: %w", videoID, err)
 	}

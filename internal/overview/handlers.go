@@ -109,7 +109,7 @@ func (a api) disks(ctx context.Context) []Disk {
 func countVideos(ctx context.Context, db *sql.DB) (_ Videos, err error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT path, missing_since IS NOT NULL, hidden_at IS NOT NULL, video_codec,
-		       coalesce(audio_codec, ''), converted IS NOT NULL, cover IS NOT NULL
+		       coalesce(audio_codec, ''), coalesce(pixel_format, ''), converted IS NOT NULL, cover IS NOT NULL
 		FROM videos`)
 	if err != nil {
 		return Videos{}, fmt.Errorf("count videos: %w", err)
@@ -120,8 +120,8 @@ func countVideos(ctx context.Context, db *sql.DB) (_ Videos, err error) {
 		var p string
 		var missing, hidden, converted, cover bool
 		var codec sql.NullString
-		var audio string
-		if err := rows.Scan(&p, &missing, &hidden, &codec, &audio, &converted, &cover); err != nil {
+		var audio, pixels string
+		if err := rows.Scan(&p, &missing, &hidden, &codec, &audio, &pixels, &converted, &cover); err != nil {
 			return Videos{}, fmt.Errorf("count videos: %w", err)
 		}
 		if missing {
@@ -136,7 +136,7 @@ func countVideos(ctx context.Context, db *sql.DB) (_ Videos, err error) {
 			continue // not analysed yet
 		}
 		v.Analysed++
-		info := video.Info{VideoCodec: codec.String, AudioCodec: audio}
+		info := video.Info{VideoCodec: codec.String, AudioCodec: audio, PixelFormat: pixels}
 		if converted || video.DirectlyPlayable(path.Ext(p), info) {
 			v.Playable++
 		}

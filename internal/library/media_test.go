@@ -8,6 +8,8 @@ func TestIsVideo(t *testing.T) {
 		"FILM.MKV":      true,
 		"clip.webm":     true,
 		"old.avi":       true,
+		"old.rmvb":      true,
+		"camera.dv":     true,
 		"notes.txt":     false,
 		"cover.jpg":     false,
 		"subs.srt":      false,

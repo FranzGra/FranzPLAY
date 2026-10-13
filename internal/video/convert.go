@@ -1,9 +1,5 @@
 package video
 
-// copyableVideoCodecs are the pictures that go as they are into the MP4
-// copy: the ones DirectlyPlayable trusts, except VP8, which MP4 cannot hold.
-var copyableVideoCodecs = map[string]bool{"h264": true, "vp9": true, "av1": true}
-
 // MaxConvertHeight is the tallest picture of a converted copy: a 4K film
 // becomes 1080p. Encoding more would take far too long on a Raspberry Pi,
 // and a home screen hardly shows the difference.
@@ -16,12 +12,14 @@ type ConvertPlan struct {
 }
 
 // PlanConversion decides whether a video needs a copy, and how. ext is the
-// file extension, like ".mkv"; info is what ffprobe found.
+// file extension, like ".mkv"; info is what ffprobe found. The picture is
+// copied only when every device decodes it (see DirectlyPlayable): a VP9,
+// AV1 or HEVC picture would play in some browsers and not on an iPhone.
 func PlanConversion(ext string, info Info) ConvertPlan {
 	if info.VideoCodec == "" || DirectlyPlayable(ext, info) {
 		return ConvertPlan{}
 	}
-	return ConvertPlan{Needed: true, CopyVideo: copyableVideoCodecs[info.VideoCodec]}
+	return ConvertPlan{Needed: true, CopyVideo: plainPicture(info)}
 }
 
 // MP4AudioCodec is the sound a copy holds for a sound track of the file:
