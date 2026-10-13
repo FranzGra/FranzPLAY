@@ -106,3 +106,35 @@ test("on a phone the card in the middle of the screen plays its clip", async ({
   // clip being there is what this checks.)
   await expect(page.getByTestId("clip")).toHaveCount(1);
 });
+
+test("on a phone a tap shows the controls and a double tap jumps", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "taps are for touch screens");
+  await logIn(page, PEOPLE[0]);
+  const video = (await videos(page)).find((v) => v.title === "Gita al mare");
+  await page.goto(`/video/${video?.id}`);
+  const player = page.locator("[data-controls] video");
+  const root = page.locator("[data-controls]");
+  // Playing, untouched for a while: the controls go away.
+  await expect
+    .poll(() => player.evaluate((v: HTMLVideoElement) => v.currentTime))
+    .toBeGreaterThan(0);
+  await expect(root).toHaveAttribute("data-controls", "hidden", { timeout: 10_000 });
+
+  const box = await root.boundingBox();
+  if (!box) throw new Error("the player has no size");
+  const y = box.y + box.height / 2;
+  // A tap brings them back, and they stay after the finger lifts.
+  await page.touchscreen.tap(box.x + box.width / 2, y);
+  await page.waitForTimeout(500);
+  await expect(root).toHaveAttribute("data-controls", "visible");
+
+  // A double tap on the right, where the controls' shade is, jumps
+  // forward and does not go full screen.
+  const before = await player.evaluate((v: HTMLVideoElement) => v.currentTime);
+  await page.touchscreen.tap(box.x + box.width * 0.85, box.y + box.height * 0.6);
+  await page.touchscreen.tap(box.x + box.width * 0.85, box.y + box.height * 0.6);
+  await expect
+    .poll(() => player.evaluate((v: HTMLVideoElement) => v.currentTime))
+    .toBeGreaterThan(before + 10);
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+});

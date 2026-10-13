@@ -63,7 +63,7 @@ const paths = {
       <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
     </>
   ),
-  back10: (
+  back15: (
     <>
       <path d="M4 12a8 8 0 1 0 2.4-5.7" />
       <path d="M4 3v4h4" />
@@ -76,11 +76,11 @@ const paths = {
         stroke="none"
         fontWeight="700"
       >
-        10
+        15
       </text>
     </>
   ),
-  forward10: (
+  forward15: (
     <>
       <path d="M20 12a8 8 0 1 1-2.4-5.7" />
       <path d="M20 3v4h-4" />
@@ -93,7 +93,7 @@ const paths = {
         stroke="none"
         fontWeight="700"
       >
-        10
+        15
       </text>
     </>
   ),

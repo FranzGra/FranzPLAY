@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SubtitleTrack } from "../../api/videos";
-import { failureText, Player, pickTrack } from "./Player";
+import { doubleTapWithin, failureText, hideAfter, Player, pickTrack } from "./Player";
 
 // jsdom has no real video: these stand-ins make play() and pause() behave.
 function fakeMedia() {
@@ -117,17 +117,17 @@ describe("player", () => {
     expect(screen.getByRole("button", { name: "Riproduci (k)" })).toBeInTheDocument();
   });
 
-  it("jumps 10 seconds with the buttons, within the video", async () => {
+  it("jumps 15 seconds with the buttons, within the video", async () => {
     const { user, video } = setup();
     video.currentTime = 100;
-    await user.click(screen.getByRole("button", { name: "Avanti di 10 secondi (l)" }));
-    expect(video.currentTime).toBe(110);
-    await user.click(screen.getByRole("button", { name: "Indietro di 10 secondi (j)" }));
-    await user.click(screen.getByRole("button", { name: "Indietro di 10 secondi (j)" }));
-    expect(video.currentTime).toBe(90);
+    await user.click(screen.getByRole("button", { name: "Avanti di 15 secondi (l)" }));
+    expect(video.currentTime).toBe(115);
+    await user.click(screen.getByRole("button", { name: "Indietro di 15 secondi (j)" }));
+    await user.click(screen.getByRole("button", { name: "Indietro di 15 secondi (j)" }));
+    expect(video.currentTime).toBe(85);
 
     video.currentTime = 240;
-    await user.click(screen.getByRole("button", { name: "Avanti di 10 secondi (l)" }));
+    await user.click(screen.getByRole("button", { name: "Avanti di 15 secondi (l)" }));
     expect(video.currentTime).toBe(245);
   });
 
@@ -135,7 +135,7 @@ describe("player", () => {
     const { user, video, play } = setup();
     video.currentTime = 50;
     await user.keyboard("{ArrowRight}");
-    expect(video.currentTime).toBe(60);
+    expect(video.currentTime).toBe(65);
     await user.keyboard("j");
     expect(video.currentTime).toBe(50);
     await user.keyboard("5");
@@ -498,9 +498,9 @@ describe("sound tracks", () => {
     const { user, video } = setup({ audio, findAudio, length: 245 });
     await chooseInSettings(user, "Inglese");
     fireEvent.loadedMetadata(video);
-    await user.click(screen.getByRole("button", { name: "Avanti di 10 secondi (l)" }));
-    expect(findAudio).toHaveBeenLastCalledWith(2, 10);
-    expect(video.getAttribute("src")).toBe("/api/videos/7/audio/2/stream?at=10");
+    await user.click(screen.getByRole("button", { name: "Avanti di 15 secondi (l)" }));
+    expect(findAudio).toHaveBeenLastCalledWith(2, 15);
+    expect(video.getAttribute("src")).toBe("/api/videos/7/audio/2/stream?at=15");
   });
 
   it("opens in the language chosen last time", async () => {
@@ -545,5 +545,95 @@ describe("failureText", () => {
     [4, "Copia in arrivo.", "Copia in arrivo."],
   ])("code %s, hint %s", (code, hint, want) => {
     expect(failureText(code, hint)).toContain(want);
+  });
+});
+
+describe("player on a touch screen", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // playing sets up a player whose video plays, with a picture 300 wide.
+  function playing() {
+    const { video } = setup();
+    fireEvent.play(video);
+    const root = document.querySelector("[data-controls]") as HTMLElement;
+    const surface = document.querySelector("[data-surface]") as HTMLElement;
+    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({ left: 0, width: 300 } as DOMRect);
+    const fullscreen = vi.fn(() => Promise.resolve());
+    root.requestFullscreen = fullscreen;
+    return { video, root, surface, fullscreen };
+  }
+
+  // tap is a finger touching the picture at x and lifting: the browser
+  // also says the finger left the player.
+  function tap(surface: HTMLElement, root: HTMLElement, x = 150) {
+    fireEvent.pointerDown(surface, { pointerType: "touch", clientX: x });
+    fireEvent.pointerUp(surface, { pointerType: "touch", clientX: x });
+    fireEvent.pointerLeave(root, { pointerType: "touch" });
+  }
+
+  function wait(ms: number) {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  it("shows the controls on a tap and keeps them up while the finger is away", () => {
+    const { root, surface } = playing();
+    wait(hideAfter);
+    expect(root).toHaveAttribute("data-controls", "hidden");
+    tap(surface, root);
+    expect(root).toHaveAttribute("data-controls", "visible");
+    wait(hideAfter - 100);
+    expect(root).toHaveAttribute("data-controls", "visible");
+    wait(100);
+    expect(root).toHaveAttribute("data-controls", "hidden");
+  });
+
+  it("keeps the controls up while a finger uses them", () => {
+    const { root, surface } = playing();
+    wait(hideAfter);
+    tap(surface, root);
+    wait(hideAfter - 100);
+    const forward = screen.getByRole("button", { name: "Avanti di 15 secondi (l)" });
+    fireEvent.pointerDown(forward, { pointerType: "touch" });
+    wait(hideAfter - 100);
+    expect(root).toHaveAttribute("data-controls", "visible");
+  });
+
+  it("hides the controls on a second tap, a moment later", () => {
+    const { root, surface } = playing();
+    wait(hideAfter);
+    tap(surface, root);
+    wait(doubleTapWithin + 1);
+    expect(root).toHaveAttribute("data-controls", "visible");
+    tap(surface, root);
+    wait(doubleTapWithin);
+    expect(root).toHaveAttribute("data-controls", "hidden");
+  });
+
+  it("jumps 15 seconds on a double tap on the sides, never full screen", () => {
+    const { video, root, surface, fullscreen } = playing();
+    video.currentTime = 100;
+    tap(surface, root, 280);
+    tap(surface, root, 280);
+    fireEvent.doubleClick(surface);
+    expect(video.currentTime).toBe(115);
+    tap(surface, root, 20);
+    wait(doubleTapWithin + 1);
+    tap(surface, root, 20);
+    tap(surface, root, 20);
+    fireEvent.doubleClick(surface);
+    expect(video.currentTime).toBe(100);
+    expect(fullscreen).not.toHaveBeenCalled();
+    expect(root).toHaveAttribute("data-controls", "visible");
+  });
+
+  it("goes full screen on a double click of the mouse", () => {
+    const { surface, fullscreen } = playing();
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    fireEvent.doubleClick(surface);
+    expect(fullscreen).toHaveBeenCalled();
   });
 });

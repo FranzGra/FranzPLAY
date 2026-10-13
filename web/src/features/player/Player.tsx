@@ -65,13 +65,13 @@ type PlayerProps = {
 // position while the video plays.
 const reportEvery = 10;
 
-// hideAfter is how long the controls stay visible after the last movement,
-// while the video plays.
-const hideAfter = 2500;
+// hideAfter is how long the controls stay visible after the last movement
+// or touch, while the video plays.
+export const hideAfter = 3000;
 // doubleTapWithin is how close two taps must be to count as a double tap.
-const doubleTapWithin = 300;
+export const doubleTapWithin = 300;
 
-type Flash = { icon: "back10" | "forward10" | "play" | "pause" | "volume" | "muted"; key: number };
+type Flash = { icon: "back15" | "forward15" | "play" | "pause" | "volume" | "muted"; key: number };
 
 const parseVolume = (data: unknown) => {
   if (typeof data !== "number" || data < 0 || data > 1) throw new Error("bad volume");
@@ -246,6 +246,11 @@ export function Player({
   }, [subtitles]);
   const hideTimer = useRef<number | undefined>(undefined);
   const lastTap = useRef(0);
+  // What pressed the picture last: a double tap of a finger must not also
+  // count as a double click, which goes full screen.
+  const lastPointer = useRef("");
+  const tapTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(tapTimer.current), []);
 
   // What onPosition knows: the time now, the last one told, and whether
   // the video was played at all (opening a video is not watching it).
@@ -489,7 +494,7 @@ export function Player({
           break;
         case "seek-by":
           seekTo(realTime(v) + action.seconds);
-          showFlash(action.seconds < 0 ? "back10" : "forward10");
+          showFlash(action.seconds < 0 ? "back15" : "forward15");
           break;
         case "seek-to-fraction":
           if (Number.isFinite(realDuration(v))) seekTo(realDuration(v) * action.fraction);
@@ -563,6 +568,7 @@ export function Player({
   // On a touch screen a tap shows the controls and a double tap on the
   // sides jumps; with a mouse a click plays or pauses.
   function onSurfacePointerUp(event: PointerEvent<HTMLDivElement>) {
+    lastPointer.current = event.pointerType;
     if (menuOpen) {
       setMenuOpen(false); // a click outside the menu closes it, and does nothing else
       return;
@@ -575,13 +581,20 @@ export function Player({
     const rect = event.currentTarget.getBoundingClientRect();
     const zone = tapZone(event.clientX, rect.left, rect.width);
     if (now - lastTap.current < doubleTapWithin && zone !== "middle") {
+      window.clearTimeout(tapTimer.current); // the first tap was half of this
       run({ kind: "seek-by", seconds: zone === "back" ? -skipSeconds : skipSeconds });
       lastTap.current = 0;
       return;
     }
     lastTap.current = now;
-    if (active && started) {
-      setActive(false);
+    if (active && started && playing) {
+      // A tap on visible controls hides them, but only once it is clear it
+      // is not the first half of a double tap.
+      window.clearTimeout(tapTimer.current);
+      tapTimer.current = window.setTimeout(() => {
+        window.clearTimeout(hideTimer.current);
+        setActive(false);
+      }, doubleTapWithin);
     } else {
       showControls();
     }
@@ -604,7 +617,14 @@ export function Player({
       data-controls={controlsVisible ? "visible" : "hidden"}
       data-theater={theater ? "on" : undefined}
       onPointerMove={(event) => event.pointerType !== "touch" && showControls()}
-      onPointerLeave={() => playing && setActive(false)}
+      // A finger on a button of the controls keeps them up a while longer.
+      onPointerDown={(event) => {
+        if (event.pointerType === "touch" && event.target !== event.currentTarget) {
+          if (!(event.target as HTMLElement).dataset.surface) showControls();
+        }
+      }}
+      // Only the mouse leaves: a finger "leaves" every time it lifts.
+      onPointerLeave={(event) => event.pointerType === "mouse" && playing && setActive(false)}
     >
       {/* biome-ignore lint/a11y/useMediaCaption: many home videos have no subtitles; when they do, they are tracks below */}
       <video
@@ -701,12 +721,10 @@ export function Player({
       {/* The surface catches clicks and taps on the picture. */}
       <div
         className={styles.surface}
+        data-surface="true"
         onPointerUp={onSurfacePointerUp}
-        onDoubleClick={(event) => {
-          if ((event.nativeEvent as globalThis.PointerEvent).pointerType !== "touch") {
-            toggleFullscreen();
-          }
-        }}
+        // A double click goes full screen; a double tap jumps instead.
+        onDoubleClick={() => lastPointer.current === "mouse" && toggleFullscreen()}
         aria-hidden="true"
       />
 
@@ -812,17 +830,17 @@ export function Player({
             type="button"
             className={styles.button}
             onClick={() => run({ kind: "seek-by", seconds: -skipSeconds })}
-            aria-label="Indietro di 10 secondi (j)"
+            aria-label="Indietro di 15 secondi (j)"
           >
-            <Icon name="back10" size={26} />
+            <Icon name="back15" size={26} />
           </button>
           <button
             type="button"
             className={styles.button}
             onClick={() => run({ kind: "seek-by", seconds: skipSeconds })}
-            aria-label="Avanti di 10 secondi (l)"
+            aria-label="Avanti di 15 secondi (l)"
           >
-            <Icon name="forward10" size={26} />
+            <Icon name="forward15" size={26} />
           </button>
           <div className={styles.volume}>
             <button

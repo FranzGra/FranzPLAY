@@ -201,7 +201,7 @@ incollato, il browser può farlo partire solo senza audio: in alto a sinistra co
 l'audio**.
 
 - **barra del tempo** grande: cliccala o trascinala per spostarti;
-- **±10 secondi** con i tasti accanto a Play, con le frecce o J e L della tastiera, oppure con un
+- **±15 secondi** con i tasti accanto a Play, con le frecce o J e L della tastiera, oppure con un
   doppio tocco ai lati del video sul telefono;
 - altri tasti: **spazio** o K per pausa, **F** schermo intero, **M** muto, **C** sottotitoli;
 - l'**ingranaggio** apre le impostazioni: velocità, lingua dell'audio (se il video ne ha più di
