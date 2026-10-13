@@ -20,7 +20,11 @@ if [ "$(id -u)" = 0 ]; then
 	data="${FRANZPLAY_DATA_DIR:-/data}"
 	mkdir -p "$data"
 	# Only what is not already theirs: fast when nothing changed.
-	find "$data" \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown "$PUID:$PGID" {} +
+	# Some folders shared from Windows or a NAS refuse a new owner: say so,
+	# and try to start anyway.
+	if ! find "$data" \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown "$PUID:$PGID" {} +; then
+		echo "entrypoint: could not give $data to $PUID:$PGID; FranzPLAY may not be able to write there" >&2
+	fi
 	exec su-exec "$PUID:$PGID" "$@"
 fi
 

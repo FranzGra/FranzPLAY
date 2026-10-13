@@ -41,6 +41,7 @@ services:
     volumes:
       # La cartella dati di FranzPLAY: database, copertine, anteprime, video caricati.
       # È l'unica dove FranzPLAY scrive. Per spostare FranzPLAY basta copiare questa.
+      # Su Windows e Mac usa "franzplay-data" (vedi .env.example).
       - ${FRANZPLAY_DATA_FOLDER:-./data}:/data
       # I tuoi video, in SOLA LETTURA (":ro"): FranzPLAY non può toccarli.
       - ${FRANZPLAY_VIDEO_FOLDER:?scrivi in .env la cartella dei tuoi video (FRANZPLAY_VIDEO_FOLDER)}:/videos:ro
@@ -100,4 +101,6 @@ services:
         max-file: "3"
 
 volumes:
+  # La cartella dati tenuta da Docker, per chi scrive FRANZPLAY_DATA_FOLDER=franzplay-data.
+  franzplay-data:
   libretranslate-models:
