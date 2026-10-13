@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -153,5 +154,52 @@ func TestRunFailsWhenPortIsBusy(t *testing.T) {
 	env := map[string]string{config.EnvAddr: l.Addr().String(), config.EnvDataDir: t.TempDir()}
 	if err := run(context.Background(), func(k string) string { return env[k] }, io.Discard); err == nil {
 		t.Error("run() returned nil, want an error when the port is already in use")
+	}
+}
+
+// TestStopWhileSomeoneIsWatching: a video being watched never ends by
+// itself. Stopping must still end cleanly, not with an error.
+func TestStopWhileSomeoneIsWatching(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	playing := make(chan struct{})
+	srv := &http.Server{
+		ReadHeaderTimeout: time.Second,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			// A stream that goes on until the person leaves.
+			for {
+				if _, err := w.Write(bytes.Repeat([]byte("v"), 64<<10)); err != nil {
+					return
+				}
+				select {
+				case playing <- struct{}{}:
+				default:
+				}
+			}
+		}),
+	}
+	served := make(chan error, 1)
+	go func() { served <- srv.Serve(l) }()
+
+	resp, err := http.Get("http://" + l.Addr().String() + "/video")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // the server closes it
+	<-playing
+	// The person paused: nothing more is read.
+
+	start := time.Now()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := stopServer(srv, 200*time.Millisecond, logger); err != nil {
+		t.Errorf("stop with a video playing: %v", err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("stop took %v", took)
+	}
+	if err := <-served; !errors.Is(err, http.ErrServerClosed) {
+		t.Errorf("server ended with %v", err)
 	}
 }
