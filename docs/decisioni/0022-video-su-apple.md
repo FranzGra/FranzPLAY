@@ -1,4 +1,4 @@
-# 0021 · Video che si vedono anche su iPhone, iPad e Mac
+# 0022 · Video che si vedono anche su iPhone, iPad e Mac
 
 **Data:** 13 ottobre 2026 · **Stato:** decisa
 

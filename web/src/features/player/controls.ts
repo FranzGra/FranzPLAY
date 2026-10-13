@@ -25,17 +25,30 @@ export function timeAt(x: number, left: number, width: number, duration: number)
   return fraction * duration;
 }
 
-// previewFrame finds, in the image of previews, the frame for a time: its
-// top-left corner in pixels. The last frame covers the end of the video.
+// previewFrame finds, in the image of previews, the frame for a time, as
+// CSS background values in percent: the frame is shown at whatever size
+// the player chooses, whatever size it was made at. The last frame covers
+// the end of the video.
 export function previewFrame(
-  preview: { gap: number; count: number; columns: number; width: number; height: number },
+  preview: { gap: number; count: number; columns: number },
   time: number,
-): { x: number; y: number } {
+): { position: string; size: string } {
   const index = Math.min(Math.max(Math.floor(time / preview.gap), 0), preview.count - 1);
+  const rows = Math.ceil(preview.count / preview.columns);
+  // In CSS, 0% puts the image's left edge on the box's left edge and 100%
+  // its right edge on the right one: frame i of n is at i / (n - 1).
+  const percent = (i: number, n: number) => (n > 1 ? (i / (n - 1)) * 100 : 0);
+  const x = percent(index % preview.columns, preview.columns);
+  const y = percent(Math.floor(index / preview.columns), rows);
   return {
-    x: (index % preview.columns) * preview.width,
-    y: Math.floor(index / preview.columns) * preview.height,
+    position: `${round(x)}% ${round(y)}%`,
+    size: `${preview.columns * 100}% ${rows * 100}%`,
   };
+}
+
+// round keeps 4 decimals: enough for a frame among thousands of pixels.
+function round(n: number): number {
+  return Math.round(n * 10000) / 10000;
 }
 
 // bufferedEnd is how far the browser has downloaded ahead of time: the

@@ -11,7 +11,7 @@ import (
 // not read yet, or missing, are left alone.
 func TestPixelFormatChecksEveryVideoAgain(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "x.db")
-	before, err := open(context.Background(), file, migrationsUpTo(t, 39))
+	before, err := open(context.Background(), file, migrationsUpTo(t, 40))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestPixelFormatChecksEveryVideoAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db := openTest(t, file, migrationsUpTo(t, 40))
+	db := openTest(t, file, migrationsUpTo(t, 41))
 	var got string
 	if err := db.QueryRow(`SELECT group_concat(video_id || ' ' || kind || ' ' || state, ', ')
 		FROM (SELECT * FROM jobs ORDER BY video_id, kind)`).Scan(&got); err != nil {
