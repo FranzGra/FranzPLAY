@@ -1,0 +1,103 @@
+/* A glass panel under the title of the Home, with the choices side by
+   side on a wide screen. */
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 18px 28px;
+  margin: 0 0 24px;
+  padding: 18px 20px;
+  border-radius: var(--radius-l);
+  animation: var(--motion-pop-in);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.label {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* A row of buttons joined together, like shadcn/ui's toggle group. */
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  background: rgb(0 0 0 / 0.25);
+}
+
+.segment {
+  min-width: 40px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.segment:hover {
+  color: var(--color-text);
+  background: rgb(255 255 255 / 0.06);
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.slider input {
+  width: 150px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.hint {
+  max-width: 240px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.reset {
+  align-self: flex-end;
+  height: 36px;
+  margin-left: auto;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: none;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.reset:hover {
+  color: var(--color-text);
+  background: rgb(255 255 255 / 0.06);
+}

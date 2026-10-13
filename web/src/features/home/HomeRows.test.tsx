@@ -2,6 +2,8 @@ import { screen, within } from "@testing-library/react";
 import { videoJSON, watchedJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 
+const look = { columns: 0, size: 3, sections: "one" };
+
 const routes = {
   ...signedIn(),
   "GET /api/continue": { body: [watchedJSON({ video: videoJSON({ id: 3, title: "A metà" }) })] },
@@ -12,7 +14,7 @@ describe("home rows", () => {
   it("closes a row by its title and remembers it on the server", async () => {
     const { user, server } = renderApp("/", {
       ...routes,
-      "PUT /api/home/rows/liked": { body: { closed: ["liked"] } },
+      "PUT /api/home/rows/liked": { body: { closed: ["liked"], look } },
     });
     const row = await screen.findByRole("region", { name: "Ti piacciono" });
     const toggle = within(row).getByRole("button", { name: "Ti piacciono" });
@@ -34,8 +36,8 @@ describe("home rows", () => {
   it("shows closed the rows the person closed before", async () => {
     const { user, server } = renderApp("/", {
       ...routes,
-      "GET /api/home": { body: { closed: ["continue"] } },
-      "PUT /api/home/rows/continue": { body: { closed: [] } },
+      "GET /api/home": { body: { closed: ["continue"], look } },
+      "PUT /api/home/rows/continue": { body: { closed: [], look } },
     });
     const row = await screen.findByRole("region", { name: "Continua a guardare" });
     expect(within(row).getByRole("button", { name: "Continua a guardare" })).toHaveAttribute(
