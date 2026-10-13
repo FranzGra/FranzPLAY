@@ -19,15 +19,14 @@
   background: var(--color-surface);
   box-shadow: 0 0 0 1px var(--color-border);
   transition:
-    translate var(--duration-normal) var(--ease-out),
-    scale var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out);
+    scale var(--duration-slow) var(--ease-out),
+    box-shadow var(--duration-slow) var(--ease-out);
 }
 
-/* Under the mouse the cover lifts a little and its picture comes closer;
-   pressed, it sinks. */
+/* Under the mouse the cover grows softly a little, without moving up;
+   pressed, it sinks back. */
 .root:hover .cover {
-  translate: 0 -3px;
+  scale: var(--hover-scale);
   box-shadow:
     0 0 0 1px var(--color-border),
     0 14px 30px rgb(0 0 0 / 0.45);
@@ -35,17 +34,13 @@
 
 .root:active .cover {
   scale: 0.98;
+  transition-duration: var(--duration-fast);
 }
 
 .cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: scale var(--duration-slow) var(--ease-out);
-}
-
-.root:hover .cover img {
-  scale: 1.04;
 }
 
 /* The clip lies over the cover. */

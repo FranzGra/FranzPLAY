@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchContinue, leaveContinue, type Watched } from "../../api/progress";
 import { Icon } from "../../components/Icon";
+import { removeSmoothly } from "../../lib/motion";
 import type { Fold } from "../home/useHomeLayout";
 import { VideoCard } from "../videos/VideoCard";
 import { VideoRow } from "../videos/VideoRow";
@@ -27,16 +28,17 @@ export function ContinueRow({ fold }: { fold?: Fold }) {
     return () => controller.abort();
   }, []);
 
-  const leave = (gone: Watched) => {
-    const before = started;
+  // takeOut lets the video fade away while the server takes it out of the
+  // row; the others then glide into its place. If the server refuses, it
+  // comes back where it was.
+  const takeOut = (gone: Watched, item: Element | null) => {
     setProblem("");
-    setStarted((list) => list.filter((w) => w.video.id !== gone.video.id));
-    leaveContinue(gone.video.id).catch((error: unknown) => {
+    removeSmoothly(
+      item,
+      () => leaveContinue(gone.video.id),
+      () => setStarted((list) => list.filter((w) => w.video.id !== gone.video.id)),
+    ).catch((error: unknown) => {
       console.error(error);
-      // Put it back in its place: on the server it is still in the row.
-      setStarted((list) =>
-        before.filter((w) => w === gone || list.some((l) => l.video.id === w.video.id)),
-      );
       setProblem("Non sono riuscito a togliere il video. Riprova.");
     });
   };
@@ -51,14 +53,14 @@ export function ContinueRow({ fold }: { fold?: Fold }) {
       )}
       <VideoRow title="Continua a guardare" fold={fold}>
         {started.map((w) => (
-          <li key={w.video.id} className={styles.item}>
+          <li key={w.video.id} className={styles.item} data-flip>
             <VideoCard video={w.video} now={now} position={w.position} />
             <button
               type="button"
               className={`glass ${styles.leave}`}
               aria-label={`Togli «${w.video.title}» da Continua a guardare`}
               title="Togli da Continua a guardare (resta nella cronologia)"
-              onClick={() => leave(w)}
+              onClick={(event) => takeOut(w, event.currentTarget.closest("li"))}
             >
               <Icon name="close" size={16} />
             </button>

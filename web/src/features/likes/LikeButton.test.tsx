@@ -37,6 +37,27 @@ describe("like button", () => {
     expect(server.requests.map((r) => r.method)).toEqual(["GET", "PUT", "DELETE"]);
   });
 
+  it("bursts when I like, not when the page opens on a liked video", async () => {
+    const { user } = setup({
+      "GET /api/videos/7/like": { body: { liked: true, count: 4 } },
+      "DELETE /api/videos/7/like": { body: { liked: false, count: 3 } },
+      "PUT /api/videos/7/like": { body: { liked: true, count: 4 } },
+    });
+    const button = await screen.findByRole("button", { name: "Mi piace", pressed: true });
+    expect(screen.queryByTestId("like-burst")).not.toBeInTheDocument();
+
+    await user.click(button);
+    await screen.findByRole("button", { name: "Mi piace", pressed: false });
+    expect(screen.queryByTestId("like-burst")).not.toBeInTheDocument();
+    // The number rolled down to 3.
+    expect(screen.getByText("3")).toHaveAttribute("data-direction", "down");
+
+    await user.click(button);
+    await screen.findByRole("button", { name: "Mi piace", pressed: true });
+    expect(screen.getByTestId("like-burst")).toBeInTheDocument();
+    expect(screen.getByText("4")).toHaveAttribute("data-direction", "up");
+  });
+
   it("goes back when the server refuses", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { user } = setup({

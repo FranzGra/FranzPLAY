@@ -48,6 +48,31 @@ describe("save button", () => {
     ]);
   });
 
+  it("makes the button's icon jump when the video goes into a list", async () => {
+    setup({
+      "GET /api/playlists": { body: [later, trips] },
+      "PUT /api/playlists/1/videos/7": { status: 204 },
+      "DELETE /api/playlists/2/videos/7": { status: 204 },
+    });
+    const user = userEvent.setup();
+    const button = screen.getByRole("button", { name: "Salva" });
+    const icon = () => button.querySelector("span");
+    await user.click(button);
+    expect(icon()).not.toHaveAttribute("data-bounce");
+    // Taking it out of a list is no reason to jump.
+    await user.click(await screen.findByRole("checkbox", { name: "Gite" }));
+    expect(icon()).not.toHaveAttribute("data-bounce");
+    await user.click(screen.getByRole("checkbox", { name: "Guarda più tardi" }));
+    expect(icon()).toHaveAttribute("data-bounce");
+    // Only the list just ticked draws its tick.
+    expect(
+      screen.getByRole("checkbox", { name: "Guarda più tardi" }).closest("li"),
+    ).toHaveAttribute("data-touched");
+    expect(screen.getByRole("checkbox", { name: "Gite" }).closest("li")).not.toHaveAttribute(
+      "data-touched",
+    );
+  });
+
   it("goes back when the server refuses", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { user } = setup({

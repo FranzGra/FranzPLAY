@@ -56,6 +56,15 @@ describe("clip on the video card", () => {
     expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
   });
 
+  it("waits a full second of the mouse resting before playing", () => {
+    show(video());
+    fireEvent.pointerEnter(card(), { pointerType: "mouse" });
+    wait(999);
+    expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
+    wait(1);
+    expect(screen.getByTestId("clip")).toBeInTheDocument();
+  });
+
   it("does not play when the mouse only passes over", () => {
     show(video());
     fireEvent.pointerEnter(card(), { pointerType: "mouse" });

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type Ref, useEffect, useRef, useState } from "react";
 import {
   createPlaylist,
   fetchPlaylists,
@@ -8,12 +8,18 @@ import {
   putInPlaylist,
 } from "../../api/playlists";
 import { Icon } from "../../components/Icon";
+import { usePresence } from "../../lib/presence";
 import styles from "./SaveButton.module.css";
 
 // SaveButton opens a small panel where I put the video in my lists, or
-// make a new list for it.
+// make a new list for it. The panel grows out of the button and shrinks
+// back into it; each time the video goes into a list, the button's icon
+// bounces.
 export function SaveButton({ videoId }: { videoId: number }) {
   const [open, setOpen] = useState(false);
+  const panel = usePresence(open ? true : null);
+  // saved counts the lists the video went into: each one bounces the icon.
+  const [saved, setSaved] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
 
@@ -46,19 +52,44 @@ export function SaveButton({ videoId }: { videoId: number }) {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <Icon name="save" size={20} />
+        <span key={saved} className={styles.icon} data-bounce={saved > 0 || undefined}>
+          <Icon name="save" size={20} />
+        </span>
         Salva
       </button>
-      {open && <Panel videoId={videoId} onClose={() => setOpen(false)} />}
+      {panel.shown && (
+        <Panel
+          ref={panel.ref}
+          leaving={panel.leaving}
+          videoId={videoId}
+          onSaved={() => setSaved((n) => n + 1)}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; lists: Playlist[] };
 
-function Panel({ videoId, onClose }: { videoId: number; onClose: () => void }) {
+function Panel({
+  ref,
+  leaving,
+  videoId,
+  onSaved,
+  onClose,
+}: {
+  ref: Ref<HTMLDivElement>;
+  leaving: boolean;
+  videoId: number;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [problem, setProblem] = useState("");
+  // The list just ticked or made here: only that one moves.
+  const [touched, setTouched] = useState<number | null>(null);
+  const [made, setMade] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -82,6 +113,8 @@ function Panel({ videoId, onClose }: { videoId: number; onClose: () => void }) {
   const toggle = (list: Playlist) => {
     const contains = !list.contains;
     mark(list.id, contains);
+    setTouched(list.id);
+    if (contains) onSaved();
     setProblem("");
     putInPlaylist(list.id, videoId, contains).catch((error: unknown) => {
       console.error(error);
@@ -90,13 +123,23 @@ function Panel({ videoId, onClose }: { videoId: number; onClose: () => void }) {
     });
   };
 
-  const created = (list: Playlist) =>
+  const created = (list: Playlist) => {
+    onSaved();
+    setTouched(list.id);
+    setMade(list.id);
     setState((s) =>
       s.kind === "ready" ? { kind: "ready", lists: [...s.lists, { ...list, contains: true }] } : s,
     );
+  };
 
   return (
-    <div className={`glass ${styles.panel}`} role="dialog" aria-label="Salva in una playlist">
+    <div
+      ref={ref}
+      className={`glass ${styles.panel}`}
+      role="dialog"
+      aria-label="Salva in una playlist"
+      data-leaving={leaving || undefined}
+    >
       <div className={styles.head}>
         <h2 className={styles.title}>Salva in…</h2>
         <button type="button" className={styles.close} onClick={onClose} aria-label="Chiudi">
@@ -111,7 +154,11 @@ function Panel({ videoId, onClose }: { videoId: number; onClose: () => void }) {
         <>
           <ul className={styles.lists}>
             {state.lists.map((list) => (
-              <li key={list.id}>
+              <li
+                key={list.id}
+                data-touched={list.id === touched || undefined}
+                data-new={list.id === made || undefined}
+              >
                 <label className={styles.option}>
                   <input
                     type="checkbox"

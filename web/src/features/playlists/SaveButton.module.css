@@ -19,6 +19,15 @@
   background: var(--glass-bg-strong);
 }
 
+.icon {
+  display: flex;
+}
+
+/* The video just went into a list: the icon jumps. */
+.icon[data-bounce] {
+  animation: var(--motion-bounce);
+}
+
 .panel {
   position: absolute;
   top: calc(100% + 8px);
@@ -32,6 +41,12 @@
   /* It grows out of the button. */
   transform-origin: top left;
   animation: var(--motion-pop-in);
+}
+
+/* Closing, it shrinks back into the button. */
+.panel[data-leaving] {
+  animation: var(--motion-pop-out);
+  pointer-events: none;
 }
 
 .head {
@@ -113,15 +128,46 @@
   color: transparent;
 }
 
+.check {
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
 .option input:checked + .check {
   border-color: var(--color-text);
   background: var(--color-text);
   color: var(--color-bg);
 }
 
+/* A list just made comes in softly at the bottom. */
+.lists li[data-new] {
+  animation: var(--motion-enter);
+}
+
 .option input:focus-visible + .check {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* Ticking a list: the box pops and the tick draws itself, stroke by
+   stroke. Only the list just touched moves, not those ticked before. */
+[data-touched] .option input:checked + .check {
+  animation: var(--motion-pop);
+}
+
+[data-touched] .option input:checked + .check path {
+  stroke-dasharray: 24;
+  animation: draw var(--duration-slow) var(--ease-out) both;
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 .name {
@@ -214,7 +260,17 @@
     bottom: calc(var(--tabbar-height) + 24px);
     left: 16px;
     width: auto;
-    /* On phones it rises from below instead. */
+    /* On phones it rises from below instead, and sinks back down. */
     animation: var(--motion-enter);
+  }
+
+  .panel[data-leaving] {
+    animation: var(--motion-sink-out);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-touched] .option input:checked + .check path {
+    animation: none;
   }
 }

@@ -24,6 +24,16 @@
   animation: var(--motion-pop-in);
 }
 
+/* Closing, the window shrinks away and the shade fades. */
+.backdrop[data-leaving] {
+  animation: var(--motion-fade-out);
+  pointer-events: none;
+}
+
+.backdrop[data-leaving] .dialog {
+  animation: var(--motion-pop-out);
+}
+
 .title {
   margin: 0;
   font-size: 18px;

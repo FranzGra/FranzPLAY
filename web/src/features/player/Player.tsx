@@ -10,6 +10,7 @@ import type { AudioStart, AudioTrack } from "../../api/audio";
 import type { Preview, SubtitleTrack } from "../../api/videos";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
+import { usePresence } from "../../lib/presence";
 import { loadSetting, saveSetting } from "../../lib/storage";
 import {
   type Action,
@@ -214,6 +215,9 @@ export function Player({
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState(true); // the person moved recently
   const [flash, setFlash] = useState<Flash | null>(null);
+  // The settings menu and the big play button leave softly.
+  const menu = usePresence(menuOpen ? true : null);
+  const bigPlay = usePresence<true, HTMLButtonElement>(!started && !failed ? true : null);
   const [track, setTrack] = useState<string | null>(() =>
     pickTrack(subtitles, loadSetting("subtitles", parseSubtitleChoice, { on: false, lang: "" })),
   );
@@ -727,8 +731,16 @@ export function Player({
         </div>
       )}
 
-      {!started && !failed && (
-        <button type="button" className={styles.bigPlay} onClick={togglePlay} aria-label="Guarda">
+      {bigPlay.shown && (
+        <button
+          ref={bigPlay.ref}
+          type="button"
+          className={styles.bigPlay}
+          onClick={togglePlay}
+          aria-label="Guarda"
+          data-leaving={bigPlay.leaving || undefined}
+          tabIndex={bigPlay.leaving ? -1 : undefined}
+        >
           <Icon name="play" size={40} />
         </button>
       )}
@@ -757,8 +769,10 @@ export function Player({
         </div>
       )}
 
-      {menuOpen && (
+      {menu.shown && (
         <SettingsMenu
+          ref={menu.ref}
+          leaving={menu.leaving}
           speed={speed}
           onSpeed={setSpeed}
           tracks={subtitles}

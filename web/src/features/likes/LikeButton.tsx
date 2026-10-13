@@ -4,11 +4,17 @@ import { Icon } from "../../components/Icon";
 import styles from "./LikeButton.module.css";
 
 // LikeButton shows how many people like a video and lets me like it.
-// It changes at once and goes back if the server refuses.
+// It changes at once and goes back if the server refuses. Liking makes
+// the thumb bounce with a little burst around it, and the number rolls up
+// or down to its new value.
 export function LikeButton({ videoId }: { videoId: number }) {
   const [like, setLikeState] = useState<Like | null>(null);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  // burst counts the likes given here: each one draws a new burst.
+  const [burst, setBurst] = useState(0);
+  // Which way the number last moved, so it rolls the right way.
+  const [direction, setDirection] = useState<"up" | "down">("up");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -28,6 +34,8 @@ export function LikeButton({ videoId }: { videoId: number }) {
     const before = like;
     const liked = !before.liked;
     setLikeState({ liked, count: Math.max(0, before.count + (liked ? 1 : -1)) });
+    setDirection(liked ? "up" : "down");
+    if (liked) setBurst((b) => b + 1);
     setSaving(true);
     setFailed(false);
     setLike(videoId, liked)
@@ -50,11 +58,23 @@ export function LikeButton({ videoId }: { videoId: number }) {
         onClick={toggle}
         title={like.liked ? "Non mi piace più" : "Mi piace"}
       >
-        <Icon name="like" size={20} />
+        <span className={styles.icon}>
+          <Icon name="like" size={20} />
+          {like.liked && burst > 0 && (
+            <span
+              key={burst}
+              className={styles.burst}
+              data-testid="like-burst"
+              aria-hidden="true"
+            />
+          )}
+        </span>
         Mi piace
         {like.count > 0 && (
           <span className={styles.count} aria-hidden="true">
-            {like.count.toLocaleString("it-IT")}
+            <span key={like.count} className={styles.number} data-direction={direction}>
+              {like.count.toLocaleString("it-IT")}
+            </span>
           </span>
         )}
       </button>

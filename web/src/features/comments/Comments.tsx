@@ -1,15 +1,24 @@
-import { useId, useState } from "react";
+import { type MouseEvent, useId, useState } from "react";
 import { Link } from "react-router";
 import { avatarUrl } from "../../api/auth";
 import { type Comment, maxCommentLength } from "../../api/comments";
 import { formatSince } from "../../lib/format";
+import { removeSmoothly } from "../../lib/motion";
 import styles from "./Comments.module.css";
 import { countComments, useComments } from "./useComments";
 
 // Comments is the section under a video where people talk about it:
 // conversations newest first, each with its replies.
 export function Comments({ videoId }: { videoId: number }) {
-  const { state, add, remove } = useComments(videoId);
+  const { state, add, remove: deleteOne, drop } = useComments(videoId);
+  // remove lets the comment fade away while the server deletes it; the
+  // ones below then glide up.
+  const remove = (id: number, item: Element | null) =>
+    removeSmoothly(
+      item,
+      () => deleteOne(id),
+      () => drop(id),
+    );
   const [now] = useState(() => new Date());
   const titleId = useId();
 
@@ -36,7 +45,7 @@ export function Comments({ videoId }: { videoId: number }) {
           ) : (
             <ul className={`stagger ${styles.list}`}>
               {state.comments.map((c) => (
-                <li key={c.id}>
+                <li key={c.id} data-flip>
                   <Conversation comment={c} now={now} add={add} remove={remove} />
                 </li>
               ))}
@@ -50,7 +59,7 @@ export function Comments({ videoId }: { videoId: number }) {
 
 type Actions = {
   add: (body: string, rootId?: number) => Promise<void>;
-  remove: (id: number) => Promise<void>;
+  remove: (id: number, item: Element | null) => Promise<void>;
 };
 
 // Conversation is a comment with its replies and the form to answer.
@@ -68,7 +77,7 @@ function Conversation({ comment, now, add, remove }: { comment: Comment; now: Da
               aria-label={`Risposte a ${comment.author.name}`}
             >
               {comment.replies.map((r) => (
-                <li key={r.id}>
+                <li key={r.id} data-flip>
                   <CommentView comment={r} now={now} onReply={reply} remove={remove} />
                 </li>
               ))}
@@ -99,14 +108,15 @@ function CommentView({
   comment: Comment;
   now: Date;
   onReply: () => void;
-  remove: (id: number) => Promise<void>;
+  remove: (id: number, item: Element | null) => Promise<void>;
 }) {
   const [asking, setAsking] = useState(false);
   const [problem, setProblem] = useState("");
-  const confirm = () => {
+  const confirm = (event: MouseEvent<HTMLButtonElement>) => {
+    const item = event.currentTarget.closest("li");
     setAsking(false);
     setProblem("");
-    remove(comment.id).catch((error: unknown) => {
+    remove(comment.id, item).catch((error: unknown) => {
       console.error(error);
       setProblem("Non sono riuscito a eliminare il commento. Riprova.");
     });

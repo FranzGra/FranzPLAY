@@ -3,6 +3,7 @@ import { type AdminVideo, resetCover, setCoverSecond, uploadCover } from "../../
 import { ApiError } from "../../api/client";
 import { streamURL } from "../../api/videos";
 import { formatDuration } from "../../lib/format";
+import { usePresence } from "../../lib/presence";
 import { type LoadedPhoto, loadPhoto } from "../profile/photo";
 import styles from "./Admin.module.css";
 import { CoverCropper } from "./CoverCropper";
@@ -24,6 +25,9 @@ export function CoverForm({
   onClose: () => void;
 }) {
   const [picture, setPicture] = useState<LoadedPhoto | null>(null);
+  // The window to fit the picture closes softly: it keeps the picture meanwhile.
+  const cropper = usePresence(picture);
+  const cropping = cropper.shown;
   const [moment, setMoment] = useState(false);
   const [online, setOnline] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -141,9 +145,11 @@ export function CoverForm({
           {problem}
         </p>
       )}
-      {picture && (
+      {cropping && (
         <CoverCropper
-          picture={picture}
+          ref={cropper.ref}
+          leaving={cropper.leaving}
+          picture={cropping}
           saving={busy}
           problem={problem}
           onCancel={() => {
@@ -151,7 +157,7 @@ export function CoverForm({
             setProblem("");
           }}
           onSave={(rect) =>
-            save(async () => uploadCover(video.id, await renderCover(picture.url, rect)), {
+            save(async () => uploadCover(video.id, await renderCover(cropping.url, rect)), {
               ...video,
               coverChoice: "image",
               coverSecond: null,

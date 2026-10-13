@@ -4,15 +4,17 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatDay } from "../../lib/format";
+import { removeAllSmoothly, removeSmoothly } from "../../lib/motion";
 import { VideoCard } from "../videos/VideoCard";
 import styles from "./HistoryPage.module.css";
 import { useHistory } from "./useHistory";
 
 // HistoryPage lists the videos the person watched, most recent first,
-// grouped by day. Each can be removed, or the whole history emptied.
+// grouped by day. Each can be removed, or the whole history emptied: what
+// goes fades away and what stays glides into its place.
 export function HistoryPage() {
   usePageTitle("Cronologia");
-  const { state, loadMore, forget, clear } = useHistory();
+  const { state, loadMore, forget, drop, clear, empty } = useHistory();
   const [now] = useState(() => new Date());
   const [problem, setProblem] = useState("");
 
@@ -33,7 +35,13 @@ export function HistoryPage() {
         </h1>
         {state.kind === "ready" && state.items.length > 0 && (
           <ClearButton
-            onClear={() => run(clear, "Non sono riuscito a cancellare la cronologia. Riprova.")}
+            onClear={() =>
+              run(
+                () =>
+                  removeAllSmoothly(document.querySelectorAll("[data-history-item]"), clear, empty),
+                "Non sono riuscito a cancellare la cronologia. Riprova.",
+              )
+            }
           />
         )}
       </div>
@@ -57,10 +65,12 @@ export function HistoryPage() {
       {state.kind === "ready" &&
         byDay(state.items, now).map(({ day, items }) => (
           <section key={day} className={styles.day} aria-label={day}>
-            <h2 className={styles.dayTitle}>{day}</h2>
+            <h2 className={styles.dayTitle} data-flip>
+              {day}
+            </h2>
             <ul className={`stagger ${styles.list}`}>
               {items.map((w) => (
-                <li key={w.video.id} className={styles.item}>
+                <li key={w.video.id} className={styles.item} data-flip data-history-item>
                   <VideoCard
                     video={w.video}
                     now={now}
@@ -72,12 +82,18 @@ export function HistoryPage() {
                     className={styles.remove}
                     aria-label={`Togli «${w.video.title}» dalla cronologia`}
                     title="Togli dalla cronologia"
-                    onClick={() =>
+                    onClick={(event) => {
+                      const item = event.currentTarget.closest("li");
                       run(
-                        () => forget(w.video.id),
+                        () =>
+                          removeSmoothly(
+                            item,
+                            () => forget(w.video.id),
+                            () => drop(w.video.id),
+                          ),
                         "Non sono riuscito a togliere il video dalla cronologia. Riprova.",
-                      )
-                    }
+                      );
+                    }}
                   >
                     <Icon name="close" size={18} />
                   </button>
@@ -87,7 +103,7 @@ export function HistoryPage() {
           </section>
         ))}
       {state.kind === "ready" && state.items.length < state.total && (
-        <div className={styles.more}>
+        <div className={styles.more} data-flip>
           <button
             type="button"
             className={`glass ${styles.moreButton}`}

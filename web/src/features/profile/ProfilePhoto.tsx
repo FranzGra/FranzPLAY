@@ -3,6 +3,7 @@ import { avatarUrl, removeAvatar, setAvatar } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { useAccount, useAuth } from "../../app/auth";
 import { Avatar } from "../../components/Avatar";
+import { usePresence } from "../../lib/presence";
 import { PhotoCropper } from "./PhotoCropper";
 import styles from "./ProfilePage.module.css";
 import { type LoadedPhoto, loadPhoto, renderCrop } from "./photo";
@@ -14,6 +15,9 @@ export function ProfilePhoto({ children }: { children: ReactNode }) {
   const { signedIn } = useAuth();
   const input = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<LoadedPhoto | null>(null);
+  // The window to fit the picture closes softly: it keeps the picture meanwhile.
+  const cropper = usePresence(photo);
+  const cropping = cropper.shown;
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState("");
 
@@ -76,9 +80,11 @@ export function ProfilePhoto({ children }: { children: ReactNode }) {
           e.target.value = ""; // the same file can be chosen again
         }}
       />
-      {photo && (
+      {cropping && (
         <PhotoCropper
-          photo={photo}
+          ref={cropper.ref}
+          leaving={cropper.leaving}
+          photo={cropping}
           saving={saving}
           problem={problem}
           onSave={save}

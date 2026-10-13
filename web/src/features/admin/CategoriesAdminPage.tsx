@@ -10,6 +10,7 @@ import {
 import { ApiError } from "../../api/client";
 import { EmptyState } from "../../components/EmptyState";
 import { formatVideos } from "../../lib/format";
+import { usePresence } from "../../lib/presence";
 import { type LoadedPhoto, loadPhoto } from "../profile/photo";
 import styles from "./Admin.module.css";
 import { CoverCropper } from "./CoverCropper";
@@ -75,6 +76,9 @@ function CategoryRow({ category, onChanged }: { category: AdminCategory; onChang
   const [label, setLabel] = useState(category.label);
   const [color, setColor] = useState(category.color);
   const [picture, setPicture] = useState<LoadedPhoto | null>(null);
+  // The window to fit the picture closes softly: it keeps the picture meanwhile.
+  const cropper = usePresence(picture);
+  const cropping = cropper.shown;
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const [done, setDone] = useState("");
@@ -219,9 +223,11 @@ function CategoryRow({ category, onChanged }: { category: AdminCategory; onChang
           {done}
         </p>
       )}
-      {picture && (
+      {cropping && (
         <CoverCropper
-          picture={picture}
+          ref={cropper.ref}
+          leaving={cropper.leaving}
+          picture={cropping}
           saving={busy}
           problem={problem}
           title={`Immagine di ${shown}`}
@@ -232,7 +238,7 @@ function CategoryRow({ category, onChanged }: { category: AdminCategory; onChang
           }}
           onSave={(rect) =>
             run(
-              async () => uploadCategoryImage(category.name, await renderCover(picture.url, rect)),
+              async () => uploadCategoryImage(category.name, await renderCover(cropping.url, rect)),
               "Immagine salvata.",
             )
           }
