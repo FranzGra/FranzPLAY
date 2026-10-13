@@ -215,16 +215,29 @@
   bottom: 0;
   left: 0;
   padding: 48px 16px 8px;
+  /* The shade above the buttons, and the gaps between them, are still the
+     picture: a tap there shows or hides the controls, a double tap jumps.
+     On a phone they cover half the picture. Only the timeline and what is
+     on the bar take the finger. */
+  pointer-events: none;
   background: linear-gradient(transparent, rgb(0 0 0 / 0.75));
   transition:
     opacity var(--duration-normal) var(--ease-out),
     translate var(--duration-normal) var(--ease-out);
 }
 
+.controls > :not(.bar),
+.bar > :not(.spacer) {
+  pointer-events: auto;
+}
+
 /* The controls sink a little as they fade away, and rise as they return. */
 .root[data-controls="hidden"] .controls {
   opacity: 0;
   translate: 0 6px;
+}
+
+.root[data-controls="hidden"] .controls * {
   pointer-events: none;
 }
 
@@ -351,6 +364,7 @@
 .bar {
   display: flex;
   align-items: center;
+  pointer-events: none;
   gap: 2px;
   margin-top: 2px;
 }

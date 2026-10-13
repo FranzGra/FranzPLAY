@@ -1,8 +1,9 @@
 // The player's decisions, as plain functions: no video element, no screen.
 // The Player component asks these what to do, and they are easy to test.
 
-// skipSeconds is how far the ±10 buttons, the keys and double taps jump.
-export const skipSeconds = 10;
+// skipSeconds is how far the ±15 buttons, the keys and double taps jump.
+// 15 as Francesco asked: a bit more than YouTube's 10.
+export const skipSeconds = 15;
 
 // speeds are the playback speeds offered in the settings menu.
 export const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
