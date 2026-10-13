@@ -106,9 +106,9 @@ func clipOutputFiles(args []string) []string {
 
 func TestClipSaved(t *testing.T) {
 	fx := newClipFixture(t, "/videos", "a.mp4", 600)
-	var got []string
+	var calls [][]string
 	fx.c.run = func(ctx context.Context, program string, args ...string) ([]byte, error) {
-		got = args
+		calls = append(calls, args)
 		return fakeClipFFmpeg("clip", nil)(ctx, program, args...)
 	}
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
@@ -118,7 +118,7 @@ func TestClipSaved(t *testing.T) {
 		t.Errorf("saved %+v, want 1-fp.mp4", s)
 	}
 	if files := fx.files(t); !slices.Equal(files, []string{"1-fp.mp4"}) {
-		t.Errorf("clips folder = %q", files)
+		t.Errorf("clips folder = %q, want the clip and no work files", files)
 	}
 	// The sharp twin, made by the same run of ffmpeg, with the same name.
 	if s := fx.savedHD(t); s.String != "1-fp.mp4" {
@@ -127,24 +127,34 @@ func TestClipSaved(t *testing.T) {
 	if files := fx.filesHD(t); !slices.Equal(files, []string{"1-fp.mp4"}) {
 		t.Errorf("sharp clips folder = %q", files)
 	}
-	if outs := clipOutputFiles(got); len(outs) != 2 {
-		t.Errorf("ffmpeg writes %q, want two clips", outs)
+	if len(calls) != 4 {
+		t.Fatalf("ffmpeg ran %d times, want one per moment and one to join them", len(calls))
 	}
-	// Three moments, each read straight from its place.
-	var starts []string
-	for i, a := range got {
-		if a == "-ss" {
-			starts = append(starts, got[i+1])
+	// Three moments, one at a time, each read straight from its place.
+	for i, start := range []string{"150", "300", "450"} {
+		joined := strings.Join(calls[i], " ")
+		for _, want := range []string{"-ss " + start + " -t 2 -i file:/videos/a.mp4", "min(720,ih)", "-an"} {
+			if !strings.Contains(joined, want) {
+				t.Errorf("moment %d: ffmpeg command %q has no %q", i, joined, want)
+			}
+		}
+		if outs := clipOutputFiles(calls[i]); len(outs) != 1 {
+			t.Errorf("moment %d writes %q, want one piece", i, outs)
 		}
 	}
-	if !slices.Equal(starts, []string{"150", "300", "450"}) {
-		t.Errorf("ffmpeg starts at %q, want 150, 300 and 450", starts)
+	// The last run joins the pieces and writes both clips.
+	last := calls[3]
+	if outs := clipOutputFiles(last); len(outs) != 2 {
+		t.Errorf("ffmpeg writes %q, want two clips", outs)
 	}
-	joined := strings.Join(got, " ")
-	for _, want := range []string{"concat=n=3:v=1:a=0", "min(720,ih)", "split=2", "scale=-2:360", "-an", "+faststart", "file:/videos/a.mp4"} {
+	joined := strings.Join(last, " ")
+	for _, want := range []string{"concat=n=3:v=1:a=0", "split=2", "scale=-2:360", "-an", "+faststart"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("ffmpeg command %q has no %q", joined, want)
 		}
+	}
+	if strings.Contains(joined, "/videos/a.mp4") {
+		t.Errorf("the join reads the video again: %q", joined)
 	}
 }
 

@@ -270,3 +270,16 @@ func TestPreviewsWithRealFFmpeg(t *testing.T) {
 		})
 	}
 }
+
+// TestFramesArgsKeyFramesUseOneThread: reading key frames only, ffmpeg
+// decodes with one thread, which saves memory and no time; reading every
+// frame it keeps all its threads.
+func TestFramesArgsKeyFramesUseOneThread(t *testing.T) {
+	args := framesArgs("a.mp4", 6, "work", true)
+	if i := slices.Index(args, "-threads"); i < 0 || args[i+1] != "1" || i > slices.Index(args, "-i") {
+		t.Errorf("key frames: %q, want -threads 1 before the input", args)
+	}
+	if args := framesArgs("a.mp4", 6, "work", false); slices.Contains(args, "-threads") {
+		t.Errorf("every frame: %q, want ffmpeg's own threads", args)
+	}
+}

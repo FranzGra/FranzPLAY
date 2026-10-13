@@ -40,14 +40,14 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 	video := filepath.Join(dir, "mare.mp4")
 	c := &Coverer{}
 
-	args := c.coverArgs(video, 300, coverChoice{}, "out.jpg")
+	args := c.coverArgs(video, 300, coverChoice{}, true, "out.jpg")
 	if !slices.Contains(args, "file:"+video) || !slices.Contains(args, "30") {
 		t.Errorf("without an image: %q, want a frame at second 30 of the video", args)
 	}
 
 	// A picture found on the internet comes before a frame of the video.
 	downloaded := filepath.Join(dir, "data", "online", "7-1234.img")
-	args = c.coverArgs(video, 300, coverChoice{downloaded: downloaded}, "out.jpg")
+	args = c.coverArgs(video, 300, coverChoice{downloaded: downloaded}, true, "out.jpg")
 	if !slices.Contains(args, "file:"+downloaded) || slices.Contains(args, "file:"+video) {
 		t.Errorf("with a picture from the internet: %q", args)
 	}
@@ -57,7 +57,7 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An image next to the video comes before the internet's.
-	args = c.coverArgs(video, 300, coverChoice{downloaded: downloaded}, "out.jpg")
+	args = c.coverArgs(video, 300, coverChoice{downloaded: downloaded}, true, "out.jpg")
 	if !slices.Contains(args, "file:"+poster) || slices.Contains(args, "file:"+video) {
 		t.Errorf("with mare-poster.jpg: %q", args)
 	}
@@ -67,7 +67,7 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 	if err := os.WriteFile(plain, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if args = c.coverArgs(video, 300, coverChoice{}, "out.jpg"); !slices.Contains(args, "file:"+plain) {
+	if args = c.coverArgs(video, 300, coverChoice{}, true, "out.jpg"); !slices.Contains(args, "file:"+plain) {
 		t.Errorf("with mare.jpg: %q", args)
 	}
 }
@@ -83,19 +83,37 @@ func TestCoverArgsPrefersTheAdministratorsChoice(t *testing.T) {
 
 	// A moment chosen by the administrator beats the image next to the video.
 	choice := coverChoice{second: sql.NullInt64{Int64: 125, Valid: true}, downloaded: downloaded}
-	args := c.coverArgs(video, 300, choice, "out.jpg")
+	args := c.coverArgs(video, 300, choice, true, "out.jpg")
 	if !slices.Contains(args, "file:"+video) || !slices.Contains(args, "125") {
 		t.Errorf("with a chosen moment: %q", args)
 	}
 
 	// An uploaded image beats everything, and is cut to 16:9.
 	choice.own = filepath.Join(dir, "data", "own-covers", "7-abcdef0123456789.png")
-	args = c.coverArgs(video, 300, choice, "out.jpg")
+	args = c.coverArgs(video, 300, choice, true, "out.jpg")
 	if !slices.Contains(args, "file:"+choice.own) || slices.Contains(args, "file:"+video) {
 		t.Errorf("with an uploaded image: %q", args)
 	}
 	if i := slices.Index(args, "-vf"); i < 0 || !strings.HasPrefix(args[i+1], "crop=") {
 		t.Errorf("the uploaded image is not cut to 16:9: %q", args)
+	}
+}
+
+// TestCoverArgsReadsKeyFramesOnlyForItsOwnMoment: the frame FranzPLAY
+// picks comes from the key frames alone, which is light on a Raspberry
+// Pi; a moment chosen by the administrator stays exact.
+func TestCoverArgsReadsKeyFramesOnlyForItsOwnMoment(t *testing.T) {
+	video := filepath.Join(t.TempDir(), "mare.mp4")
+	c := &Coverer{}
+	if args := c.coverArgs(video, 300, coverChoice{}, true, "out.jpg"); !slices.Contains(args, "-skip_frame") {
+		t.Errorf("FranzPLAY's moment: %q, want key frames only", args)
+	}
+	if args := c.coverArgs(video, 300, coverChoice{}, false, "out.jpg"); slices.Contains(args, "-skip_frame") {
+		t.Errorf("every frame asked: %q, want no -skip_frame", args)
+	}
+	chosen := coverChoice{second: sql.NullInt64{Int64: 125, Valid: true}}
+	if args := c.coverArgs(video, 300, chosen, true, "out.jpg"); slices.Contains(args, "-skip_frame") {
+		t.Errorf("administrator's moment: %q, want the exact frame", args)
 	}
 }
 
@@ -194,6 +212,29 @@ func TestCoverFailuresLeaveNothingBehind(t *testing.T) {
 				t.Error("cover saved after a failure")
 			}
 		})
+	}
+}
+
+// TestCoverWithoutAKeyFrameReadsEveryFrame: when no key frame follows
+// the moment, the cover is made again from every frame instead of failing.
+func TestCoverWithoutAKeyFrameReadsEveryFrame(t *testing.T) {
+	fx := newCoverFixture(t, "/videos", "a.mp4")
+	var calls [][]string
+	fx.c.run = func(ctx context.Context, program string, args ...string) ([]byte, error) {
+		calls = append(calls, args)
+		if slices.Contains(args, "-skip_frame") {
+			return fakeFFmpeg("", nil)(ctx, program, args...) // no key frame found
+		}
+		return fakeFFmpeg("jpeg", nil)(ctx, program, args...)
+	}
+	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 || slices.Contains(calls[1], "-skip_frame") {
+		t.Errorf("ffmpeg runs %q, want key frames first, then every frame", calls)
+	}
+	if !fx.cover(t).Valid || len(fx.files(t)) != 1 {
+		t.Errorf("cover %+v, folder %q; want one cover", fx.cover(t), fx.files(t))
 	}
 }
 
