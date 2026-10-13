@@ -6,8 +6,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 func schemaVersion(t *testing.T, db *sql.DB) int {
@@ -74,16 +76,111 @@ func TestOpenAppliesSettings(t *testing.T) {
 		"PRAGMA foreign_keys": "1",
 		"PRAGMA journal_mode": "wal",
 		"PRAGMA synchronous":  "1",
-		"PRAGMA busy_timeout": "5000",
+		"PRAGMA busy_timeout": "30000",
 	}
-	for pragma, want := range checks {
-		var got string
-		if err := db.QueryRow(pragma).Scan(&got); err != nil {
-			t.Fatalf("%s: %v", pragma, err)
+	// Every connection must have the settings, not only the first one.
+	ctx := context.Background()
+	conns := make([]*sql.Conn, MaxConnections)
+	for i := range conns {
+		c, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if got != want {
-			t.Errorf("%s = %s, want %s", pragma, got, want)
+		conns[i] = c
+	}
+	for i, c := range conns {
+		for pragma, want := range checks {
+			var got string
+			if err := c.QueryRowContext(ctx, pragma).Scan(&got); err != nil {
+				t.Fatalf("connection %d, %s: %v", i, pragma, err)
+			}
+			if got != want {
+				t.Errorf("connection %d: %s = %s, want %s", i, pragma, got, want)
+			}
 		}
+	}
+	for _, c := range conns {
+		if err := c.Close(); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+// TestReadsDoNotWaitForAWrite: while a long write is still open (a library
+// scan, say), someone jumping in a video can still read.
+func TestReadsDoNotWaitForAWrite(t *testing.T) {
+	db := openTest(t, filepath.Join(t.TempDir(), "x.db"),
+		sqlFiles("0001_a.sql", "CREATE TABLE a (id INTEGER); INSERT INTO a VALUES (1);"))
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO a VALUES (2)"); err != nil {
+		t.Fatal(err)
+	}
+
+	readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var n int
+	if err := db.QueryRowContext(readCtx, "SELECT count(*) FROM a").Scan(&n); err != nil {
+		t.Fatalf("read during a write: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("read %d rows, want 1: the write is not finished yet", n)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestWritesTakeTurns: transactions that read and then write, started at
+// the same moment, all succeed one after the other instead of failing with
+// "database is locked".
+func TestWritesTakeTurns(t *testing.T) {
+	db := openTest(t, filepath.Join(t.TempDir(), "x.db"),
+		sqlFiles("0001_a.sql", "CREATE TABLE counter (n INTEGER); INSERT INTO counter VALUES (0);"))
+	ctx := context.Background()
+	const writers = 2 * MaxConnections
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for range writers {
+		wg.Go(func() {
+			errs <- func() (err error) {
+				tx, err := db.BeginTx(ctx, nil)
+				if err != nil {
+					return err
+				}
+				defer func() {
+					if err != nil {
+						err = errors.Join(err, tx.Rollback())
+					}
+				}()
+				var n int
+				if err := tx.QueryRowContext(ctx, "SELECT n FROM counter").Scan(&n); err != nil {
+					return err
+				}
+				time.Sleep(5 * time.Millisecond) // let the others try in the meantime
+				if _, err := tx.ExecContext(ctx, "UPDATE counter SET n = ?", n+1); err != nil {
+					return err
+				}
+				return tx.Commit()
+			}()
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("write failed: %v", err)
+		}
+	}
+	var n int
+	if err := db.QueryRow("SELECT n FROM counter").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != writers {
+		t.Errorf("counter = %d, want %d: a write was lost", n, writers)
 	}
 }
 
