@@ -25,7 +25,7 @@ export function LikedRow({ fold }: { fold?: Fold }) {
   }, []);
   if (videos.length === 0) return null;
   return (
-    <VideoRow title="Ti piacciono" fold={fold} more="/mi-piace">
+    <VideoRow title="Ti piacciono" icon="like" fold={fold} more="/mi-piace">
       {videos.map((video) => (
         <li key={video.id}>
           <VideoCard video={video} now={now} />

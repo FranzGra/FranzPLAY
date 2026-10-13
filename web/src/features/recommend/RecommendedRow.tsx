@@ -13,7 +13,7 @@ export function RecommendedRow({ fold }: { fold?: Fold }) {
   const suggestions = useSuggestions(fetchRecommended);
   if (suggestions.length === 0) return null;
   return (
-    <VideoRow title="Potrebbe piacerti" fold={fold}>
+    <VideoRow title="Potrebbe piacerti" icon="sparkles" fold={fold}>
       {suggestions.map((s) => (
         <li key={s.video.id}>
           <VideoCard video={s.video} now={now} note={reasonText(s)} />

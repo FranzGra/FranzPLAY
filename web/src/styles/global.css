@@ -17,6 +17,8 @@
   --color-accent-rgb: 41 151 255; /* the accent as numbers, for see-through shades */
   --color-accent-glow: rgb(var(--color-accent-rgb) / 0.25);
   --color-on-accent: #ffffff;
+  --color-star: #facc15; /* the shining icon on top of the Home */
+  --color-star-rgb: 250 204 21;
   --color-danger: #fca5a5;
   --color-danger-bg: rgb(239 68 68 / 0.14);
   --color-danger-strong: #dc2626; /* buttons that delete for good */

@@ -27,7 +27,7 @@ export function SavedRow({ fold }: { fold?: Fold }) {
   }, []);
   if (!saved || saved.videos.length === 0) return null;
   return (
-    <VideoRow title="I tuoi salvati" fold={fold} more={`/playlist/${saved.list}`}>
+    <VideoRow title="I tuoi salvati" icon="save" fold={fold} more={`/playlist/${saved.list}`}>
       {saved.videos.map((video) => (
         <li key={video.id}>
           <VideoCard video={video} now={now} />

@@ -153,3 +153,74 @@ func TestRowsGoWithThePerson(t *testing.T) {
 		t.Errorf("rows left = %d (%v), want 0", n, err)
 	}
 }
+
+func (s *site) look(t *testing.T, rec *httptest.ResponseRecorder) Look {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d %s", rec.Code, rec.Body)
+	}
+	var l Layout
+	if err := json.NewDecoder(rec.Body).Decode(&l); err != nil {
+		t.Fatal(err)
+	}
+	return l.Look
+}
+
+func TestLookIsKeptForEachPerson(t *testing.T) {
+	s := newSite(t)
+	if got := s.look(t, s.do(giulia, http.MethodGet, "/api/home", "")); got != DefaultLook {
+		t.Fatalf("new person: %+v, want the default %+v", got, DefaultLook)
+	}
+
+	want := Look{Columns: 5, Size: 2, Sections: TwoLines}
+	if got := s.look(t, s.do(giulia, http.MethodPut, "/api/home/look", `{"columns":5,"size":2,"sections":"two"}`)); got != want {
+		t.Errorf("answer: %+v, want %+v", got, want)
+	}
+	// Changing it again replaces it.
+	want = Look{Columns: 0, Size: 4, Sections: Scroll}
+	s.look(t, s.do(giulia, http.MethodPut, "/api/home/look", `{"columns":0,"size":4,"sections":"scroll"}`))
+	if got := s.look(t, s.do(giulia, http.MethodGet, "/api/home", "")); got != want {
+		t.Errorf("Giulia: %+v, want %+v", got, want)
+	}
+	if got := s.look(t, s.do(marco, http.MethodGet, "/api/home", "")); got != DefaultLook {
+		t.Errorf("Marco: %+v, want his own, the default", got)
+	}
+
+	if _, err := s.db.Exec(`DELETE FROM users WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM home_look`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("looks left = %d (%v), want 0", n, err)
+	}
+}
+
+func TestLookIsCheckedAtTheEdge(t *testing.T) {
+	s := newSite(t)
+	tests := []struct {
+		name string
+		user int64
+		body string
+		want int
+	}{
+		{"nobody logged in", 0, `{"columns":3,"size":3,"sections":"one"}`, http.StatusUnauthorized},
+		{"one column", giulia, `{"columns":1,"size":3,"sections":"one"}`, http.StatusBadRequest},
+		{"seven columns", giulia, `{"columns":7,"size":3,"sections":"one"}`, http.StatusBadRequest},
+		{"size 0", giulia, `{"columns":3,"size":0,"sections":"one"}`, http.StatusBadRequest},
+		{"size 6", giulia, `{"columns":3,"size":6,"sections":"one"}`, http.StatusBadRequest},
+		{"unknown sections", giulia, `{"columns":3,"size":3,"sections":"all"}`, http.StatusBadRequest},
+		{"missing size", giulia, `{"columns":3,"sections":"one"}`, http.StatusBadRequest},
+		{"other fields", giulia, `{"columns":3,"size":3,"sections":"one","x":1}`, http.StatusBadRequest},
+		{"size not a number", giulia, `{"columns":3,"size":"big","sections":"one"}`, http.StatusBadRequest},
+		{"six columns", giulia, `{"columns":6,"size":5,"sections":"scroll"}`, http.StatusOK},
+	}
+	for _, tt := range tests {
+		if rec := s.do(tt.user, http.MethodPut, "/api/home/look", tt.body); rec.Code != tt.want {
+			t.Errorf("%s: %d %s, want %d", tt.name, rec.Code, rec.Body, tt.want)
+		}
+	}
+	// The database refuses what Go refuses, too.
+	if _, err := s.db.Exec(`INSERT INTO home_look (user_id, columns, size, sections) VALUES (2, 1, 3, 'one')`); err == nil {
+		t.Error("the database accepted one column")
+	}
+}
