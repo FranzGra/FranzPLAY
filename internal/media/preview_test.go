@@ -33,15 +33,15 @@ func newPreviewFixture(t *testing.T, root, rel string, duration int64) *previewF
 }
 
 type savedPreview struct {
-	name       sql.NullString
-	gap, count sql.NullInt64
+	name                      sql.NullString
+	gap, count, width, height sql.NullInt64
 }
 
 func (fx *previewFixture) saved(t *testing.T) savedPreview {
 	t.Helper()
 	var s savedPreview
-	if err := fx.db.QueryRow(`SELECT preview, preview_gap, preview_count FROM videos WHERE id = ?`, fx.id).
-		Scan(&s.name, &s.gap, &s.count); err != nil {
+	if err := fx.db.QueryRow(`SELECT preview, preview_gap, preview_count, preview_width, preview_height
+		FROM videos WHERE id = ?`, fx.id).Scan(&s.name, &s.gap, &s.count, &s.width, &s.height); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -107,17 +107,46 @@ func TestPreviewsSaved(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := fx.saved(t)
-	if s.name.String != "1-fp.jpg" || s.gap.Int64 != 6 || s.count.Int64 != 42 {
-		t.Errorf("saved %+v, want 42 frames every 6 seconds", s)
+	if s.name.String != "1-fp-w480.jpg" || s.gap.Int64 != 6 || s.count.Int64 != 42 ||
+		s.width.Int64 != 480 || s.height.Int64 != 270 {
+		t.Errorf("saved %+v, want 42 frames of 480x270 every 6 seconds", s)
 	}
 	if !slices.Contains(joined, "tile=10x5") {
 		t.Errorf("join command %q, want a 10x5 grid", joined)
 	}
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp.jpg"}) {
+	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480.jpg"}) {
 		t.Errorf("previews folder = %q", files)
 	}
 	if !slices.Equal(fake.calls, []string{"frames", "join"}) {
 		t.Errorf("ffmpeg ran for %q, want only key frames then join", fake.calls)
+	}
+}
+
+// TestPreviewsMadeAgainReplaceTheOldImage: an image made by an older
+// version, with smaller frames and the old name, is replaced by the new
+// one under a new name, so no browser keeps showing the old one.
+func TestPreviewsMadeAgainReplaceTheOldImage(t *testing.T) {
+	fx := newPreviewFixture(t, "/videos", "a.mp4", 600)
+	dir := filepath.Join(fx.dataDir, PreviewsDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "1-fp.jpg"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fx.db.Exec(`UPDATE videos SET preview = '1-fp.jpg', preview_gap = 6, preview_count = 100,
+		preview_width = 160, preview_height = 90 WHERE id = ?`, fx.id); err != nil {
+		t.Fatal(err)
+	}
+	fx.p.run = (&fakeFFmpegFrames{keyFrames: 100}).run
+	if err := fx.p.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if s := fx.saved(t); s.name.String != "1-fp-w480.jpg" || s.width.Int64 != 480 || s.height.Int64 != 270 {
+		t.Errorf("saved %+v, want the new image with 480x270 frames", s)
+	}
+	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480.jpg"}) {
+		t.Errorf("previews folder = %q, want only the new image", files)
 	}
 }
 
@@ -261,8 +290,8 @@ func TestPreviewsWithRealFFmpeg(t *testing.T) {
 			columns := min(s.count.Int64, 10)
 			rows := (s.count.Int64 + columns - 1) / columns
 			w, h := jpegSize(t, filepath.Join(fx.dataDir, PreviewsDir, s.name.String))
-			if int64(w) != columns*160 || int64(h) != rows*90 {
-				t.Errorf("image is %dx%d, want %dx%d", w, h, columns*160, rows*90)
+			if int64(w) != columns*480 || int64(h) != rows*270 {
+				t.Errorf("image is %dx%d, want %dx%d", w, h, columns*480, rows*270)
 			}
 			if after := listDir(t, root); !slices.Equal(after, libraryBefore) {
 				t.Errorf("the video folder changed:\nbefore %q\nafter  %q", libraryBefore, after)

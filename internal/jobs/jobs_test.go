@@ -274,6 +274,37 @@ func TestConversionGivesWayToOtherWork(t *testing.T) {
 	}
 }
 
+// TestConversionDoesNotGiveWayToARetry: a job failing again and again (an
+// internet lookup while offline) must not restart a long conversion from
+// zero every few minutes.
+func TestConversionDoesNotGiveWayToARetry(t *testing.T) {
+	fx := newFixture(t, 2)
+	film, other := fx.videos[0], fx.videos[1]
+	fx.enqueue(t, film, Convert)
+	fx.enqueue(t, other, Online)
+	mustExec(t, fx.db, `UPDATE jobs SET attempts = 1, run_after = ? WHERE kind = 'online'`,
+		fx.clock.Add(time.Hour).Unix())
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{
+		Convert: func(ctx context.Context, _ int64) error {
+			// The failed lookup is due again while the film converts.
+			mustExec(t, fx.db, `UPDATE jobs SET run_after = 0 WHERE kind = 'online'`)
+			w.Wake()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
+			return nil
+		},
+		Online: func(context.Context, int64) error { return nil },
+	}
+	runNext(t, w)
+	if j := fx.job(t, film, Convert); j.state != done {
+		t.Errorf("conversion = %+v, want done: a retry is no reason to stop", j)
+	}
+}
+
 func TestConversionDoesNotGiveWayToItsOwnKind(t *testing.T) {
 	fx := newFixture(t, 2)
 	fx.enqueue(t, fx.videos[0], Convert)
@@ -319,7 +350,7 @@ func TestInterruptedJobRunsAgainAfterRestart(t *testing.T) {
 	video := fx.videos[0]
 	fx.enqueue(t, video, Probe)
 
-	// FranzPLAY stops while the job is running.
+	// FranzPLAY stops cleanly while the job is running.
 	ctx, cancel := context.WithCancel(context.Background())
 	w := fx.worker(map[Kind]Handler{Probe: func(context.Context, int64) error {
 		cancel()
@@ -328,11 +359,11 @@ func TestInterruptedJobRunsAgainAfterRestart(t *testing.T) {
 	if _, err := w.RunNext(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if j := fx.job(t, video, Probe); j.state != running || j.attempts != 0 {
-		t.Fatalf("interrupted job = %+v, want running with no failed attempt", j)
+	if j := fx.job(t, video, Probe); j.state != pending || j.attempts != 0 {
+		t.Fatalf("interrupted job = %+v, want back in the queue with no failed attempt", j)
 	}
 
-	// At the next start it goes back in the queue and runs.
+	// At the next start it runs again.
 	ran := false
 	w = fx.worker(map[Kind]Handler{Probe: func(context.Context, int64) error { ran = true; return nil }})
 	if err := w.resetInterrupted(context.Background()); err != nil {
@@ -341,6 +372,59 @@ func TestInterruptedJobRunsAgainAfterRestart(t *testing.T) {
 	runNext(t, w)
 	if !ran {
 		t.Error("interrupted job did not run again")
+	}
+}
+
+// TestJobThatKillsFranzPLAYIsGivenUp: a job still "running" at start means
+// FranzPLAY died during it. If the same video kills it at every start, the
+// job is given up after MaxAttempts instead of a crash at every start.
+func TestJobThatKillsFranzPLAYIsGivenUp(t *testing.T) {
+	fx := newFixture(t, 1)
+	video := fx.videos[0]
+	fx.enqueue(t, video, Probe)
+	w := fx.worker(map[Kind]Handler{Probe: func(context.Context, int64) error { return nil }})
+
+	for attempt := 1; attempt <= MaxAttempts; attempt++ {
+		// The job starts, and FranzPLAY dies before it ends.
+		mustExec(t, fx.db, `UPDATE jobs SET state = 'running' WHERE video_id = ?`, video)
+		if err := w.resetInterrupted(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		j := fx.job(t, video, Probe)
+		want := pending
+		if attempt == MaxAttempts {
+			want = failed
+		}
+		if j.state != want || j.attempts != attempt || j.lastError != crashMessage {
+			t.Fatalf("after crash %d: %+v, want %s with %d attempts", attempt, j, want, attempt)
+		}
+	}
+	if runNext(t, w) {
+		t.Error("a job that crashed FranzPLAY every time ran again")
+	}
+}
+
+// TestPanicInAJobDoesNotStopFranzPLAY: a bug that panics on one strange
+// file fails that job only; the worker carries on with the next.
+func TestPanicInAJobDoesNotStopFranzPLAY(t *testing.T) {
+	fx := newFixture(t, 2)
+	bad, good := fx.videos[0], fx.videos[1]
+	fx.enqueue(t, bad, Probe)
+	fx.enqueue(t, good, Probe)
+	w := fx.worker(map[Kind]Handler{Probe: func(_ context.Context, id int64) error {
+		if id == bad {
+			panic("strange file")
+		}
+		return nil
+	}})
+
+	runNext(t, w)
+	runNext(t, w)
+	if j := fx.job(t, bad, Probe); j.state != failed || !strings.Contains(j.lastError, "crashed") {
+		t.Errorf("job that panicked = %+v, want failed with the reason", j)
+	}
+	if j := fx.job(t, good, Probe); j.state != done {
+		t.Errorf("next job = %+v, want done", j)
 	}
 }
 

@@ -64,3 +64,31 @@ test("the server answers jumps in the file with only the part asked", async ({ p
   expect(res.status()).toBe(206);
   expect((await res.body()).length).toBe(1000);
 });
+
+test("the timeline shows a sharp frame of the time pointed at", async ({ page, isMobile }) => {
+  test.skip(isMobile, "phones have no pointer to move over the timeline");
+  const errors = watchErrors(page);
+  await logIn(page, PEOPLE[0]);
+  const video = (await videos(page)).find((v) => v.title === "Gita al mare");
+  await page.goto(`/video/${video?.id}`);
+  const timeline = page.getByRole("slider", { name: "Posizione nel video" });
+  const box = await timeline.boundingBox();
+  expect(box, "the timeline is on the page").not.toBeNull();
+  if (!box) return;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const frame = page.getByTestId("preview").locator("div").first();
+  await expect(frame).toBeVisible();
+  // Shown 240 points wide, from an image made with frames twice as sharp.
+  const shown = await frame.evaluate((el) => el.getBoundingClientRect().width);
+  expect(Math.round(shown)).toBe(244); // with its 2-point border
+  const image = await frame.evaluate(async (el) => {
+    const src = getComputedStyle(el).backgroundImage.slice(5, -2);
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    return { width: img.naturalWidth, height: img.naturalHeight };
+  });
+  expect(image.width % 480).toBe(0);
+  expect(image.height % 270).toBe(0);
+  expect(errors).toEqual([]);
+});

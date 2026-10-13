@@ -6,7 +6,7 @@ Per ogni video FranzPLAY prepara tre cose da guardare:
 |---|---|---|
 | **Copertina** | la foto ferma del video, in ogni pagina | un'immagine JPEG larga **640** pixel |
 | **Anteprima** | i secondi che partono tenendo il mouse sulla copertina, o tenendo premuto col dito sul telefono | un video MP4 di **6 secondi**, senza audio, in due versioni: **360p** e **720p** |
-| **Fotogrammi della timeline** | la miniatura sopra la barra del tempo, mentre ci passi sopra col mouse | una sola immagine JPEG a griglia, con fino a **100** fotogrammi da **160×90** |
+| **Fotogrammi della timeline** | la miniatura sopra la barra del tempo, mentre ci passi sopra col mouse | una sola immagine JPEG a griglia, con fino a **100** fotogrammi da **480×270** |
 
 Le crea da solo, in sottofondo, uno alla volta, appena trova un video nuovo o cambiato. Puoi
 seguire il lavoro in **Amministrazione › Lavori**.
@@ -99,7 +99,13 @@ Perché 720p e non 1080p: [decisione 0020](decisioni/0020-anteprime-alta-e-bassa
 
 - FranzPLAY prende un fotogramma ogni pochi secondi: il più spesso possibile (al massimo uno ogni
   2 secondi), ma **non più di 100** in tutto. In un video di 10 minuti, uno ogni 6 secondi.
-- Ogni fotogramma è rimpicciolito a **160×90**, con le bande nere se il video ha un'altra forma.
+- Ogni fotogramma è rimpicciolito a **480×270**, con le bande nere se il video ha un'altra forma.
+  Il player lo mostra largo 240 punti sul computer e 160 sul telefono: gli schermi del Mac hanno
+  2 pixel veri per punto e quelli dei telefoni 3, quindi 480 pixel bastano a vederlo nitido su
+  entrambi. L'immagine intera pesa circa mezzo mega. Perché non in Full HD:
+  [decisione 0021](decisioni/0021-fotogrammi-timeline-nitidi.md).
+- Le anteprime fatte dalle versioni vecchie (160×90) continuano a funzionare e vengono rifatte
+  da sole, una alla volta, in sottofondo.
 - Tutti insieme stanno in **una sola immagine** a griglia (10 per riga), che il player scarica una
   volta sola quando apri il video. Così passare sulla barra è immediato.
 - Per andare veloce anche su un Raspberry, usa i fotogrammi "chiave" del video: sono un po' meno

@@ -64,8 +64,9 @@ type Owner struct {
 }
 
 // Preview is the image with small frames of a video, shown over the
-// player's timeline: Count frames of Width×Height, one every Gap seconds,
-// Columns per row.
+// player's timeline: Count frames of Width×Height pixels, one every Gap
+// seconds, Columns per row. The size is the one the image was made with,
+// which older versions of FranzPLAY made smaller.
 type Preview struct {
 	Src     string `json:"src"`
 	Gap     int64  `json:"gap"` // seconds
@@ -120,7 +121,7 @@ const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name =
 
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
-	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.converted,
+	v.path, v.video_codec, v.audio_codec, v.preview, v.preview_gap, v.preview_count, v.preview_width, v.preview_height, v.converted,
 	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private,
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
@@ -139,14 +140,14 @@ func (m moreColumns) Scan(dest ...any) error { return m.row.Scan(append(dest, m.
 
 func scanVideo(row rowScanner) (Video, error) {
 	var v Video
-	var duration, width, height, previewGap, previewCount sql.NullInt64
+	var duration, width, height, previewGap, previewCount, previewWidth, previewHeight sql.NullInt64
 	var cover, videoCodec, audioCodec, preview, converted, author, published, clip, clipHD sql.NullString
 	var addedAt int64
 	var relPath string
 	var uploaderID sql.NullInt64
 	var uploaderName sql.NullString
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
-		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &converted,
+		&relPath, &videoCodec, &audioCodec, &preview, &previewGap, &previewCount, &previewWidth, &previewHeight, &converted,
 		&author, &published, &clip, &clipHD, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
 		return Video{}, err
 	}
@@ -161,12 +162,12 @@ func scanVideo(row rowScanner) (Video, error) {
 		address := "/api/covers/" + cover.String
 		v.Cover = &address
 	}
-	if preview.Valid && previewGap.Valid && previewCount.Valid {
+	if preview.Valid && previewGap.Valid && previewCount.Valid && previewWidth.Valid && previewHeight.Valid {
 		count := int(previewCount.Int64)
 		columns, _ := video.PreviewGrid(count)
 		v.Preview = &Preview{
 			Src: "/api/previews/" + preview.String, Gap: previewGap.Int64, Count: count, Columns: columns,
-			Width: video.PreviewWidth, Height: video.PreviewHeight,
+			Width: int(previewWidth.Int64), Height: int(previewHeight.Int64),
 		}
 	}
 	if clip.Valid {

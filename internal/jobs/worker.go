@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"time"
 )
 
@@ -83,12 +84,41 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 }
 
-// resetInterrupted puts back in the queue the jobs that were running when
-// FranzPLAY last stopped.
+// crashMessage is the error saved for a job that was running when
+// FranzPLAY stopped without warning.
+const crashMessage = "FranzPLAY stopped suddenly during this job (power cut, out of memory or crash)"
+
+// resetInterrupted puts back in the queue the jobs that were still running
+// when FranzPLAY started. A clean stop puts its job back by itself (see
+// RunNext), so these were running when FranzPLAY died: a power cut, or
+// the job itself crashed it. That counts as a failed attempt, so a video
+// that crashes FranzPLAY every time is given up after MaxAttempts instead
+// of crashing it again at every start, forever.
 func (w *Worker) resetInterrupted(ctx context.Context) error {
-	_, err := w.db.ExecContext(ctx,
-		`UPDATE jobs SET state = 'pending', updated_at = ? WHERE state = 'running'`, w.now().Unix())
-	return err
+	_, err := w.db.ExecContext(ctx, `
+		UPDATE jobs SET state = CASE WHEN attempts + 1 >= ? THEN 'failed' ELSE 'pending' END,
+			attempts = attempts + 1, last_error = ?, updated_at = ?
+		WHERE state = 'running'`, MaxAttempts, crashMessage, w.now().Unix())
+	if err != nil {
+		return fmt.Errorf("put back interrupted jobs: %w", err)
+	}
+	return nil
+}
+
+// stopTimeout is how long saving the queue may take when FranzPLAY stops.
+const stopTimeout = 5 * time.Second
+
+// runHandler runs a job. A bug that panics in a job becomes the job's
+// error, instead of stopping the whole of FranzPLAY.
+func (w *Worker) runHandler(ctx context.Context, h Handler, j job) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			w.logger.ErrorContext(ctx, "job crashed", "kind", j.kind, "video", j.videoID,
+				"panic", r, "stack", string(debug.Stack()))
+			err = fmt.Errorf("%w: crashed: %v", ErrPermanent, r)
+		}
+	}()
+	return h(ctx, j.videoID)
 }
 
 // job is one row of the queue.
@@ -118,7 +148,7 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 		stopWatching = w.watchForOthers(jobCtx, yield)
 	}
 	start := time.Now()
-	runErr := h(jobCtx, j.videoID)
+	runErr := w.runHandler(jobCtx, h, j)
 	stopWatching()
 	cancel()
 	gaveWay := errors.Is(context.Cause(yieldCtx), errGaveWay)
@@ -126,8 +156,10 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 
 	if ctx.Err() != nil {
 		// FranzPLAY is stopping: the job did not fail, it was interrupted.
-		// It stays "running" and is put back in the queue at the next start.
-		return true, nil //nolint:nilerr // an interrupted job is not a queue error
+		// It goes back in the queue as if it had not started.
+		saveCtx, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), stopTimeout)
+		defer cancelSave()
+		return true, w.giveBack(saveCtx, j)
 	}
 	if gaveWay {
 		w.logger.InfoContext(ctx, "job paused for other work", "kind", j.kind, "video", j.videoID,
@@ -189,7 +221,10 @@ func (w *Worker) watchForOthers(ctx context.Context, stop context.CancelCauseFun
 	}
 }
 
-// othersWaiting reports whether a job that does not give way is due.
+// othersWaiting reports whether a job that does not give way is due, and
+// is new work. A job trying again after a failure waits for the end of the
+// long one: offline, the internet lookups fail and come back every few
+// minutes, and each would throw away hours of conversion.
 func (w *Worker) othersWaiting(ctx context.Context) (bool, error) {
 	args := []any{w.now().Unix()}
 	placeholders := ""
@@ -208,7 +243,8 @@ func (w *Worker) othersWaiting(ctx context.Context) (bool, error) {
 	}
 	var waiting bool
 	err := w.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
-		WHERE state = 'pending' AND run_after <= ? AND kind IN (`+placeholders+`))`, args...).Scan(&waiting)
+		WHERE state = 'pending' AND run_after <= ? AND attempts = 0 AND kind IN (`+placeholders+`))`,
+		args...).Scan(&waiting)
 	if err != nil {
 		return false, fmt.Errorf("look for waiting jobs: %w", err)
 	}
