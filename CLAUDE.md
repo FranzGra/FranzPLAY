@@ -75,6 +75,7 @@ internal/webui/     serve l'interfaccia web inclusa nel programma
 web/                l'interfaccia: React + TypeScript (vedi sotto)
 android/            l'app Android: una finestra sull'interfaccia del server (docs/app-android.md)
 docs/               visione, decisioni (docs/decisioni/), guida per provare sul PC e per importare dal vecchio
+e2e/                prove nel browser: il programma vero, con video veri, su computer e telefono
 ```
 
 - **Cartelle per funzionalità** (`catalog/`, `comments/`, `playlists/`…), non per tipo di file.
@@ -103,6 +104,9 @@ web/src/styles/       colori, misure e caratteri, tutti in un posto solo (variab
 - Niente Tailwind né librerie di componenti: l'aspetto di shadcn/ui si ottiene con componenti
   nostri, così le dipendenze restano poche (regola 10).
 - Test con Vitest e Testing Library, accanto al codice (`Nome.test.tsx`).
+- Le prove in `e2e/` (Playwright) aprono ogni pagina su computer e telefono: nessun errore, niente
+  che allarghi la pagina di lato, e un video che parte e salta in fretta. Una pagina nuova si
+  aggiunge al loro elenco in `e2e/tests/pages.spec.ts`.
 - Formattazione e lint con **Biome**, tipi stretti con TypeScript.
 
 ## Convenzioni
@@ -127,6 +131,7 @@ make run     # avvia FranzPLAY su http://localhost:8090
 make test    # tutti i test
 make lint    # controlli automatici
 make fmt     # formatta il codice
+make e2e     # apre ogni pagina e fa partire un video in un browser vero (serve ffmpeg)
 make check   # tutto quello che controlla la CI: lancialo prima di ogni push
 make web     # prepara l'interfaccia (serve Node.js 22)
 make web-dev # interfaccia in modalità sviluppo su http://localhost:5173 (insieme a make run)

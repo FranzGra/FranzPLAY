@@ -3,7 +3,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: help run build test lint fmt check web web-dev web-check
+.PHONY: help run build test lint fmt check web web-dev web-check e2e
 
 help: ## Show this list
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -32,4 +32,7 @@ web-dev: ## Start the interface in development mode on http://localhost:5173 (ru
 web-check: ## Lint, type-check and test the web interface
 	cd web && npm ci && npm run check
 
-check: lint test web-check ## Everything CI checks, before you push
+e2e: build ## Open every page and play a video in a real browser (needs ffmpeg)
+	cd e2e && npm ci && npx playwright install chromium && npm run check && npx playwright test
+
+check: lint test web-check e2e ## Everything CI checks, before you push
