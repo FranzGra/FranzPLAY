@@ -493,3 +493,122 @@ func TestScanAddsAndForgetsManyVideosABatchAtATime(t *testing.T) {
 		t.Errorf("catalog = %v, want only keep.mp4", got)
 	}
 }
+
+// TestScanReadsADuplicateOnlyOnce: second copies are not in the catalog, so
+// without memory every scan would read them again, every minute.
+func TestScanReadsADuplicateOnlyOnce(t *testing.T) {
+	lib := t.TempDir()
+	writeFile(t, lib, "mare.mp4", "sea")
+	// Files are taken in name order: this one goes in the catalog.
+	original := writeFile(t, lib, "Copia/mare.mp4", "sea")
+	ts := newTestScanner(t, lib)
+	opened := 0
+	ts.open = func(dir string) fs.FS { return countingFS{FS: os.DirFS(dir), opened: &opened} }
+
+	ts.scan(t, Report{Added: 1, Duplicates: 1})
+	opened = 0
+	ts.scan(t, Report{Unchanged: 1, Duplicates: 1})
+	if opened != 0 {
+		t.Errorf("second scan opened %d files, want 0", opened)
+	}
+
+	// The original goes away: the copy takes its place, still without
+	// being read again, and the video keeps its likes and comments.
+	id := ts.videos(t)["Copia/mare.mp4"].id
+	if err := os.Remove(original); err != nil {
+		t.Fatal(err)
+	}
+	ts.scan(t, Report{Moved: 1})
+	if v := ts.videos(t)["mare.mp4"]; v.id != id || v.missing {
+		t.Errorf("copy = %+v, want video %d in its new place", v, id)
+	}
+	if opened != 0 {
+		t.Errorf("opened %d files, want 0", opened)
+	}
+}
+
+// TestScanWaitsForAFileBeingCopied: a film copied into the folder over the
+// network changes at every scan. Taken each time, it would be read, probed
+// and looked up on the internet again and again until the copy ends.
+func TestScanWaitsForAFileBeingCopied(t *testing.T) {
+	lib := t.TempDir()
+	name := writeFile(t, lib, "film.mkv", "the beginning")
+	info, err := os.Stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestScanner(t, lib)
+	ts.clock = info.ModTime().Add(10 * time.Second)
+
+	// Seen for the first time: taken at once, most files arrive whole.
+	ts.scan(t, Report{Added: 1})
+	id := ts.videos(t)["film.mkv"].id
+	if _, err := ts.db.Exec(`UPDATE jobs SET state = 'done'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// It keeps growing: the scan leaves it alone and the video stays.
+	grow := func(more string, at time.Time) {
+		t.Helper()
+		f, err := os.OpenFile(name, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(more); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(name, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := range 3 {
+		ts.clock = ts.clock.Add(time.Minute)
+		grow(fmt.Sprint(" and more ", i), ts.clock.Add(-5*time.Second))
+		ts.scan(t, Report{Unchanged: 1})
+		if v := ts.videos(t)["film.mkv"]; v.id != id || v.missing {
+			t.Fatalf("while copying: %+v, want the same video, present", v)
+		}
+		if got := ts.probeJobs(t)["film.mkv"]; got != "done" {
+			t.Fatalf("while copying the probe is %q, want left alone", got)
+		}
+	}
+
+	// The copy is over: once the file has rested, it is read again.
+	ts.clock = ts.clock.Add(settleTime)
+	ts.scan(t, Report{Updated: 1})
+	if got := ts.probeJobs(t)["film.mkv"]; got != "pending" {
+		t.Errorf("after the copy the probe is %q, want pending", got)
+	}
+}
+
+func TestStillCopying(t *testing.T) {
+	now := int64(1_000) * int64(time.Second)
+	recent := now - int64(30*time.Second)
+	old := now - int64(settleTime) - 1
+	file := func(size, mod int64) found { return found{loc: location{1, "a.mkv"}, size: size, modTime: mod} }
+	tests := []struct {
+		name       string
+		f, before  found
+		seenBefore bool
+		knownHere  bool
+		want       bool
+	}{
+		{"new file seen for the first time", file(10, recent), found{}, false, false, false},
+		{"new file still growing", file(20, recent), file(10, recent-1), true, false, true},
+		{"new file unchanged since last scan", file(10, recent), file(10, recent), true, false, false},
+		{"known video being rewritten", file(20, recent), found{}, false, true, true},
+		{"known video changed long ago", file(20, old), found{}, false, true, false},
+		{"growing but quiet for long", file(20, old), file(10, old-1), true, false, false},
+		{"date in the future", file(20, now+int64(time.Hour)), file(10, recent), true, true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := stillCopying(tt.f, tt.before, tt.seenBefore, tt.knownHere, now); got != tt.want {
+				t.Errorf("stillCopying = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
