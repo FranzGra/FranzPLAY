@@ -166,3 +166,47 @@ func TestModelsHaveChecksums(t *testing.T) {
 		}
 	}
 }
+
+func TestDownloadWithoutInternet(t *testing.T) {
+	// A server that answers, sends a little, then stops: like a
+	// connection lost halfway.
+	stalled := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		if _, err := io.WriteString(w, "a little"); err != nil {
+			t.Error(err)
+		}
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	t.Cleanup(stalled.Close)
+	// An address nobody answers on: like no internet at all.
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+
+	for name, url := range map[string]string{"stops halfway": stalled.URL, "no server": closed.URL} {
+		t.Run(name, func(t *testing.T) {
+			dataDir := t.TempDir()
+			d := NewDownloader(dataDir, url, func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			d.models = []Model{{Name: "small", sha1: checksum("the real one")}}
+			d.stall = 50 * time.Millisecond
+			ctx, cancel := context.WithCancel(context.Background())
+			var wg sync.WaitGroup
+			wg.Go(func() { d.Run(ctx) })
+			fx := &downloadFixture{d: d, dataDir: dataDir}
+			t.Cleanup(func() { cancel(); wg.Wait() })
+			if err := fx.start(t, "small"); err != nil {
+				t.Fatal(err)
+			}
+			if got := fx.finished(t); !strings.HasPrefix(got.Error, "Non c'è connessione a internet") {
+				t.Errorf("error = %q", got.Error)
+			}
+			entries, err := os.ReadDir(filepath.Join(dataDir, media.WhisperDir))
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Errorf("left %d files", len(entries))
+			}
+		})
+	}
+}

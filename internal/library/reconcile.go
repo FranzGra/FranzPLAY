@@ -3,6 +3,7 @@ package library
 import (
 	"cmp"
 	"slices"
+	"time"
 )
 
 // This file is the pure core of a scan: it compares what the database
@@ -184,4 +185,25 @@ func libraryTrusted(readWithoutErrors bool, filesFound, videosKnown int) bool {
 		return false
 	}
 	return filesFound > 0 || videosKnown == 0
+}
+
+// settleTime is how long a file must stay untouched before FranzPLAY trusts
+// it is complete. A film being copied into the folder changes at every scan.
+const settleTime = 2 * time.Minute
+
+// stillCopying reports whether a file that needs identifying looks like it
+// is still being written, so the scan should leave it alone for now:
+// it changed in the last settleTime, and it is either a known video's file
+// being rewritten, or a new file that changed since the previous scan.
+// A new file seen for the first time is taken at once: most files arrive
+// whole, and people want to see them right away.
+//
+// now and the times are Unix nanoseconds. A date in the future (a wrong
+// clock) never counts as recent, so such a file is never kept waiting.
+func stillCopying(f found, before found, seenBefore, knownHere bool, now int64) bool {
+	age := now - f.modTime
+	if age < 0 || age >= int64(settleTime) {
+		return false
+	}
+	return knownHere || (seenBefore && before != f)
 }

@@ -5,7 +5,8 @@
 #   - the video is found, read by ffprobe and gets a cover from ffmpeg;
 #   - the video streams, with a jump to the middle (an HTTP Range request);
 #   - whisper-cli is inside;
-#   - the video folder is exactly as before: nothing written there.
+#   - the video folder is exactly as before: nothing written there;
+#   - with no network at all, it starts and makes covers just the same.
 #
 # Usage, from the repository root, after building the image:
 #   docker build -t ghcr.io/franzgra/franzplay:smoke .
@@ -33,8 +34,9 @@ cleanup() {
 		compose logs --no-color franzplay || true
 	fi
 	compose down --volumes --timeout 30 >/dev/null 2>&1 || true
-	# The data folder belongs to $uid now: remove it from inside Docker.
-	docker run --rm --entrypoint rm -v "$work:/work" "$image" -rf /work/data >/dev/null 2>&1 || true
+	docker rm -f franzplay-offline >/dev/null 2>&1 || true
+	# The data folders belong to $uid now: remove them from inside Docker.
+	docker run --rm --entrypoint rm -v "$work:/work" "$image" -rf /work/data /work/offline >/dev/null 2>&1 || true
 	chmod -R u+w "$work"
 	rm -rf "$work"
 	exit "$status"
@@ -125,4 +127,21 @@ compose logs --no-color franzplay | grep -q 'FranzPLAY stopped' || fail "did not
 after="$(cd "$work/videos" && find . -exec stat -c '%n %s %Y' {} + | sort; find . -type f -exec sha256sum {} + | sort)"
 [ "$before" = "$after" ] || fail "the video folder changed"
 
-echo "OK: FranzPLAY works in Docker"
+echo "--- Starting it again with no network at all, not even to the computer"
+docker run -d --name franzplay-offline --network none -e PUID="$uid" -e PGID="$gid" \
+	-v "$work/videos:/videos:ro" -v "$work/offline:/data" "$image" >/dev/null
+i=0
+until docker logs franzplay-offline 2>&1 | grep -q 'kind=preview'; do
+	i=$((i + 1))
+	[ "$i" -le 60 ] || fail "offline: no cover and preview after 120 seconds"
+	sleep 2
+done
+docker logs franzplay-offline 2>&1 | grep -q 'kind=cover' || fail "offline: no cover"
+docker exec franzplay-offline wget -q -O - http://127.0.0.1:8090/api/health | grep -q '"ok"' ||
+	fail "offline: health"
+if docker logs franzplay-offline 2>&1 | grep 'level=ERROR'; then
+	fail "offline: errors in the log"
+fi
+docker rm -f franzplay-offline >/dev/null
+
+echo "OK: FranzPLAY works in Docker, with or without internet"

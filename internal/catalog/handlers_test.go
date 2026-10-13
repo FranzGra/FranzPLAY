@@ -437,7 +437,7 @@ func TestCover(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "jpeg" {
 		t.Fatalf("cover: %d %q", rec.Code, rec.Body)
 	}
-	if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, max-age=31536000, immutable" {
 		t.Errorf("Cache-Control = %q", cc)
 	}
 

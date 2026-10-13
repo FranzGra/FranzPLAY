@@ -2,6 +2,10 @@
 # ZimaBlade (arm64), each on its own kind of machine, and tests it with
 # docker/smoke-test.sh. On main (and on a v1.2.3 tag) the tested images
 # are published as ghcr.io/franzgra/franzplay, one name for both.
+#
+# No file is stored between jobs (GitHub "artifacts"): a private repository
+# has little room for them, and when it is full nothing gets published. The
+# two digests travel as job outputs instead.
 name: Docker
 
 on:
@@ -16,6 +20,8 @@ permissions:
 
 env:
   IMAGE: ghcr.io/franzgra/franzplay
+  # The build summary would be kept as an artifact too: not needed.
+  DOCKER_BUILD_RECORD_UPLOAD: false
 
 jobs:
   build:
@@ -24,6 +30,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Each kind of machine sets only its own output, so the two never
+    # overwrite each other.
+    outputs:
+      digest-amd64: ${{ steps.digest.outputs.digest-amd64 }}
+      digest-arm64: ${{ steps.digest.outputs.digest-arm64 }}
     strategy:
       fail-fast: false
       matrix:
@@ -70,16 +81,10 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.arch }}
       - name: Remember its digest
         if: github.event_name != 'pull_request'
-        run: |
-          mkdir -p "$RUNNER_TEMP/digests"
-          digest="${{ steps.push.outputs.digest }}"
-          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
-      - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
-        with:
-          name: digests-${{ matrix.arch }}
-          path: ${{ runner.temp }}/digests/*
-          retention-days: 1
+        id: digest
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: echo "digest-${{ matrix.arch }}=$DIGEST" >> "$GITHUB_OUTPUT"
 
   publish:
     name: Publish ghcr.io/franzgra/franzplay
@@ -90,11 +95,6 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: digests-*
-          merge-multiple: true
       - uses: docker/setup-buildx-action@v3
       - name: Names for the image
         id: meta
@@ -113,10 +113,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: One name for both kinds of machine
-        working-directory: ${{ runner.temp }}/digests
+        env:
+          AMD64: ${{ needs.build.outputs.digest-amd64 }}
+          ARM64: ${{ needs.build.outputs.digest-arm64 }}
         run: |
+          for d in "$AMD64" "$ARM64"; do
+            [[ "$d" == sha256:* ]] || { echo "missing digest: amd64=$AMD64 arm64=$ARM64"; exit 1; }
+          done
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "$IMAGE@sha256:%s " *)
+            "$IMAGE@$AMD64" "$IMAGE@$ARM64"
       - name: Show what was published
         run: docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"
