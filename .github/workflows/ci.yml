@@ -56,6 +56,44 @@ jobs:
       - name: Build
         run: npm run build
 
+  e2e:
+    name: Browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            e2e/package-lock.json
+      - name: Install ffmpeg (FranzPLAY makes covers; the test makes its videos)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Build FranzPLAY, interface included
+        run: make build
+      - name: Install the browser checks
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Lint the browser checks
+        working-directory: e2e
+        run: npm run check
+      - name: Open every page and play a video, on a computer and a phone
+        working-directory: e2e
+        run: npx playwright test
+      - name: Keep the report when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7
+
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
