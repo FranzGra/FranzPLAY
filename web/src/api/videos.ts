@@ -19,6 +19,10 @@ export type Video = {
   likes: number; // how many people like it
   private: boolean; // only the person who uploaded it sees it, and the people they chose
   uploader: Person | null; // who uploaded it from the browser; null = from a video folder
+  // owner is whose video it is, shown under the title: the uploader, or for
+  // a video from a folder the main administrator. Only when asking for one
+  // video; null otherwise.
+  owner: Owner | null;
   // sharedWith are the people a private video is shared with: only for one
   // video, and only for the person who uploaded it; [] otherwise.
   sharedWith: SharePerson[];
@@ -31,14 +35,23 @@ export type Video = {
 // Person is someone on FranzPLAY, as a video names them.
 export type Person = { id: number; name: string };
 
-function parsePerson(value: unknown): Person | null {
+function parsePerson(value: unknown, what = "video uploader"): Person | null {
   if (value === null || value === undefined) return null;
-  const p = record(value, "video uploader");
-  const id = count(p.id, "video uploader id");
-  if (id === 0) throw new Error("video uploader id: zero");
-  if (typeof p.name !== "string" || p.name === "")
-    throw new Error("video uploader name: not a name");
+  const p = record(value, what);
+  const id = count(p.id, `${what} id`);
+  if (id === 0) throw new Error(`${what} id: zero`);
+  if (typeof p.name !== "string" || p.name === "") throw new Error(`${what} name: not a name`);
   return { id, name: p.name };
+}
+
+// Owner is the person a video belongs to, with their profile photo.
+export type Owner = Person & { avatar: number }; // avatar: version of the photo, 0 = none
+
+function parseOwner(value: unknown): Owner | null {
+  if (value === null || value === undefined) return null;
+  const person = parsePerson(value, "video owner");
+  if (person === null) return null;
+  return { ...person, avatar: count(record(value, "video owner").avatar, "video owner avatar") };
 }
 
 // Preview is one image holding small frames of the video, count frames of
@@ -158,6 +171,7 @@ export function parseVideo(data: unknown): Video {
     likes: count(v.likes, "video likes"),
     private: v.private,
     uploader: parsePerson(v.uploader),
+    owner: parseOwner(v.owner),
     sharedWith:
       v.sharedWith === undefined ? [] : parseSharePeople(v.sharedWith, "video sharedWith"),
     author: v.author,

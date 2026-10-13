@@ -35,6 +35,10 @@ type Video struct {
 	Likes    int64     `json:"likes"`    // how many people like it
 	Private  bool      `json:"private"`  // only its uploader, and the people they chose, see it
 	Uploader *Person   `json:"uploader"` // who uploaded it from the browser; null = from a video folder
+	// Owner is whose video it is, shown under the title: its uploader, or
+	// for a video from a folder the main administrator. Only for one video;
+	// null if FranzPLAY has nobody yet.
+	Owner *Owner `json:"owner,omitempty"`
 	// SharedWith are the people a private video is shared with: only for
 	// one video, and only when its uploader asks.
 	SharedWith []sharing.Person `json:"sharedWith,omitempty"`
@@ -48,6 +52,13 @@ type Video struct {
 type Person struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+}
+
+// Owner is the person a video belongs to, with their profile photo.
+type Owner struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Avatar int64  `json:"avatar"` // version of their profile photo, 0 = none
 }
 
 // Preview is the image with small frames of a video, shown over the
@@ -269,6 +280,9 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 	if description.Valid {
 		v.Description = &description.String
 	}
+	if v.Owner, err = s.owner(ctx, v.Uploader); err != nil {
+		return Video{}, fmt.Errorf("read video %d: %w", id, err)
+	}
 	if v.Private && v.Uploader != nil && v.Uploader.ID == viewer(ctx) {
 		people, err := sharing.People(ctx, s.db, `SELECT s.video_id, u.id, u.name, u.avatar
 			FROM video_shares s JOIN users u ON u.id = s.user_id
@@ -279,6 +293,28 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 		v.SharedWith = people[id]
 	}
 	return v, nil
+}
+
+// owner returns whose a video is: the person who uploaded it, or for a
+// video from a folder (or whose uploader left) the main administrator, the
+// first administrator created, who installed FranzPLAY. nil if there is
+// nobody yet.
+func (s store) owner(ctx context.Context, uploader *Person) (*Owner, error) {
+	var uploaderID any // NULL: the video came from a folder
+	if uploader != nil {
+		uploaderID = uploader.ID
+	}
+	var o Owner
+	err := s.db.QueryRowContext(ctx, `SELECT u.id, u.name, u.avatar FROM users u WHERE u.id = coalesce(?,
+		(SELECT a.id FROM users a WHERE a.role = 'admin' ORDER BY a.created_at, a.id LIMIT 1))`, uploaderID).
+		Scan(&o.ID, &o.Name, &o.Avatar)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read owner: %w", err)
+	}
+	return &o, nil
 }
 
 // byIDs returns the visible videos among ids, in the order of ids.

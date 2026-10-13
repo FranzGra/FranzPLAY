@@ -31,6 +31,12 @@ describe("parseVideo", () => {
     ]);
   });
 
+  it("reads whose the video is, with their photo", () => {
+    const owner = { id: 1, name: "Anna", avatar: 77 };
+    expect(parseVideo({ ...sampleVideo, owner }).owner).toEqual(owner);
+    expect(parseVideo(sampleVideo).owner).toBeNull();
+  });
+
   it("accepts the previews of the timeline", () => {
     const preview = {
       src: "/api/previews/7-0a.jpg",
@@ -64,6 +70,8 @@ describe("parseVideo", () => {
     ["private not true or false", { ...sampleVideo, private: 1 }],
     ["uploader without a name", { ...sampleVideo, uploader: { id: 3, name: "" } }],
     ["uploader without an id", { ...sampleVideo, uploader: { id: 0, name: "Giulia" } }],
+    ["owner without a name", { ...sampleVideo, owner: { id: 1, name: "", avatar: 0 } }],
+    ["owner without a photo version", { ...sampleVideo, owner: { id: 1, name: "Anna" } }],
     ["bad person shared with", { ...sampleVideo, sharedWith: [{ id: 3, name: "" }] }],
     ["numeric description", { ...sampleVideo, description: 5 }],
     ["zero id", { ...sampleVideo, id: 0 }],

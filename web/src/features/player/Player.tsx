@@ -53,6 +53,11 @@ type PlayerProps = {
   length?: number | null;
   // autoPlay starts the video as soon as it is ready.
   autoPlay?: boolean;
+  // theater says whether the page shows the player in theater mode: as
+  // wide as the page, not full screen. onTheater asks the page to switch;
+  // without it the player has no theater button (and the t key does nothing).
+  theater?: boolean;
+  onTheater?: () => void;
 };
 
 // reportEvery is how often, in seconds of video, onPosition hears the
@@ -176,6 +181,8 @@ export function Player({
   findAudio,
   length = null,
   autoPlay = false,
+  theater = false,
+  onTheater,
 }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -499,6 +506,9 @@ export function Player({
         case "toggle-fullscreen":
           toggleFullscreen();
           break;
+        case "toggle-theater":
+          onTheater?.();
+          break;
         case "toggle-subtitles":
           if (subtitles.length > 0) {
             // Turned on for the first time: the language of the browser, if there.
@@ -517,6 +527,7 @@ export function Player({
       showControls,
       showFlash,
       toggleFullscreen,
+      onTheater,
       togglePlay,
       subtitles,
       track,
@@ -587,6 +598,7 @@ export function Player({
       ref={root}
       className={styles.root}
       data-controls={controlsVisible ? "visible" : "hidden"}
+      data-theater={theater ? "on" : undefined}
       onPointerMove={(event) => event.pointerType !== "touch" && showControls()}
       onPointerLeave={() => playing && setActive(false)}
     >
@@ -867,6 +879,18 @@ export function Player({
           >
             <Icon name="settings" size={24} />
           </button>
+
+          {onTheater && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.theaterButton}`}
+              onClick={onTheater}
+              aria-label={theater ? "Visualizzazione normale (t)" : "Modalità Teatro (t)"}
+              title={theater ? "Visualizzazione normale (t)" : "Modalità Teatro (t)"}
+            >
+              <Icon name={theater ? "theaterExit" : "theater"} size={24} />
+            </button>
+          )}
 
           <button
             type="button"

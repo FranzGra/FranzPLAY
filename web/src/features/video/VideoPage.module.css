@@ -1,24 +1,83 @@
+/* The page, like YouTube: the player on the left, as big as the screen
+   allows, with its title and comments below and the videos to watch next
+   in a column on the right. --player-max is the widest the player gets
+   while still leaving room for the title under it on the screen. */
 .root {
+  --side-width: clamp(300px, 24vw, 402px);
+  --player-max: max(640px, calc((100dvh - var(--header-height) - 180px) * 16 / 9));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) var(--side-width);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "player side"
+    "info side";
+  column-gap: 24px;
+  max-width: calc(var(--player-max) + var(--side-width) + 24px);
+  margin: 0 auto;
 }
 
-/* A private video suggests nothing else: the player takes the whole width. */
+.player {
+  grid-area: player;
+}
+
+.info {
+  grid-area: info;
+  min-width: 0;
+}
+
+.side {
+  grid-area: side;
+  min-width: 0;
+}
+
+/* A private video suggests nothing else: no column on the right. */
 .alone {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "player"
+    "info";
+  max-width: var(--player-max);
+}
+
+/* Theater mode: the player spans the whole width under the top bar, edge
+   to edge, on black; title, comments and the next videos go below it. */
+.theater {
+  grid-template-areas:
+    "player player"
+    "info side";
+  max-width: none;
+}
+
+.theater.alone {
+  grid-template-areas:
+    "player"
+    "info";
+}
+
+.theater .player {
+  margin: calc(-1 * var(--page-top)) calc(-1 * var(--page-side)) 0;
+  background: #000;
+}
+
+.theater .side {
+  padding-top: 20px;
 }
 
 .placeholder {
   aspect-ratio: 16 / 9;
-  max-width: 816px;
   border-radius: var(--radius-l);
   background: var(--color-surface);
 }
 
+/* The same size as the player in theater mode (Player.module.css). */
+.theater .placeholder {
+  aspect-ratio: auto;
+  height: max(360px, min(100vw * 9 / 16, 100dvh - var(--header-height) - 96px));
+  border-radius: 0;
+}
+
 .title {
-  margin: 16px 0 4px;
+  margin: 16px 0 0;
   font-size: 21px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -26,8 +85,51 @@
   overflow-wrap: anywhere;
 }
 
+/* Whose the video is on the left, the buttons on the right, as on YouTube. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 12px;
+}
+
+.owner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.owner:hover {
+  color: var(--color-text);
+}
+
+.owner > :first-child {
+  transition: scale var(--duration-normal) var(--ease-spring);
+}
+
+.owner:hover > :first-child {
+  scale: 1.06;
+}
+
+.ownerName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner:hover .ownerName {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .details {
-  margin: 0;
+  margin: 14px 0 0;
   color: var(--color-text-muted);
   font-size: 14px;
 }
@@ -49,7 +151,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
 }
 
 .sideTitle {
@@ -67,30 +168,60 @@
   list-style: none;
 }
 
-@media (max-width: 1099px) {
-  .root {
+/* Narrower screens: one column, the next videos at the bottom. */
+@media (max-width: 1199px) {
+  .root,
+  .theater {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "player"
+      "info"
+      "side";
+    max-width: none;
+  }
+
+  .side {
+    margin-top: 32px;
+  }
+
+  .theater .side {
+    padding-top: 0;
+  }
+}
+
+/* Theater mode is for computers: on phones the page is always the same. */
+@media (max-width: 899px) {
+  .theater .player {
+    margin: 0;
+    background: none;
+  }
+
+  .theater .placeholder {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    border-radius: var(--radius-l);
   }
 }
 
 /* On phones the player touches the screen edges, like on YouTube. */
 @media (max-width: 599px) {
-  .main {
-    margin: -16px -16px 0;
+  .player,
+  .theater .player {
+    margin: calc(-1 * var(--page-top)) calc(-1 * var(--page-side)) 0;
   }
 
-  .title,
-  .details,
-  .actions,
-  .below {
-    padding: 0 16px;
+  .placeholder,
+  .theater .placeholder {
+    border-radius: 0;
   }
 
   /* The buttons stay on one line and scroll sideways, like on YouTube,
-     instead of wrapping onto a second line. */
+     instead of wrapping onto a second line, right to the screen edges. */
   .actions {
-    position: relative;
+    flex: 1 1 100%;
     flex-wrap: nowrap;
+    margin: 0 calc(-1 * var(--page-side));
+    padding: 0 var(--page-side);
     overflow-x: auto;
     scrollbar-width: none;
   }

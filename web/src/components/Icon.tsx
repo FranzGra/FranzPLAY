@@ -127,6 +127,9 @@ const paths = {
       <path d="M15 20v-5h5" />
     </>
   ),
+  // theater: the wide player of theater mode; theaterExit: back to normal.
+  theater: <rect x="2" y="6" width="20" height="12" rx="2" />,
+  theaterExit: <rect x="5" y="8" width="14" height="9" rx="2" />,
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />

@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
+import { avatarUrl } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { fetchProgress, saveProgress } from "../../api/progress";
 import { fetchSimilar, reasonText } from "../../api/recommend";
 import {
   fetchSubtitles,
   fetchVideo,
+  type Owner,
   type SubtitleTrack,
   streamURL,
   type Video,
 } from "../../api/videos";
 import { useAccount } from "../../app/auth";
+import { usePageWidth } from "../../app/pageWidth";
+import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatAge, formatDate } from "../../lib/format";
+import { loadSetting, saveSetting } from "../../lib/storage";
 import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
@@ -39,6 +44,8 @@ export function VideoPage() {
   const param = useParams().id ?? "";
   const id = /^\d+$/.test(param) ? Number(param) : 0;
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [theater, toggleTheater] = useTheater();
+  usePageWidth(theater ? "full" : "wide");
   usePageTitle(
     state.kind === "ready"
       ? state.video.title
@@ -70,7 +77,13 @@ export function VideoPage() {
 
   switch (state.kind) {
     case "loading":
-      return <div className={styles.placeholder} aria-busy="true" />;
+      return (
+        <div className={layoutClass(theater, false)}>
+          <div className={styles.player}>
+            <div className={styles.placeholder} aria-busy="true" />
+          </div>
+        </div>
+      );
     case "missing":
       return (
         <EmptyState title="Video non trovato" headingLevel={1}>
@@ -84,8 +97,41 @@ export function VideoPage() {
         </EmptyState>
       );
     case "ready":
-      return <Watch video={state.video} startAt={state.startAt} />;
+      return (
+        <Watch
+          video={state.video}
+          startAt={state.startAt}
+          theater={theater}
+          onTheater={toggleTheater}
+        />
+      );
   }
+}
+
+// layoutClass arranges the page: the player on the left with the videos
+// to watch next on its right, like on YouTube; in theater mode the player
+// spans the whole width above them. A private video suggests nothing
+// else, so it has no column on the right.
+function layoutClass(theater: boolean, alone: boolean): string {
+  return [styles.root, theater && styles.theater, alone && styles.alone].filter(Boolean).join(" ");
+}
+
+function parseTheater(data: unknown): boolean {
+  if (typeof data !== "boolean") throw new Error("theater: not true or false");
+  return data;
+}
+
+// useTheater is theater mode, on or off, remembered in this browser for
+// the next videos, like on YouTube.
+function useTheater(): [boolean, () => void] {
+  const [theater, setTheater] = useState(() => loadSetting("theater", parseTheater, false));
+  const toggle = useCallback(() => {
+    setTheater((on) => {
+      saveSetting("theater", !on);
+      return !on;
+    });
+  }, []);
+  return [theater, toggle];
 }
 
 // startPosition is where to start the video: where the person stopped,
@@ -100,7 +146,17 @@ async function startPosition(id: number, signal: AbortSignal): Promise<number> {
   }
 }
 
-function Watch({ video, startAt }: { video: Video; startAt: number }) {
+function Watch({
+  video,
+  startAt,
+  theater,
+  onTheater,
+}: {
+  video: Video;
+  startAt: number;
+  theater: boolean;
+  onTheater: () => void;
+}) {
   const [now] = useState(() => new Date());
   const subtitles = useSubtitles(video.id);
   const audio = useAudio(video.id);
@@ -123,8 +179,8 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
   ].filter(Boolean);
 
   return (
-    <div className={video.private ? `${styles.root} ${styles.alone}` : styles.root}>
-      <div className={styles.main}>
+    <div className={layoutClass(theater, video.private)}>
+      <div className={styles.player}>
         <Player
           key={video.id}
           src={streamURL(video.id)}
@@ -137,13 +193,31 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
           findAudio={findAudio}
           length={video.duration}
           autoPlay
+          theater={theater}
+          onTheater={onTheater}
           unsupportedHint={
             video.playable
               ? undefined
               : "Il formato di questo video non è adatto a tutti i browser. FranzPLAY ne sta preparando una copia che si vede ovunque: riprova più tardi."
           }
         />
+      </div>
+      <div className={styles.info}>
         <h1 className={styles.title}>{video.title}</h1>
+        <div className={styles.bar}>
+          {video.owner && <OwnerLink owner={video.owner} />}
+          <div className={styles.actions}>
+            <LikeButton videoId={video.id} />
+            {/* A private video opens only for its few people: a playlist or
+                a link would lead the others to a page that does not open. */}
+            {!video.private && (
+              <>
+                <SaveButton videoId={video.id} />
+                <ShareButton title={video.title} path={`/video/${video.id}`} />
+              </>
+            )}
+          </div>
+        </div>
         <p className={styles.details}>
           {video.category && (
             <>
@@ -152,25 +226,8 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
             </>
           )}
           {details.join(" · ")}
-          {video.uploader && (
-            <>
-              {" · Caricato da "}
-              <Link to={`/canale/${video.uploader.id}`}>{video.uploader.name}</Link>
-            </>
-          )}
         </p>
         {video.private && <PrivateNote video={video} />}
-        <div className={styles.actions}>
-          <LikeButton videoId={video.id} />
-          {/* A private video opens only for its few people: a playlist or
-              a link would lead the others to a page that does not open. */}
-          {!video.private && (
-            <>
-              <SaveButton videoId={video.id} />
-              <ShareButton title={video.title} path={`/video/${video.id}`} />
-            </>
-          )}
-        </div>
         {video.description && (
           <div className={styles.below}>
             <Description text={video.description} />
@@ -186,6 +243,18 @@ function Watch({ video, startAt }: { video: Video; startAt: number }) {
         </aside>
       )}
     </div>
+  );
+}
+
+// OwnerLink is whose the video is, with their photo, leading to their
+// channel: the person who uploaded it, or the main administrator for a
+// video from a folder.
+function OwnerLink({ owner }: { owner: Owner }) {
+  return (
+    <Link to={`/canale/${owner.id}`} className={styles.owner}>
+      <Avatar name={owner.name} photo={avatarUrl(owner.id, owner.avatar)} />
+      <span className={styles.ownerName}>{owner.name}</span>
+    </Link>
   );
 }
 

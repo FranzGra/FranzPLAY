@@ -57,6 +57,19 @@ describe("player starting by itself", () => {
     expect(play).toHaveBeenCalledTimes(1);
   });
 
+  it("has a theater button only when the page offers theater mode", async () => {
+    const { unmount } = setup();
+    expect(screen.queryByRole("button", { name: /Teatro/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "t" }); // nothing to do, nothing breaks
+    unmount();
+
+    const onTheater = vi.fn();
+    const { user } = setup({ onTheater });
+    await user.click(screen.getByRole("button", { name: "Modalità Teatro (t)" }));
+    fireEvent.keyDown(document.body, { key: "t" });
+    expect(onTheater).toHaveBeenCalledTimes(2);
+  });
+
   it("does not start without autoPlay", () => {
     const { video, play } = setup();
     fireEvent.loadedMetadata(video);

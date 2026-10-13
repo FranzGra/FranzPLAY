@@ -514,6 +514,28 @@
   flex: 1;
 }
 
+/* Theater mode, on computers: the player is as wide as the page, with
+   square corners, and never taller than the screen leaves room for, so
+   the title still shows below it. The picture keeps its shape inside,
+   with black at its sides. */
+@media (min-width: 900px) {
+  .root[data-theater="on"] {
+    /* A fixed height, not a 16:9 shape: with the shape, a height limit
+       would also narrow the player instead of leaving black at its sides. */
+    aspect-ratio: auto;
+    height: max(360px, min(100vw * 9 / 16, 100dvh - var(--header-height) - 96px));
+    border-radius: 0;
+  }
+}
+
+/* Theater mode is for wide screens: on phones the player already fills
+   the width, so its button is not there. */
+@media (max-width: 899px) {
+  .theaterButton {
+    display: none;
+  }
+}
+
 @media (max-width: 599px) {
   .root {
     border-radius: 0;

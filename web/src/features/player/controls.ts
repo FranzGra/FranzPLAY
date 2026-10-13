@@ -57,6 +57,7 @@ export type Action =
   | { kind: "volume-by"; amount: number }
   | { kind: "toggle-mute" }
   | { kind: "toggle-fullscreen" }
+  | { kind: "toggle-theater" }
   | { kind: "toggle-subtitles" };
 
 // keyAction decides what a key does, as on YouTube. null: the key is not
@@ -85,6 +86,9 @@ export function keyAction(key: string): Action | null {
     case "f":
     case "F":
       return { kind: "toggle-fullscreen" };
+    case "t":
+    case "T":
+      return { kind: "toggle-theater" };
     case "c":
     case "C":
       return { kind: "toggle-subtitles" };
