@@ -143,6 +143,34 @@ e `docker compose up -d`. La prima volta LibreTranslate scarica le lingue scelte
 Attenzione: vuole 1-2 GB di memoria, troppa per un Raspberry Pi da 2 GB. Se hai già un
 LibreTranslate su un altro computer, scrivi solo il suo indirizzo in `FRANZPLAY_TRANSLATE_URL`.
 
+## Senza internet
+
+Internet serve **solo per scaricare l'immagine** (la prima volta e per gli aggiornamenti). Dopo,
+FranzPLAY parte e funziona anche con il cavo staccato: l'interfaccia, i caratteri e le icone sono
+dentro l'immagine, e copertine, anteprime, copie per i browser e sottotitoli li fa FFmpeg sul tuo
+computer. Nessun pezzo viene scaricato all'avvio. Ogni volta che si prepara una versione nuova,
+un controllo automatico la avvia senza nessuna rete e verifica che parta e prepari le copertine.
+
+Usano internet solo queste cose, e solo se le accendi tu:
+
+- **Copertine e titoli da internet** (YouTube, TMDB, ThePornDB): sono spenti finché non li accendi in
+  **Amministrazione › Internet**.
+- **Il modello di Whisper**, la prima volta che premi «Scarica» in **Amministrazione ›
+  Sottotitoli**. Senza internet FranzPLAY lo dice con un messaggio chiaro. Puoi anche portarlo tu:
+  scarica il file su un altro computer, per esempio
+  [ggml-small.bin](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin), e
+  mettilo nella cartella `whisper` dentro la cartella dati. Se la cartella dati è
+  `franzplay-data` (Windows e Mac), copialo così (il riavvio alla fine rende il file di FranzPLAY):
+
+  ```sh
+  docker compose exec franzplay mkdir -p /data/whisper
+  docker compose cp ggml-small.bin franzplay:/data/whisper/ggml-small.bin
+  docker compose restart
+  ```
+
+- **LibreTranslate**, se lo accendi: la prima volta scarica le lingue. Poi a ogni avvio cerca
+  aggiornamenti; senza internet lo scrive nel suo log e parte lo stesso con le lingue che ha.
+
 ## Portare i dati dal vecchio FranzPLAY
 
 La guida è [importare-dal-vecchio.md](importare-dal-vecchio.md). Con Docker cambia solo il modo di

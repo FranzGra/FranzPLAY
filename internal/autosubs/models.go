@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/media"
 )
@@ -47,6 +49,17 @@ type Download struct {
 	Ended bool   `json:"ended"` // finished, well (Error "") or not
 }
 
+// How long the models' server may keep FranzPLAY waiting. Without
+// internet, or with a connection that stops halfway, a download ends
+// with a clear message instead of waiting forever.
+const (
+	connectTimeout = 30 * time.Second // to reach the server and get its answer
+	stallTimeout   = time.Minute      // with no bytes arriving, halfway through
+)
+
+// errStalled means no bytes arrived for stallTimeout.
+var errStalled = errors.New("no data for too long")
+
 // errBusy means a download is already going.
 var errBusy = errors.New("another model is downloading")
 
@@ -62,6 +75,7 @@ type Downloader struct {
 	logger  *slog.Logger
 	changed func() // tells the pages how the download goes
 	models  []Model
+	stall   time.Duration // stallTimeout, shorter in the tests
 
 	start chan Model
 	mu    sync.Mutex
@@ -71,8 +85,15 @@ type Downloader struct {
 // NewDownloader returns a downloader into dataDir/whisper. changed is
 // called as the download goes on.
 func NewDownloader(dataDir, baseURL string, changed func(), logger *slog.Logger) *Downloader {
-	return &Downloader{dataDir: dataDir, baseURL: baseURL, client: &http.Client{}, logger: logger,
-		changed: changed, models: Models, start: make(chan Model)}
+	dialer := &net.Dialer{Timeout: connectTimeout}
+	client := &http.Client{Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		TLSHandshakeTimeout:   connectTimeout,
+		ResponseHeaderTimeout: connectTimeout,
+	}}
+	return &Downloader{dataDir: dataDir, baseURL: baseURL, client: client, logger: logger,
+		changed: changed, models: Models, stall: stallTimeout, start: make(chan Model)}
 }
 
 // Status returns how the last download goes or went; nil if none.
@@ -121,7 +142,7 @@ func (d *Downloader) Run(ctx context.Context) {
 			}
 			if err != nil {
 				d.logger.ErrorContext(ctx, "download whisper model", "model", m.Name, "error", err)
-				d.update(func(s *Download) { s.Error, s.Ended = "Non sono riuscito a scaricarlo: "+err.Error(), true })
+				d.update(func(s *Download) { s.Error, s.Ended = failure(err), true })
 			} else {
 				d.logger.InfoContext(ctx, "whisper model downloaded", "model", m.Name)
 				d.update(func(s *Download) { s.Ended = true })
@@ -133,7 +154,18 @@ func (d *Downloader) Run(ctx context.Context) {
 
 // download writes the model to a temporary file, checks it, and only
 // then gives it its name (rule 6).
-func (d *Downloader) download(ctx context.Context, m Model) (err error) {
+func (d *Downloader) download(parent context.Context, m Model) (err error) {
+	// Every byte that arrives pushes the stall timer back.
+	ctx, cancel := context.WithCancelCause(parent)
+	defer cancel(nil)
+	stalled := time.AfterFunc(d.stall, func() { cancel(errStalled) })
+	defer stalled.Stop()
+	defer func() {
+		if errors.Is(context.Cause(ctx), errStalled) {
+			err = errors.Join(errStalled, err)
+		}
+	}()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.baseURL+"/ggml-"+m.Name+".bin", nil)
 	if err != nil {
 		return err
@@ -162,7 +194,7 @@ func (d *Downloader) download(ctx context.Context, m Model) (err error) {
 		}
 	}()
 	sum := sha1.New() //nolint:gosec // see the import
-	_, copyErr := io.Copy(io.MultiWriter(tmp, sum, progress{d}), resp.Body)
+	_, copyErr := io.Copy(io.MultiWriter(tmp, sum, progress{d, stalled}), resp.Body)
 	if err := errors.Join(copyErr, tmp.Close()); err != nil {
 		return err
 	}
@@ -172,10 +204,34 @@ func (d *Downloader) download(ctx context.Context, m Model) (err error) {
 	return os.Rename(tmp.Name(), media.ModelFile(d.dataDir, m.Name))
 }
 
+// failure says to people why a download stopped. Without internet it
+// says so, and how to have the model anyway.
+func failure(err error) string {
+	var dns *net.DNSError
+	var op *net.OpError
+	switch {
+	case errors.Is(err, errStalled), errors.As(err, &dns), errors.As(err, &op), isTimeout(err):
+		return "Non c'è connessione a internet, o il server dei modelli non risponde. " +
+			"Internet serve solo per scaricare il modello: puoi anche copiarlo tu nella cartella dei modelli."
+	default:
+		return "Non sono riuscito a scaricarlo: " + err.Error()
+	}
+}
+
+// isTimeout reports whether err is a network timeout.
+func isTimeout(err error) bool {
+	var t interface{ Timeout() bool }
+	return errors.As(err, &t) && t.Timeout()
+}
+
 // progress counts the bytes downloaded.
-type progress struct{ d *Downloader }
+type progress struct {
+	d       *Downloader
+	stalled *time.Timer
+}
 
 func (p progress) Write(b []byte) (int, error) {
+	p.stalled.Reset(p.d.stall)
 	tell := false
 	p.d.update(func(s *Download) {
 		before := s.Done
