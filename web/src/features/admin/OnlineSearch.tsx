@@ -96,7 +96,7 @@ export function OnlineSearch({
     );
   }
   return (
-    <div className={styles.searchBox}>
+    <div className={styles.coverSearch}>
       <form className={styles.momentControls} onSubmit={search}>
         {sources.length > 1 && (
           <label className={styles.field}>

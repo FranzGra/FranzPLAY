@@ -14,6 +14,20 @@ import (
 // elsewhere (reconcile.go); the store only carries them out.
 type store struct {
 	db *sql.DB
+	// batch is how many videos one transaction adds or forgets at most
+	// (defaultBatch when zero). A long transaction would make everyone
+	// else's writes wait: likes, progress, the job queue.
+	batch int
+}
+
+// defaultBatch keeps each transaction well under a second on a Raspberry Pi.
+const defaultBatch = 500
+
+func (s store) batchSize() int {
+	if s.batch > 0 {
+		return s.batch
+	}
+	return defaultBatch
 }
 
 // libraryIDs returns the id of each library folder, adding the new ones.
@@ -62,9 +76,30 @@ func (s store) knownVideos(ctx context.Context) (_ []known, err error) {
 	return videos, nil
 }
 
-// apply saves what a scan decided, all in one transaction: if anything
-// fails, the catalog stays exactly as it was.
-func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error) {
+// apply saves what a scan decided. Missing and moved videos are saved in
+// one transaction: if anything fails, they stay exactly as they were. New
+// videos are then added a batch at a time, so a first scan of 50,000 videos
+// does not hold the database for a minute; if a batch fails, the next scan
+// finds the videos still missing from the catalog and adds them.
+func (s store) apply(ctx context.Context, ch changes, now time.Time) error {
+	if err := s.applyChanges(ctx, ch, now); err != nil {
+		return err
+	}
+	for added := ch.added; len(added) > 0; {
+		n := min(len(added), s.batchSize())
+		if err := s.add(ctx, added[:n], now); err != nil {
+			return err
+		}
+		added = added[n:]
+	}
+	return nil
+}
+
+// applyChanges saves the videos gone missing and the ones that changed.
+func (s store) applyChanges(ctx context.Context, ch changes, now time.Time) (err error) {
+	if len(ch.gone) == 0 && len(ch.updates) == 0 {
+		return nil
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("save scan: begin: %w", err)
@@ -120,8 +155,19 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 			}
 		}
 	}
+	return nil
+}
 
-	for _, f := range ch.added {
+// add puts new videos in the catalog, in one transaction.
+func (s store) add(ctx context.Context, added []identified, now time.Time) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("save new videos: begin: %w", err)
+	}
+	defer func() { err = finish(tx, err) }()
+
+	stamp := now.Unix()
+	for _, f := range added {
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -146,17 +192,27 @@ func (s store) apply(ctx context.Context, ch changes, now time.Time) (err error)
 // forget deletes the videos missing since before the given time. Only the
 // catalog row goes away: the video file, if it still exists somewhere, is
 // never touched. It returns how many videos were forgotten.
+// Like apply, it works a batch at a time: forgetting a whole disk also
+// deletes every like, comment and history row of its videos.
 func (s store) forget(ctx context.Context, missingBefore time.Time) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM videos WHERE missing_since IS NOT NULL AND missing_since < ?`, missingBefore.Unix())
-	if err != nil {
-		return 0, fmt.Errorf("forget missing videos: %w", err)
+	var total int64
+	for {
+		res, err := s.db.ExecContext(ctx, `
+			DELETE FROM videos WHERE id IN (
+				SELECT id FROM videos WHERE missing_since IS NOT NULL AND missing_since < ? LIMIT ?)`,
+			missingBefore.Unix(), s.batchSize())
+		if err != nil {
+			return total, fmt.Errorf("forget missing videos: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, fmt.Errorf("forget missing videos: %w", err)
+		}
+		total += n
+		if n < int64(s.batchSize()) {
+			return total, nil
+		}
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("forget missing videos: %w", err)
-	}
-	return n, nil
 }
 
 // finish commits the transaction when err is nil, and rolls it back otherwise.

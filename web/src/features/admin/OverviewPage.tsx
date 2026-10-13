@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { type Disk, fetchOverview, type Overview, type Problem } from "../../api/overview";
 import { EmptyState } from "../../components/EmptyState";
+import { Icon } from "../../components/Icon";
 import { formatBytes } from "../../lib/format";
 import styles from "./Admin.module.css";
 
@@ -40,7 +41,10 @@ export function OverviewPage() {
     <>
       <h2 className={styles.groupTitle}>Da sistemare</h2>
       {o.problems.length === 0 ? (
-        <p className={`glass ${styles.person} ${styles.plain}`}>
+        <p className={`glass ${styles.person} ${styles.problemRow} ${styles.plain}`}>
+          <span className={`${styles.problemMark} ${styles.allGood}`} aria-hidden="true">
+            <Icon name="check" size={16} />
+          </span>
           Tutto a posto: non c'è niente da sistemare.
         </p>
       ) : (
@@ -48,8 +52,11 @@ export function OverviewPage() {
           {o.problems.map((p) => (
             <li
               key={`${p.kind}-${p.folder}`}
-              className={`glass ${styles.person} ${p.severity === "critical" ? styles.critical : ""}`}
+              className={`glass ${styles.person} ${styles.problemRow} ${p.severity === "critical" ? styles.critical : ""}`}
             >
+              <span className={styles.problemMark} aria-hidden="true">
+                !
+              </span>
               <ProblemText problem={p} />
             </li>
           ))}
@@ -62,11 +69,10 @@ export function OverviewPage() {
           <span className={styles.number}>{n(v.present)}</span>
           {v.analysed > 0 && (
             <span className={styles.note}>
-              {" "}
-              · {Math.round((100 * v.playable) / v.analysed)}% pronti per tutti i dispositivi
+              {Math.round((100 * v.playable) / v.analysed)}% pronti per tutti i dispositivi
             </span>
           )}
-          {v.hidden > 0 && <span className={styles.note}> · {n(v.hidden)} nascosti</span>}
+          {v.hidden > 0 && <span className={styles.note}>{n(v.hidden)} nascosti</span>}
         </Stat>
         <Stat label="Categorie" to="/categorie">
           <span className={styles.number}>{n(o.categories)}</span>
@@ -74,8 +80,7 @@ export function OverviewPage() {
         <Stat label="Persone" to="/admin/persone">
           <span className={styles.number}>{n(o.people)}</span>
           <span className={styles.note}>
-            {" "}
-            · {o.admins === 1 ? "1 amministratore" : `${n(o.admins)} amministratori`}
+            {o.admins === 1 ? "1 amministratore" : `${n(o.admins)} amministratori`}
           </span>
         </Stat>
         <Stat label="Commenti" to="/admin/commenti">
@@ -94,7 +99,7 @@ export function OverviewPage() {
           </li>
         ))}
       </ul>
-      <p className={styles.done}>FranzPLAY versione {o.version}</p>
+      <p className={styles.version}>FranzPLAY versione {o.version}</p>
     </>
   );
 }
@@ -103,7 +108,10 @@ function Stat({ label, to, children }: { label: string; to: string; children: Re
   return (
     <div className={`glass ${styles.stat}`}>
       <dt>
-        <Link to={to}>{label}</Link>
+        <Link to={to} className={styles.statLink}>
+          {label}
+          <Icon name="chevronRight" size={14} />
+        </Link>
       </dt>
       <dd>{children}</dd>
     </div>

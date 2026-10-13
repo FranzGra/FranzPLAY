@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { type Account, nameProblem, passwordProblem } from "../../api/auth";
+import { type Account, avatarUrl, nameProblem, passwordProblem } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import {
   createUser,
@@ -10,6 +10,7 @@ import {
   updateUser,
 } from "../../api/users";
 import { useAccount } from "../../app/auth";
+import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatBytes, formatSince } from "../../lib/format";
@@ -219,9 +220,7 @@ function PersonRow({
   return (
     <div className={`glass ${styles.person}`}>
       <div className={styles.who}>
-        <span className={styles.avatar}>
-          <Icon name="profile" size={20} />
-        </span>
+        <Avatar name={person.name} size={44} photo={avatarUrl(person.id, person.avatar)} />
         <div>
           <p className={styles.name}>
             {person.name}
@@ -239,7 +238,7 @@ function PersonRow({
         </div>
       </div>
 
-      <div className={styles.controls}>
+      <div className={`${styles.controls} ${styles.personControls}`}>
         <label className={styles.check}>
           <input
             type="checkbox"

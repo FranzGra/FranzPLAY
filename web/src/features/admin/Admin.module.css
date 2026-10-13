@@ -8,34 +8,69 @@
   letter-spacing: -0.02em;
 }
 
-.sections {
+/* The pages of the administration: one row of tabs on a glass bar. On a
+   narrow screen the row slides sideways instead of piling up in lines. */
+.tabs {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
   margin: 0 0 24px;
+  padding: 4px;
+  overflow-x: auto;
+  border-radius: var(--radius-pill);
+  scrollbar-width: none;
 }
 
-.section {
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab,
+.segment {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  height: 36px;
-  padding: 0 16px;
-  border: 1px solid var(--color-border);
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
   border-radius: var(--radius-pill);
-  color: var(--color-text);
+  background: transparent;
+  color: var(--color-text-muted);
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.section:hover {
+.tab:hover,
+.segment:hover {
+  background: rgb(255 255 255 / 0.06);
   color: var(--color-text);
-  background: var(--glass-bg-strong);
 }
 
-.section[aria-current="page"] {
-  border-color: transparent;
+.tab[aria-current="page"],
+.segment[aria-pressed="true"] {
   background: var(--color-text);
   color: var(--color-bg);
+}
+
+/* A small group of choices where only one is on (like "Tutti", "Nascosti"). */
+.segmented {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px;
+  border: var(--glass-border);
+  border-radius: var(--radius-l);
+}
+
+.segmented legend {
+  float: left;
 }
 
 .top {
@@ -48,10 +83,14 @@
 }
 
 .lead {
-  max-width: 560px;
-  margin: 0;
+  max-width: 620px;
+  margin: 0 0 20px;
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+.top .lead {
+  margin: 0;
 }
 
 .placeholder {
@@ -142,11 +181,56 @@
   cursor: pointer;
 }
 
-.check input {
+/* A tick box drawn by us, the same in every browser: a soft square that
+   fills with the accent and shows a white tick when it is on. */
+.check input[type="checkbox"] {
+  display: inline-grid;
+  flex: none;
+  place-content: center;
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: var(--color-accent);
+  border: 1.5px solid rgb(255 255 255 / 0.28);
+  border-radius: 5px;
+  background: transparent;
+  cursor: inherit;
+  appearance: none;
+}
+
+.check input[type="checkbox"]::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: var(--color-on-accent);
+  clip-path: polygon(14% 44%, 0 59%, 40% 100%, 100% 22%, 86% 8%, 39% 70%);
+  scale: 0;
+  transition: scale var(--duration-fast) var(--ease-spring);
+}
+
+.check input[type="checkbox"]:checked {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.check input[type="checkbox"]:checked::after {
+  scale: 1;
+}
+
+.check input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.check input[type="checkbox"]:disabled {
+  opacity: 0.5;
+}
+
+/* A person's settings sit on their own line under the name, the same for
+   everyone, so the cards line up. */
+.personControls {
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
 }
 
 .check:has(input:disabled) {
@@ -326,6 +410,29 @@
   font-size: 13px;
 }
 
+/* Under a big number, each note goes on its own line. */
+.stat .note {
+  display: block;
+  margin-top: 2px;
+}
+
+.statLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-text-muted);
+}
+
+.statLink:hover {
+  color: var(--color-text);
+}
+
+.version {
+  margin: 24px 0 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
 .failed {
   flex: 1 1 280px;
   min-width: 0;
@@ -352,8 +459,12 @@
 }
 
 .good {
-  color: var(--color-text-muted);
-  font-size: 13px;
+  flex: none;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-size: 12px;
 }
 
 .lastCheck {
@@ -368,27 +479,12 @@
   margin-top: 4px;
 }
 
-.section[aria-pressed="true"] {
-  border-color: transparent;
-  background: var(--color-text);
-  color: var(--color-bg);
-}
-
-button.section {
-  background: transparent;
-  cursor: pointer;
-}
-
 .tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 16px;
-  margin: 20px 0;
-}
-
-.tools .sections {
-  margin: 0;
+  margin: 0 0 20px;
 }
 
 .searchForm {
@@ -476,12 +572,6 @@ button.section {
 
 .more {
   margin: 20px auto 0;
-}
-
-fieldset.sections {
-  min-width: 0;
-  padding: 0;
-  border: 0;
 }
 
 .action:disabled {
@@ -599,18 +689,43 @@ fieldset.field {
   font-size: 12px;
 }
 
-/* Search and filters above a list. */
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 20px;
-  margin: 0 0 20px;
+/* Something to fix, with a round mark in front: amber when it can wait a
+   little, red when it must be fixed soon, green when all is well. */
+.problemRow {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 14px;
 }
 
-/* A problem that must be fixed soon. */
+.problemMark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
 .critical {
   border-color: rgb(239 68 68 / 0.45);
+}
+
+.critical .problemMark {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.problemMark.allGood {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.problemRow code {
+  overflow-wrap: anywhere;
 }
 
 .plain {
@@ -704,6 +819,17 @@ label.action:focus-within {
 
 .rules h2 {
   margin: 0;
+  font-size: 18px;
+}
+
+/* In a column, a field takes only the room it needs (no tall empty gap). */
+.rules .field {
+  flex: none;
+  max-width: 420px;
+}
+
+.rules .momentControls {
+  flex: none;
 }
 
 .order {
@@ -724,7 +850,7 @@ label.action:focus-within {
 }
 
 /* Searching a cover on the internet. */
-.searchBox {
+.coverSearch {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -860,4 +986,25 @@ label.action:focus-within {
 .proposal > div:nth-child(2) {
   flex: 1 1 200px;
   min-width: 0;
+}
+
+/* A drop-down next to the search and the filters. */
+.toolSelect {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+}
+
+/* Smaller buttons, for rows that have many of them. */
+.small {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* A long file path stays on one line; the whole path is in its tooltip. */
+.oneLine {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
