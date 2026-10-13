@@ -331,3 +331,35 @@ export function parseSubtitles(data: unknown): SubtitleTrack[] {
 export async function fetchSubtitles(id: number, signal?: AbortSignal): Promise<SubtitleTrack[]> {
   return parseSubtitles(await request(`/api/videos/${id}/subtitles`, { signal }));
 }
+
+// CopyState says where the copy of a video for every device is: made
+// (ready), in the queue (waiting), being made (working), not possible
+// (failed), or not planned, because the file should play as it is (none).
+export type CopyState = "ready" | "waiting" | "working" | "failed" | "none";
+
+const copyStates: readonly CopyState[] = ["ready", "waiting", "working", "failed", "none"];
+
+// CopyProgress is where the copy is, and while it is being made how much
+// of it is done, 0 to 99 (null when not known).
+export type CopyProgress = { state: CopyState; percent: number | null };
+
+export function parseCopyProgress(data: unknown): CopyProgress {
+  const d = (data ?? {}) as { state?: unknown; percent?: unknown };
+  const state = copyStates.find((s) => s === d.state);
+  if (!state) throw new Error("copy state: not a known state");
+  const percent = d.percent ?? null;
+  if (
+    percent !== null &&
+    (typeof percent !== "number" || !Number.isInteger(percent) || percent < 0 || percent > 100)
+  ) {
+    throw new Error("copy percent: not a percentage");
+  }
+  return { state, percent };
+}
+
+// prepareVideo tells the server this browser cannot play a video: its copy
+// for every device goes before every other job. It answers where the copy
+// is, and asking again only answers that.
+export async function prepareVideo(id: number): Promise<CopyProgress> {
+  return parseCopyProgress(await request(`/api/videos/${id}/prepare`, { method: "POST" }));
+}

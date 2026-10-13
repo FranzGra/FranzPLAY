@@ -1,6 +1,13 @@
 import { videoJSON } from "../test/fixtures";
 import { fakeServer } from "../test/render";
-import { fetchVideos, parseCategories, parseVideo, playsFileItself, streamURL } from "./videos";
+import {
+  fetchVideos,
+  parseCategories,
+  parseCopyProgress,
+  parseVideo,
+  playsFileItself,
+  streamURL,
+} from "./videos";
 
 const sampleVideo = videoJSON();
 
@@ -188,5 +195,21 @@ describe("playsFileItself", () => {
   it("asks for the file itself by address", () => {
     expect(streamURL(7)).toBe("/api/videos/7/stream");
     expect(streamURL(7, true)).toBe("/api/videos/7/stream?original=1");
+  });
+});
+
+describe("parseCopyProgress", () => {
+  it("reads where the copy is and how far", () => {
+    expect(parseCopyProgress({ state: "working", percent: 40 })).toEqual({
+      state: "working",
+      percent: 40,
+    });
+    expect(parseCopyProgress({ state: "waiting" })).toEqual({ state: "waiting", percent: null });
+  });
+
+  it("refuses what is not a copy state", () => {
+    expect(() => parseCopyProgress({ state: "done" })).toThrow();
+    expect(() => parseCopyProgress({ state: "working", percent: 140 })).toThrow();
+    expect(() => parseCopyProgress(null)).toThrow();
   });
 });

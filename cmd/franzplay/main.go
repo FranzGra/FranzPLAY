@@ -256,6 +256,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		accounts.Routes,
 		catalog.Routes(db, cfg.DataDir, logger),
 		catalog.AudioRoutes(db, cfg.DataDir, remux, logger),
+		catalog.PrepareRoutes(db, cfg.DataDir, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		catalog.AdminRoutes(db, cfg.DataDir,
 			func() { hub.Publish(events.Library) },
 			func() { worker.Wake(); hub.Publish(events.Jobs) },

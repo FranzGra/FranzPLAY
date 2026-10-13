@@ -31,6 +31,7 @@ import { namesList } from "../sharing/audience";
 import { VideoCard } from "../videos/VideoCard";
 import { Description } from "./Description";
 import { subtitleLabel } from "./subtitleLabel";
+import { copyHint, useCopy } from "./useCopy";
 import styles from "./VideoPage.module.css";
 
 type State =
@@ -165,6 +166,7 @@ function Watch({
 }) {
   const [now] = useState(() => new Date());
   const subtitles = useSubtitles(video.id);
+  const copy = useCopy(video, canPlayType);
   const audio = useAudio(video.id);
   const findAudio = useCallback(
     (stream: number, at: number) => fetchAudioStart(video.id, stream, at),
@@ -188,7 +190,7 @@ function Watch({
     <div className={layoutClass(theater, video.private)}>
       <div className={styles.player}>
         <Player
-          key={video.id}
+          key={`${video.id}-${copy.round}`}
           src={streamURL(video.id, video.copy && playsFileItself(video, canPlayType))}
           poster={video.cover}
           subtitles={subtitles}
@@ -201,11 +203,8 @@ function Watch({
           autoPlay
           theater={theater}
           onTheater={onTheater}
-          unsupportedHint={
-            video.playable
-              ? undefined
-              : "Il formato di questo video non è adatto a tutti i browser. FranzPLAY ne sta preparando una copia che si vede ovunque: riprova più tardi."
-          }
+          unsupportedHint={copyHint(video, copy.state, copy.percent)}
+          onUnsupported={copy.unsupported}
         />
       </div>
       <div className={styles.info}>
