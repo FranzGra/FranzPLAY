@@ -53,6 +53,15 @@ describe("profile page", () => {
     expect(within(pages).queryByRole("link", { name: /Amministrazione/ })).not.toBeInTheDocument();
   });
 
+  it("groups the account actions in one list, like the pages above", async () => {
+    renderApp("/profilo");
+    const account = await screen.findByRole("region", { name: "Il tuo account" });
+    const names = within(account)
+      .getAllByRole("button")
+      .map((b) => b.textContent?.replace("›", "").trim());
+    expect(names).toEqual(["Cambia nome", "Cambia password", "Esci"]);
+  });
+
   it("changes the password", async () => {
     const { user, server } = renderApp("/profilo", {
       ...signedIn(),
