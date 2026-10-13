@@ -68,3 +68,22 @@ test("on the phone the bottom bar is on screen", async ({ page, isMobile }) => {
   const bar = page.getByRole("navigation").filter({ hasText: "Profilo" }).last();
   await expect(bar).toBeInViewport();
 });
+
+test("on the computer the side menu stays in place while the page scrolls", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "phones have no side menu");
+  await logIn(page, PEOPLE[0]);
+  // A short window, so the Home is taller than it and scrolls.
+  await page.setViewportSize({ width: 1440, height: 420 });
+  await page.goto("/");
+  const menu = page.getByRole("navigation", { name: "Menu principale" });
+  const before = await menu.boundingBox();
+  await page.mouse.move(900, 300);
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  // Half a pixel of give: the top bar is not a whole number of pixels tall.
+  expect((await menu.boundingBox())?.y).toBeCloseTo(before?.y ?? -1, 0);
+  await expect(menu.getByRole("link", { name: "Home" })).toBeInViewport();
+});

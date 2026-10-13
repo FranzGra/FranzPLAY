@@ -3,6 +3,9 @@
 Guida passo passo per scaricare il progetto, lanciare i test e avviare il programma.
 Serve circa un quarto d'ora la prima volta, poi bastano pochi secondi.
 
+> Vuoi solo **usare** FranzPLAY, senza toccare il codice? Con Docker bastano due comandi e non
+> serve installare Go, Node.js né FFmpeg: segui [docker.md](docker.md).
+
 ## 1. Installa gli strumenti (una volta sola)
 
 Servono quattro programmi:
