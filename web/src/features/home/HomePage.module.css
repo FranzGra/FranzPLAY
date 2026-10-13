@@ -1,5 +1,6 @@
 /* The row of categories: it scrolls sideways on small screens. */
 .chips {
+  position: relative;
   display: flex;
   gap: 8px;
   margin: 0 0 24px;
@@ -11,6 +12,14 @@
 
 .chips li {
   flex: none;
+}
+
+@media (max-width: 899px) {
+  .chips {
+    margin-inline: -16px;
+    padding-inline: 16px;
+    scroll-padding-inline: 16px;
+  }
 }
 
 .chip {
