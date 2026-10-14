@@ -104,8 +104,9 @@ web/src/styles/       colori, misure e caratteri, tutti in un posto solo (variab
   nostri, così le dipendenze restano poche (regola 10).
 - Test con Vitest e Testing Library, accanto al codice (`Nome.test.tsx`).
 - Le prove in `e2e/` (Playwright) aprono ogni pagina su computer e telefono: nessun errore, niente
-  che allarghi la pagina di lato, e un video che parte e salta in fretta. Una pagina nuova si
-  aggiunge al loro elenco in `e2e/tests/pages.spec.ts`.
+  che allarghi la pagina di lato, sul computer la colonna della pagina sempre al centro (mai
+  attaccata a sinistra), e un video che parte e salta in fretta. Una pagina nuova si aggiunge al
+  loro elenco in `e2e/tests/pages.spec.ts`.
 - Formattazione e lint con **Biome**, tipi stretti con TypeScript.
 
 ## Convenzioni
