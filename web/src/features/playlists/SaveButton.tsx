@@ -158,18 +158,20 @@ export function SaveButton({ videoId }: { videoId: number }) {
         type="button"
         className={`glass ${styles.button}`}
         aria-expanded={open}
+        // The name says how many lists hold the video; the badge shows it.
+        aria-label={inside > 0 ? `Salva — in ${inside} playlist` : undefined}
         onClick={() => setOpen((o) => !o)}
       >
         <span key={saved} className={styles.icon} data-bounce={saved > 0 || undefined}>
           <Icon name={inside > 0 ? "check" : "save"} size={20} />
         </span>
-        Salva
+        {inside > 0 ? "Salvato" : "Salva"}
+        {inside > 0 && (
+          <span className={styles.count} aria-hidden="true">
+            {inside}
+          </span>
+        )}
       </button>
-      {inside > 0 && (
-        <span className={styles.count} aria-live="polite">
-          in {inside} playlist
-        </span>
-      )}
       {/* The panel goes straight into the page's body: no box around the
           button can cut it or stack it under the videos or the tab bar. */}
       {content && createPortal(content, document.body)}
