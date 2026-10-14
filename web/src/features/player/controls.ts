@@ -133,6 +133,30 @@ export function clampVolume(volume: number): number {
   return Math.round(Math.min(Math.max(volume, 0), 1) * 100) / 100;
 }
 
+// wheelStep is how much one notch of the mouse wheel over the volume
+// changes it: 5 %, the same step as the volume bar.
+export const wheelStep = 0.05;
+// wheelNotch is how far the wheel moves the page with one notch, in pixels.
+const wheelNotch = 100;
+// lineHeight turns a wheel that counts in lines (Firefox) into pixels.
+const lineHeight = 33;
+
+// wheelVolume turns the wheel over the volume into whole steps up (+) or
+// down (-), keeping what is left for the next turn: a touchpad sends many
+// small moves, a mouse one big move per notch. deltaMode 1 counts in lines,
+// 2 in pages.
+export function wheelVolume(
+  rest: number,
+  deltaY: number,
+  deltaMode: number,
+): { steps: number; rest: number } {
+  const pixels =
+    deltaMode === 1 ? deltaY * lineHeight : deltaMode === 2 ? deltaY * wheelNotch : deltaY;
+  const total = rest - pixels; // the wheel turned away from you scrolls up: louder
+  const steps = Math.trunc(total / wheelNotch) || 0; // never -0
+  return { steps, rest: total - steps * wheelNotch };
+}
+
 // speedLabel writes a speed as in the menu: "Normale", "1,5×".
 export function speedLabel(speed: number): string {
   return speed === 1 ? "Normale" : `${String(speed).replace(".", ",")}×`;

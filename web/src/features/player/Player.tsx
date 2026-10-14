@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type PointerEvent,
   type SyntheticEvent,
   useCallback,
@@ -24,6 +25,8 @@ import {
   pickAudio,
   skipSeconds,
   tapZone,
+  wheelStep,
+  wheelVolume,
 } from "./controls";
 import styles from "./Player.module.css";
 import { SettingsMenu } from "./SettingsMenu";
@@ -74,6 +77,12 @@ const reportEvery = 10;
 export const hideAfter = 3000;
 // doubleTapWithin is how close two taps must be to count as a double tap.
 export const doubleTapWithin = 300;
+// doubleClickWithin is how long a click of the mouse waits before playing
+// or pausing: if a second click comes first, it was a double click, which
+// only goes full screen.
+export const doubleClickWithin = 250;
+// slowDoubleClick is the longest double click computers allow by default.
+const slowDoubleClick = 500;
 
 type Flash = { icon: "back15" | "forward15" | "play" | "pause" | "volume" | "muted"; key: number };
 
@@ -192,6 +201,7 @@ export function Player({
 }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
+  const volumeBox = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(false);
   const [time, setTime] = useState(0);
@@ -263,6 +273,12 @@ export function Player({
   const lastPointer = useRef("");
   const tapTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(tapTimer.current), []);
+  // A click of the mouse waiting to see if a second one comes, and when
+  // the last lone click that played or paused was made (a slow double
+  // click undoes it).
+  const clickTimer = useRef<number | undefined>(undefined);
+  const clickToggledAt = useRef(0);
+  useEffect(() => () => window.clearTimeout(clickTimer.current), []);
 
   // What onPosition knows: the time now, the last one told, and whether
   // the video was played at all (opening a video is not watching it).
@@ -611,8 +627,34 @@ export function Player({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [run]);
 
-  // On a touch screen a tap shows the controls and a double tap on the
-  // sides jumps; with a mouse a click plays or pauses.
+  // The mouse wheel over the volume turns it up or down in small steps,
+  // and does not scroll the page. React listens to the wheel without the
+  // right to stop the page, so the listener is added by hand.
+  useEffect(() => {
+    const box = volumeBox.current;
+    if (!box) return;
+    let rest = 0;
+    const onWheel = (event: WheelEvent) => {
+      const v = video.current;
+      if (!v) return;
+      event.preventDefault();
+      const turn = wheelVolume(rest, event.deltaY, event.deltaMode);
+      rest = turn.rest;
+      if (turn.steps === 0) return;
+      const from = v.muted ? 0 : v.volume;
+      const next = clampVolume(from + turn.steps * wheelStep);
+      v.volume = next; // right away: the next notch may come before React
+      setVolume(next);
+      setMuted(next === 0);
+      setSilenced(false);
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // On a touch screen a tap shows the controls, a double tap on the sides
+  // jumps and one in the middle goes full screen; with a mouse a click
+  // plays or pauses.
   function onSurfacePointerUp(event: PointerEvent<HTMLDivElement>) {
     lastPointer.current = event.pointerType;
     if (menuOpen) {
@@ -620,15 +662,31 @@ export function Player({
       return;
     }
     if (event.pointerType !== "touch") {
-      run({ kind: "toggle-play" });
+      if (clickTimer.current !== undefined) {
+        // The second click of a double click: full screen comes with it.
+        window.clearTimeout(clickTimer.current);
+        clickTimer.current = undefined;
+        return;
+      }
+      const clickedAt = Date.now();
+      clickTimer.current = window.setTimeout(() => {
+        clickTimer.current = undefined;
+        clickToggledAt.current = clickedAt;
+        run({ kind: "toggle-play" });
+      }, doubleClickWithin);
       return;
     }
     const now = Date.now();
     const rect = event.currentTarget.getBoundingClientRect();
     const zone = tapZone(event.clientX, rect.left, rect.width);
-    if (now - lastTap.current < doubleTapWithin && zone !== "middle") {
+    if (now - lastTap.current < doubleTapWithin) {
+      // A double tap on the sides jumps; in the middle it goes full screen.
       window.clearTimeout(tapTimer.current); // the first tap was half of this
-      run({ kind: "seek-by", seconds: zone === "back" ? -skipSeconds : skipSeconds });
+      if (zone === "middle") {
+        toggleFullscreen();
+      } else {
+        run({ kind: "seek-by", seconds: zone === "back" ? -skipSeconds : skipSeconds });
+      }
       lastTap.current = 0;
       return;
     }
@@ -644,6 +702,18 @@ export function Player({
     } else {
       showControls();
     }
+  }
+
+  // A double click of the mouse only goes full screen. If it was slower
+  // than doubleClickWithin, its first click already played or paused:
+  // that is undone, so the video stays as it was.
+  function onSurfaceDoubleClick() {
+    if (lastPointer.current !== "mouse") return;
+    window.clearTimeout(clickTimer.current);
+    clickTimer.current = undefined;
+    if (Date.now() - clickToggledAt.current < slowDoubleClick) togglePlay();
+    clickToggledAt.current = 0;
+    toggleFullscreen();
   }
 
   function onProgress(event: SyntheticEvent<HTMLVideoElement>) {
@@ -776,8 +846,8 @@ export function Player({
         className={styles.surface}
         data-surface="true"
         onPointerUp={onSurfacePointerUp}
-        // A double click goes full screen; a double tap jumps instead.
-        onDoubleClick={() => lastPointer.current === "mouse" && toggleFullscreen()}
+        // A double click of the mouse goes full screen; taps are counted above.
+        onDoubleClick={onSurfaceDoubleClick}
         aria-hidden="true"
       />
 
@@ -895,7 +965,7 @@ export function Player({
           >
             <Icon name="forward15" size={26} />
           </button>
-          <div className={styles.volume}>
+          <div ref={volumeBox} className={styles.volume}>
             <button
               type="button"
               className={styles.button}
@@ -913,6 +983,7 @@ export function Player({
               max={1}
               step={0.05}
               value={muted || silenced ? 0 : volume}
+              style={{ "--level": `${(muted || silenced ? 0 : volume) * 100}%` } as CSSProperties}
               aria-label="Volume"
               onChange={(event) => {
                 const next = clampVolume(Number(event.target.value));

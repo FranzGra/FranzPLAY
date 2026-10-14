@@ -1,7 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SubtitleTrack } from "../../api/videos";
-import { doubleTapWithin, failureText, hideAfter, Player, pickTrack } from "./Player";
+import {
+  doubleClickWithin,
+  doubleTapWithin,
+  failureText,
+  hideAfter,
+  Player,
+  pickTrack,
+} from "./Player";
 
 // jsdom has no real video: these stand-ins make play() and pause() behave.
 function fakeMedia() {
@@ -195,7 +202,7 @@ describe("player", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(play).not.toHaveBeenCalled();
     await user.click(surface);
-    expect(play).toHaveBeenCalled();
+    await waitFor(() => expect(play).toHaveBeenCalled());
   });
 
   it("remembers the volume for the next video", async () => {
@@ -205,6 +212,26 @@ describe("player", () => {
 
     const { container } = render(<Player src="/y" poster={null} />);
     expect(container.querySelector("video")?.volume).toBe(0.35);
+  });
+
+  it("turns the volume with the mouse wheel, in steps of 5 %, without scrolling the page", () => {
+    const { video } = setup();
+    const slider = screen.getByRole("slider", { name: "Volume" });
+    fireEvent.change(slider, { target: { value: "0.5" } });
+    const wheel = (deltaY: number) => {
+      const event = new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true });
+      act(() => {
+        slider.dispatchEvent(event);
+      });
+      return event;
+    };
+    expect(wheel(100).defaultPrevented).toBe(true);
+    wheel(100);
+    expect(video.volume).toBe(0.4);
+    expect(slider).toHaveValue("0.4");
+    for (let i = 0; i < 20; i++) wheel(-100);
+    expect(video.volume).toBe(1);
+    expect(slider).toHaveValue("1");
   });
 
   it("shows where the video is on the timeline", () => {
@@ -587,14 +614,15 @@ describe("player on a touch screen", () => {
 
   // playing sets up a player whose video plays, with a picture 300 wide.
   function playing() {
-    const { video } = setup();
+    const { video, play, pause } = setup();
+    Object.defineProperty(video, "paused", { value: false, configurable: true });
     fireEvent.play(video);
     const root = document.querySelector("[data-controls]") as HTMLElement;
     const surface = document.querySelector("[data-surface]") as HTMLElement;
     vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({ left: 0, width: 300 } as DOMRect);
     const fullscreen = vi.fn(() => Promise.resolve());
     root.requestFullscreen = fullscreen;
-    return { video, root, surface, fullscreen };
+    return { video, root, surface, fullscreen, play, pause };
   }
 
   // tap is a finger touching the picture at x and lifting: the browser
@@ -662,11 +690,64 @@ describe("player on a touch screen", () => {
     expect(root).toHaveAttribute("data-controls", "visible");
   });
 
-  it("goes full screen on a double click of the mouse", () => {
-    const { surface, fullscreen } = playing();
+  it("goes full screen on a double tap in the middle", () => {
+    const { video, root, surface, fullscreen } = playing();
+    video.currentTime = 100;
+    tap(surface, root, 150);
+    tap(surface, root, 150);
+    fireEvent.doubleClick(surface);
+    expect(fullscreen).toHaveBeenCalledTimes(1);
+    expect(video.currentTime).toBe(100);
+  });
+
+  it("goes full screen on a double click of the mouse, without pausing", () => {
+    const { surface, fullscreen, play, pause } = playing();
+    play.mockClear();
     fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    wait(doubleClickWithin / 2);
     fireEvent.pointerUp(surface, { pointerType: "mouse" });
     fireEvent.doubleClick(surface);
+    wait(doubleClickWithin * 2);
     expect(fullscreen).toHaveBeenCalled();
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  it("pauses on a single click of the mouse, a moment later", () => {
+    const { surface, fullscreen, play, pause } = playing();
+    play.mockClear();
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    wait(doubleClickWithin - 1);
+    expect(pause).not.toHaveBeenCalled();
+    wait(1);
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(fullscreen).not.toHaveBeenCalled();
+  });
+
+  it("keeps the video playing after a slow double click", () => {
+    const { surface, fullscreen, play, pause } = playing();
+    play.mockClear();
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    wait(doubleClickWithin + 100); // the first click already paused
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    fireEvent.doubleClick(surface);
+    wait(doubleClickWithin * 2);
+    expect(fullscreen).toHaveBeenCalled();
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not undo an older click when a double click follows it", () => {
+    const { surface, fullscreen, play, pause } = playing();
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    wait(1000); // a lone click: paused
+    expect(pause).toHaveBeenCalledTimes(1);
+    play.mockClear();
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    wait(doubleClickWithin / 2);
+    fireEvent.pointerUp(surface, { pointerType: "mouse" });
+    fireEvent.doubleClick(surface);
+    wait(doubleClickWithin * 2);
+    expect(fullscreen).toHaveBeenCalled();
+    expect(play).not.toHaveBeenCalled();
   });
 });
