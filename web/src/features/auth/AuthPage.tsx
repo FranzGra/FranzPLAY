@@ -264,6 +264,9 @@ function explain(error: unknown, mode: Mode): string {
         ? "Il codice di installazione non è giusto. Copialo dal terminale."
         : "Nome o password sbagliati.";
     case 403:
+      if (mode !== "register" || error.message === "request from another site") {
+        return "Il server ha rifiutato la richiesta perché arriva da un indirizzo diverso da quello del sito. Se usi un proxy, controlla che passi l'indirizzo giusto.";
+      }
       return "La registrazione è chiusa: per entrare chiedi un invito a chi gestisce FranzPLAY.";
     case 409:
       return mode === "register"

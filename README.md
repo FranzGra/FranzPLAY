@@ -76,6 +76,10 @@ Full guide (in Italian): [`docs/copertine-e-anteprime.md`](docs/copertine-e-ante
 | `FRANZPLAY_TRANSLATE_KEY` | none | LibreTranslate key, when the server asks for one |
 | `FRANZPLAY_SETUP_CODE` | `false` | `true` asks for a one-time code from the log to create the first administrator |
 
+Behind a reverse proxy (HTTPS on its own name), the proxy must pass `X-Forwarded-Host` (or
+`Forwarded: host=`) and `X-Forwarded-Proto`: FranzPLAY uses them to recognize its own pages
+and refuses changes that come from other sites.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).

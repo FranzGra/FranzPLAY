@@ -356,6 +356,28 @@ func TestRequestsFromOtherSitesAreRefused(t *testing.T) {
 	expect(t, b.do("POST", "/api/logout", nil, "Origin", "http://example.com"), http.StatusNoContent)
 }
 
+func TestRequestsThroughReverseProxy(t *testing.T) {
+	s := newSite(t)
+	s.setUp()
+	login := map[string]string{"name": "Admin", "password": "admin-password"}
+	origin := "https://play.example.org"
+	// The proxy reaches FranzPLAY at its own address (httptest's example.com)
+	// and passes the address the browser used.
+	expect(t, s.browser().do("POST", "/api/login", login,
+		"Origin", origin, "X-Forwarded-Host", "play.example.org", "X-Forwarded-Proto", "https"), http.StatusOK)
+	expect(t, s.browser().do("POST", "/api/login", login,
+		"Origin", origin, "X-Forwarded-Host", "play.example.org, inner.proxy"), http.StatusOK)
+	expect(t, s.browser().do("POST", "/api/login", login,
+		"Origin", origin, "Forwarded", `for=10.0.0.1;proto=https;host="play.example.org", for=10.0.0.2`), http.StatusOK)
+	// Without the header, the proxy's address does not match: refused, as before.
+	expect(t, s.browser().do("POST", "/api/login", login, "Origin", origin), http.StatusForbidden)
+	// Another site is still refused, with or without the proxy.
+	expect(t, s.browser().do("POST", "/api/login", login,
+		"Origin", "https://evil.example", "X-Forwarded-Host", "play.example.org"), http.StatusForbidden)
+	expect(t, s.browser().do("POST", "/api/login", login,
+		"Origin", "https://evil.example", "Forwarded", "host=play.example.org"), http.StatusForbidden)
+}
+
 func TestChangePassword(t *testing.T) {
 	s := newSite(t)
 	b := s.setUp()
