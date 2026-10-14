@@ -40,7 +40,11 @@ func (ts *testScanner) shown(t *testing.T) map[string]bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	out := map[string]bool{}
 	for rows.Next() {
 		var p string
