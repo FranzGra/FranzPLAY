@@ -1,0 +1,35 @@
+/* The card takes the whole width; the button lies over its right edge,
+   halfway down, and the card's words leave room for it. */
+.root {
+  position: relative;
+  --card-end: calc(var(--touch) + 4px);
+}
+
+.remove {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch);
+  height: var(--touch);
+  translate: 0 -50%;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.remove:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-text);
+}
+
+/* With the mouse on the button the card stays lit: they are one piece. */
+@media (hover: hover) {
+  .root:hover > :global(.glow)::before {
+    opacity: 1;
+  }
+}

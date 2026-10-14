@@ -14,7 +14,7 @@
   position: relative;
   aspect-ratio: 16 / 9;
   margin-bottom: 8px;
-  border-radius: var(--radius-m);
+  border-radius: var(--card-radius);
   overflow: hidden;
   background: var(--color-surface);
   box-shadow: 0 0 0 1px var(--color-border);
@@ -65,11 +65,13 @@
 }
 
 .duration {
+  /* Its corners are the cover's, minus the space between them. */
+  --inset: 8px;
   position: absolute;
-  right: 8px;
-  bottom: 8px;
+  right: var(--inset);
+  bottom: var(--inset);
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: max(4px, calc(var(--card-radius) - var(--inset)));
   background: rgb(0 0 0 / 0.75);
   font-size: 12px;
   font-weight: 600;
@@ -116,10 +118,14 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  /* Room on the right for a button laid over the card (RemovableCard). */
+  padding-right: var(--card-end, 0);
 }
 
-/* Row: small cover on the left, text on the right. */
+/* Row: small cover on the left, text on the right. A smaller cover has
+   smaller corners, and its glow follows them. */
 .root[data-layout="row"] {
+  --card-radius: var(--radius-s);
   flex-direction: row;
   gap: 12px;
 }
@@ -128,7 +134,10 @@
   flex: none;
   width: 168px;
   margin: 0;
-  border-radius: var(--radius-s);
+}
+
+.root[data-layout="row"] .duration {
+  --inset: 6px;
 }
 
 .root[data-layout="row"] .title {
@@ -152,5 +161,5 @@
 }
 
 .root:has(.watched) .duration {
-  bottom: 12px;
+  bottom: calc(var(--inset) + 4px);
 }

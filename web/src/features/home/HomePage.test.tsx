@@ -91,6 +91,11 @@ describe("home page", () => {
       "true",
     );
     expect(server.requests.at(-1)?.url).toContain("category=Scuola");
+    // However many categories there are, the last chip opens all of them.
+    expect(within(chips).getByRole("link", { name: /Tutte le categorie/ })).toHaveAttribute(
+      "href",
+      "/categorie",
+    );
 
     await user.click(within(chips).getByRole("button", { name: "Tutti" }));
     const grid = await screen.findByRole("list", { name: "Tutti i video" });

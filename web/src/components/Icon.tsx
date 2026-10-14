@@ -36,6 +36,9 @@ const paths = {
       <rect x="13" y="13" width="7" height="7" rx="1.5" />
     </>
   ),
+  folder: (
+    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h4l2 2.5h7A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" />
+  ),
   channel: (
     <>
       <rect x="3" y="5" width="18" height="13" rx="2.5" />
