@@ -53,7 +53,9 @@
   -webkit-backdrop-filter: var(--glass-blur);
   color: #fff;
   cursor: pointer;
-  transform: translate(-50%, -50%);
+  /* translate, not transform: growing (scale) then happens around the
+     middle of the button, so it stays where it is. */
+  translate: -50% -50%;
   transition:
     scale var(--duration-normal) var(--ease-spring),
     background-color var(--duration-fast);
