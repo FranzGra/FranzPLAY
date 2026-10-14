@@ -18,6 +18,7 @@ import { formatVideos } from "../../lib/format";
 import { removeSmoothly } from "../../lib/motion";
 import { type Choice, choiceOf, namesList, playlistSharing, ready } from "../sharing/audience";
 import { type Hints, WhoSees } from "../sharing/WhoSees";
+import { RemovableCard } from "../videos/RemovableCard";
 import { VideoCard } from "../videos/VideoCard";
 import { NameForm } from "./NameForm";
 import styles from "./Playlists.module.css";
@@ -160,7 +161,7 @@ export function PlaylistPage() {
   };
 
   return (
-    <>
+    <div className={styles.page}>
       <p className={styles.back}>
         {mine ? (
           <Link to="/playlist">
@@ -305,24 +306,22 @@ export function PlaylistPage() {
       ) : (
         <ol className={styles.videos}>
           {videos.map((video) => (
-            <li key={video.id} className={styles.item} data-flip>
-              <VideoCard video={video} now={now} layout="row" />
-              {mine && (
-                <button
-                  type="button"
-                  className={styles.remove}
-                  aria-label={`Togli «${video.title}» dalla playlist`}
+            <li key={video.id} data-flip>
+              {mine ? (
+                <RemovableCard
+                  card={<VideoCard video={video} now={now} layout="row" />}
+                  label={`Togli «${video.title}» dalla playlist`}
                   title="Togli dalla playlist"
-                  onClick={(event) => takeOut(video.id, event.currentTarget.closest("li"))}
-                >
-                  <Icon name="close" size={20} />
-                </button>
+                  onRemove={(event) => takeOut(video.id, event.currentTarget.closest("li"))}
+                />
+              ) : (
+                <VideoCard video={video} now={now} layout="row" />
               )}
             </li>
           ))}
         </ol>
       )}
-    </>
+    </div>
   );
 }
 

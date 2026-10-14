@@ -1,6 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
+import { tileColor } from "./color";
 
 describe("categories", () => {
   it("lists the categories with their videos", async () => {
@@ -38,6 +39,31 @@ describe("categories", () => {
     expect(link.querySelector("img")).toHaveAttribute(
       "src",
       "/api/category-images/1-0123456789abcdef.jpg",
+    );
+  });
+
+  it("draws a colored folder card for a category without an image", async () => {
+    renderApp("/categorie", {
+      ...signedIn(),
+      "GET /api/categories": {
+        body: [
+          {
+            name: "Scuola",
+            videos: 2,
+            color: "",
+            image: null,
+            cover: "/api/covers/1.jpg",
+          },
+        ],
+      },
+    });
+    const link = await screen.findByRole("link", { name: /Scuola/ });
+    // Not the cover of a video: the card of the old FranzPLAY, in a color
+    // that is always the same for the same name.
+    expect(link.querySelector("img")).toBeNull();
+    expect(link.querySelector("svg")).not.toBeNull();
+    expect(link.style.getPropertyValue("--tile-color")).toBe(
+      tileColor({ name: "Scuola", color: "" }),
     );
   });
 

@@ -43,9 +43,9 @@ describe("playlists page", () => {
       "/playlist/2",
       "/playlist/3",
     ]);
-    expect(within(links[1] as HTMLElement).getByText("2 video")).toBeInTheDocument();
+    expect(within(links[1] as HTMLElement).getByText("Playlist · 2 video")).toBeInTheDocument();
     expect(
-      within(links[2] as HTMLElement).getByText("2 video · sul tuo canale"),
+      within(links[2] as HTMLElement).getByText("Playlist · 2 video · sul tuo canale"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Per fare una playlist/)).not.toBeInTheDocument();
   });
