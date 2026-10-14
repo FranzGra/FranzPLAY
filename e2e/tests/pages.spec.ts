@@ -36,7 +36,16 @@ const adminPages = [
 async function checkPages(page: import("@playwright/test").Page, paths: string[], phone: boolean) {
   const errors = watchErrors(page);
   const all = await videos(page);
-  for (const path of [...paths, `/video/${all[0].id}`, "/canale/1"]) {
+  // Everyone has the "Guarda più tardi" list: its page is a playlist page.
+  const lists = await page.request.get("/api/playlists");
+  expect(lists.ok()).toBe(true);
+  const playlists = (await lists.json()) as { id: number }[];
+  for (const path of [
+    ...paths,
+    `/video/${all[0].id}`,
+    "/canale/1",
+    `/playlist/${playlists[0].id}`,
+  ]) {
     await test.step(path, async () => {
       await page.goto(path);
       await expect(page.locator("main")).toBeVisible();
@@ -59,6 +68,26 @@ async function checkPages(page: import("@playwright/test").Page, paths: string[]
       );
       expect(spilling, `${path} has pictures wider than their box`).toEqual([]);
       expect(errors, `${path} had errors`).toEqual([]);
+      // On a computer a page narrower than the room it has (a column with a
+      // fixed largest width) sits in the middle, not stuck to the left with
+      // an empty band on the right. Text paragraphs may stay on the left.
+      if (!phone) {
+        const offCenter = await page.evaluate(() => {
+          const room = document.querySelector("main > div");
+          if (!room) return ["no page box"];
+          const box = room.getBoundingClientRect();
+          return Array.from(room.children)
+            .filter(
+              (part) => part.tagName !== "P" && getComputedStyle(part).maxWidth.endsWith("px"),
+            )
+            .filter((part) => {
+              const own = part.getBoundingClientRect();
+              return Math.abs(own.left - box.left - (box.right - own.right)) > 2;
+            })
+            .map((part) => part.outerHTML.slice(0, 80));
+        });
+        expect(offCenter, `${path} has a column that is not in the middle`).toEqual([]);
+      }
       // On a phone a field with letters smaller than 16px makes Safari
       // zoom the whole page in when touched.
       if (phone) {
