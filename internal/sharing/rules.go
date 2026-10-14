@@ -46,3 +46,48 @@ func Clean(ids []int64, owner int64) ([]int64, error) {
 	}
 	return out, nil
 }
+
+// Audiences: who sees something, as the interface names it.
+const (
+	ForEveryone = "everyone" // everybody, in every list
+	ForMe       = "me"       // only its owner
+	ForPeople   = "people"   // its owner and the people they chose
+	ForLink     = "link"     // its owner and whoever opens its link
+)
+
+// AudienceOf says who sees something from how it is stored: private or
+// not, shared with someone, with a link.
+func AudienceOf(private, shared, link bool) string {
+	switch {
+	case !private:
+		return ForEveryone
+	case link:
+		return ForLink
+	case shared:
+		return ForPeople
+	default:
+		return ForMe
+	}
+}
+
+// ErrLinkNotPrivate refuses a link for something everybody sees already,
+// or together with chosen people: a link is its own way of sharing.
+var ErrLinkNotPrivate = errors.New("only something private and not shared with chosen people can have a link")
+
+// keyLength is how many letters a link key has: 22 letters of base64 are
+// 132 random bits, which nobody can guess.
+const keyLength = 22
+
+// ValidKey says whether s looks like a link key, before it is looked for.
+func ValidKey(s string) bool {
+	if len(s) != keyLength {
+		return false
+	}
+	for _, c := range s {
+		ok := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_'
+		if !ok {
+			return false
+		}
+	}
+	return true
+}

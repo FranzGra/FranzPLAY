@@ -60,7 +60,7 @@ describe("upload page", () => {
     await user.type(title, "Al mare");
     expect(screen.getByRole("radio", { name: "Tutti" })).toBeChecked();
     await user.click(screen.getByRole("radio", { name: "Solo io" }));
-    expect(screen.getByText(/Non compare nelle liste di nessuno/)).toBeInTheDocument();
+    expect(screen.getByText(/Non lo vede nessun altro/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Carica" }));
 
     expect(await screen.findByRole("link", { name: "Guarda il video" })).toHaveAttribute(
@@ -74,6 +74,7 @@ describe("upload page", () => {
       size: 5,
       private: true,
       sharedWith: [],
+      byLink: false,
     });
     expect(received).toBe(5);
   });
@@ -182,6 +183,7 @@ describe("upload page", () => {
     hidden: false,
     private: false,
     sharedWith: [],
+    link: null,
   };
 
   it("lists my videos and renames one", async () => {
@@ -232,7 +234,11 @@ describe("upload page", () => {
     await user.click(within(mine).getByRole("radio", { name: "Solo io" }));
     await user.click(within(mine).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/solo tu lo vedi/)).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({ private: true, sharedWith: [] });
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      private: true,
+      sharedWith: [],
+      byLink: false,
+    });
   });
 
   it("shares one of my videos with some people", async () => {
@@ -259,7 +265,11 @@ describe("upload page", () => {
     await user.click(within(mine).getByRole("checkbox", { name: "Marco" }));
     await user.click(within(mine).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/lo vedono anche Marco$/)).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({ private: true, sharedWith: [4] });
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      private: true,
+      sharedWith: [4],
+      byLink: false,
+    });
   });
 
   it("chooses the people when uploading", async () => {
@@ -297,7 +307,43 @@ describe("upload page", () => {
       size: 5,
       private: true,
       sharedWith: [3],
+      byLink: false,
     });
+  });
+
+  it("gives one of my videos a link to copy", async () => {
+    const link = "/video/12?k=abcdefghijklmnopqrstuv";
+    const { user, server } = renderApp(
+      "/carica",
+      uploads({
+        "GET /api/uploads/videos": { body: [mare] },
+        "PUT /api/uploads/videos/12": { body: { ...mare, private: true, link } },
+      }),
+    );
+    const mine = await screen.findByRole("region", { name: "I tuoi video" });
+    expect(within(mine).queryByRole("button", { name: "Copia link" })).not.toBeInTheDocument();
+    await user.click(await within(mine).findByRole("button", { name: "Chi lo vede" }));
+    await user.click(within(mine).getByRole("radio", { name: "Chi ha il link" }));
+    expect(within(mine).getByText(/comparirà appena salvi/)).toBeInTheDocument();
+    await user.click(within(mine).getByRole("button", { name: "Salva" }));
+    expect(await within(mine).findByText(/lo vede chi ha il link$/)).toBeInTheDocument();
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      private: true,
+      sharedWith: [],
+      byLink: true,
+    });
+
+    await user.click(within(mine).getByRole("button", { name: "Copia link" }));
+    expect(await within(mine).findByRole("button", { name: "Copiato" })).toBeInTheDocument();
+    // user-event gives the page its own clipboard, read here.
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}${link}`);
+
+    // Opened again, the choice shows the link itself.
+    await user.click(within(mine).getByRole("button", { name: "Chi lo vede" }));
+    expect(within(mine).getByRole("radio", { name: "Chi ha il link" })).toBeChecked();
+    expect(within(mine).getByLabelText("Link del video")).toHaveValue(
+      `${window.location.origin}${link}`,
+    );
   });
 
   it("deletes one of my videos after asking", async () => {
