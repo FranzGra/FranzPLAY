@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { logIn, PEOPLE, videos, watchErrors } from "./franzplay";
 
 // The heart of FranzPLAY: a video starts quickly and jumps quickly. The
@@ -174,13 +174,28 @@ async function openTheaterTest(page: Page) {
   await expect(page.locator("video")).toHaveCount(1);
 }
 
+// steadyBox measures an element once the page has stopped moving it: the
+// page around the player may still settle by a pixel just after loading.
+async function steadyBox(element: Locator) {
+  let box = await element.boundingBox();
+  for (let i = 0; i < 20; i++) {
+    await element.page().waitForTimeout(100);
+    const next = await element.boundingBox();
+    if (JSON.stringify(next) === JSON.stringify(box)) {
+      return next;
+    }
+    box = next;
+  }
+  return box;
+}
+
 test("theater mode glides in and out, and nothing else jumps", async ({ page, isMobile }) => {
   test.skip(isMobile, "theater mode is for wide screens");
   const errors = watchErrors(page);
   await openTheaterTest(page);
   const player = page.locator("[data-controls]");
   const menu = page.getByRole("navigation", { name: "Menu principale" });
-  const normal = await player.boundingBox();
+  const normal = await steadyBox(player);
   await countGlides(page);
 
   await page.keyboard.press("t");
@@ -192,9 +207,8 @@ test("theater mode glides in and out, and nothing else jumps", async ({ page, is
   await page.keyboard.press("t");
   expect(await waitGlides(page)).toBe(2);
   await expect(menu).toBeVisible();
-  // Back to the same place and size (the page may still have been
-  // settling in by a fraction of a pixel when first measured).
-  const back = await player.boundingBox();
+  // Back to the same place and size.
+  const back = await steadyBox(player);
   for (const side of ["x", "y", "width", "height"] as const) {
     expect(back?.[side]).toBeCloseTo(normal?.[side] ?? 0, 0);
   }
