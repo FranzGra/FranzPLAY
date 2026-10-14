@@ -1,4 +1,5 @@
-import { type FormEvent, type Ref, useEffect, useRef, useState } from "react";
+import { type FormEvent, type Ref, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   createPlaylist,
   fetchPlaylists,
@@ -9,31 +10,40 @@ import {
 } from "../../api/playlists";
 import { Icon } from "../../components/Icon";
 import { usePresence } from "../../lib/presence";
+import { useWide } from "../home/look";
 import styles from "./SaveButton.module.css";
 
-// SaveButton opens a small panel where I put the video in my lists, or
-// make a new list for it. The panel grows out of the button and shrinks
-// back into it; each time the video goes into a list, the button's icon
-// bounces.
+// SaveButton opens a panel where I put the video in my lists, or make a
+// new list for it. On a computer the panel grows out of the button and
+// shrinks back into it; on a phone it covers the whole screen, rising from
+// the bottom, with big rows for the thumb. Each time the video goes into a
+// list, the button's icon bounces.
 export function SaveButton({ videoId }: { videoId: number }) {
   const [open, setOpen] = useState(false);
   const panel = usePresence(open ? true : null);
+  const sheet = !useWide();
   // saved counts the lists the video went into: each one bounces the icon.
   const [saved, setSaved] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
 
+  // Closing gives the focus back to the button, for the keyboard.
+  const close = useCallback(() => {
+    setOpen(false);
+    button.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-    const close = () => {
-      setOpen(false);
-      button.current?.focus();
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
+    // A touch outside closes the panel; the phone's sheet lives outside
+    // the button's box, so a touch on it counts as inside.
     const onPointer = (e: PointerEvent) => {
-      if (e.target instanceof Node && !root.current?.contains(e.target)) setOpen(false);
+      if (!(e.target instanceof Node)) return;
+      if (root.current?.contains(e.target) || panel.ref.current?.contains(e.target)) return;
+      setOpen(false);
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
@@ -41,7 +51,28 @@ export function SaveButton({ videoId }: { videoId: number }) {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
     };
-  }, [open]);
+  }, [open, close, panel.ref]);
+
+  // Under the phone's sheet the page must not scroll with the finger.
+  useEffect(() => {
+    if (!open || !sheet) return;
+    const before = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = before;
+    };
+  }, [open, sheet]);
+
+  const content = panel.shown && (
+    <Panel
+      ref={panel.ref}
+      leaving={panel.leaving}
+      sheet={sheet}
+      videoId={videoId}
+      onSaved={() => setSaved((n) => n + 1)}
+      onClose={close}
+    />
+  );
 
   return (
     <div className={styles.root} ref={root}>
@@ -57,15 +88,9 @@ export function SaveButton({ videoId }: { videoId: number }) {
         </span>
         Salva
       </button>
-      {panel.shown && (
-        <Panel
-          ref={panel.ref}
-          leaving={panel.leaving}
-          videoId={videoId}
-          onSaved={() => setSaved((n) => n + 1)}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {/* On a phone the sheet goes straight into the page's body: no box
+          around the button can cut it or stack it under the tab bar. */}
+      {sheet && content ? createPortal(content, document.body) : content}
     </div>
   );
 }
@@ -75,12 +100,14 @@ type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; lists: P
 function Panel({
   ref,
   leaving,
+  sheet,
   videoId,
   onSaved,
   onClose,
 }: {
   ref: Ref<HTMLDivElement>;
   leaving: boolean;
+  sheet: boolean;
   videoId: number;
   onSaved: () => void;
   onClose: () => void;
@@ -90,6 +117,12 @@ function Panel({
   // The list just ticked or made here: only that one moves.
   const [touched, setTouched] = useState<number | null>(null);
   const [made, setMade] = useState<number | null>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+
+  // The sheet covers the page: the keyboard and screen readers move into it.
+  useEffect(() => {
+    if (sheet) closeButton.current?.focus();
+  }, [sheet]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -135,52 +168,69 @@ function Panel({
   return (
     <div
       ref={ref}
-      className={`glass ${styles.panel}`}
+      className={`glass ${sheet ? styles.sheet : styles.panel}`}
       role="dialog"
       aria-label="Salva in una playlist"
+      aria-modal={sheet || undefined}
       data-leaving={leaving || undefined}
     >
       <div className={styles.head}>
-        <h2 className={styles.title}>Salva in…</h2>
-        <button type="button" className={styles.close} onClick={onClose} aria-label="Chiudi">
-          <Icon name="close" size={18} />
+        <h2 className={styles.title}>{sheet ? "Salva in una playlist" : "Salva in…"}</h2>
+        <button
+          ref={closeButton}
+          type="button"
+          className={styles.close}
+          onClick={onClose}
+          aria-label="Chiudi"
+        >
+          <Icon name="close" size={sheet ? 22 : 18} />
         </button>
       </div>
-      {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
-      {state.kind === "error" && (
-        <p className={styles.problem}>Non sono riuscito a caricare le playlist. Riprova.</p>
-      )}
-      {state.kind === "ready" && (
-        <>
-          <ul className={styles.lists}>
-            {state.lists.map((list) => (
-              <li
-                key={list.id}
-                data-touched={list.id === touched || undefined}
-                data-new={list.id === made || undefined}
-              >
-                <label className={styles.option}>
-                  <input
-                    type="checkbox"
-                    checked={list.contains ?? false}
-                    onChange={() => toggle(list)}
-                  />
-                  <span className={styles.check} aria-hidden="true">
-                    <Icon name="check" size={14} />
-                  </span>
-                  {list.kind === "later" && <Icon name="clock" size={18} />}
-                  <span className={styles.name}>{playlistName(list)}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-          <NewPlaylist videoId={videoId} onCreated={created} />
-        </>
-      )}
+      {/* Only the lists scroll; the title and the buttons stay. */}
+      <div className={styles.body}>
+        {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
+        {state.kind === "error" && (
+          <p className={styles.problem}>Non sono riuscito a caricare le playlist. Riprova.</p>
+        )}
+        {state.kind === "ready" && (
+          <>
+            <ul className={styles.lists}>
+              {state.lists.map((list) => (
+                <li
+                  key={list.id}
+                  data-touched={list.id === touched || undefined}
+                  data-new={list.id === made || undefined}
+                >
+                  <label className={styles.option}>
+                    <input
+                      type="checkbox"
+                      checked={list.contains ?? false}
+                      onChange={() => toggle(list)}
+                    />
+                    <span className={styles.check} aria-hidden="true">
+                      <Icon name="check" size={14} />
+                    </span>
+                    {list.kind === "later" && <Icon name="clock" size={18} />}
+                    <span className={styles.name}>{playlistName(list)}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <NewPlaylist videoId={videoId} onCreated={created} />
+          </>
+        )}
+      </div>
       {problem && (
         <p role="alert" className={styles.problem}>
           {problem}
         </p>
+      )}
+      {sheet && (
+        <div className={styles.foot}>
+          <button type="button" className={styles.done} onClick={onClose}>
+            Fatto
+          </button>
+        </div>
       )}
     </div>
   );
