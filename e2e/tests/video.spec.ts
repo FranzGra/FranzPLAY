@@ -206,7 +206,8 @@ test("theater mode glides in and out, and nothing else jumps", async ({ page, is
 
   await page.keyboard.press("t");
   expect(await waitGlides(page)).toBe(2);
-  await expect(menu).toBeVisible();
+  // On the video page the side menu stays folded away until ☰ opens it.
+  await expect(menu).toBeHidden();
   // Back to the same place and size.
   const back = await steadyBox(player);
   for (const side of ["x", "y", "width", "height"] as const) {
