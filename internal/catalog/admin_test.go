@@ -146,11 +146,24 @@ func TestAdminList(t *testing.T) {
 		t.Errorf("video with a copy = %+v", v)
 	}
 
-	for show, want := range map[string]int64{"hidden": secret, "missing": gone} {
+	// Too short for the administrator's minimum: listed apart, nobody sees it.
+	if _, err := s.db.Exec(`UPDATE videos SET too_short = 1 WHERE id = ?`, mare); err != nil {
+		t.Fatal(err)
+	}
+	if v := decode[adminList](t, s.do(t, "GET", "/api/admin/videos?q=mare", "", http.StatusOK)).Videos[0]; !v.TooShort {
+		t.Errorf("video too short = %+v", v)
+	}
+	if rec := s.get(t, "/api/videos/"+strconv.FormatInt(mare, 10)); rec.Code != http.StatusNotFound {
+		t.Errorf("GET video too short = %d, want 404", rec.Code)
+	}
+	for show, want := range map[string]int64{"hidden": secret, "missing": gone, "short": mare} {
 		got := decode[adminList](t, s.do(t, "GET", "/api/admin/videos?show="+show, "", http.StatusOK))
 		if got.Total != 1 || got.Videos[0].ID != want {
 			t.Errorf("show=%s: %+v", show, got)
 		}
+	}
+	if _, err := s.db.Exec(`UPDATE videos SET too_short = 0 WHERE id = ?`, mare); err != nil {
+		t.Fatal(err)
 	}
 	// The search also looks in the file's path.
 	got := decode[adminList](t, s.do(t, "GET", "/api/admin/videos?q=viaggi%2Fmare", "", http.StatusOK))

@@ -10,12 +10,14 @@ import {
 import { EmptyState } from "../../components/EmptyState";
 import { formatSince } from "../../lib/format";
 import styles from "./Admin.module.css";
+import { ShortVideosForm } from "./ShortVideosForm";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; library: LibraryOverview };
 
 // FoldersPage shows the video folders FranzPLAY reads, how many videos
 // each has, whether something is wrong with them, and how the last check
-// went. The administrator can ask for a check right away.
+// went. The administrator can ask for a check right away, and leave out
+// the videos too short to be worth showing.
 export function FoldersPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [asked, setAsked] = useState(false);
@@ -103,6 +105,13 @@ export function FoldersPage() {
       </ul>
 
       {library.lastScan && <LastCheck scan={library.lastScan} />}
+
+      <ShortVideosForm
+        key={library.minDuration}
+        minDuration={library.minDuration}
+        tooShort={library.tooShort}
+        onSaved={() => load()}
+      />
     </>
   );
 }
