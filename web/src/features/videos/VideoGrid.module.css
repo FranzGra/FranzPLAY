@@ -75,11 +75,12 @@
   color: var(--color-danger);
 }
 
-/* On a phone two cards side by side: one card as wide as the screen
-   was huge, as Francesco said. */
+/* On a phone one card per line, as wide as the screen, as Francesco
+   asked. minmax(0, 1fr) keeps a wide picture inside its card: the card
+   never grows past the screen. */
 @media (max-width: 599px) {
   .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
   }
 }

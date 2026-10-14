@@ -154,14 +154,3 @@
 .root:has(.watched) .duration {
   bottom: 12px;
 }
-
-/* On a phone the cards are two side by side: the text a little smaller. */
-@media (max-width: 599px) {
-  .root[data-layout="grid"] .title {
-    font-size: 14px;
-  }
-
-  .root[data-layout="grid"] .details {
-    font-size: 12px;
-  }
-}

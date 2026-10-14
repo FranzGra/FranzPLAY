@@ -242,9 +242,8 @@
   background: rgb(255 255 255 / 0.12);
 }
 
-/* On a phone the row runs to the edges of the screen, so it is clear
-   there is more to scroll, and the cards stay big whatever was chosen on
-   a computer. */
+/* On a phone the row runs to the edges of the screen, and the cards stay
+   big whatever was chosen on a computer. */
 @media (max-width: 599px) {
   .title {
     font-size: 19px;
@@ -259,21 +258,20 @@
     margin-inline: -16px;
     padding-inline: 16px;
     scroll-padding-inline: 16px;
-    grid-auto-columns: minmax(240px, 75%);
   }
 }
 
-/* On a phone the cards of a row are smaller, so more than one shows and
-   it is clear the row slides sideways. */
+/* On a phone one card at a time, as wide as the screen, as Francesco
+   asked: the finger slides the row to the next one, which stops in place. */
 @media (max-width: 599px) {
   .list {
-    grid-auto-columns: 200px;
+    grid-auto-columns: 100%;
     gap: 12px;
   }
 
   .list[data-sections="one"],
   .list[data-sections="two"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
   }
 }

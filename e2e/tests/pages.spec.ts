@@ -47,6 +47,17 @@ async function checkPages(page: import("@playwright/test").Page, paths: string[]
         scroll: document.documentElement.scrollWidth,
       }));
       expect(scroll, `${path} is wider than the window`).toBeLessThanOrEqual(width);
+      // Every picture stays inside its box: a picture that pushes its card
+      // wider makes the whole page shrink on a phone.
+      const spilling = await page.evaluate(() =>
+        Array.from(document.querySelectorAll("main img"))
+          .filter((img) => {
+            const box = img.parentElement?.getBoundingClientRect();
+            return box && img.getBoundingClientRect().width > box.width + 1;
+          })
+          .map((img) => img.outerHTML.slice(0, 80)),
+      );
+      expect(spilling, `${path} has pictures wider than their box`).toEqual([]);
       expect(errors, `${path} had errors`).toEqual([]);
       // On a phone a field with letters smaller than 16px makes Safari
       // zoom the whole page in when touched.
@@ -84,6 +95,61 @@ test("on the phone the bottom bar is on screen", async ({ page, isMobile }) => {
   await page.goto("/");
   const bar = page.getByRole("navigation").filter({ hasText: "Profilo" }).last();
   await expect(bar).toBeInViewport();
+});
+
+test("on the phone the videos come one per line, as wide as the screen", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "only on phones");
+  await logIn(page, PEOPLE[0]);
+  for (const path of ["/", "/categorie/Vacanze"]) {
+    await test.step(path, async () => {
+      await page.goto(path);
+      const card = page.locator('main a[data-layout="grid"]').first();
+      await expect(card).toBeVisible();
+      await page.waitForTimeout(400); // the page slides in
+      const { width, cards } = await page.evaluate(() => ({
+        width: window.innerWidth,
+        cards: Array.from(document.querySelectorAll('main a[data-layout="grid"]'))
+          .map((card) => card.getBoundingClientRect())
+          .filter((box) => box.left >= 0 && box.right <= window.innerWidth)
+          .map((box) => ({ left: box.left, top: box.top, width: box.width })),
+      }));
+      // The screen's edges leave 16px each side; the card takes the rest.
+      expect(cards[0]?.width).toBeGreaterThanOrEqual(width - 40);
+      expect(cards[0]?.width).toBeLessThanOrEqual(width);
+      // Never two cards side by side on the screen.
+      const rows = new Set(cards.map((box) => Math.round(box.top)));
+      expect(rows.size).toBe(cards.length);
+    });
+  }
+});
+
+test("on the phone Salva opens a window over the whole screen", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "on a computer Salva stays a small panel");
+  await logIn(page, PEOPLE[0]);
+  const all = await videos(page);
+  await page.goto(`/video/${all[0].id}`);
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Salva in una playlist" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("checkbox", { name: "Guarda più tardi" })).toBeAttached();
+  await page.waitForTimeout(500); // it rises from the bottom
+  const box = await sheet.boundingBox();
+  const size = page.viewportSize();
+  expect(box).toEqual({ x: 0, y: 0, width: size?.width, height: size?.height });
+  // Nothing lies on top of it, the bottom bar included.
+  const onTop = await page.evaluate(() => {
+    const at = document.elementFromPoint(window.innerWidth / 2, window.innerHeight - 10);
+    return at?.closest('[role="dialog"]') !== null;
+  });
+  expect(onTop).toBe(true);
+  // The close button sits at the right end of the title line.
+  const close = await sheet.getByRole("button", { name: "Chiudi" }).boundingBox();
+  expect((close?.x ?? 0) + (close?.width ?? 0)).toBeGreaterThan((size?.width ?? 0) - 24);
+  await sheet.getByRole("button", { name: "Fatto" }).click();
+  await expect(sheet).toBeHidden();
 });
 
 test("on the computer the side menu stays in place while the page scrolls", async ({
