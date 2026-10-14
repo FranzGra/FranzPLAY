@@ -141,8 +141,10 @@ describe("online sources page", () => {
     expect(within(form).queryByRole("combobox", { name: "Dalle" })).not.toBeInTheDocument();
 
     await user.click(within(form).getByRole("checkbox", { name: "Chiedi solo in certe ore" }));
-    await user.selectOptions(within(form).getByRole("combobox", { name: "Dalle" }), "22:00");
-    await user.selectOptions(within(form).getByRole("combobox", { name: "Alle" }), "06:00");
+    await user.click(within(form).getByRole("combobox", { name: "Dalle" }));
+    await user.click(screen.getByRole("option", { name: "22:00" }));
+    await user.click(within(form).getByRole("combobox", { name: "Alle" }));
+    await user.click(screen.getByRole("option", { name: "06:00" }));
     const daily = within(form).getByRole("spinbutton", { name: /quanti video al giorno/ });
     await user.clear(daily);
     await user.type(daily, "50");

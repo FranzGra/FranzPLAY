@@ -139,7 +139,8 @@ describe("people page", () => {
       "PUT /api/users/2": { body: { ...uploader, uploadQuota: 50 * 1024 ** 3 } },
     });
     const row = await rowOf("Giulia");
-    await user.selectOptions(within(row).getByRole("combobox", { name: "Spazio" }), "50 GB");
+    await user.click(within(row).getByRole("combobox", { name: "Spazio" }));
+    await user.click(screen.getByRole("option", { name: "50 GB" }));
     expect(await within(row).findByText(/fino a 50 GB$/)).toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({
       role: "user",
