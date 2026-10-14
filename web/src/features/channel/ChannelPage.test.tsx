@@ -28,7 +28,7 @@ describe("channel page", () => {
     expect(screen.getByText("Su FranzPLAY da marzo 2026")).toBeInTheDocument();
     const card = screen.getByRole("link", { name: /Gite/ });
     expect(card).toHaveAttribute("href", "/playlist/2");
-    expect(within(card).getByText("3 video")).toBeInTheDocument();
+    expect(within(card).getByText("Playlist · 3 video")).toBeInTheDocument();
   });
 
   it("shows the videos the person uploaded", async () => {
