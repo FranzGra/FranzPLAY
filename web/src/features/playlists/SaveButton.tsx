@@ -1,7 +1,9 @@
 import {
   type CSSProperties,
+  type Dispatch,
   type FormEvent,
   type Ref,
+  type SetStateAction,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -52,6 +54,24 @@ export function SaveButton({ videoId }: { videoId: number }) {
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const [place, setPlace] = useState<Place | null>(null);
+  // The lists live here, not in the panel: the button tells how many
+  // hold the video, before the panel opens and while ticks change.
+  const [state, setState] = useState<State>({ kind: "loading" });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPlaylists(videoId, controller.signal)
+      .then((lists) => setState({ kind: "ready", lists }))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        setState({ kind: "error" });
+      });
+    return () => controller.abort();
+  }, [videoId]);
+
+  // Watch later is a list like the others in the data, so it counts too.
+  const inside = state.kind === "ready" ? state.lists.filter((l) => l.contains).length : 0;
 
   // On a computer the panel hangs from the button, or rises above it when
   // there is more room there. It lives at the end of the page (a portal),
@@ -124,6 +144,8 @@ export function SaveButton({ videoId }: { videoId: number }) {
       sheet={sheet}
       place={place}
       videoId={videoId}
+      state={state}
+      setState={setState}
       onSaved={() => setSaved((n) => n + 1)}
       onClose={close}
     />
@@ -139,10 +161,15 @@ export function SaveButton({ videoId }: { videoId: number }) {
         onClick={() => setOpen((o) => !o)}
       >
         <span key={saved} className={styles.icon} data-bounce={saved > 0 || undefined}>
-          <Icon name="save" size={20} />
+          <Icon name={inside > 0 ? "check" : "save"} size={20} />
         </span>
         Salva
       </button>
+      {inside > 0 && (
+        <span className={styles.count} aria-live="polite">
+          in {inside} playlist
+        </span>
+      )}
       {/* The panel goes straight into the page's body: no box around the
           button can cut it or stack it under the videos or the tab bar. */}
       {content && createPortal(content, document.body)}
@@ -158,6 +185,8 @@ function Panel({
   sheet,
   place,
   videoId,
+  state,
+  setState,
   onSaved,
   onClose,
 }: {
@@ -166,10 +195,11 @@ function Panel({
   sheet: boolean;
   place: Place | null;
   videoId: number;
+  state: State;
+  setState: Dispatch<SetStateAction<State>>;
   onSaved: () => void;
   onClose: () => void;
 }) {
-  const [state, setState] = useState<State>({ kind: "loading" });
   const [problem, setProblem] = useState("");
   // The list just ticked or made here: only that one moves.
   const [touched, setTouched] = useState<number | null>(null);
@@ -181,18 +211,6 @@ function Panel({
   useEffect(() => {
     closeButton.current?.focus();
   }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchPlaylists(videoId, controller.signal)
-      .then((lists) => setState({ kind: "ready", lists }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        console.error(error);
-        setState({ kind: "error" });
-      });
-    return () => controller.abort();
-  }, [videoId]);
 
   const mark = (id: number, contains: boolean) =>
     setState((s) =>

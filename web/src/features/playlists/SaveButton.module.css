@@ -1,5 +1,15 @@
 .root {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* How many lists hold the video, next to the button. */
+.count {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .button {
