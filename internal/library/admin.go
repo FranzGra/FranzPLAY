@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -37,6 +38,7 @@ type FolderState struct {
 //
 //	GET  /api/library       the folders, their videos and the last scan
 //	POST /api/library/scan  check the folders now
+//	PUT  /api/library/min-duration  the shortest a video may last to be shown
 func (s *Scanner) Routes(interval time.Duration, logger *slog.Logger) func(mux *http.ServeMux) {
 	a := admin{scanner: s, interval: interval, logger: logger, account: users.FromContext}
 	return a.routes
@@ -52,6 +54,7 @@ type admin struct {
 func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/library", a.only(a.handleOverview))
 	mux.HandleFunc("POST /api/library/scan", a.only(a.handleScan))
+	mux.HandleFunc("PUT /api/library/min-duration", a.only(a.handleMinDuration))
 }
 
 // only lets only administrators through.
@@ -75,6 +78,10 @@ type overview struct {
 	Interval int         `json:"interval"` // seconds between two automatic scans
 	LastScan *lastScan   `json:"lastScan"`
 	Folders  []folderRow `json:"folders"`
+	// MinDuration is the shortest a video of the folders may last to be
+	// shown, in seconds; 0 = no minimum. TooShort counts the ones left out.
+	MinDuration int `json:"minDuration"`
+	TooShort    int `json:"tooShort"`
 }
 
 type lastScan struct {
@@ -117,6 +124,14 @@ func (a admin) handleOverview(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
+	if o.MinDuration, err = a.scanner.store.minDuration(r.Context()); err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	if o.TooShort, err = a.scanner.store.tooShort(r.Context()); err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
 	for _, dir := range a.scanner.libraries {
 		c := counts[dir]
 		f := st.Folders[dir]
@@ -133,6 +148,31 @@ func (a admin) handleScan(w http.ResponseWriter, r *http.Request) {
 	who, _ := a.account(r.Context())
 	a.logger.InfoContext(r.Context(), "library scan asked", "by", who.Name)
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (a admin) handleMinDuration(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Seconds *int `json:"seconds"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil || req.Seconds == nil {
+		respond.Error(w, r, a.logger, http.StatusBadRequest, `the body must be {"seconds": a number}`)
+		return
+	}
+	err := a.scanner.store.setMinDuration(r.Context(), *req.Seconds)
+	if errors.Is(err, errBadMinDuration) {
+		respond.Error(w, r, a.logger, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	who, _ := a.account(r.Context())
+	a.logger.InfoContext(r.Context(), "minimum video length changed", "seconds", *req.Seconds, "by", who.Name)
+	a.scanner.changed()
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type folderCount struct{ present, missing int }

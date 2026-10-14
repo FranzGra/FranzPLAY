@@ -969,3 +969,8 @@ label.action:focus-within {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A few seconds need only a short box. */
+.rules .seconds {
+  max-width: 160px;
+}
