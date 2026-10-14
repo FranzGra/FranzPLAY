@@ -189,6 +189,10 @@ scritti: puoi eliminare quelli che non vanno bene (con le loro risposte).
 Nella sezione **Cartelle** vedi le cartelle dei video, quanti video ha ognuna e com'è andato
 l'ultimo controllo. Se una cartella non si legge, o è vuota ma prima aveva dei video (disco
 staccato?), te lo dice in rosso. Con **Controlla adesso** non aspetti il minuto.
+Sotto, **Video troppo corti** (spento all'inizio) lascia fuori i video delle cartelle che durano
+meno dei secondi che scegli, per esempio vecchie anteprime da 10 secondi. Non cancella niente: i
+file restano dove sono e, se spegni l'opzione, tornano tutti. I video caricati dal browser si vedono
+sempre. Quelli esclusi li trovi in **Video › Troppo corti**.
 
 Nella sezione **Lavori** vedi cosa FranzPLAY sta facendo da solo (leggere i video, copertine,
 anteprime): quello in corso, quanti aspettano, quanti sono fatti e quali sono falliti, con il

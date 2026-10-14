@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
+	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -93,8 +94,8 @@ func (p *Prober) Handle(ctx context.Context, videoID int64) error {
 	return p.save(ctx, videoID, fingerprint, info)
 }
 
-// save stores what ffprobe found and asks for the cover and the
-// previews, which need the duration, for the subtitles inside the file,
+// save stores what ffprobe found, decides whether the video is too short
+// to be shown, and asks for the cover and the previews, which need the duration, for the subtitles inside the file,
 // and for a copy for the browsers, which needs the formats. All happen together or not at all. Nothing is saved if the
 // content changed while ffprobe read it: the scan has already asked for a
 // new reading.
@@ -116,6 +117,9 @@ func (p *Prober) save(ctx context.Context, videoID int64, fingerprint string, in
 	}
 	if n, err := res.RowsAffected(); err != nil || n == 0 {
 		return err // content changed meanwhile: nothing to do
+	}
+	if err := library.MarkShort(ctx, tx, videoID); err != nil {
+		return err
 	}
 	if err := jobs.Enqueue(ctx, tx, videoID, jobs.Cover, false, p.now()); err != nil {
 		return err

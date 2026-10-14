@@ -29,6 +29,8 @@ export type LibraryOverview = {
   interval: number; // seconds between two automatic checks
   lastScan: LastScan | null;
   folders: LibraryFolder[];
+  minDuration: number; // seconds; a shorter video of the folders is left out, 0 = none
+  tooShort: number; // videos left out because they are shorter
 };
 
 const countNames = [
@@ -86,6 +88,8 @@ export function parseLibraryOverview(data: unknown): LibraryOverview {
     interval: count(d.interval, "interval"),
     lastScan: d.lastScan === null ? null : parseLastScan(d.lastScan),
     folders: d.folders.map(parseFolder),
+    minDuration: count(d.minDuration, "minDuration"),
+    tooShort: count(d.tooShort, "tooShort"),
   };
 }
 
@@ -96,4 +100,13 @@ export async function fetchLibrary(signal?: AbortSignal): Promise<LibraryOvervie
 // scanLibrary asks FranzPLAY to check the folders now.
 export async function scanLibrary(): Promise<void> {
   await request("/api/library/scan", { method: "POST" });
+}
+
+// The longest minimum the server accepts, in seconds.
+export const maxMinDuration = 600;
+
+// saveMinDuration leaves out the videos of the folders shorter than
+// seconds; 0 shows them all again.
+export async function saveMinDuration(seconds: number): Promise<void> {
+  await request("/api/library/min-duration", { method: "PUT", body: { seconds } });
 }

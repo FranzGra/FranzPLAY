@@ -37,6 +37,7 @@ const filters: { show: AdminShow; label: string }[] = [
   { show: "", label: "Tutti" },
   { show: "hidden", label: "Nascosti" },
   { show: "missing", label: "Non trovati" },
+  { show: "short", label: "Troppo corti" },
 ];
 
 // VideosPage lists every video, also the hidden ones and the ones whose
@@ -260,7 +261,7 @@ function VideoRow({
         </span>
         <div className={styles.failed}>
           <p className={styles.name}>
-            {video.hidden || video.missing || video.private ? (
+            {video.hidden || video.missing || video.tooShort || video.private ? (
               video.title
             ) : (
               <Link to={`/video/${video.id}`}>{video.title}</Link>
@@ -283,6 +284,7 @@ function VideoRow({
           <p className={styles.badges}>
             {video.hidden && <span className={styles.badge}>Nascosto</span>}
             {video.missing && <span className={styles.badge}>Non trovato</span>}
+            {video.tooShort && <span className={styles.badge}>Troppo corto</span>}
             {video.private && <span className={styles.badge}>Solo per chi l'ha caricato</span>}
             {video.duration === null ? (
               <span className={styles.badge}>Non ancora letto</span>
