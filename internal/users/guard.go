@@ -98,7 +98,35 @@ func sameOrigin(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	return strings.EqualFold(u.Host, r.Host)
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	// Behind a reverse proxy, r.Host is the proxy's address for FranzPLAY
+	// (like 10.0.0.1:8090), and the address the browser used arrives in
+	// X-Forwarded-Host or Forwarded. Trusting them is safe: a page on
+	// another site cannot set these headers (the browser would first ask
+	// with a CORS preflight, which FranzPLAY never allows), and a tool that
+	// sets them by hand does not have the user's cookie anyway.
+	host := forwardedHost(r)
+	return host != "" && strings.EqualFold(u.Host, host)
+}
+
+// forwardedHost returns the address the browser used, as a reverse proxy
+// passes it: the first value of X-Forwarded-Host, else the host= of the
+// first Forwarded entry. Empty when there is none.
+func forwardedHost(r *http.Request) string {
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		first, _, _ := strings.Cut(h, ",")
+		return strings.TrimSpace(first)
+	}
+	first, _, _ := strings.Cut(r.Header.Get("Forwarded"), ",")
+	for _, pair := range strings.Split(first, ";") {
+		key, value, ok := strings.Cut(strings.TrimSpace(pair), "=")
+		if ok && strings.EqualFold(key, "host") {
+			return strings.Trim(value, `"`)
+		}
+	}
+	return ""
 }
 
 // setCookie gives the browser its session cookie.

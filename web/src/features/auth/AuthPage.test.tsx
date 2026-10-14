@@ -37,6 +37,7 @@ describe("login", () => {
 
   it.each([
     [401, "Nome o password sbagliati."],
+    [403, "arriva da un indirizzo diverso da quello del sito"],
     [429, "Troppe password sbagliate. Aspetta un minuto e riprova."],
     [500, "Qualcosa è andato storto sul server. Riprova tra poco."],
   ])("explains a %i answer", async (status, message) => {
