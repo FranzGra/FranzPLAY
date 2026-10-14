@@ -34,18 +34,23 @@
 
 .back {
   margin: 0 0 12px;
-  font-size: 14px;
 }
 
+/* The way back: a pill like the video page's buttons, easy to hit. */
 .back a {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--color-text-muted);
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .back a:hover {
-  color: var(--color-text);
+  background: var(--glass-bg-strong);
 }
 
 .buttons {

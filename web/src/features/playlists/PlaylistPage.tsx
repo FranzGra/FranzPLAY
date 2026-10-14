@@ -164,18 +164,18 @@ export function PlaylistPage() {
     <div className={styles.page}>
       <p className={styles.back}>
         {mine ? (
-          <Link to="/playlist">
-            <Icon name="chevronLeft" size={16} />
+          <Link to="/playlist" className="glass">
+            <Icon name="chevronLeft" size={20} />
             Tutte le playlist
           </Link>
         ) : !playlist.public ? (
-          <Link to="/condivisi">
-            <Icon name="chevronLeft" size={16} />
+          <Link to="/condivisi" className="glass">
+            <Icon name="chevronLeft" size={20} />
             Condivisi con te
           </Link>
         ) : (
-          <Link to={`/canale/${playlist.owner.id}`}>
-            <Icon name="chevronLeft" size={16} />
+          <Link to={`/canale/${playlist.owner.id}`} className="glass">
+            <Icon name="chevronLeft" size={20} />
             Canale di {playlist.owner.name}
           </Link>
         )}

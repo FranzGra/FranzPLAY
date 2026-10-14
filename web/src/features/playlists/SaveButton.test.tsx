@@ -48,6 +48,30 @@ describe("save button", () => {
     ]);
   });
 
+  it("tells how many lists hold the video, and follows the ticks", async () => {
+    const { user } = setup({
+      "GET /api/playlists": { body: [later, trips] },
+      "PUT /api/playlists/1/videos/7": { status: 204 },
+      "DELETE /api/playlists/1/videos/7": { status: 204 },
+      "DELETE /api/playlists/2/videos/7": { status: 204 },
+    });
+    // Known before the panel opens.
+    expect(await screen.findByText("in 1 playlist")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Salva" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Guarda più tardi" }));
+    expect(screen.getByText("in 2 playlist")).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: "Guarda più tardi" }));
+    await user.click(screen.getByRole("checkbox", { name: "Gite" }));
+    expect(screen.queryByText(/in \d+ playlist/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing when no list holds the video", async () => {
+    setup({ "GET /api/playlists": { body: [later, { ...trips, contains: false }] } });
+    await screen.findByRole("button", { name: "Salva" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText(/playlist$/)).not.toBeInTheDocument();
+  });
+
   it("makes the button's icon jump when the video goes into a list", async () => {
     setup({
       "GET /api/playlists": { body: [later, trips] },

@@ -74,6 +74,20 @@ describe("categories", () => {
     ).toBeInTheDocument();
   });
 
+  it("goes back to the categories with a pill button", async () => {
+    renderApp("/categorie/Scuola", {
+      ...signedIn(),
+      "GET /api/videos": { body: { videos: [], total: 0 } },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Scuola" });
+    // The menu has a Categorie link too: the way back is the pill one.
+    const back = screen
+      .getAllByRole("link", { name: "Categorie" })
+      .find((l) => l.classList.contains("glass"));
+    expect(back).toHaveAttribute("href", "/categorie");
+    expect(back?.querySelector("svg")).not.toBeNull();
+  });
+
   it("shows the videos of one category", async () => {
     const { server } = renderApp("/categorie/Gite%20%26%20mare", {
       ...signedIn(),

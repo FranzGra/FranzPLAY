@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
+import { videoJSON } from "../test/fixtures";
 import { renderApp, signedIn } from "../test/render";
 import { tabFor } from "./Layout";
 
@@ -199,5 +200,36 @@ describe("search", () => {
     const { user } = renderApp("/");
     await user.type(await screen.findByRole("searchbox"), "   {Enter}");
     expect(screen.getByRole("heading", { name: "Ancora nessun video" })).toBeInTheDocument();
+  });
+
+  it("hides the side menu on a video's page, behind a ☰ drawer", async () => {
+    const { user } = renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": { body: videoJSON() },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    const button = screen.getByRole("button", { name: "Menu" });
+    const nav = document.getElementById("menu-principale");
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(nav).not.toHaveAttribute("data-open");
+
+    await user.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(nav).toHaveAttribute("data-open");
+    expect(nav?.contains(document.activeElement)).toBe(true);
+
+    await user.keyboard("{Escape}");
+    expect(nav).not.toHaveAttribute("data-open");
+    expect(button).toHaveFocus();
+
+    await user.click(button);
+    await user.click(screen.getByTestId("menu-backdrop"));
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps the side menu as it is on the other pages", async () => {
+    renderApp("/");
+    await screen.findByRole("navigation", { name: "Menu principale" });
+    expect(screen.queryByRole("button", { name: "Menu" })).not.toBeInTheDocument();
   });
 });

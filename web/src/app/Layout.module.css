@@ -244,6 +244,69 @@
   }
 }
 
+/* ☰ in the top bar, on a video's page only, on computers only: phones
+   have their bar of tabs. */
+.menuButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--touch);
+  height: var(--touch);
+  margin-left: -8px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.menuButton:hover,
+.menuButton[aria-expanded="true"] {
+  background: rgb(255 255 255 / 0.08);
+}
+
+/* On a video's page the side menu is a drawer over the page: hidden until
+   ☰ opens it, sliding in from the left above a darkened page. The page
+   under it keeps its size. */
+@media (min-width: 900px) {
+  .body[data-drawer] .sidebar {
+    position: fixed;
+    top: calc(var(--header-height) + env(safe-area-inset-top));
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    max-height: none;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    box-shadow: var(--glass-shadow);
+    translate: -100% 0;
+    visibility: hidden;
+    transition:
+      translate var(--duration-normal) var(--ease-out),
+      visibility 0s linear var(--duration-normal);
+  }
+
+  .body[data-drawer] .sidebar[data-open] {
+    translate: 0 0;
+    visibility: visible;
+    transition: translate var(--duration-normal) var(--ease-out);
+  }
+
+  /* Theater mode hides the menu; the drawer still opens over it. */
+  .body[data-drawer][data-width="full"] .sidebar {
+    display: flex;
+  }
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgb(0 0 0 / 0.5);
+  animation: var(--motion-fade-in);
+}
+
 /* Bottom bar, only on phones: a floating glass capsule */
 .tabbar {
   display: none;
@@ -294,6 +357,8 @@
 
   .search,
   .avatar,
+  .menuButton,
+  .backdrop,
   .sidebar {
     display: none;
   }

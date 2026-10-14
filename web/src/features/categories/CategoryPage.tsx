@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router";
+import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
@@ -13,7 +14,10 @@ export function CategoryPage() {
   return (
     <>
       <p className={styles.back}>
-        <Link to="/categorie">‹ Categorie</Link>
+        <Link to="/categorie" className="glass">
+          <Icon name="chevronLeft" size={20} />
+          Categorie
+        </Link>
       </p>
       <h1 className={styles.heading}>{name}</h1>
       <VideoGrid

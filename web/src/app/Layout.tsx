@@ -1,4 +1,4 @@
-import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
+import { type FormEvent, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { avatarUrl } from "../api/auth";
 import { fetchPlaylists, onPlaylistsChanged, type Playlist, playlistName } from "../api/playlists";
@@ -59,7 +59,13 @@ export function Layout() {
   const [query, setQuery] = useState("");
   const page = useRef<HTMLDivElement>(null);
   useEnterOnNavigate(page);
-  const currentTab = tabFor(useLocation().pathname);
+  const { pathname } = useLocation();
+  const currentTab = tabFor(pathname);
+  // On a video's page the side menu hides, like on YouTube: the player and
+  // the videos beside it get the room. The ☰ button brings it back as a
+  // drawer over the page, which keeps its size.
+  const drawer = pathname.startsWith("/video/");
+  const menu = useDrawer(pathname);
   const [width, setWidth] = useState<PageWidth>("normal");
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
@@ -73,6 +79,19 @@ export function Layout() {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
+        {drawer && (
+          <button
+            ref={menu.button}
+            type="button"
+            className={styles.menuButton}
+            aria-label="Menu"
+            aria-expanded={menu.open}
+            aria-controls="menu-principale"
+            onClick={menu.toggle}
+          >
+            <Icon name="menu" size={22} />
+          </button>
+        )}
         <Link to="/" className={styles.logo}>
           <span className={styles.logoMark}>
             <Icon name="play" size={14} />
@@ -104,8 +123,19 @@ export function Layout() {
         </Link>
       </header>
 
-      <div className={styles.body} data-width={width}>
-        <nav className={styles.sidebar} aria-label="Menu principale">
+      <div className={styles.body} data-width={width} data-drawer={drawer || undefined}>
+        {drawer && menu.open && (
+          // biome-ignore lint/a11y/noStaticElementInteractions: the keyboard closes with Escape
+          // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard closes with Escape
+          <div className={styles.backdrop} data-testid="menu-backdrop" onClick={menu.close} />
+        )}
+        <nav
+          ref={menu.nav}
+          id="menu-principale"
+          className={styles.sidebar}
+          aria-label="Menu principale"
+          data-open={(drawer && menu.open) || undefined}
+        >
           {sideLinks(account.id).map((link) => (
             <NavLink key={link.to} to={link.to} end className={styles.sideLink}>
               <Icon name={link.icon} size={20} />
@@ -158,6 +188,37 @@ export function Layout() {
       </nav>
     </div>
   );
+}
+
+// useDrawer runs the side menu as a drawer: open and shut, Escape closes
+// it, the focus goes into it on opening and back to ☰ on closing, and a
+// new page shuts it.
+function useDrawer(pathname: string) {
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const nav = useRef<HTMLElement>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new address closes the drawer
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    button.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    nav.current?.querySelector<HTMLElement>("a")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, close]);
+
+  return { open, button, nav, close, toggle: () => (open ? close() : setOpen(true)) };
 }
 
 // PlaylistLink is one of my lists in the side menu.
