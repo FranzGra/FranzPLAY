@@ -157,6 +157,7 @@ func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 		{sharing.ErrBadPeople, http.StatusBadRequest},
 		{sharing.ErrUnknownPerson, http.StatusBadRequest},
 		{sharing.ErrNotPrivate, http.StatusBadRequest},
+		{sharing.ErrLinkNotPrivate, http.StatusBadRequest},
 	} {
 		if errors.Is(err, known.err) {
 			if err != known.err { //nolint:errorlint // on purpose: is it this error and nothing more?

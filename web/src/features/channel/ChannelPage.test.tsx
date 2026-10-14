@@ -48,6 +48,36 @@ describe("channel page", () => {
     expect(new URL(asked?.url ?? "").searchParams.get("uploader")).toBe("5");
   });
 
+  it("shows me all my videos, each saying who sees it", async () => {
+    renderApp("/canale/1", {
+      ...signedIn(),
+      "GET /api/channels/1": { body: channel({ id: 1, name: "Paolo" }) },
+      "GET /api/videos": {
+        body: {
+          videos: [
+            videoJSON({ id: 1, title: "Per tutti", audience: "everyone" }),
+            videoJSON({ id: 2, title: "Col link", private: true, audience: "link" }),
+            videoJSON({ id: 3, title: "Per Anna", private: true, audience: "people" }),
+            videoJSON({ id: 4, title: "Solo mio", private: true, audience: "me" }),
+          ],
+          total: 4,
+        },
+      },
+    });
+    const videos = await screen.findByRole("list", { name: "I tuoi video" });
+    expect(screen.getByRole("heading", { level: 2, name: "I tuoi video" })).toBeInTheDocument();
+    expect(screen.getByText(/Gli altri vedono solo quelli pubblici/)).toBeInTheDocument();
+    for (const [title, label] of [
+      ["Per tutti", "Pubblico"] as const,
+      ["Col link", "Chi ha il link"],
+      ["Per Anna", "Alcune persone"],
+      ["Solo mio", "Privato"],
+    ]) {
+      const card = within(videos).getByRole("link", { name: new RegExp(title) });
+      expect(card).toHaveTextContent(`Chi lo vede: ${label}`);
+    }
+  });
+
   it("shows no videos box for who never uploaded one", async () => {
     renderApp("/canale/5", {
       ...signedIn(),
