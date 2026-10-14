@@ -10,6 +10,7 @@ import { RecommendedRow } from "../recommend/RecommendedRow";
 import { LatestRow } from "../videos/LatestRow";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
+import { CategoryChips } from "./CategoryChips";
 import styles from "./HomePage.module.css";
 import { LookPanel } from "./LookPanel";
 import { lookStyle, SectionsContext, useWide } from "./look";
@@ -60,20 +61,7 @@ export function HomePage() {
       </header>
       {wide && choosing && <LookPanel look={layout.look} onChange={layout.setLook} />}
       {categories.length > 0 && (
-        <ul className={styles.chips} aria-label="Categorie">
-          {["", ...categories.map((c) => c.name)].map((name) => (
-            <li key={name}>
-              <button
-                type="button"
-                className={styles.chip}
-                aria-pressed={name === category}
-                onClick={() => setCategory(name)}
-              >
-                {name || "Tutti"}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <CategoryChips categories={categories} chosen={category} onChoose={setCategory} />
       )}
       {category === "" && layout.ready && (
         <SectionsContext.Provider value={layout.look.sections}>

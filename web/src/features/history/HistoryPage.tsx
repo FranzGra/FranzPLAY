@@ -5,6 +5,7 @@ import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatDay } from "../../lib/format";
 import { removeAllSmoothly, removeSmoothly } from "../../lib/motion";
+import { RemovableCard } from "../videos/RemovableCard";
 import { VideoCard } from "../videos/VideoCard";
 import styles from "./HistoryPage.module.css";
 import { useHistory } from "./useHistory";
@@ -27,7 +28,7 @@ export function HistoryPage() {
   };
 
   return (
-    <>
+    <div className={styles.page}>
       <div className={styles.top}>
         <h1 className={styles.heading}>
           <Icon name="history" size={26} />
@@ -70,19 +71,19 @@ export function HistoryPage() {
             </h2>
             <ul className={`stagger ${styles.list}`}>
               {items.map((w) => (
-                <li key={w.video.id} className={styles.item} data-flip data-history-item>
-                  <VideoCard
-                    video={w.video}
-                    now={now}
-                    layout="row"
-                    position={w.finished ? (w.video.duration ?? undefined) : w.position}
-                  />
-                  <button
-                    type="button"
-                    className={styles.remove}
-                    aria-label={`Togli «${w.video.title}» dalla cronologia`}
+                <li key={w.video.id} data-flip data-history-item>
+                  <RemovableCard
+                    card={
+                      <VideoCard
+                        video={w.video}
+                        now={now}
+                        layout="row"
+                        position={w.finished ? (w.video.duration ?? undefined) : w.position}
+                      />
+                    }
+                    label={`Togli «${w.video.title}» dalla cronologia`}
                     title="Togli dalla cronologia"
-                    onClick={(event) => {
+                    onRemove={(event) => {
                       const item = event.currentTarget.closest("li");
                       run(
                         () =>
@@ -94,9 +95,7 @@ export function HistoryPage() {
                         "Non sono riuscito a togliere il video dalla cronologia. Riprova.",
                       );
                     }}
-                  >
-                    <Icon name="close" size={18} />
-                  </button>
+                  />
                 </li>
               ))}
             </ul>
@@ -119,7 +118,7 @@ export function HistoryPage() {
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }
 

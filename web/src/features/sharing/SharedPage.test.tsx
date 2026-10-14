@@ -56,7 +56,7 @@ describe("shared with me page", () => {
       "href",
       "/playlist/9",
     );
-    expect(within(lists).getByText("3 video · di Giulia")).toBeInTheDocument();
+    expect(within(lists).getByText("Playlist · 3 video · di Giulia")).toBeInTheDocument();
     expect(await screen.findByText("Nessun video condiviso con te")).toBeInTheDocument();
   });
 });
