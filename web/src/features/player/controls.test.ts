@@ -10,6 +10,7 @@ import {
   speedLabel,
   tapZone,
   timeAt,
+  wheelVolume,
 } from "./controls";
 
 describe("clampTime", () => {
@@ -175,5 +176,21 @@ describe("pickAudio", () => {
 
   it("no tracks, nothing to play", () => {
     expect(pickAudio([], "it")).toBeNull();
+  });
+});
+
+describe("wheelVolume", () => {
+  it.each([
+    // rest, deltaY, deltaMode, steps, rest after
+    [0, -100, 0, 1, 0], // one notch away from you: one step louder
+    [0, 100, 0, -1, 0], // one notch towards you: one step quieter
+    [0, -300, 0, 3, 0], // a fast turn: three steps
+    [0, -3, 1, 0, 99], // Firefox counts in lines: 3 lines are almost a notch
+    [99, -1, 0, 1, 0], // a touchpad adds up small moves
+    [0, -40, 0, 0, 40],
+    [40, 60, 0, 0, -20], // turning back takes back what was saved
+    [0, -1, 2, 1, 0], // one page
+  ])("rest %d, wheel %d (mode %d): %d steps, rest %d", (rest, deltaY, mode, steps, after) => {
+    expect(wheelVolume(rest, deltaY, mode)).toEqual({ steps, rest: after });
   });
 });
