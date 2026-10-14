@@ -115,6 +115,16 @@ a:hover {
   color: var(--color-accent-hover);
 }
 
+/* Lists the browser draws by itself (the suggestions under a field) follow
+   the dark theme through color-scheme above. Choices from a list use our
+   own Select (components/Select.tsx), never a <select>: some systems drew
+   its open list white, with our white words on it. Just in case one comes
+   back, its choices get our dark colors too. */
+option {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
 button,
 input {
   font: inherit;

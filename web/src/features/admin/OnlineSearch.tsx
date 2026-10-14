@@ -9,6 +9,7 @@ import {
   pictureURL,
   searchOnline,
 } from "../../api/online";
+import { Select } from "../../components/Select";
 import styles from "./Admin.module.css";
 
 const sourceNames: Record<KeySource, string> = { tmdb: "TMDB (film)", tpdb: "ThePornDB" };
@@ -101,20 +102,15 @@ export function OnlineSearch({
         {sources.length > 1 && (
           <label className={styles.field}>
             Dove cercare
-            <select
-              className={`glass ${styles.select}`}
+            <Select
+              aria-label="Dove cercare"
               value={source}
-              onChange={(e) => {
-                setSource(e.target.value as KeySource);
+              options={sources.map((s) => ({ value: s, label: sourceNames[s] }))}
+              onChange={(s) => {
+                setSource(s);
                 setFound(null);
               }}
-            >
-              {sources.map((s) => (
-                <option key={s} value={s}>
-                  {sourceNames[s]}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         )}
         <label className={styles.field}>
