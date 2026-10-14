@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type PointerEvent,
   type SyntheticEvent,
   useCallback,
@@ -651,8 +652,9 @@ export function Player({
     return () => box.removeEventListener("wheel", onWheel);
   }, []);
 
-  // On a touch screen a tap shows the controls and a double tap on the
-  // sides jumps; with a mouse a click plays or pauses.
+  // On a touch screen a tap shows the controls, a double tap on the sides
+  // jumps and one in the middle goes full screen; with a mouse a click
+  // plays or pauses.
   function onSurfacePointerUp(event: PointerEvent<HTMLDivElement>) {
     lastPointer.current = event.pointerType;
     if (menuOpen) {
@@ -677,9 +679,14 @@ export function Player({
     const now = Date.now();
     const rect = event.currentTarget.getBoundingClientRect();
     const zone = tapZone(event.clientX, rect.left, rect.width);
-    if (now - lastTap.current < doubleTapWithin && zone !== "middle") {
+    if (now - lastTap.current < doubleTapWithin) {
+      // A double tap on the sides jumps; in the middle it goes full screen.
       window.clearTimeout(tapTimer.current); // the first tap was half of this
-      run({ kind: "seek-by", seconds: zone === "back" ? -skipSeconds : skipSeconds });
+      if (zone === "middle") {
+        toggleFullscreen();
+      } else {
+        run({ kind: "seek-by", seconds: zone === "back" ? -skipSeconds : skipSeconds });
+      }
       lastTap.current = 0;
       return;
     }
@@ -839,7 +846,7 @@ export function Player({
         className={styles.surface}
         data-surface="true"
         onPointerUp={onSurfacePointerUp}
-        // A double click goes full screen; a double tap jumps instead.
+        // A double click of the mouse goes full screen; taps are counted above.
         onDoubleClick={onSurfaceDoubleClick}
         aria-hidden="true"
       />
@@ -976,6 +983,7 @@ export function Player({
               max={1}
               step={0.05}
               value={muted || silenced ? 0 : volume}
+              style={{ "--level": `${(muted || silenced ? 0 : volume) * 100}%` } as CSSProperties}
               aria-label="Volume"
               onChange={(event) => {
                 const next = clampVolume(Number(event.target.value));
