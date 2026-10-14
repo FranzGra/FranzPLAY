@@ -53,15 +53,29 @@ function refuse(play: ReturnType<typeof fakeMedia>["play"], always: boolean) {
 }
 
 describe("player starting by itself", () => {
-  it("starts when ready, only once", () => {
-    const { video, play, pause } = setup({ autoPlay: true });
-    expect(play).not.toHaveBeenCalled();
-    fireEvent.loadedMetadata(video);
+  it("starts right away, only once, looking like it plays", () => {
+    const { video, play } = setup({ autoPlay: true });
     expect(play).toHaveBeenCalledTimes(1);
     expect(video.muted).toBe(false);
-    pause.getMockImplementation()?.call(video);
     fireEvent.loadedMetadata(video);
     expect(play).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Guarda" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pausa (k)" })).toBeInTheDocument();
+  });
+
+  it("shows the pause icon and loading while the video is on its way", async () => {
+    const { play, pause } = fakeMedia();
+    play.mockImplementation(() => new Promise<void>(() => {})); // never ready
+    const user = userEvent.setup();
+    render(<Player src="/api/videos/7/stream" poster={null} autoPlay />);
+    expect(screen.getByRole("status", { name: "Caricamento" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guarda" })).not.toBeInTheDocument();
+
+    // Pause while it is on its way: it stays still, with the play button.
+    await user.click(screen.getByRole("button", { name: "Pausa (k)" }));
+    expect(pause).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Riproduci (k)" })).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Caricamento" })).not.toBeInTheDocument();
   });
 
   it("has a theater button only when the page offers theater mode", async () => {
@@ -81,12 +95,15 @@ describe("player starting by itself", () => {
     const { video, play } = setup();
     fireEvent.loadedMetadata(video);
     expect(play).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Guarda" })).toBeInTheDocument();
   });
 
   it("starts without sound when the browser wants so, and offers the sound", async () => {
-    const { user, video, play } = setup({ autoPlay: true });
+    const { play } = fakeMedia();
     refuse(play, false);
-    fireEvent.loadedMetadata(video);
+    const user = userEvent.setup();
+    const { container } = render(<Player src="/api/videos/7/stream" poster={null} autoPlay />);
+    const video = container.querySelector("video") as HTMLVideoElement;
     const unmute = await screen.findByRole("button", { name: "Attiva l'audio" });
     expect(play).toHaveBeenCalledTimes(2);
     expect(video.muted).toBe(true);
@@ -99,13 +116,15 @@ describe("player starting by itself", () => {
     expect(window.localStorage.getItem("franzplay.muted")).toBe("false");
   });
 
-  it("keeps the play button when the browser refuses even without sound", async () => {
-    const { video, play } = setup({ autoPlay: true });
+  it("brings back the play button when the browser refuses even without sound", async () => {
+    const { play } = fakeMedia();
     refuse(play, true);
-    fireEvent.loadedMetadata(video);
+    const { container } = render(<Player src="/api/videos/7/stream" poster={null} autoPlay />);
+    const video = container.querySelector("video") as HTMLVideoElement;
     await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(video.muted).toBe(false));
-    expect(screen.getByRole("button", { name: "Guarda" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Guarda" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Riproduci (k)" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Attiva l'audio" })).not.toBeInTheDocument();
   });
 });
