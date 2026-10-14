@@ -161,21 +161,26 @@ function startPlaying(v: HTMLVideoElement) {
 // with sound only after the person clicked something on the site (like
 // the video in a list); otherwise they allow it only without sound. So:
 // with sound if allowed, else without and onSilenced, else not at all
-// (the big play button stays).
-function playByItself(v: HTMLVideoElement, onSilenced: () => void) {
+// and onRefused (the big play button comes back).
+function playByItself(v: HTMLVideoElement, onSilenced: () => void, onRefused: () => void) {
   v.play().catch((error: unknown) => {
     if (!(error instanceof DOMException && error.name === "NotAllowedError")) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         console.warn("play refused", error);
+        onRefused();
       }
       return;
     }
-    if (v.muted) return;
+    if (v.muted) {
+      onRefused();
+      return;
+    }
     v.muted = true;
     v.play()
       .then(onSilenced)
       .catch(() => {
         v.muted = false;
+        onRefused();
       });
   });
 }
@@ -216,8 +221,16 @@ export function Player({
   // silenced: the browser let the video start by itself only without
   // sound. Not the person's choice, so it is not remembered.
   const [silenced, setSilenced] = useState(false);
-  // Whether starting by itself was already tried for this video.
-  const autoTried = useRef(false);
+  // starting: the video was asked to start by itself and is on its way.
+  // It already looks like it plays (pause icon, loading circle), so a
+  // click on a video feels immediate; the big play button only comes
+  // back if the browser refuses. The ref is for the click handlers.
+  const [starting, setStartingState] = useState(autoPlay);
+  const startingRef = useRef(autoPlay);
+  const setStarting = useCallback((value: boolean) => {
+    startingRef.current = value;
+    setStartingState(value);
+  }, []);
   const [speed, setSpeed] = useState(1);
   // repeat starts the video again when it ends. Only for this video.
   const [repeat, setRepeat] = useState(false);
@@ -233,7 +246,9 @@ export function Player({
   const [flash, setFlash] = useState<Flash | null>(null);
   // The settings menu and the big play button leave softly.
   const menu = usePresence(menuOpen ? true : null);
-  const bigPlay = usePresence<true, HTMLButtonElement>(!started && failed === null ? true : null);
+  const bigPlay = usePresence<true, HTMLButtonElement>(
+    !started && !starting && failed === null ? true : null,
+  );
   const [track, setTrack] = useState<string | null>(() =>
     pickTrack(subtitles, loadSetting("subtitles", parseSubtitleChoice, { on: false, lang: "" })),
   );
@@ -319,7 +334,6 @@ export function Player({
   // A new video starts from scratch.
   // biome-ignore lint/correctness/useExhaustiveDependencies: src is the reason to reset
   useEffect(() => {
-    autoTried.current = false;
     setSilenced(false);
     setStarted(false);
     setFailed(null);
@@ -329,6 +343,17 @@ export function Player({
     nativeRef.current = null;
     nativeWanted.current = null;
     setNativeStream(null);
+    // Asked right away, not when the first bytes arrive: the browser
+    // then loads the video to play it, not only to read its length.
+    const v = video.current;
+    setStarting(autoPlay && v !== null);
+    if (autoPlay && v) {
+      playByItself(
+        v,
+        () => setSilenced(true),
+        () => setStarting(false),
+      );
+    }
   }, [src]);
 
   // The browser loads the chosen subtitles; FranzPLAY draws them itself,
@@ -394,12 +419,16 @@ export function Player({
   const togglePlay = useCallback(() => {
     const v = video.current;
     if (!v) return;
-    if (v.paused || v.ended) {
+    if (startingRef.current) {
+      // Still on its way: the person wants it to stay still.
+      setStarting(false);
+      v.pause();
+    } else if (v.paused || v.ended) {
       startPlaying(v);
     } else {
       v.pause();
     }
-  }, []);
+  }, [setStarting]);
 
   // realTime and realDuration are those of the whole video, whatever the
   // sound track.
@@ -551,7 +580,7 @@ export function Player({
       if (!v) return;
       switch (action.kind) {
         case "toggle-play":
-          showFlash(v.paused ? "play" : "pause");
+          showFlash(v.paused && !startingRef.current ? "play" : "pause");
           togglePlay();
           break;
         case "seek-by":
@@ -753,6 +782,7 @@ export function Player({
         playsInline
         onPlay={() => {
           position.current.played = true;
+          setStarting(false);
           setPlaying(true);
           setStarted(true);
           showControls();
@@ -809,10 +839,6 @@ export function Player({
             v.currentTime = startAt;
             setTime(startAt);
           }
-          if (autoPlay && !autoTried.current && !position.current.played) {
-            autoTried.current = true;
-            playByItself(v, () => setSilenced(true));
-          }
         }}
         onProgress={onProgress}
         onWaiting={() => setWaiting(true)}
@@ -826,6 +852,7 @@ export function Player({
             return;
           }
           const code = e.currentTarget.error?.code ?? 0;
+          setStarting(false);
           setFailed(code);
           if (code !== 2) onUnsupported?.(); // 2: the network, not the format
         }}
@@ -862,7 +889,7 @@ export function Player({
         </div>
       )}
 
-      {waiting && playing && (
+      {((waiting && playing) || (starting && failed === null)) && (
         <div className={styles.spinner} role="status" aria-label="Caricamento" />
       )}
 
@@ -943,10 +970,10 @@ export function Player({
             type="button"
             className={styles.button}
             onClick={() => run({ kind: "toggle-play" })}
-            aria-label={playing ? "Pausa (k)" : "Riproduci (k)"}
+            aria-label={playing || starting ? "Pausa (k)" : "Riproduci (k)"}
           >
-            <span key={playing ? "pause" : "play"} className={styles.swap}>
-              <Icon name={playing ? "pause" : "play"} size={26} />
+            <span key={playing || starting ? "pause" : "play"} className={styles.swap}>
+              <Icon name={playing || starting ? "pause" : "play"} size={26} />
             </span>
           </button>
           <button
