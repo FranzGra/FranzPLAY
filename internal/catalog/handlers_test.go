@@ -961,3 +961,123 @@ func TestSharedVideoOnlyForTheChosenPeople(t *testing.T) {
 		t.Errorf("public: shared with Marco = %+v, want none", list)
 	}
 }
+
+func TestMyChannelShowsAllMyVideos(t *testing.T) {
+	s := newSite(t)
+	for _, name := range []string{"Giulia", "Marco"} {
+		if _, err := s.db.Exec(`INSERT INTO users (name, password_hash, role, created_at) VALUES (?, 'x', 'user', 1)`,
+			name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const giulia, marco = 1, 2
+	want := map[int64]string{}
+	for i, tc := range []struct{ name, set, audience string }{
+		{"public.mp4", `private = 0`, "everyone"},
+		{"me.mp4", `private = 1`, "me"},
+		{"people.mp4", `private = 1`, "people"},
+		{"link.mp4", `private = 1, link_key = 'aaaaaaaaaaaaaaaaaaaaaa'`, "link"},
+	} {
+		id := s.addVideo(t, tc.name, "x", "", int64(i+1), false)
+		if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = ?, `+tc.set+` WHERE id = ?`, giulia, id); err != nil {
+			t.Fatal(err)
+		}
+		want[id] = tc.audience
+		if tc.audience == "people" {
+			if _, err := s.db.Exec(`INSERT INTO video_shares (video_id, user_id) VALUES (?, ?)`, id, marco); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	hidden := s.addVideo(t, "hidden.mp4", "x", "", 9, false)
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = ?, private = 1, hidden_at = 1 WHERE id = ?`,
+		giulia, hidden); err != nil {
+		t.Fatal(err)
+	}
+
+	// Giulia, on her own channel, sees all her videos and who sees each.
+	list := decode[listResponse](t, s.getAs(t, giulia, "/api/videos?uploader=1"))
+	if list.Total != 4 || len(list.Videos) != 4 {
+		t.Fatalf("Giulia's channel = %+v, want her 4 videos, not the hidden one", list)
+	}
+	for _, v := range list.Videos {
+		if v.Audience != want[v.ID] || v.Link != nil {
+			t.Errorf("video %d: audience %q, link %v; want %q and no link in a list", v.ID, v.Audience, v.Link, want[v.ID])
+		}
+	}
+
+	// Marco sees only the public one, and not who sees it.
+	list = decode[listResponse](t, s.getAs(t, marco, "/api/videos?uploader=1"))
+	if list.Total != 1 || list.Videos[0].Audience != "" {
+		t.Errorf("Marco on Giulia's channel = %+v, want the public video only", list)
+	}
+
+	// Elsewhere, Giulia's private videos stay out of her lists.
+	if list := decode[listResponse](t, s.getAs(t, giulia, "/api/videos")); list.Total != 1 || list.Videos[0].Audience != "" {
+		t.Errorf("Giulia's Home = %+v, want only the public video, without audience", list)
+	}
+}
+
+func TestVideoByLink(t *testing.T) {
+	s := newSite(t)
+	for _, name := range []string{"Giulia", "Marco", "Anna"} {
+		if _, err := s.db.Exec(`INSERT INTO users (name, password_hash, role, created_at) VALUES (?, 'x', 'user', 1)`,
+			name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const giulia, marco, anna = 1, 2, 3
+	const key = "abcdefghijklmnopqrstuv"
+	id := s.addVideo(t, "link.mp4", "secret", "Mare", 1, true)
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = ?, private = 1, link_key = ? WHERE id = ?`,
+		giulia, key, id); err != nil {
+		t.Fatal(err)
+	}
+	page := "/api/videos/" + strconv.FormatInt(id, 10)
+
+	// Giulia sees its link; nobody else opens it before opening the link.
+	v := decode[Video](t, s.getAs(t, giulia, page))
+	if v.Audience != "link" || v.Link == nil || *v.Link != "/video/1?k="+key {
+		t.Errorf("Giulia sees audience %q, link %v", v.Audience, v.Link)
+	}
+	if rec := s.getAs(t, marco, page+"/stream"); rec.Code != http.StatusNotFound {
+		t.Errorf("Marco without the link: status %d, want 404", rec.Code)
+	}
+
+	// Marco opened the link: he watches it, without seeing the link. Anna
+	// opened an old link: she does not.
+	if _, err := s.db.Exec(`INSERT INTO video_link_viewers (video_id, user_id, link_key) VALUES (?, ?, ?), (?, ?, 'old')`,
+		id, marco, key, id, anna); err != nil {
+		t.Fatal(err)
+	}
+	rec := s.getAs(t, marco, page)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Marco with the link: status %d", rec.Code)
+	}
+	if v := decode[Video](t, rec); v.Link != nil || v.Audience != "" {
+		t.Errorf("Marco sees link %v, audience %q", v.Link, v.Audience)
+	}
+	if rec := s.getAs(t, marco, page+"/stream"); rec.Code != http.StatusOK || rec.Body.String() != "secret" {
+		t.Errorf("Marco plays it: status %d, body %q", rec.Code, rec.Body)
+	}
+	if rec := s.getAs(t, anna, page); rec.Code != http.StatusNotFound {
+		t.Errorf("Anna with an old link: status %d, want 404", rec.Code)
+	}
+
+	// In no list, even for Marco.
+	for _, target := range []string{"/api/videos", "/api/videos?shared=1", "/api/videos?uploader=1"} {
+		for _, v := range decode[listResponse](t, s.getAs(t, marco, target)).Videos {
+			if v.ID == id {
+				t.Errorf("%s shows the video seen by link", target)
+			}
+		}
+	}
+
+	// Giulia takes the link away: Marco cannot watch it any more.
+	if _, err := s.db.Exec(`UPDATE videos SET link_key = NULL WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if rec := s.getAs(t, marco, page); rec.Code != http.StatusNotFound {
+		t.Errorf("link taken away: Marco gets status %d, want 404", rec.Code)
+	}
+}

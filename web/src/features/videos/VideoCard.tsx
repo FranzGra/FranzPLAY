@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import type { Video } from "../../api/videos";
-import { Icon } from "../../components/Icon";
+import type { Audience, Video } from "../../api/videos";
+import { Icon, type IconName } from "../../components/Icon";
 import { goodConnection } from "../../lib/connection";
 import { formatAge, formatDuration } from "../../lib/format";
+import { audienceLabel } from "../sharing/audience";
 import { useClipPreview } from "./useClipPreview";
 import styles from "./VideoCard.module.css";
 
@@ -20,7 +21,8 @@ type VideoCardProps = {
 };
 
 // VideoCard is a video in a grid: cover with its duration, title, and
-// category with how long ago it arrived and how many people like it. Resting the mouse on it
+// category with how long ago it arrived and how many people like it. On
+// my own channel the cover also says who sees each of my videos. Resting the mouse on it
 // plays a few silent seconds of the video; on a touch screen the card that
 // stays in the middle of the screen plays them.
 export function VideoCard({ video, now, layout = "grid", position, note }: VideoCardProps) {
@@ -44,6 +46,13 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
           </span>
         )}
         {playing && video.clip && <Clip src={chooseClip(video.clip, video.clipHD)} />}
+        {video.audience !== null && (
+          <span className={styles.audience} data-audience={video.audience}>
+            <Icon name={audienceIcon[video.audience]} size={13} />
+            <span className="visually-hidden">Chi lo vede: </span>
+            {audienceLabel[video.audience]}
+          </span>
+        )}
         {video.duration !== null && (
           <span className={styles.duration}>{formatDuration(video.duration)}</span>
         )}
@@ -73,6 +82,14 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
     </Link>
   );
 }
+
+// audienceIcon is the little picture next to who sees one of my videos.
+const audienceIcon: Record<Audience, IconName> = {
+  everyone: "globe",
+  link: "link",
+  people: "people",
+  me: "lock",
+};
 
 // chooseClip picks which clip plays: the sharp one on a good connection,
 // like the Wi-Fi at home, the light one otherwise. It asks each time a clip

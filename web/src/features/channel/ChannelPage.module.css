@@ -30,6 +30,13 @@
   font-weight: 600;
 }
 
+.hint {
+  max-width: 70ch;
+  margin: -8px 0 16px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
 /* After the videos, the playlists need some air. */
 * + .section {
   margin-top: 32px;

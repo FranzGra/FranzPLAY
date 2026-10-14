@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
 import { avatarUrl } from "../../api/auth";
 import { ApiError } from "../../api/client";
@@ -9,6 +9,7 @@ import {
   fetchSubtitles,
   fetchVideo,
   type Owner,
+  openVideoLink,
   playsFileItself,
   type SubtitleTrack,
   streamURL,
@@ -29,6 +30,7 @@ import { SaveButton } from "../playlists/SaveButton";
 import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
 import { namesList } from "../sharing/audience";
+import { CopyLink } from "../sharing/CopyLink";
 import { VideoCard } from "../videos/VideoCard";
 import { Description } from "./Description";
 import { subtitleLabel } from "./subtitleLabel";
@@ -51,6 +53,9 @@ function canPlayType(type: string): string {
 export function VideoPage() {
   const param = useParams().id ?? "";
   const id = /^\d+$/.test(param) ? Number(param) : 0;
+  // key is the secret of the link of a video seen by link, when the
+  // person came from one.
+  const key = useSearchParams()[0].get("k");
   const [state, setState] = useState<State>({ kind: "loading" });
   const [theater, toggleTheater] = useTheater();
   usePageWidth(theater ? "full" : "wide");
@@ -69,7 +74,10 @@ export function VideoPage() {
     }
     const controller = new AbortController();
     setState({ kind: "loading" });
-    Promise.all([fetchVideo(id, controller.signal), startPosition(id, controller.signal)])
+    openLink(id, key)
+      .then(() =>
+        Promise.all([fetchVideo(id, controller.signal), startPosition(id, controller.signal)]),
+      )
       .then(([video, startAt]) => setState({ kind: "ready", video, startAt }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -81,7 +89,7 @@ export function VideoPage() {
         setState({ kind: "error" });
       });
     return () => controller.abort();
-  }, [id]);
+  }, [id, key]);
 
   switch (state.kind) {
     case "loading":
@@ -95,7 +103,10 @@ export function VideoPage() {
     case "missing":
       return (
         <EmptyState title="Video non trovato" headingLevel={1}>
-          Questo video non esiste o non è più disponibile. <Link to="/">Torna alla home</Link>
+          {key === null
+            ? "Questo video non esiste o non è più disponibile."
+            : "Questo link non funziona più: chiedi un link nuovo a chi te l'ha mandato."}{" "}
+          <Link to="/">Torna alla home</Link>
         </EmptyState>
       );
     case "error":
@@ -113,6 +124,18 @@ export function VideoPage() {
           onTheater={toggleTheater}
         />
       );
+  }
+}
+
+// openLink tells the server the person opened the link of a video, so
+// they may watch it. A link that does not work any more is not a problem
+// here: the video is then simply not found.
+async function openLink(id: number, key: string | null): Promise<void> {
+  if (key === null) return;
+  try {
+    await openVideoLink(id, key);
+  } catch (error: unknown) {
+    if (!(error instanceof ApiError && error.status === 404)) throw error;
   }
 }
 
@@ -272,7 +295,8 @@ function OwnerLink({ owner }: { owner: Owner }) {
 }
 
 // PrivateNote says who sees a private video: to its uploader, who else and
-// where to change it; to someone it was shared with, that few see it.
+// where to change it, with its link to copy when it is seen by link; to
+// someone it was shared with, that few see it.
 function PrivateNote({ video }: { video: Video }) {
   const me = useAccount();
   if (video.uploader !== null && video.uploader.id !== me.id) {
@@ -284,13 +308,26 @@ function PrivateNote({ video }: { video: Video }) {
     );
   }
   const others = video.sharedWith.map((p) => p.name);
+  const change = (
+    <>
+      Per cambiare chi lo vede, vai a «I tuoi video» nella pagina{" "}
+      <Link to="/carica">Carica un video</Link>.
+    </>
+  );
+  if (video.link !== null) {
+    return (
+      <div className={`glass ${styles.private}`}>
+        <p>Questo video lo vede solo chi ha il link: mandalo a chi vuoi tu. {change}</p>
+        <CopyLink link={video.link} />
+      </div>
+    );
+  }
   return (
     <p className={`glass ${styles.private}`}>
       {others.length === 0
         ? "Solo tu vedi questo video."
         : `Questo video lo vedete solo ${namesList(["tu", ...others])}.`}{" "}
-      Per cambiare chi lo vede, vai a «I tuoi video» nella pagina{" "}
-      <Link to="/carica">Carica un video</Link>.
+      {change}
     </p>
   );
 }
