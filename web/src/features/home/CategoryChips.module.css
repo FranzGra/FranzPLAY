@@ -1,0 +1,169 @@
+/* The categories of the Home: a small label, then one line of chips. */
+.root {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+.label {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* The line itself, with its fading edges and arrows. */
+.track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chips li {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+/* Where more chips hide, the edge fades out: the line clearly goes on. */
+.track[data-right] .chips {
+  mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
+}
+
+.track[data-left] .chips {
+  mask-image: linear-gradient(to right, transparent, #000 64px);
+}
+
+.track[data-left][data-right] .chips {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 64px,
+    #000 calc(100% - 64px),
+    transparent
+  );
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.06);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: var(--color-text);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+/* The category's own color, as on its card. */
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.08);
+}
+
+/* The way to the page with every category: quieter, with an arrow. */
+.all {
+  gap: 4px;
+  padding-right: 10px;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+/* Two round glass arrows on the edges, only for a mouse: a finger slides
+   the line by itself. */
+.arrow {
+  position: absolute;
+  top: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  translate: 0 -50%;
+  border: var(--glass-border);
+  border-radius: 50%;
+  background: var(--glass-bg-strong);
+  box-shadow:
+    var(--glass-highlight),
+    0 4px 16px rgb(0 0 0 / 0.4);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--color-text);
+  cursor: pointer;
+  animation: var(--motion-fade-in);
+}
+
+.left {
+  left: 0;
+}
+
+.right {
+  right: 0;
+}
+
+@media (hover: hover) {
+  .arrow {
+    display: flex;
+  }
+}
+
+/* On a phone the label is just its icon, and the line runs to the edges
+   of the screen. */
+@media (max-width: 599px) {
+  .labelText {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .root {
+    margin-right: -16px;
+  }
+
+  .chips {
+    padding-right: 16px;
+    scroll-padding-inline: 0 16px;
+  }
+}
