@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { useAccount } from "../../app/auth";
+import { PageLoading } from "../../app/PageLoading";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
@@ -58,7 +59,9 @@ export function AdminPage() {
           </NavLink>
         ))}
       </nav>
-      <Outlet />
+      <Suspense fallback={<PageLoading />}>
+        <Outlet />
+      </Suspense>
     </>
   );
 }

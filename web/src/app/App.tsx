@@ -1,35 +1,39 @@
+import { Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
-import { AccessPage } from "../features/admin/AccessPage";
-import { AdminPage } from "../features/admin/AdminPage";
-import { CategoriesAdminPage } from "../features/admin/CategoriesAdminPage";
-import { CommentsPage } from "../features/admin/CommentsPage";
-import { FoldersPage } from "../features/admin/FoldersPage";
-import { InvitesPage } from "../features/admin/InvitesPage";
-import { JobsPage } from "../features/admin/JobsPage";
-import { OnlinePage } from "../features/admin/OnlinePage";
-import { OverviewPage } from "../features/admin/OverviewPage";
-import { PeoplePage } from "../features/admin/PeoplePage";
-import { SitePage } from "../features/admin/SitePage";
-import { SubtitlesPage } from "../features/admin/SubtitlesPage";
-import { VideosPage } from "../features/admin/VideosPage";
-import { AuthPage } from "../features/auth/AuthPage";
-import { JoinPage } from "../features/auth/JoinPage";
 import { ComingSoonPage } from "../features/ComingSoonPage";
-import { CategoriesPage } from "../features/categories/CategoriesPage";
-import { CategoryPage } from "../features/categories/CategoryPage";
-import { ChannelPage } from "../features/channel/ChannelPage";
-import { HistoryPage } from "../features/history/HistoryPage";
 import { HomePage } from "../features/home/HomePage";
-import { LikedPage } from "../features/likes/LikedPage";
-import { PlaylistPage } from "../features/playlists/PlaylistPage";
-import { PlaylistsPage } from "../features/playlists/PlaylistsPage";
-import { ProfilePage } from "../features/profile/ProfilePage";
-import { SearchPage } from "../features/search/SearchPage";
-import { SharedPage } from "../features/sharing/SharedPage";
-import { UploadPage } from "../features/upload/UploadPage";
-import { VideoPage } from "../features/video/VideoPage";
 import { AuthProvider, useAuth } from "./auth";
 import { Layout } from "./Layout";
+import {
+  AccessPage,
+  AdminPage,
+  AuthPage,
+  CategoriesAdminPage,
+  CategoriesPage,
+  CategoryPage,
+  ChannelPage,
+  CommentsPage,
+  FoldersPage,
+  HistoryPage,
+  InvitesPage,
+  JobsPage,
+  JoinPage,
+  LikedPage,
+  OnlinePage,
+  OverviewPage,
+  PeoplePage,
+  PlaylistPage,
+  PlaylistsPage,
+  ProfilePage,
+  SearchPage,
+  SharedPage,
+  SitePage,
+  SubtitlesPage,
+  UploadPage,
+  VideoPage,
+  VideosPage,
+} from "./lazyPages";
+import { PageLoading } from "./PageLoading";
 import { StartupProblem } from "./StartupProblem";
 import { SiteProvider } from "./site";
 
@@ -38,7 +42,9 @@ export function App() {
   return (
     <SiteProvider>
       <AuthProvider>
-        <Gate />
+        <Suspense fallback={<PageLoading />}>
+          <Gate />
+        </Suspense>
       </AuthProvider>
     </SiteProvider>
   );

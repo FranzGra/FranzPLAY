@@ -98,8 +98,31 @@ export function parsePlaylistPage(data: unknown): PlaylistPage {
 // fetchPlaylists returns my lists, "Guarda più tardi" first. With a
 // video, each list also says whether it has it.
 export async function fetchPlaylists(video?: number, signal?: AbortSignal): Promise<Playlist[]> {
-  const query = video === undefined ? "" : `?video=${video}`;
-  return parsePlaylists(await request(`/api/playlists${query}`, { signal }));
+  if (video !== undefined) {
+    return parsePlaylists(await request(`/api/playlists?video=${video}`, { signal }));
+  }
+  // The side menu and the Home's saved row ask for my lists at the same
+  // moment: while one request is on its way, the others share its answer.
+  myListsInFlight ??= request("/api/playlists")
+    .then(parsePlaylists)
+    .finally(() => {
+      myListsInFlight = null;
+    });
+  return abortable(myListsInFlight, signal);
+}
+
+let myListsInFlight: Promise<Playlist[]> | null = null;
+
+// abortable gives back shared, but lets one caller stop waiting for it
+// without stopping it for the others.
+function abortable<T>(shared: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return shared;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const stop = () => reject(signal.reason);
+    signal.addEventListener("abort", stop, { once: true });
+    shared.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
+  });
 }
 
 export async function fetchPlaylist(id: number, signal?: AbortSignal): Promise<PlaylistPage> {
@@ -118,6 +141,8 @@ export function onPlaylistsChanged(listener: () => void): () => void {
 }
 
 function changed() {
+  // An answer already on its way may not have the change yet.
+  myListsInFlight = null;
   changes.dispatchEvent(new Event("change"));
 }
 

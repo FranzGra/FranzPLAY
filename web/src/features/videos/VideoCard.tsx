@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import type { Audience, Video } from "../../api/videos";
+import { VideoPage } from "../../app/lazyPages";
 import { Icon, type IconName } from "../../components/Icon";
 import { goodConnection } from "../../lib/connection";
 import { formatAge, formatDuration } from "../../lib/format";
@@ -35,6 +36,10 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
       to={`/video/${video.id}`}
       className={`glow ${styles.root}`}
       data-layout={layout}
+      // Fetch the player's code as soon as the card is pointed at.
+      onMouseEnter={preloadPlayer}
+      onFocus={preloadPlayer}
+      onTouchStart={preloadPlayer}
       {...handlers}
     >
       <div ref={coverRef} className={styles.cover}>
@@ -117,4 +122,8 @@ function Clip({ src }: { src: string }) {
       onPlaying={() => setMoving(true)}
     />
   );
+}
+
+function preloadPlayer() {
+  VideoPage.preload().catch(() => {});
 }
