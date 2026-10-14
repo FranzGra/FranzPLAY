@@ -229,3 +229,28 @@ test("theater mode switches at once for whoever asked for less motion", async ({
   await expect(page.getByRole("navigation", { name: "Menu principale" })).toBeHidden();
   expect(await waitGlides(page)).toBe(0);
 });
+
+test("the big play button grows in place under the mouse", async ({ page, isMobile }) => {
+  test.skip(isMobile, "a finger does not hover");
+  // The browser refuses to start by itself: the big button stays.
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = () =>
+      Promise.reject(new DOMException("needs a click first", "NotAllowedError"));
+  });
+  await logIn(page, PEOPLE[0]);
+  const video = (await videos(page)).find((v) => v.title === "Gita al mare");
+  await page.goto(`/video/${video?.id}`);
+  const big = page.getByRole("button", { name: "Guarda" });
+  const before = await steadyBox(big);
+  await big.hover();
+  const after = await steadyBox(big);
+  const middle = (box: typeof before) => [
+    (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    (box?.y ?? 0) + (box?.height ?? 0) / 2,
+  ];
+  expect(after?.width).toBeGreaterThan((before?.width ?? 0) + 2);
+  const [x0, y0] = middle(before);
+  const [x1, y1] = middle(after);
+  expect(x1).toBeCloseTo(x0, 0);
+  expect(y1).toBeCloseTo(y0, 0);
+});
