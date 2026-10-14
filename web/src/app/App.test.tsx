@@ -206,7 +206,7 @@ describe("search", () => {
     expect(screen.getByRole("heading", { name: "Ancora nessun video" })).toBeInTheDocument();
   });
 
-  it("hides the side menu on a video's page, behind a ☰ drawer", async () => {
+  it("hides the side menu on a video's page, and ☰ shows it again in its place", async () => {
     const { user } = renderApp("/video/7", {
       ...signedIn(),
       "GET /api/videos/7": { body: videoJSON() },
@@ -214,21 +214,24 @@ describe("search", () => {
     await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
     const button = screen.getByRole("button", { name: "Menu" });
     const nav = document.getElementById("menu-principale");
+    expect(button).toHaveAttribute("aria-controls", "menu-principale");
     expect(button).toHaveAttribute("aria-expanded", "false");
     expect(nav).not.toHaveAttribute("data-open");
 
+    // ☰ is a switch: pressed it shows the menu, pressed again it hides it.
     await user.click(button);
     expect(button).toHaveAttribute("aria-expanded", "true");
     expect(nav).toHaveAttribute("data-open");
-    expect(nav?.contains(document.activeElement)).toBe(true);
+    // The menu takes its place in the page: nothing lies over the page.
+    expect(document.querySelector("[data-testid='menu-backdrop']")).toBeNull();
 
-    await user.keyboard("{Escape}");
-    expect(nav).not.toHaveAttribute("data-open");
-    expect(button).toHaveFocus();
+    // A click on the page leaves it open.
+    await user.click(screen.getByRole("heading", { level: 1, name: "Mare 2024" }));
+    expect(nav).toHaveAttribute("data-open");
 
     await user.click(button);
-    await user.click(screen.getByTestId("menu-backdrop"));
     expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(nav).not.toHaveAttribute("data-open");
   });
 
   it("keeps the side menu as it is on the other pages", async () => {

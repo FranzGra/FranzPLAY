@@ -137,6 +137,7 @@
 
 /* Body: side menu + page */
 .body {
+  --duration-drawer: 220ms;
   display: flex;
 }
 
@@ -266,45 +267,43 @@
   background: rgb(255 255 255 / 0.08);
 }
 
-/* On a video's page the side menu is a drawer over the page: hidden until
-   ☰ opens it, sliding in from the left above a darkened page. The page
-   under it keeps its size. */
+/* On a video's page the side menu starts hidden; ☰ brings it back in its
+   usual place, and the page beside it narrows to make room. It slides out
+   to the left while its column closes, and back in from the left. */
 @media (min-width: 900px) {
   .body[data-drawer] .sidebar {
-    position: fixed;
-    top: calc(var(--header-height) + env(safe-area-inset-top));
-    bottom: 0;
-    left: 0;
-    z-index: 30;
-    max-height: none;
-    background: var(--color-surface);
-    border-right: 1px solid var(--color-border);
-    box-shadow: var(--glass-shadow);
+    white-space: nowrap;
+    transition:
+      width var(--duration-drawer) ease,
+      padding var(--duration-drawer) ease,
+      translate var(--duration-drawer) ease,
+      visibility 0s linear;
+  }
+
+  .body[data-drawer] .sidebar:not([data-open]) {
+    width: 0;
+    padding-inline: 0;
+    overflow: hidden;
     translate: -100% 0;
     visibility: hidden;
     transition:
-      translate var(--duration-normal) var(--ease-out),
-      visibility 0s linear var(--duration-normal);
+      width var(--duration-drawer) ease,
+      padding var(--duration-drawer) ease,
+      translate var(--duration-drawer) ease,
+      visibility 0s linear var(--duration-drawer);
   }
 
-  .body[data-drawer] .sidebar[data-open] {
-    translate: 0 0;
-    visibility: visible;
-    transition: translate var(--duration-normal) var(--ease-out);
-  }
-
-  /* Theater mode hides the menu; the drawer still opens over it. */
-  .body[data-drawer][data-width="full"] .sidebar {
+  /* Theater mode hides the menu; ☰ still brings it back. */
+  .body[data-drawer][data-width="full"] .sidebar[data-open] {
     display: flex;
   }
 }
 
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 25;
-  background: rgb(0 0 0 / 0.5);
-  animation: var(--motion-fade-in);
+@media (prefers-reduced-motion: reduce) {
+  .body[data-drawer] .sidebar,
+  .body[data-drawer] .sidebar:not([data-open]) {
+    transition: none;
+  }
 }
 
 /* Bottom bar, only on phones: a floating glass capsule */
@@ -358,7 +357,6 @@
   .search,
   .avatar,
   .menuButton,
-  .backdrop,
   .sidebar {
     display: none;
   }

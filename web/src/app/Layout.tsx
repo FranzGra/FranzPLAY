@@ -74,8 +74,8 @@ export function Layout() {
   const { pathname } = useLocation();
   const currentTab = tabFor(pathname);
   // On a video's page the side menu hides, like on YouTube: the player and
-  // the videos beside it get the room. The ☰ button brings it back as a
-  // drawer over the page, which keeps its size.
+  // the videos beside it get the room. The ☰ button brings it back in its
+  // usual place, and the page makes room for it.
   const drawer = pathname.startsWith("/video/");
   const menu = useDrawer(pathname);
   const [width, setWidth] = useState<PageWidth>("normal");
@@ -93,7 +93,6 @@ export function Layout() {
       <header className={styles.header}>
         {drawer && (
           <button
-            ref={menu.button}
             type="button"
             className={styles.menuButton}
             aria-label="Menu"
@@ -136,13 +135,7 @@ export function Layout() {
       </header>
 
       <div className={styles.body} data-width={width} data-drawer={drawer || undefined}>
-        {drawer && menu.open && (
-          // biome-ignore lint/a11y/noStaticElementInteractions: the keyboard closes with Escape
-          // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard closes with Escape
-          <div className={styles.backdrop} data-testid="menu-backdrop" onClick={menu.close} />
-        )}
         <nav
-          ref={menu.nav}
           id="menu-principale"
           className={styles.sidebar}
           aria-label="Menu principale"
@@ -204,35 +197,16 @@ export function Layout() {
   );
 }
 
-// useDrawer runs the side menu as a drawer: open and shut, Escape closes
-// it, the focus goes into it on opening and back to ☰ on closing, and a
-// new page shuts it.
+// useDrawer says whether ☰ has brought the side menu back on a video's
+// page. A new page hides it again.
 function useDrawer(pathname: string) {
   const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  const nav = useRef<HTMLElement>(null);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new address closes the drawer
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new address hides the menu
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
-
-  const close = useCallback(() => {
-    setOpen(false);
-    button.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    nav.current?.querySelector<HTMLElement>("a")?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, close]);
-
-  return { open, button, nav, close, toggle: () => (open ? close() : setOpen(true)) };
+  const toggle = useCallback(() => setOpen((o) => !o), []);
+  return { open, toggle };
 }
 
 // PlaylistLink is one of my lists in the side menu.
