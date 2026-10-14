@@ -74,6 +74,12 @@ const reportEvery = 10;
 export const hideAfter = 3000;
 // doubleTapWithin is how close two taps must be to count as a double tap.
 export const doubleTapWithin = 300;
+// doubleClickWithin is how long a click of the mouse waits before playing
+// or pausing: if a second click comes first, it was a double click, which
+// only goes full screen.
+export const doubleClickWithin = 250;
+// slowDoubleClick is the longest double click computers allow by default.
+const slowDoubleClick = 500;
 
 type Flash = { icon: "back15" | "forward15" | "play" | "pause" | "volume" | "muted"; key: number };
 
@@ -263,6 +269,12 @@ export function Player({
   const lastPointer = useRef("");
   const tapTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(tapTimer.current), []);
+  // A click of the mouse waiting to see if a second one comes, and when
+  // the last lone click that played or paused was made (a slow double
+  // click undoes it).
+  const clickTimer = useRef<number | undefined>(undefined);
+  const clickToggledAt = useRef(0);
+  useEffect(() => () => window.clearTimeout(clickTimer.current), []);
 
   // What onPosition knows: the time now, the last one told, and whether
   // the video was played at all (opening a video is not watching it).
@@ -620,7 +632,18 @@ export function Player({
       return;
     }
     if (event.pointerType !== "touch") {
-      run({ kind: "toggle-play" });
+      if (clickTimer.current !== undefined) {
+        // The second click of a double click: full screen comes with it.
+        window.clearTimeout(clickTimer.current);
+        clickTimer.current = undefined;
+        return;
+      }
+      const clickedAt = Date.now();
+      clickTimer.current = window.setTimeout(() => {
+        clickTimer.current = undefined;
+        clickToggledAt.current = clickedAt;
+        run({ kind: "toggle-play" });
+      }, doubleClickWithin);
       return;
     }
     const now = Date.now();
@@ -644,6 +667,18 @@ export function Player({
     } else {
       showControls();
     }
+  }
+
+  // A double click of the mouse only goes full screen. If it was slower
+  // than doubleClickWithin, its first click already played or paused:
+  // that is undone, so the video stays as it was.
+  function onSurfaceDoubleClick() {
+    if (lastPointer.current !== "mouse") return;
+    window.clearTimeout(clickTimer.current);
+    clickTimer.current = undefined;
+    if (Date.now() - clickToggledAt.current < slowDoubleClick) togglePlay();
+    clickToggledAt.current = 0;
+    toggleFullscreen();
   }
 
   function onProgress(event: SyntheticEvent<HTMLVideoElement>) {
@@ -777,7 +812,7 @@ export function Player({
         data-surface="true"
         onPointerUp={onSurfacePointerUp}
         // A double click goes full screen; a double tap jumps instead.
-        onDoubleClick={() => lastPointer.current === "mouse" && toggleFullscreen()}
+        onDoubleClick={onSurfaceDoubleClick}
         aria-hidden="true"
       />
 
