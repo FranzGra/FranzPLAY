@@ -3,6 +3,10 @@
 import { request } from "./client";
 import { parseSharePeople, type SharePerson } from "./people";
 
+// Audience is who sees something: everybody, only me, the people I
+// choose, or whoever has its link.
+export type Audience = "everyone" | "me" | "people" | "link";
+
 export type Video = {
   id: number;
   title: string;
@@ -31,6 +35,12 @@ export type Video = {
   // sharedWith are the people a private video is shared with: only for one
   // video, and only for the person who uploaded it; [] otherwise.
   sharedWith: SharePerson[];
+  // audience says who sees it: only for the person who uploaded it, on
+  // their own channel and on the video; null otherwise.
+  audience: Audience | null;
+  // link is the address that lets anyone with it watch the video, when it
+  // is seen by link: only for its uploader, on the video; null otherwise.
+  link: string | null;
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
@@ -162,6 +172,12 @@ export function parseVideo(data: unknown): Video {
   if (typeof v.private !== "boolean") {
     throw new Error("video private: not true or false");
   }
+  if (v.audience !== undefined && !isAudience(v.audience)) {
+    throw new Error("video audience: not who sees it");
+  }
+  if (v.link !== undefined && !isLink(v.link)) {
+    throw new Error("video link: not the address of a video");
+  }
   if (typeof v.author !== "string") {
     throw new Error("video author: not text");
   }
@@ -194,6 +210,8 @@ export function parseVideo(data: unknown): Video {
     owner: parseOwner(v.owner),
     sharedWith:
       v.sharedWith === undefined ? [] : parseSharePeople(v.sharedWith, "video sharedWith"),
+    audience: v.audience === undefined ? null : v.audience,
+    link: v.link === undefined ? null : v.link,
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",
@@ -362,4 +380,21 @@ export function parseCopyProgress(data: unknown): CopyProgress {
 // is, and asking again only answers that.
 export async function prepareVideo(id: number): Promise<CopyProgress> {
   return parseCopyProgress(await request(`/api/videos/${id}/prepare`, { method: "POST" }));
+}
+
+const audiences: readonly unknown[] = ["everyone", "me", "people", "link"];
+
+function isAudience(value: unknown): value is Audience {
+  return audiences.includes(value);
+}
+
+// isLink checks the address of a video seen by link, as the server makes it.
+export function isLink(value: unknown): value is string {
+  return typeof value === "string" && /^\/video\/\d+\?k=[A-Za-z0-9_-]{22}$/.test(value);
+}
+
+// openVideoLink tells the server I opened the link of a video seen by
+// link, with its key: from now on I may watch it.
+export async function openVideoLink(id: number, key: string): Promise<void> {
+  await request(`/api/videos/${id}/link`, { method: "POST", body: { key } });
 }

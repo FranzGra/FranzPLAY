@@ -161,6 +161,50 @@ describe("video page", () => {
     ).toBeInTheDocument();
   });
 
+  it("gives the uploader the link of a video seen by link", async () => {
+    const link = "/video/7?k=abcdefghijklmnopqrstuv";
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/videos/7": {
+        body: videoJSON({
+          private: true,
+          uploader: { id: 1, name: "Paolo" },
+          audience: "link",
+          link,
+        }),
+      },
+    });
+    expect(await screen.findByText(/lo vede solo chi ha il link/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Link del video")).toHaveValue(`${window.location.origin}${link}`);
+    expect(screen.getByRole("button", { name: "Copia link" })).toBeInTheDocument();
+  });
+
+  it("opens the link of a video before showing it", async () => {
+    const { server } = renderApp("/video/7?k=abcdefghijklmnopqrstuv", {
+      ...signedIn(),
+      "POST /api/videos/7/link": { status: 204 },
+      "GET /api/videos/7": {
+        body: videoJSON({ private: true, uploader: { id: 5, name: "Giulia" } }),
+      },
+    });
+    expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();
+    const paths = server.requests.map((r) => `${r.method} ${new URL(r.url).pathname}`);
+    const opened = paths.indexOf("POST /api/videos/7/link");
+    expect(opened).toBeGreaterThanOrEqual(0);
+    expect(opened).toBeLessThan(paths.indexOf("GET /api/videos/7"));
+    const body = await server.requests[opened]?.json();
+    expect(body).toEqual({ key: "abcdefghijklmnopqrstuv" });
+  });
+
+  it("says when a link does not work any more", async () => {
+    renderApp("/video/7?k=abcdefghijklmnopqrstuv", {
+      ...signedIn(),
+      "POST /api/videos/7/link": { status: 404, body: { error: "video not found" } },
+      "GET /api/videos/7": { status: 404, body: { error: "video not found" } },
+    });
+    expect(await screen.findByText(/Questo link non funziona più/)).toBeInTheDocument();
+  });
+
   it("tells who received a shared video that few see it", async () => {
     renderApp("/video/7", {
       ...signedIn(),

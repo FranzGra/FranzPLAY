@@ -78,6 +78,46 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Who sees one of my videos, in the top corner of its cover. */
+.audience {
+  --inset: 8px;
+  position: absolute;
+  top: var(--inset);
+  left: var(--inset);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100% - 2 * var(--inset));
+  padding: 3px 8px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 0.62);
+  backdrop-filter: blur(10px);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audience svg {
+  flex: none;
+}
+
+.audience[data-audience="everyone"] svg {
+  color: var(--color-success);
+}
+
+.audience[data-audience="link"] svg,
+.audience[data-audience="people"] svg {
+  color: var(--color-accent-light);
+}
+
+.audience[data-audience="me"] svg {
+  color: var(--color-warning);
+}
+
 .title {
   display: -webkit-box;
   margin: 0;

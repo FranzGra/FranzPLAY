@@ -262,7 +262,14 @@ function NewUpload({
           <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
         </label>
       )}
-      {file && <WhoSees choice={who} onChange={setWho} hints={videoHints} />}
+      {file && (
+        <WhoSees
+          choice={who}
+          onChange={setWho}
+          hints={videoHints}
+          linkLater="Quando il video è caricato, copi il link qui sotto, in «I tuoi video»."
+        />
+      )}
       {problem && (
         <p role="alert" className={styles.problem}>
           {problem}

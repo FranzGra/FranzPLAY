@@ -94,6 +94,7 @@ export function ChannelPage() {
         key={channel.id}
         id={channel.id}
         name={channel.name}
+        mine={mine}
         canUpload={mine && account.canUpload}
       />
       <h2 className={styles.section}>Playlist</h2>
@@ -121,23 +122,42 @@ export function ChannelPage() {
   );
 }
 
-// ChannelVideos shows the videos a person uploaded for everyone. Who
-// never uploaded one sees no empty box, unless it is my channel and I
-// may upload: then it says where to start.
-function ChannelVideos({ id, name, canUpload }: { id: number; name: string; canUpload: boolean }) {
+// ChannelVideos shows the videos a person uploaded for everyone. On my
+// own channel it shows all of mine, private ones too, each saying who sees
+// it. Who never uploaded one sees no empty box, unless it is my channel and
+// I may upload: then it says where to start.
+function ChannelVideos({
+  id,
+  name,
+  mine,
+  canUpload,
+}: {
+  id: number;
+  name: string;
+  mine: boolean;
+  canUpload: boolean;
+}) {
   const { state, loadMore } = useVideoList({ uploader: id });
   if (state.kind === "loading") return null;
-  if (state.kind === "ready" && state.videos.length === 0 && !canUpload) return null;
+  const none = state.kind === "ready" && state.videos.length === 0;
+  if (none && !canUpload) return null;
   return (
     <>
-      <h2 className={styles.section}>Video</h2>
+      <h2 className={styles.section}>{mine ? "I tuoi video" : "Video"}</h2>
+      {mine && !none && (
+        <p className={styles.hint}>
+          Qui vedi tutti i video che hai caricato, con scritto chi può vederli. Gli altri vedono
+          solo quelli pubblici. Per cambiare chi li vede, vai a{" "}
+          <Link to="/carica">Carica un video</Link>.
+        </p>
+      )}
       <VideoGrid
         state={state}
         onMore={loadMore}
-        label={`Video caricati da ${name}`}
+        label={mine ? "I tuoi video" : `Video caricati da ${name}`}
         empty={{
           title: "Nessun video caricato",
-          text: "I video che carichi da «Carica un video», nel Profilo, compariranno qui per tutti.",
+          text: "I video che carichi da «Carica un video», nel Profilo, compariranno qui, ognuno con scritto chi può vederlo.",
         }}
       />
     </>
