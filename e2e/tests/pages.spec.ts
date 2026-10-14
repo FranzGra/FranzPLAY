@@ -152,6 +152,35 @@ test("on the phone Salva opens a window over the whole screen", async ({ page, i
   await expect(sheet).toBeHidden();
 });
 
+test("on the computer Salva opens over everything, the videos on the right included", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "on a phone Salva covers the whole screen");
+  await logIn(page, PEOPLE[0]);
+  const all = await videos(page);
+  await page.goto(`/video/${all[0].id}`);
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Salva in una playlist" });
+  await expect(panel.getByRole("checkbox", { name: "Guarda più tardi" })).toBeAttached();
+  await page.waitForTimeout(500); // it grows out of the button
+  // Every corner of the panel is the panel itself: nothing lies on top of it.
+  // (A bit inside the corners, which are round.)
+  const covered = await panel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const points = [
+      [box.left + 20, box.top + 20],
+      [box.right - 20, box.top + 20],
+      [box.left + 20, box.bottom - 20],
+      [box.right - 20, box.bottom - 20],
+    ];
+    return points.filter(([x, y]) => !element.contains(document.elementFromPoint(x, y))).length;
+  });
+  expect(covered).toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+});
+
 test("on the computer the side menu stays in place while the page scrolls", async ({
   page,
   isMobile,
