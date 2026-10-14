@@ -9,6 +9,7 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
     path: "Vacanze/Mare 2024.mp4",
     hidden: false,
     missing: false,
+    tooShort: false,
     foundTitle: "Mare 2024",
     foundCategory: "Vacanze",
     titleSet: false,

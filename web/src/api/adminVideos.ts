@@ -9,6 +9,7 @@ export type AdminVideo = Video & {
   path: string; // inside the folder
   hidden: boolean;
   missing: boolean; // not found at the last check
+  tooShort: boolean; // shorter than the minimum chosen for the folders: nobody sees it
   foundTitle: string; // the title FranzPLAY found by itself
   foundCategory: string; // the category of its folder; "" if none
   titleSet: boolean; // the title was chosen by the administrator
@@ -29,7 +30,7 @@ export type ClipChoice = "" | "video" | "none";
 // uploaded, a "moment" of the video they chose, or "" when FranzPLAY picks.
 export type CoverChoice = "" | "image" | "moment";
 
-export type AdminShow = "" | "hidden" | "missing";
+export type AdminShow = "" | "hidden" | "missing" | "short";
 
 export type AdminVideoList = { videos: AdminVideo[]; total: number };
 
@@ -39,8 +40,12 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   if (typeof d.folder !== "string" || typeof d.path !== "string") {
     throw new Error("admin video: bad folder or path");
   }
-  if (typeof d.hidden !== "boolean" || typeof d.missing !== "boolean") {
-    throw new Error("admin video: bad hidden or missing");
+  if (
+    typeof d.hidden !== "boolean" ||
+    typeof d.missing !== "boolean" ||
+    typeof d.tooShort !== "boolean"
+  ) {
+    throw new Error("admin video: bad hidden, missing or tooShort");
   }
   if (typeof d.foundTitle !== "string" || typeof d.foundCategory !== "string") {
     throw new Error("admin video: bad found title or category");
@@ -74,6 +79,7 @@ export function parseAdminVideo(data: unknown): AdminVideo {
     path: d.path,
     hidden: d.hidden,
     missing: d.missing,
+    tooShort: d.tooShort,
     foundTitle: d.foundTitle,
     foundCategory: d.foundCategory,
     titleSet: d.titleSet,
