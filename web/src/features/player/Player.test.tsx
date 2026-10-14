@@ -690,6 +690,16 @@ describe("player on a touch screen", () => {
     expect(root).toHaveAttribute("data-controls", "visible");
   });
 
+  it("goes full screen on a double tap in the middle", () => {
+    const { video, root, surface, fullscreen } = playing();
+    video.currentTime = 100;
+    tap(surface, root, 150);
+    tap(surface, root, 150);
+    fireEvent.doubleClick(surface);
+    expect(fullscreen).toHaveBeenCalledTimes(1);
+    expect(video.currentTime).toBe(100);
+  });
+
   it("goes full screen on a double click of the mouse, without pausing", () => {
     const { surface, fullscreen, play, pause } = playing();
     play.mockClear();

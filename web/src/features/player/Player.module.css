@@ -412,26 +412,89 @@
   animation: var(--motion-swap-in);
 }
 
+/* The speaker and its volume bar are one pill: under the mouse it lights
+   up and grows to the right, opening the bar. */
 .volume {
   display: flex;
   align-items: center;
+  border-radius: var(--radius-pill);
+  transition: background-color var(--duration-fast);
 }
 
-/* The volume bar opens next to the speaker on computers. */
+.volume:hover,
+.volume:focus-within {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.volume .button:hover {
+  background: transparent; /* the pill is lit instead */
+}
+
+/* The volume bar: a thick track, white up to the level (--level), with a
+   round knob easy to grab. */
 .volumeSlider {
+  --track: 6px;
+  --knob: 16px;
+  appearance: none;
   width: 0;
+  height: var(--knob);
+  margin: 0;
+  background: transparent;
   opacity: 0;
-  accent-color: #fff;
+  cursor: pointer;
   transition:
     width var(--duration-normal) var(--ease-out),
+    margin var(--duration-normal) var(--ease-out),
     opacity var(--duration-normal);
 }
 
 .volume:hover .volumeSlider,
-.volumeSlider:focus-visible {
-  width: 80px;
-  margin: 0 8px 0 2px;
+.volume:focus-within .volumeSlider {
+  width: 88px;
+  margin: 0 16px 0 2px;
   opacity: 1;
+}
+
+.volumeSlider::-webkit-slider-runnable-track {
+  height: var(--track);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, #fff var(--level), rgb(255 255 255 / 0.3) var(--level));
+}
+
+.volumeSlider::-moz-range-track {
+  height: var(--track);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.3);
+}
+
+.volumeSlider::-moz-range-progress {
+  height: var(--track);
+  border-radius: var(--radius-pill);
+  background: #fff;
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--knob);
+  height: var(--knob);
+  margin-top: calc((var(--track) - var(--knob)) / 2);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  transition: scale var(--duration-fast) var(--ease-out);
+}
+
+.volumeSlider::-moz-range-thumb {
+  width: var(--knob);
+  height: var(--knob);
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+
+.volumeSlider:active::-webkit-slider-thumb {
+  scale: 1.15;
 }
 
 /* The time is a button: a click shows how much is left instead. */
