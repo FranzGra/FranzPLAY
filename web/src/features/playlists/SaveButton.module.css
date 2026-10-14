@@ -5,11 +5,20 @@
   gap: 8px;
 }
 
-/* How many lists hold the video, next to the button. */
+/* How many lists hold the video: a small round badge inside the button. */
 .count {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-right: -6px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.12);
   color: var(--color-text-muted);
-  white-space: nowrap;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .button {

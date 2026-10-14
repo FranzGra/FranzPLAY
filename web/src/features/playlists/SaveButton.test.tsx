@@ -56,13 +56,16 @@ describe("save button", () => {
       "DELETE /api/playlists/2/videos/7": { status: 204 },
     });
     // Known before the panel opens.
-    expect(await screen.findByText("in 1 playlist")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Salva" }));
+    const button = await screen.findByRole("button", { name: "Salva — in 1 playlist" });
+    expect(button).toHaveTextContent("Salvato1");
+    await user.click(button);
     await user.click(await screen.findByRole("checkbox", { name: "Guarda più tardi" }));
-    expect(screen.getByText("in 2 playlist")).toBeInTheDocument();
+    expect(button).toHaveAccessibleName("Salva — in 2 playlist");
+    expect(button).toHaveTextContent("Salvato2");
     await user.click(screen.getByRole("checkbox", { name: "Guarda più tardi" }));
     await user.click(screen.getByRole("checkbox", { name: "Gite" }));
-    expect(screen.queryByText(/in \d+ playlist/)).not.toBeInTheDocument();
+    expect(button).toHaveAccessibleName("Salva");
+    expect(button).toHaveTextContent(/^Salva$/);
   });
 
   it("says nothing when no list holds the video", async () => {
