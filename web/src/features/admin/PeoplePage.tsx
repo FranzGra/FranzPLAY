@@ -13,6 +13,7 @@ import { useAccount } from "../../app/auth";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
+import { Select } from "../../components/Select";
 import { formatBytes, formatSince } from "../../lib/format";
 import styles from "./Admin.module.css";
 
@@ -251,18 +252,17 @@ function PersonRow({
         {person.canUpload && (
           <label className={styles.check}>
             Spazio
-            <select
-              className={`glass ${styles.select}`}
+            <Select
+              compact
+              aria-label="Spazio"
               value={person.uploadQuota}
               disabled={busy}
-              onChange={(e) => change(person.role, true, Number(e.target.value))}
-            >
-              {choicesFor(person.uploadQuota).map((bytes) => (
-                <option key={bytes} value={bytes}>
-                  {formatBytes(bytes)}
-                </option>
-              ))}
-            </select>
+              options={choicesFor(person.uploadQuota).map((bytes) => ({
+                value: bytes,
+                label: formatBytes(bytes),
+              }))}
+              onChange={(bytes) => change(person.role, true, bytes)}
+            />
           </label>
         )}
         <label className={styles.check}>
