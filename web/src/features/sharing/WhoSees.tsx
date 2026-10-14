@@ -2,53 +2,94 @@ import { useEffect, useId, useState } from "react";
 import { avatarUrl } from "../../api/auth";
 import { fetchPeople, type SharePerson } from "../../api/people";
 import { Avatar } from "../../components/Avatar";
+import { Icon, type IconName } from "../../components/Icon";
 import type { Audience, Choice } from "./audience";
+import { CopyLink } from "./CopyLink";
 import styles from "./WhoSees.module.css";
 
-// Hints say, under the three options, what each one means for this thing.
-export type Hints = Record<Audience, string>;
+// Hints say, under each option, what it means for this thing. Only the
+// options with a hint are offered: a playlist has no link.
+export type Hints = Partial<Record<Audience, string>>;
 
-const labels: Record<Audience, string> = {
-  everyone: "Tutti",
-  me: "Solo io",
-  people: "Alcune persone",
-};
+// From the most open to the most closed.
+const options: { audience: Audience; label: string; icon: IconName }[] = [
+  { audience: "everyone", label: "Tutti", icon: "globe" },
+  { audience: "link", label: "Chi ha il link", icon: "link" },
+  { audience: "people", label: "Alcune persone", icon: "people" },
+  { audience: "me", label: "Solo io", icon: "lock" },
+];
 
-// WhoSees chooses who sees something: everybody, only me, or the people I
-// tick in the list that opens under "Alcune persone".
+// WhoSees chooses who sees something: one card for each option, the chosen
+// one lit. Under "Alcune persone" opens the list of people to tick; under
+// "Chi ha il link", the link to copy once there is one (link), or before
+// that linkLater, which says when it will be.
 export function WhoSees({
   choice,
   onChange,
   hints,
+  link = null,
+  linkLater = "Il link da copiare comparirà appena salvi.",
 }: {
   choice: Choice;
   onChange: (choice: Choice) => void;
   hints: Hints;
+  link?: string | null;
+  linkLater?: string;
 }) {
   const group = useId();
   return (
     <fieldset className={styles.root}>
       <legend>Chi può vederlo</legend>
-      <div className={styles.choices}>
-        {(["everyone", "me", "people"] as const).map((audience) => (
-          <label key={audience} className={styles.choice}>
-            <input
-              type="radio"
-              name={group}
-              checked={choice.audience === audience}
-              onChange={() => onChange({ ...choice, audience })}
-            />
-            {labels[audience]}
-          </label>
-        ))}
+      <div className={styles.options}>
+        {options
+          .filter((o) => hints[o.audience] !== undefined)
+          .map((o) => {
+            const chosen = choice.audience === o.audience;
+            return (
+              <div key={o.audience} className={`${styles.option} ${chosen ? styles.chosen : ""}`}>
+                <label className={styles.head}>
+                  <input
+                    type="radio"
+                    name={group}
+                    checked={chosen}
+                    aria-label={o.label}
+                    aria-describedby={`${group}-${o.audience}`}
+                    onChange={() => onChange({ ...choice, audience: o.audience })}
+                  />
+                  <span className={styles.icon}>
+                    <Icon name={o.icon} size={20} />
+                  </span>
+                  <span className={styles.words}>
+                    <span className={styles.label}>{o.label}</span>
+                    <span className={styles.hint} id={`${group}-${o.audience}`}>
+                      {hints[o.audience]}
+                    </span>
+                  </span>
+                  <span className={styles.mark} aria-hidden="true">
+                    {chosen && <Icon name="check" size={14} />}
+                  </span>
+                </label>
+                {chosen && o.audience === "people" && (
+                  <div className={styles.more}>
+                    <PeoplePicker
+                      chosen={choice.people}
+                      onChange={(people) => onChange({ ...choice, people })}
+                    />
+                  </div>
+                )}
+                {chosen && o.audience === "link" && (
+                  <div className={styles.more}>
+                    {link === null ? (
+                      <p className={styles.note}>{linkLater}</p>
+                    ) : (
+                      <CopyLink link={link} />
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
-      <p className={styles.note}>{hints[choice.audience]}</p>
-      {choice.audience === "people" && (
-        <PeoplePicker
-          chosen={choice.people}
-          onChange={(people) => onChange({ ...choice, people })}
-        />
-      )}
     </fieldset>
   );
 }
