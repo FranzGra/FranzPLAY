@@ -17,6 +17,7 @@ import {
 import { onServerEvent } from "../../api/events";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
+import { Select } from "../../components/Select";
 import styles from "./Admin.module.css";
 
 const pageSize = 50;
@@ -120,19 +121,18 @@ export function SubtitlesPage() {
             </button>
           ))}
         </fieldset>
-        <select
-          className={`glass ${styles.select} ${styles.toolSelect}`}
+        <Select
           aria-label="Lingua dei sottotitoli"
           value={lang}
-          onChange={(e) => setLang(e.target.value)}
-        >
-          <option value="">Tutte le lingue</option>
-          {(state.kind === "ready" ? state.setup.languages : []).map((l) => (
-            <option key={l} value={l}>
-              {languageName(l)}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: "Tutte le lingue" },
+            ...(state.kind === "ready" ? state.setup.languages : []).map((l) => ({
+              value: l,
+              label: languageName(l),
+            })),
+          ]}
+          onChange={setLang}
+        />
       </div>
 
       {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
@@ -502,24 +502,24 @@ function AskForm({
     <form className={styles.inline} onSubmit={submit} aria-label={`Sottotitoli di ${video.title}`}>
       <label className={styles.field}>
         Lingua parlata nel video
-        <select value={spoken} onChange={(e) => setSpoken(e.target.value)}>
-          <option value="">La indovina Whisper</option>
-          {setup.languages.map((l) => (
-            <option key={l} value={l}>
-              {languageName(l)}
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="Lingua parlata nel video"
+          value={spoken}
+          options={[
+            { value: "", label: "La indovina Whisper" },
+            ...setup.languages.map((l) => ({ value: l, label: languageName(l) })),
+          ]}
+          onChange={setSpoken}
+        />
       </label>
       <label className={styles.field}>
         Modello
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-          {setup.models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="Modello"
+          value={model}
+          options={setup.models.map((m) => ({ value: m, label: m }))}
+          onChange={setModel}
+        />
       </label>
       {canTranslate && targets.length > 0 && (
         <fieldset className={styles.field}>
