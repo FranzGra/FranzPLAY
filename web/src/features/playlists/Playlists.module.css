@@ -1,7 +1,9 @@
 /* A playlist's page: title, buttons and videos share one column, so the
-   buttons line up with the right edge of the cards under them. */
+   buttons line up with the right edge of the cards under them. The column
+   sits in the middle of the page. */
 .page {
   max-width: 820px;
+  margin-inline: auto;
 }
 
 .top {
