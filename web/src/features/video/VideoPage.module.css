@@ -285,7 +285,8 @@
     grid-column: 1 / -1;
   }
 
-  .actions > :nth-child(-n + 2) button {
+  /* Only the big button itself: not the buttons inside a panel it opens. */
+  .actions > :nth-child(-n + 2) > button {
     flex: 1;
     width: 100%;
     justify-content: center;
@@ -298,7 +299,7 @@
     justify-self: center;
   }
 
-  .actions > :nth-child(3) button {
+  .actions > :nth-child(3) > button {
     height: 44px;
     padding: 0 24px;
   }

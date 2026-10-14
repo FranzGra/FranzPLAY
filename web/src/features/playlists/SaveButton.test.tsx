@@ -113,4 +113,48 @@ describe("save button", () => {
     expect(button).toHaveFocus();
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
+
+  describe("on a phone", () => {
+    beforeEach(() => {
+      vi.stubGlobal("matchMedia", (query: string) => ({ matches: query !== "(min-width: 600px)" }));
+    });
+
+    it("covers the whole screen, outside the button, and keeps the page still", async () => {
+      const { user } = setup({ "GET /api/playlists": { body: [later, trips] } });
+      const button = screen.getByRole("button", { name: "Salva" });
+      await user.click(button);
+      const sheet = screen.getByRole("dialog", { name: "Salva in una playlist" });
+      expect(sheet).toHaveAttribute("aria-modal", "true");
+      // It lives in the page's body, so no box around the button cuts it.
+      expect(sheet.parentElement).toBe(document.body);
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(screen.getByRole("heading", { name: "Salva in una playlist" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Chiudi" })).toHaveFocus();
+
+      // A touch inside the sheet does not close it.
+      await user.click(await screen.findByRole("checkbox", { name: "Gite" }));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Fatto" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(document.body.style.overflow).toBe("");
+      expect(button).toHaveFocus();
+    });
+
+    it("closes with the cross", async () => {
+      const { user } = setup({ "GET /api/playlists": { body: [later] } });
+      await user.click(screen.getByRole("button", { name: "Salva" }));
+      await user.click(screen.getByRole("button", { name: "Chiudi" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("stays a small panel by the button on a computer", async () => {
+    const { user } = setup({ "GET /api/playlists": { body: [later] } });
+    await user.click(screen.getByRole("button", { name: "Salva" }));
+    const panel = screen.getByRole("dialog", { name: "Salva in una playlist" });
+    expect(panel).not.toHaveAttribute("aria-modal");
+    expect(panel.parentElement).not.toBe(document.body);
+    expect(screen.queryByRole("button", { name: "Fatto" })).not.toBeInTheDocument();
+  });
 });

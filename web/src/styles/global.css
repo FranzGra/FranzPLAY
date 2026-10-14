@@ -66,6 +66,10 @@
   --motion-pop-out: pop-out var(--duration-fast) ease-in both;
   --motion-fade-out: fade-out var(--duration-normal) ease-in both;
   --motion-sink-out: sink-out var(--duration-normal) ease-in both;
+  /* A window that covers the whole phone screen rises from the bottom
+     edge and goes back down there. */
+  --motion-rise-in: rise-in 420ms var(--ease-out) both;
+  --motion-drop-out: drop-out var(--duration-normal) ease-in both;
   /* An icon that just got pressed: it squashes, jumps and settles. */
   --motion-bounce: bounce 520ms var(--ease-out);
   /* An icon that turns into another (play and pause). */
@@ -97,6 +101,9 @@ body {
   font-size: 15px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  /* On Android a touched link or button flashes a gray or blue box: the
+     browser's own mark, not ours. Each piece shows its own press instead. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 a {
@@ -149,6 +156,17 @@ input {
   scale: var(--press-scale);
 }
 
+/* With the browser's flash gone, a link under a finger fades a little, so
+   the touch is still felt. Cards (glow) stay still: a finger on a card is
+   mostly scrolling the page. The fade waits a moment, so a finger that
+   only passes by does not light anything up. */
+@media (hover: none) {
+  :where(a:not(.glow):active) {
+    opacity: 0.6;
+    transition-delay: 40ms;
+  }
+}
+
 /* The shared moves: something appearing rises a little and fades in; a
    panel opening grows from slightly smaller; a pressed heart pops. */
 @keyframes enter {
@@ -194,6 +212,18 @@ input {
   to {
     opacity: 0;
     translate: 0 12px;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    translate: 0 100%;
+  }
+}
+
+@keyframes drop-out {
+  to {
+    translate: 0 100%;
   }
 }
 
@@ -344,6 +374,8 @@ input {
     --motion-pop-out: none;
     --motion-fade-out: none;
     --motion-sink-out: none;
+    --motion-rise-in: none;
+    --motion-drop-out: none;
     --motion-bounce: none;
     --motion-swap-in: none;
   }
