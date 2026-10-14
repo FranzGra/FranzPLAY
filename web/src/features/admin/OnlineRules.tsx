@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { type OnlineRules, type OnlineStatus, type SourceName, saveRules } from "../../api/online";
+import { Select } from "../../components/Select";
 import styles from "./Admin.module.css";
 
 const names: Record<SourceName, string> = {
@@ -13,6 +14,8 @@ const hours = Array.from({ length: 24 }, (_, h) => h);
 function hourText(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
 }
+
+const hourOptions = hours.map((h) => ({ value: h, label: hourText(h) }));
 
 // OnlineRulesForm sets when FranzPLAY may ask the internet, how many
 // videos a day, and which source it asks first.
@@ -70,31 +73,21 @@ export function OnlineRulesForm({
         <div className={styles.momentControls}>
           <label className={styles.field}>
             Dalle
-            <select
-              className={`glass ${styles.select}`}
+            <Select
+              aria-label="Dalle"
               value={rules.from}
-              onChange={(e) => setRules({ ...rules, from: Number(e.target.value) })}
-            >
-              {hours.map((h) => (
-                <option key={h} value={h}>
-                  {hourText(h)}
-                </option>
-              ))}
-            </select>
+              options={hourOptions}
+              onChange={(from) => setRules({ ...rules, from })}
+            />
           </label>
           <label className={styles.field}>
             Alle
-            <select
-              className={`glass ${styles.select}`}
+            <Select
+              aria-label="Alle"
               value={rules.to}
-              onChange={(e) => setRules({ ...rules, to: Number(e.target.value) })}
-            >
-              {hours.map((h) => (
-                <option key={h} value={h}>
-                  {hourText(h)}
-                </option>
-              ))}
-            </select>
+              options={hourOptions}
+              onChange={(to) => setRules({ ...rules, to })}
+            />
           </label>
         </div>
       )}
