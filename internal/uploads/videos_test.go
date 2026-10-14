@@ -2,6 +2,7 @@ package uploads
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -203,6 +204,111 @@ func TestSharedVideo(t *testing.T) {
 		http.StatusOK)
 	if got := shares(id); len(got) != 1 || got[0] != 3 {
 		t.Errorf("shared with %v, want Anna", got)
+	}
+}
+
+func TestVideoByLink(t *testing.T) {
+	s := newSite(t)
+	linkOf := func(rec *httptest.ResponseRecorder) string {
+		t.Helper()
+		expect(t, rec, http.StatusOK)
+		v := decode[myVideo](t, rec)
+		if v.Link == nil {
+			return ""
+		}
+		return *v.Link
+	}
+	keyOf := func(link string) string {
+		t.Helper()
+		_, key, ok := strings.Cut(link, "?k=")
+		if !ok {
+			t.Fatalf("link %q has no key", link)
+		}
+		return key
+	}
+	open := func(who users.Account, id int64, key string) *httptest.ResponseRecorder {
+		return s.do(t, who, "POST", "/api/videos/"+strconv.FormatInt(id, 10)+"/link",
+			strings.NewReader(`{"key":"`+key+`"}`))
+	}
+
+	// A link needs a private video and no chosen people.
+	for name, body := range map[string]string{
+		"for everybody": `{"name":"mare.mp4","size":3,"byLink":true}`,
+		"with people":   `{"name":"mare.mp4","size":3,"private":true,"byLink":true,"sharedWith":[2]}`,
+	} {
+		if rec := s.do(t, giulia, "POST", "/api/uploads", strings.NewReader(body)); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", name, rec.Code)
+		}
+	}
+
+	// Uploaded for who has the link: it has one at once.
+	body := strings.NewReader(`{"name":"mare.mp4","size":3,"private":true,"byLink":true}`)
+	u := decode[upload](t, s.do(t, giulia, "POST", "/api/uploads", body))
+	id := decode[upload](t, s.piece(t, giulia, u.ID, 0, "sea")).Video
+	list := decode[[]myVideo](t, s.do(t, giulia, "GET", "/api/uploads/videos", nil))
+	if len(list) != 1 || list[0].Link == nil || !list[0].Private {
+		t.Fatalf("my videos = %+v, want one private video with a link", list)
+	}
+	link := *list[0].Link
+	if want := "/video/" + strconv.FormatInt(id, 10) + "?k="; !strings.HasPrefix(link, want) {
+		t.Errorf("link = %q, want it to start with %q", link, want)
+	}
+	key := keyOf(link)
+
+	// Marco opens it: a wrong key is not found, the right one lets him in.
+	for _, wrong := range []string{"", "short", strings.Repeat("a", 22), key + "x"} {
+		expect(t, open(marco, id, wrong), http.StatusNotFound)
+	}
+	expect(t, open(users.Account{}, id, key), http.StatusUnauthorized)
+	expect(t, open(marco, id, key), http.StatusNoContent)
+	expect(t, open(marco, id, key), http.StatusNoContent)  // twice is fine
+	expect(t, open(giulia, id, key), http.StatusNoContent) // her own video
+	var viewers int
+	if err := s.db.QueryRow(`SELECT count(*) FROM video_link_viewers WHERE video_id = ? AND link_key = ?`, id, key).
+		Scan(&viewers); err != nil || viewers != 1 {
+		t.Errorf("link viewers = %d (%v), want Marco only", viewers, err)
+	}
+
+	// Changing the title keeps the same link.
+	if got := linkOf(s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"title":"Mare"}`))); got != link {
+		t.Errorf("after a new title link = %q, want %q", got, link)
+	}
+	for name, body := range map[string]string{
+		"and for all":  `{"private":false,"byLink":true}`,
+		"and people":   `{"byLink":true,"sharedWith":[2]}`,
+		"while public": `{"byLink":true}`,
+	} {
+		if name == "while public" {
+			expect(t, s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"private":false}`)), http.StatusOK)
+		}
+		if rec := s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(body)); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", name, rec.Code)
+		}
+	}
+
+	// Public, the link is gone; back to by link, a new one: the old one no
+	// longer opens it.
+	newLink := linkOf(s.do(t, giulia, "PUT", videoPath(id), strings.NewReader(`{"private":true,"byLink":true}`)))
+	if newLink == "" || newLink == link {
+		t.Fatalf("new link = %q, want a new one", newLink)
+	}
+	expect(t, open(marco, id, key), http.StatusNotFound)
+
+	// Chosen people instead: no link.
+	if got := linkOf(s.do(t, giulia, "PUT", videoPath(id),
+		strings.NewReader(`{"private":true,"sharedWith":[2],"byLink":false}`))); got != "" {
+		t.Errorf("shared with people, link = %q", got)
+	}
+	expect(t, open(marco, id, keyOf(newLink)), http.StatusNotFound)
+
+	// By link again: the chosen people go.
+	if got := linkOf(s.do(t, giulia, "PUT", videoPath(id),
+		strings.NewReader(`{"private":true,"sharedWith":[],"byLink":true}`))); got == "" {
+		t.Error("by link again: no link")
+	}
+	var shared int
+	if err := s.db.QueryRow(`SELECT count(*) FROM video_shares WHERE video_id = ?`, id).Scan(&shared); err != nil || shared != 0 {
+		t.Errorf("by link, still shared with %d people (%v)", shared, err)
 	}
 }
 

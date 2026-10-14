@@ -3,6 +3,7 @@
 
 import { request } from "./client";
 import { parseSharePeople, type SharePerson } from "./people";
+import { isLink } from "./videos";
 
 const isBytes = (n: unknown): n is number =>
   typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
@@ -17,6 +18,7 @@ export type MyVideo = {
   hidden: boolean; // hidden by an administrator
   private: boolean; // only I see it, and sharedWith
   sharedWith: SharePerson[]; // the people a private video is shared with
+  link: string | null; // the address to share when it is seen by link; null = no link
 };
 
 export function parseMyVideo(data: unknown): MyVideo {
@@ -32,6 +34,7 @@ export function parseMyVideo(data: unknown): MyVideo {
   if (typeof d.hidden !== "boolean") throw new Error("my video hidden");
   if (typeof d.private !== "boolean") throw new Error("my video private");
   const sharedWith = parseSharePeople(d.sharedWith, "my video sharedWith");
+  if (d.link !== null && !isLink(d.link)) throw new Error("my video link");
   return {
     id: d.id,
     title: d.title,
@@ -41,6 +44,7 @@ export function parseMyVideo(data: unknown): MyVideo {
     hidden: d.hidden,
     private: d.private,
     sharedWith,
+    link: d.link,
   };
 }
 
@@ -54,7 +58,7 @@ export async function fetchMyVideos(signal?: AbortSignal): Promise<MyVideo[]> {
 // it; what change leaves out stays as it is.
 export async function changeMyVideo(
   id: number,
-  change: { title?: string; private?: boolean; sharedWith?: number[] },
+  change: { title?: string; private?: boolean; sharedWith?: number[]; byLink?: boolean },
 ): Promise<MyVideo> {
   return parseMyVideo(await request(`/api/uploads/videos/${id}`, { method: "PUT", body: change }));
 }

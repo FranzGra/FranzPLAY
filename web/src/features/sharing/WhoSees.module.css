@@ -9,10 +9,12 @@
 }
 
 .root legend {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   padding: 0;
   color: var(--color-text-muted);
   font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .note {
@@ -27,51 +29,129 @@
   font-size: 14px;
 }
 
-/* The options side by side, like a switch with three positions. */
-.choices {
+/* One card for each option, one under the other. */
+.options {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  align-self: flex-start;
-  max-width: 100%;
-}
-
-.choice {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
-  font-size: 14px;
-  cursor: pointer;
+  border-radius: var(--radius-m);
+  background: rgb(255 255 255 / 0.03);
   transition:
-    background-color 150ms,
-    color 150ms;
+    border-color 180ms,
+    background-color 180ms,
+    box-shadow 180ms;
 }
 
-.choice:has(input:checked) {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font-weight: 600;
+.option:hover {
+  border-color: rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.05);
 }
 
-.choice:has(input:focus-visible) {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+/* The chosen one is lit with the accent, like a glass pane in the light. */
+.chosen,
+.chosen:hover {
+  border-color: rgb(var(--color-accent-rgb) / 0.6);
+  background: rgb(var(--color-accent-rgb) / 0.09);
+  box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.1);
 }
 
-.choice input {
+.head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.head input {
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-s);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  transition:
+    background-color 180ms,
+    color 180ms;
+}
+
+.chosen .icon {
+  background: rgb(var(--color-accent-rgb) / 0.2);
+  color: var(--color-accent-light);
+}
+
+.words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* The round tick on the right, filled when chosen. */
+.mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgb(255 255 255 / 0.22);
+  border-radius: 50%;
+  color: var(--color-on-accent);
+  transition:
+    background-color 180ms,
+    border-color 180ms;
+}
+
+.chosen .mark {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+/* What opens inside the chosen card: the people, or the link. */
+.more {
+  padding: 0 14px 14px;
+  animation: open 200ms ease-out;
+}
+
+@keyframes open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .picker {
@@ -87,11 +167,11 @@
 }
 
 .find {
-  height: 36px;
-  padding: 0 12px;
+  height: 38px;
+  padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
-  background: var(--color-surface);
+  background: rgb(0 0 0 / 0.25);
   color: var(--color-text);
   font: inherit;
   font-size: 14px;
@@ -105,8 +185,8 @@
   margin: 0;
   padding: 4px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-m);
-  background: var(--color-surface);
+  border-radius: var(--radius-s);
+  background: rgb(0 0 0 / 0.2);
   overflow-y: auto;
   list-style: none;
 }
@@ -115,10 +195,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
-  padding: 0 8px;
-  border-radius: var(--radius-s);
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
+  transition: background-color 150ms;
 }
 
 .person:hover,
@@ -137,4 +218,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option,
+  .icon,
+  .mark {
+    transition: none;
+  }
+
+  .more {
+    animation: none;
+  }
 }

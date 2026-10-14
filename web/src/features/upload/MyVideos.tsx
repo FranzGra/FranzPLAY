@@ -4,6 +4,7 @@ import { ApiError } from "../../api/client";
 import { changeMyVideo, deleteMyVideo, fetchMyVideos, type MyVideo } from "../../api/myVideos";
 import { formatBytes, formatDate } from "../../lib/format";
 import { type Choice, choiceOf, ready, seenBy, sharing } from "../sharing/audience";
+import { CopyLink } from "../sharing/CopyLink";
 import { WhoSees } from "../sharing/WhoSees";
 import { videoHints } from "./hints";
 import styles from "./MyVideos.module.css";
@@ -81,7 +82,9 @@ function VideoRow({
   onDeleted: () => void;
 }) {
   const [asking, setAsking] = useState<"nothing" | "title" | "who" | "delete">("nothing");
-  const [who, setWho] = useState<Choice>(() => choiceOf(video.private, video.sharedWith));
+  const [who, setWho] = useState<Choice>(() =>
+    choiceOf(video.private, video.sharedWith, video.link),
+  );
   const [title, setTitle] = useState(video.title);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
@@ -121,7 +124,7 @@ function VideoRow({
         </Link>
         <p className={styles.note}>
           {formatDate(video.addedAt)} · {formatBytes(video.size)}
-          {` · ${seenBy(video.private, video.sharedWith)}`}
+          {` · ${seenBy(video.private, video.sharedWith, video.link)}`}
           {video.hidden && " · nascosto dall'amministratore"}
         </p>
 
@@ -180,6 +183,7 @@ function VideoRow({
             </div>
           </div>
         )}
+        {asking === "nothing" && video.link !== null && <CopyLink link={video.link} compact />}
         {asking === "nothing" && (
           <div className={styles.buttons}>
             <button
@@ -193,7 +197,7 @@ function VideoRow({
               type="button"
               className={`glass ${styles.action}`}
               onClick={() => {
-                setWho(choiceOf(video.private, video.sharedWith));
+                setWho(choiceOf(video.private, video.sharedWith, video.link));
                 setAsking("who");
               }}
             >
@@ -230,7 +234,12 @@ function VideoRow({
             });
           }}
         >
-          <WhoSees choice={who} onChange={setWho} hints={videoHints} />
+          <WhoSees
+            choice={who}
+            onChange={setWho}
+            hints={videoHints}
+            link={who.audience === "link" ? video.link : null}
+          />
           <div className={styles.buttons}>
             <button type="submit" className={styles.primary} disabled={busy}>
               Salva

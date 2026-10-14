@@ -34,14 +34,20 @@ type Video struct {
 	// `video/webm; codecs="vp9, opus"`; "" = no browser is worth asking.
 	// A browser that can play it may ask for the file instead of the copy.
 	FileType string   `json:"fileType"`
-	Copy     bool     `json:"copy"`     // a copy for every device is ready
-	Preview  *Preview `json:"preview"`  // frames for the timeline; null = none yet
-	Clip     *string  `json:"clip"`     // address of the seconds that play on the card; null = none yet
-	ClipHD   *string  `json:"clipHD"`   // the same clip, sharper, for a good connection; null = none yet
-	Format   string   `json:"format"`   // the kind of file, from its name: "MP4", "MKV"; "" = none
-	Likes    int64    `json:"likes"`    // how many people like it
-	Private  bool     `json:"private"`  // only its uploader, and the people they chose, see it
-	Uploader *Person  `json:"uploader"` // who uploaded it from the browser; null = from a video folder
+	Copy     bool     `json:"copy"`    // a copy for every device is ready
+	Preview  *Preview `json:"preview"` // frames for the timeline; null = none yet
+	Clip     *string  `json:"clip"`    // address of the seconds that play on the card; null = none yet
+	ClipHD   *string  `json:"clipHD"`  // the same clip, sharper, for a good connection; null = none yet
+	Format   string   `json:"format"`  // the kind of file, from its name: "MP4", "MKV"; "" = none
+	Likes    int64    `json:"likes"`   // how many people like it
+	Private  bool     `json:"private"` // only its uploader, and the people they chose, see it
+	// Audience says who sees it: "everyone", "me", "people" or "link".
+	// Only its uploader is told, on their own channel and on the video.
+	Audience string `json:"audience,omitempty"`
+	// Link is the address that lets anyone with it watch a video seen "by
+	// link", like "/video/12?k=…": only for its uploader, on the video.
+	Link     *string `json:"link,omitempty"`
+	Uploader *Person `json:"uploader"` // who uploaded it from the browser; null = from a video folder
 	// Owner is whose video it is, shown under the title: its uploader, or
 	// for a video from a folder the main administrator. Only for one video;
 	// null if FranzPLAY has nobody yet.
@@ -53,6 +59,22 @@ type Video struct {
 	Author      string  `json:"author"`                // who published it; "" = not known
 	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
 	Description *string `json:"description,omitempty"` // only for one video; null = none
+
+	audience string  // as Audience, for every video read; shown only to its uploader
+	linkKey  *string // the key of its link, if it is seen by link
+}
+
+// forUploader fills Audience, and Link for one video, when the person
+// asking is the one who uploaded it.
+func (v *Video) forUploader(viewer int64, link bool) {
+	if v.Uploader == nil || v.Uploader.ID != viewer || viewer == 0 {
+		return
+	}
+	v.Audience = v.audience
+	if link && v.linkKey != nil {
+		address := sharing.VideoLink(v.ID, *v.linkKey)
+		v.Link = &address
+	}
 }
 
 // Person is someone on FranzPLAY, as a video names them.
@@ -100,13 +122,20 @@ type store struct {
 }
 
 // watchable says which videos a person may open: the visible ones, and
-// the private uploads that are theirs or shared with them, while those are
-// on the disk and not hidden. Its one argument is the person, from viewer.
-// Lists keep to visible: a private video shows up in no list, not even its
-// uploader's; only the list of the videos shared with me (sharedWithMe)
-// has them.
+// the private uploads that are theirs, shared with them, or whose link they
+// opened while it is still the video's link, while those are on the disk
+// and not hidden. Its one argument is the person, from viewer.
+// Lists keep to visible: a private video shows up in no list but its
+// uploader's own channel (mineToo) and the list of the videos shared with
+// me (sharedWithMe).
 const watchable = `(v.visible OR (v.private AND v.missing_since IS NULL AND v.hidden_at IS NULL
-	AND ? IN (SELECT v.uploaded_by UNION ALL SELECT s.user_id FROM video_shares s WHERE s.video_id = v.id)))`
+	AND ? IN (SELECT v.uploaded_by UNION ALL SELECT s.user_id FROM video_shares s WHERE s.video_id = v.id
+		UNION ALL SELECT l.user_id FROM video_link_viewers l WHERE l.video_id = v.id AND l.link_key = v.link_key)))`
+
+// mineToo is the list of a person's channel when that person is the one
+// asking: their visible videos and their private ones too, while those are
+// on the disk and not hidden. Its one argument is the person.
+const mineToo = `v.uploaded_by = ? AND (v.visible OR (v.private AND v.missing_since IS NULL AND v.hidden_at IS NULL))`
 
 // sharedWithMe says which private videos were shared with a person, the
 // one argument, while those are on the disk and not hidden.
@@ -130,7 +159,8 @@ const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name =
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
 	v.path, v.video_codec, v.audio_codec, v.pixel_format, v.preview, v.preview_gap, v.preview_count, v.preview_width, v.preview_height, v.converted,
-	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private,
+	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private, v.link_key,
+	EXISTS (SELECT 1 FROM video_shares s WHERE s.video_id = v.id),
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
 
@@ -153,12 +183,17 @@ func scanVideo(row rowScanner) (Video, error) {
 	var addedAt int64
 	var relPath string
 	var uploaderID sql.NullInt64
-	var uploaderName sql.NullString
+	var uploaderName, linkKey sql.NullString
+	var shared bool
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &pixels, &preview, &previewGap, &previewCount, &previewWidth, &previewHeight, &converted,
-		&author, &published, &clip, &clipHD, &v.Private, &uploaderID, &uploaderName, &v.Likes); err != nil {
+		&author, &published, &clip, &clipHD, &v.Private, &linkKey, &shared, &uploaderID, &uploaderName, &v.Likes); err != nil {
 		return Video{}, err
 	}
+	if linkKey.Valid {
+		v.linkKey = &linkKey.String
+	}
+	v.audience = sharing.AudienceOf(v.Private, shared, linkKey.Valid)
 	if duration.Valid {
 		v.Duration = &duration.Int64
 	}
@@ -211,13 +246,18 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		where = sharedWithMe
 		args = append(args, viewer(ctx))
 	}
+	me := viewer(ctx)
+	switch {
+	case q.uploader != 0 && q.uploader == me && !q.shared && q.shuffle == 0:
+		where = mineToo
+		args = append(args, me)
+	case q.uploader != 0:
+		where += ` AND v.uploaded_by = ?`
+		args = append(args, q.uploader)
+	}
 	if q.category != "" {
 		where += ` AND ` + shownCategory + ` = ?`
 		args = append(args, q.category)
-	}
-	if q.uploader != 0 {
-		where += ` AND v.uploaded_by = ?`
-		args = append(args, q.uploader)
 	}
 	// LIKE ignores case for the letters A to Z; that is enough for a home search.
 	for _, w := range q.words {
@@ -243,6 +283,9 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		v, err := scanVideo(rows)
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
+		}
+		if q.uploader != 0 {
+			v.forUploader(me, false) // on my channel each video says who sees it
 		}
 		videos = append(videos, v)
 	}
@@ -303,6 +346,7 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 	if v.Owner, err = s.owner(ctx, v.Uploader); err != nil {
 		return Video{}, fmt.Errorf("read video %d: %w", id, err)
 	}
+	v.forUploader(viewer(ctx), true)
 	if v.Private && v.Uploader != nil && v.Uploader.ID == viewer(ctx) {
 		people, err := sharing.People(ctx, s.db, `SELECT s.video_id, u.id, u.name, u.avatar
 			FROM video_shares s JOIN users u ON u.id = s.user_id

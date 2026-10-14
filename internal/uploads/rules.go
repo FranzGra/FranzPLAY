@@ -79,6 +79,9 @@ type newUpload struct {
 	// people in SharedWith, by id.
 	Private    bool    `json:"private"`
 	SharedWith []int64 `json:"sharedWith"`
+	// ByLink: the private video gets a link, and anyone who opens it may
+	// watch the video. Not together with SharedWith.
+	ByLink bool `json:"byLink"`
 }
 
 // check decides whether a person may start an upload, given their space
@@ -114,6 +117,9 @@ func check(a users.Account, req newUpload, space Space, waiting int) (newUpload,
 	if len(req.SharedWith) > 0 && !req.Private {
 		return newUpload{}, sharing.ErrNotPrivate
 	}
+	if req.ByLink && (!req.Private || len(req.SharedWith) > 0) {
+		return newUpload{}, sharing.ErrLinkNotPrivate
+	}
 	people, err := sharing.Clean(req.SharedWith, a.ID)
 	if err != nil {
 		return newUpload{}, err
@@ -121,7 +127,7 @@ func check(a users.Account, req newUpload, space Space, waiting int) (newUpload,
 	if len(people) == 0 {
 		people = nil
 	}
-	return newUpload{Name: name, Title: title, Size: req.Size, Private: req.Private, SharedWith: people}, nil
+	return newUpload{Name: name, Title: title, Size: req.Size, Private: req.Private, SharedWith: people, ByLink: req.ByLink}, nil
 }
 
 // cleanText reports whether s is valid text of 1 to most characters,
