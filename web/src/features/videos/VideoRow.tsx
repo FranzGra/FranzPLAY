@@ -1,7 +1,8 @@
 import type { ReactNode, RefObject } from "react";
-import { Children, useCallback, useEffect, useId, useRef, useState } from "react";
+import { Children, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Icon, type IconName } from "../../components/Icon";
+import { useScrollEnds } from "../../lib/scrollEnds";
 import { useSections } from "../home/look";
 import type { Fold } from "../home/useHomeLayout";
 import styles from "./VideoRow.module.css";
@@ -155,41 +156,4 @@ function useColumns(list: RefObject<HTMLUListElement | null>, grid: boolean): nu
     return () => watch.disconnect();
   }, [list, grid]);
   return columns;
-}
-
-type Ends = { left: boolean; right: boolean };
-
-// useScrollEnds says whether the row can still scroll left and right, and
-// keeps the answer up to date while it scrolls or changes size.
-function useScrollEnds(list: RefObject<HTMLUListElement | null>, open: boolean): Ends {
-  const [ends, setEnds] = useState<Ends>({ left: false, right: false });
-  const update = useCallback(() => {
-    const el = list.current;
-    if (!el) {
-      return;
-    }
-    // A pixel of slack: zoomed pages scroll by fractions.
-    const left = el.scrollLeft > 1;
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-    setEnds((old) => (old.left === left && old.right === right ? old : { left, right }));
-  }, [list]);
-  useEffect(() => {
-    const el = list.current;
-    if (!open || !el) {
-      return;
-    }
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    // Cards arriving later, or a wider window, change what fits.
-    const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
-    watch?.observe(el);
-    for (const child of el.children) {
-      watch?.observe(child);
-    }
-    return () => {
-      el.removeEventListener("scroll", update);
-      watch?.disconnect();
-    };
-  }, [list, open, update]);
-  return ends;
 }
