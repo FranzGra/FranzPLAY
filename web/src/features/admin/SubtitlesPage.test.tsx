@@ -87,10 +87,8 @@ describe("subtitles page", () => {
     await screen.findByRole("list", { name: "Video" });
     await user.click(screen.getByRole("button", { name: "Senza sottotitoli" }));
     await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("have=without"));
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Lingua dei sottotitoli" }),
-      "it",
-    );
+    await user.click(screen.getByRole("combobox", { name: "Lingua dei sottotitoli" }));
+    await user.click(screen.getByRole("option", { name: "Italiano" }));
     await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("lang=it"));
   });
 
@@ -102,10 +100,8 @@ describe("subtitles page", () => {
     await screen.findByRole("list", { name: "Video" });
     await user.click(within(rowOf("Mare 2024")).getByRole("button", { name: "Crea sottotitoli" }));
     const form = screen.getByRole("form", { name: "Sottotitoli di Mare 2024" });
-    await user.selectOptions(
-      within(form).getByRole("combobox", { name: "Lingua parlata nel video" }),
-      "it",
-    );
+    await user.click(within(form).getByRole("combobox", { name: "Lingua parlata nel video" }));
+    await user.click(screen.getByRole("option", { name: "Italiano" }));
     // Only the languages the translator knows, and not the spoken one.
     expect(within(form).queryByRole("checkbox", { name: "Italiano" })).not.toBeInTheDocument();
     expect(within(form).queryByRole("checkbox", { name: "Spagnolo" })).not.toBeInTheDocument();
