@@ -1,0 +1,108 @@
+# FranzPLAY con Docker.
+#
+# Le tue scelte (cartella dei video, porta, utente…) stanno nel file .env:
+# copia .env.example in .env e cambia lì. Questo file di solito non si tocca.
+#
+#   docker compose up -d        avvia FranzPLAY (la prima volta scarica l'immagine)
+#   docker compose logs -f      guarda cosa fa (Ctrl+C per uscire dai log)
+#   docker compose pull         scarica la versione nuova, poi di nuovo "up -d"
+#   docker compose down         ferma tutto (i tuoi dati restano)
+#
+# Guida completa: docs/docker.md
+
+name: franzplay
+
+services:
+  franzplay:
+    # L'immagine pronta, per computer normali (amd64) e Raspberry Pi/ZimaBlade (arm64).
+    # Se non si riesce a scaricarla, Docker la costruisce da qui (Dockerfile).
+    image: ghcr.io/franzgra/franzplay:${FRANZPLAY_IMAGE_TAG:-latest}
+    build: .
+    container_name: franzplay
+    restart: unless-stopped
+
+    ports:
+      # Porta del tuo computer : porta dentro il contenitore (quella resta 8090).
+      - "${FRANZPLAY_PORT:-8090}:8090"
+
+    environment:
+      # Chi possiede i file nella cartella dati: il tuo utente (comando "id").
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      # Fuso orario, per date e orari giusti.
+      TZ: ${TZ:-Europe/Rome}
+      # Le cartelle dei video DENTRO il contenitore. Per aggiungerne una,
+      # vedi "volumes" qui sotto e scrivila anche qui: /videos:/videos2
+      FRANZPLAY_LIBRARIES: /videos
+      # Traduzione dei sottotitoli (facoltativa): vedi .env.example.
+      FRANZPLAY_TRANSLATE_URL: ${FRANZPLAY_TRANSLATE_URL:-}
+      FRANZPLAY_TRANSLATE_KEY: ${FRANZPLAY_TRANSLATE_KEY:-}
+      # Codice dal log per creare il primo amministratore: vedi .env.example.
+      FRANZPLAY_SETUP_CODE: ${FRANZPLAY_SETUP_CODE:-false}
+
+    volumes:
+      # La cartella dati di FranzPLAY: database, copertine, anteprime, video caricati.
+      # È l'unica dove FranzPLAY scrive. Per spostare FranzPLAY basta copiare questa.
+      # Su Windows e Mac usa "franzplay-data" (vedi .env.example).
+      - ${FRANZPLAY_DATA_FOLDER:-./data}:/data
+      # I tuoi video, in SOLA LETTURA (":ro"): FranzPLAY non può toccarli.
+      - ${FRANZPLAY_VIDEO_FOLDER:?scrivi in .env la cartella dei tuoi video (FRANZPLAY_VIDEO_FOLDER)}:/videos:ro
+      # Un'altra cartella di video? Togli il # alla riga sotto, cambia il percorso
+      # a sinistra e aggiungi :/videos2 a FRANZPLAY_LIBRARIES qui sopra.
+      # - /percorso/altri/video:/videos2:ro
+
+    # Più sicuro: il contenitore non può cambiare i suoi programmi, e parte
+    # con i soli permessi che servono per dare la cartella dati al tuo utente.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+
+    # Tempo per finire con calma quando lo fermi.
+    stop_grace_period: 30s
+    # Log piccoli: su un Raspberry Pi la scheda di memoria ringrazia.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Traduzione dei sottotitoli con LibreTranslate. È spenta: si accende con
+  # COMPOSE_PROFILES=traduzioni nel file .env. Attenzione: vuole circa 1-2 GB
+  # di memoria, troppa per un Raspberry Pi da 2 GB.
+  libretranslate:
+    profiles: [traduzioni]
+    image: libretranslate/libretranslate:v1.9.6
+    container_name: franzplay-libretranslate
+    restart: unless-stopped
+    environment:
+      # Solo le lingue che ti servono: meno memoria e meno da scaricare.
+      LT_LOAD_ONLY: ${LIBRETRANSLATE_LANGUAGES:-it,en}
+      LT_UPDATE_MODELS: "true"
+    volumes:
+      # I modelli delle lingue, scaricati una volta sola.
+      - libretranslate-models:/home/libretranslate/.local
+    healthcheck:
+      test: ["CMD-SHELL", "./venv/bin/python scripts/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # La cartella dati tenuta da Docker, per chi scrive FRANZPLAY_DATA_FOLDER=franzplay-data.
+  franzplay-data:
+  libretranslate-models:

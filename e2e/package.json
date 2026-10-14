@@ -1,0 +1,13 @@
+{
+  "name": "franzplay-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "check": "biome ci ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.56.1"
+  }
+}

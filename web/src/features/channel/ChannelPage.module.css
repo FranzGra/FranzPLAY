@@ -1,0 +1,46 @@
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 8px 0 32px;
+}
+
+.avatar {
+  display: contents;
+  --avatar-size: 88px;
+}
+
+.name {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.since {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.section {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* After the videos, the playlists need some air. */
+* + .section {
+  margin-top: 32px;
+}
+
+@media (max-width: 640px) {
+  .avatar {
+    --avatar-size: 64px;
+  }
+
+  .name {
+    font-size: 22px;
+  }
+}

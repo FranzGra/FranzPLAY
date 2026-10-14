@@ -1,0 +1,49 @@
+/* The card, with the button to take it out over the top right corner of
+   its cover. */
+.item {
+  position: relative;
+}
+
+.leave {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+}
+
+/* With a mouse it shows when pointing at the card; on a touch screen,
+   where there is no pointing, always. */
+.item:hover .leave,
+.leave:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .leave {
+    opacity: 1;
+  }
+}
+
+.leave:hover {
+  background: var(--glass-bg-strong);
+}
+
+/* A bigger area to tap than the button looks. */
+.leave::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+.problem {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-danger);
+}

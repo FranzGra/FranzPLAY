@@ -1,0 +1,1010 @@
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+/* The pages of the administration: one row of tabs on a glass bar. On a
+   narrow screen the row slides sideways instead of piling up in lines. */
+.tabs {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 24px;
+  padding: 4px;
+  overflow-x: auto;
+  border-radius: var(--radius-pill);
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab,
+.segment {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab:hover,
+.segment:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--color-text);
+}
+
+.tab[aria-current="page"],
+.segment[aria-pressed="true"] {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+/* A small group of choices where only one is on (like "Tutti", "Nascosti"). */
+.segmented {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px;
+  border: var(--glass-border);
+  border-radius: var(--radius-l);
+}
+
+.segmented legend {
+  float: left;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 20px;
+}
+
+.lead {
+  max-width: 620px;
+  margin: 0 0 20px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.top .lead {
+  margin: 0;
+}
+
+.placeholder {
+  height: 240px;
+  border-radius: var(--radius-m);
+  background: var(--color-surface);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person,
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 16px 20px;
+  border-radius: var(--radius-l);
+}
+
+.panel {
+  justify-content: flex-start;
+  margin: 0 0 20px;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+.name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.you {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.role {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.controls,
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.buttons {
+  gap: 8px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* A tick box drawn by us, the same in every browser: a soft square that
+   fills with the accent and shows a white tick when it is on. */
+.check input[type="checkbox"] {
+  display: inline-grid;
+  flex: none;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid rgb(255 255 255 / 0.28);
+  border-radius: 5px;
+  background: transparent;
+  cursor: inherit;
+  appearance: none;
+}
+
+.check input[type="checkbox"]::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: var(--color-on-accent);
+  clip-path: polygon(14% 44%, 0 59%, 40% 100%, 100% 22%, 86% 8%, 39% 70%);
+  scale: 0;
+  transition: scale var(--duration-fast) var(--ease-spring);
+}
+
+.check input[type="checkbox"]:checked {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.check input[type="checkbox"]:checked::after {
+  scale: 1;
+}
+
+.check input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.check input[type="checkbox"]:disabled {
+  opacity: 0.5;
+}
+
+/* A person's settings sit on their own line under the name, the same for
+   everyone, so the cards line up. */
+.personControls {
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.check:has(input:disabled) {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.select {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-s);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.select:disabled {
+  cursor: default;
+}
+
+.field {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.field input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.inline,
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.confirm {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.confirm p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--glass-bg-strong);
+}
+
+.danger {
+  border-color: transparent;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.danger:hover {
+  background: var(--color-danger-bg);
+  filter: brightness(1.3);
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.primary:disabled {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.problem,
+.done {
+  width: 100%;
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-danger);
+}
+
+.done {
+  color: var(--color-text-muted);
+}
+
+.subheading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.warning {
+  margin: 16px 0 0;
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 24px 0 32px;
+}
+
+.stat {
+  margin: 0;
+  padding: 16px 20px;
+  border-radius: var(--radius-l);
+}
+
+.stat dt {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.stat dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.number {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.note {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* Under a big number, each note goes on its own line. */
+.stat .note {
+  display: block;
+  margin-top: 2px;
+}
+
+.statLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-text-muted);
+}
+
+.statLink:hover {
+  color: var(--color-text);
+}
+
+.version {
+  margin: 24px 0 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.failed {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--color-danger);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.path {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
+.bad {
+  margin: 8px 0 0;
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.good {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-size: 12px;
+}
+
+.lastCheck {
+  margin-top: 24px;
+}
+
+.lastCheck p {
+  margin: 0;
+}
+
+.lastCheck p + p {
+  margin-top: 4px;
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin: 0 0 20px;
+}
+
+.searchForm {
+  flex: 1 1 280px;
+  max-width: 480px;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+}
+
+.searchBox input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.searchBox input:focus {
+  outline: none;
+}
+
+.count {
+  margin: 16px 0 12px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.videoInfo {
+  display: flex;
+  flex: 1 1 320px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.thumb {
+  display: flex;
+  flex: none;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-s);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 600px) {
+  .thumb {
+    width: 88px;
+  }
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.more {
+  margin: 20px auto 0;
+}
+
+.action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.action:disabled:hover {
+  background: inherit;
+}
+
+.author {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.body {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.field .linkBox {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+/* The title of a group of settings, above its list. */
+.groupTitle {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.groupTitle:not(:first-child) {
+  margin-top: 28px;
+}
+
+.select {
+  background: transparent;
+  cursor: pointer;
+}
+
+.field select {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.field select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+fieldset.field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.badgeButton {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 -4px 0 6px;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.badgeButton:hover {
+  background: var(--glass-bg-strong);
+}
+
+.langBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.models {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font-size: 14px;
+}
+
+/* A calm badge, for things that went well. */
+.badgeOk {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* Something to fix, with a round mark in front: amber when it can wait a
+   little, red when it must be fixed soon, green when all is well. */
+.problemRow {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 14px;
+}
+
+.problemMark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
+.critical {
+  border-color: rgb(239 68 68 / 0.45);
+}
+
+.critical .problemMark {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.problemMark.allGood {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.problemRow code {
+  overflow-wrap: anywhere;
+}
+
+.plain {
+  margin: 0;
+}
+
+.disk {
+  flex: 1 1 auto;
+}
+
+.meter {
+  width: 100%;
+  height: 10px;
+  margin-top: 10px;
+}
+
+/* A button that reads like a link, inside a sentence. */
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+/* Choosing the cover of a video. */
+.coverNow {
+  width: 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* The file input sits inside its button, invisible: the button opens it. */
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+label.action {
+  position: relative;
+}
+
+label.action:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.moment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  width: 100%;
+}
+
+.momentVideo {
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-s);
+  background: #000;
+}
+
+.momentControls {
+  display: flex;
+  flex: 1 1 200px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* The rules of the questions to the internet. */
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: var(--radius-l);
+}
+
+.rules h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* In a column, a field takes only the room it needs (no tall empty gap). */
+.rules .field {
+  flex: none;
+  max-width: 420px;
+}
+
+.rules .momentControls {
+  flex: none;
+}
+
+.order {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+/* Searching a cover on the internet. */
+.coverSearch {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.found {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.foundItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.foundItem:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.foundItem:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.foundItem img,
+.noPicture {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-s);
+  object-fit: cover;
+  background: var(--color-surface);
+}
+
+.noPicture {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.foundTitle {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.foundMeta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* The compact table of videos. It scrolls sideways on a phone. */
+.tableBox {
+  overflow-x: auto;
+  border-radius: var(--radius-l);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th,
+.table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.table .tableTitle {
+  min-width: 220px;
+  max-width: 360px;
+  font-weight: 600;
+  white-space: normal;
+}
+
+.tableTitle .path {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.tableBad {
+  color: var(--color-danger);
+}
+
+/* The swatch for "no color": a crossed circle. */
+.noColor {
+  background: linear-gradient(
+    135deg,
+    transparent calc(50% - 1px),
+    var(--color-danger) calc(50% - 1px),
+    var(--color-danger) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
+
+/* What the internet found, waiting for a yes. */
+.proposal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+}
+
+.proposal > div:nth-child(2) {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+/* A drop-down next to the search and the filters. */
+.toolSelect {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+}
+
+/* Smaller buttons, for rows that have many of them. */
+.small {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* A long file path stays on one line; the whole path is in its tooltip. */
+.oneLine {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

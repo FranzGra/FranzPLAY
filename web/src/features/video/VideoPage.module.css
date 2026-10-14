@@ -1,0 +1,345 @@
+/* The page, like YouTube: the player on the left, as big as the screen
+   allows, with its title and comments below and the videos to watch next
+   in a column on the right. --player-max is the widest the player gets
+   while still leaving room for the title under it on the screen. */
+.root {
+  --side-width: clamp(300px, 24vw, 402px);
+  --player-max: max(640px, calc((100dvh - var(--header-height) - 180px) * 16 / 9));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--side-width);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "player side"
+    "info side";
+  column-gap: 24px;
+  max-width: calc(var(--player-max) + var(--side-width) + 24px);
+  margin: 0 auto;
+}
+
+/* view-transition-name: switching theater mode on or off, the player
+   grows or shrinks to its new size, and the title and the column of next
+   videos glide to their new places, instead of jumping (morph in
+   lib/motion.ts; how they glide is at the end of this file). */
+.player {
+  grid-area: player;
+  view-transition-name: video-player;
+}
+
+.info {
+  grid-area: info;
+  min-width: 0;
+  view-transition-name: video-info;
+}
+
+.side {
+  grid-area: side;
+  min-width: 0;
+  view-transition-name: video-side;
+}
+
+/* A private video suggests nothing else: no column on the right. */
+.alone {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "player"
+    "info";
+  max-width: var(--player-max);
+}
+
+/* Theater mode: the player spans the whole width under the top bar, edge
+   to edge, on black; title, comments and the next videos go below it. */
+.theater {
+  grid-template-areas:
+    "player player"
+    "info side";
+  max-width: none;
+}
+
+.theater.alone {
+  grid-template-areas:
+    "player"
+    "info";
+}
+
+.theater .player {
+  margin: calc(-1 * var(--page-top)) calc(-1 * var(--page-side)) 0;
+  background: #000;
+}
+
+/* A margin, not padding: the column glides as it is, without growing. */
+.theater .side {
+  margin-top: 20px;
+}
+
+.placeholder {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-l);
+  background: var(--color-surface);
+}
+
+/* The same size as the player in theater mode (Player.module.css). */
+.theater .placeholder {
+  aspect-ratio: auto;
+  height: max(360px, min(100vw * 9 / 16, 100dvh - var(--header-height) - 96px));
+  border-radius: 0;
+}
+
+.title {
+  margin: 16px 0 0;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Whose the video is on the left, the buttons on the right, as on YouTube. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 12px;
+}
+
+.owner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.owner:hover {
+  color: var(--color-text);
+}
+
+.owner > :first-child {
+  transition: scale var(--duration-normal) var(--ease-spring);
+}
+
+.owner:hover > :first-child {
+  scale: 1.06;
+}
+
+.ownerName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner:hover .ownerName {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 14px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* The category, easy to spot: a chip in the accent color. */
+.category {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--color-accent-rgb) / 0.14);
+  box-shadow: inset 0 0 0 1px rgb(var(--color-accent-rgb) / 0.35);
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.category:hover {
+  background: rgb(var(--color-accent-rgb) / 0.22);
+}
+
+.private {
+  margin: 12px 0 0;
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.private a {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sideTitle {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Narrower screens: one column, the next videos at the bottom. */
+@media (max-width: 1199px) {
+  .root,
+  .theater {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "player"
+      "info"
+      "side";
+    max-width: none;
+  }
+
+  .side {
+    margin-top: 32px;
+  }
+
+  .theater .side {
+    margin-top: 32px;
+  }
+}
+
+/* Theater mode is for computers: on phones the page is always the same. */
+@media (max-width: 899px) {
+  .theater .player {
+    margin: 0;
+    background: none;
+  }
+
+  .theater .placeholder {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    border-radius: var(--radius-l);
+  }
+}
+
+/* On phones the player touches the screen edges, like on YouTube. */
+@media (max-width: 599px) {
+  .player,
+  .theater .player {
+    margin: calc(-1 * var(--page-top)) calc(-1 * var(--page-side)) 0;
+  }
+
+  .placeholder,
+  .theater .placeholder {
+    border-radius: 0;
+  }
+
+  /* Room to breathe, in the order a person reads: the title, what the
+     video is (category first), whose it is, then big buttons. */
+  .info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .title {
+    margin-top: 20px;
+    font-size: 20px;
+  }
+
+  .details {
+    order: 1;
+    margin-top: 12px;
+  }
+
+  .bar {
+    order: 2;
+    margin-top: 20px;
+  }
+
+  .info > :nth-child(n + 4) {
+    order: 3;
+  }
+
+  /* Big buttons, easy for a thumb, as in the old FranzPLAY: Mi piace and
+     Salva side by side, Condividi under them, smaller and centered. */
+  .actions {
+    display: grid;
+    flex: 1 1 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .actions > * {
+    min-width: 0;
+  }
+
+  .actions > :only-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Only the big button itself: not the buttons inside a panel it opens. */
+  .actions > :nth-child(-n + 2) > button {
+    flex: 1;
+    width: 100%;
+    justify-content: center;
+    height: 52px;
+    font-size: 16px;
+  }
+
+  .actions > :nth-child(3) {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .actions > :nth-child(3) > button {
+    height: 44px;
+    padding: 0 24px;
+  }
+
+  /* The comments: their own panel, well apart from the buttons. */
+  .comments {
+    margin-top: 32px;
+    padding: 4px 16px 20px;
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 1px var(--color-border);
+  }
+
+  .comments > section {
+    margin-top: 16px;
+  }
+}
+
+/* While theater mode switches, the browser moves pictures of the page.
+   The picture of the player keeps the video's height, centered, as the
+   player itself does: so the video grows or shrinks in one piece, and
+   only the black at its sides comes and goes. */
+::view-transition-old(video-player),
+::view-transition-new(video-player) {
+  block-size: 100%;
+  inline-size: auto;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+}
+
+::view-transition-image-pair(video-player) {
+  overflow: clip;
+}
+
+/* The title, the comments and the next videos keep their size and only
+   glide: text that stretched would look blurred. */
+::view-transition-old(video-info),
+::view-transition-new(video-info),
+::view-transition-old(video-side),
+::view-transition-new(video-side) {
+  inline-size: auto;
+  block-size: auto;
+}

@@ -1,0 +1,156 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--color-text);
+}
+
+.root:hover {
+  color: var(--color-text);
+}
+
+.cover {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 8px;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border);
+  transition: scale var(--duration-fast) var(--ease-out);
+}
+
+/* Under the mouse the whole card lights up (the global glow class) and
+   keeps its size; clicked, the cover sinks a little. Only with a mouse: on
+   a touch screen a finger on a card is mostly scrolling the page, and the
+   card must not look pressed. */
+@media (hover: hover) {
+  .root:active .cover {
+    scale: 0.98;
+  }
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The clip lies over the cover. */
+.clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: transparent;
+  opacity: 0;
+  transition: opacity var(--duration-normal) ease;
+  pointer-events: none;
+}
+
+.clip[data-moving] {
+  opacity: 1;
+}
+
+.noCover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--color-surface-raised), var(--color-surface));
+  color: var(--color-text-muted);
+}
+
+.duration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.75);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.details {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* How many people like it, after the other details. */
+.likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Why the video is suggested: quieter than the details. */
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Row: small cover on the left, text on the right. */
+.root[data-layout="row"] {
+  flex-direction: row;
+  gap: 12px;
+}
+
+.root[data-layout="row"] .cover {
+  flex: none;
+  width: 168px;
+  margin: 0;
+  border-radius: var(--radius-s);
+}
+
+.root[data-layout="row"] .title {
+  font-size: 14px;
+}
+
+/* How much of the video was watched, along the bottom of the cover. */
+.watched {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: rgb(255 255 255 / 0.3);
+}
+
+.watched > span:first-child {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.root:has(.watched) .duration {
+  bottom: 12px;
+}

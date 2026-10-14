@@ -1,0 +1,127 @@
+# Builds the Docker image for computers (amd64) and for Raspberry Pi and
+# ZimaBlade (arm64), each on its own kind of machine, and tests it with
+# docker/smoke-test.sh. On main (and on a v1.2.3 tag) the tested images
+# are published as ghcr.io/franzgra/franzplay, one name for both.
+#
+# No file is stored between jobs (GitHub "artifacts"): a private repository
+# has little room for them, and when it is full nothing gets published. The
+# two digests travel as job outputs instead.
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/franzgra/franzplay
+  # The build summary would be kept as an artifact too: not needed.
+  DOCKER_BUILD_RECORD_UPLOAD: false
+
+jobs:
+  build:
+    name: Docker (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    # Each kind of machine sets only its own output, so the two never
+    # overwrite each other.
+    outputs:
+      digest-amd64: ${{ steps.digest.outputs.digest-amd64 }}
+      digest-arm64: ${{ steps.digest.outputs.digest-arm64 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # for the version name, from the tags
+      - name: Version name
+        id: version
+        run: echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          build-args: VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ env.IMAGE }}:smoke
+          load: true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+      - name: Start it like a person would, and play a video
+        run: docker/smoke-test.sh smoke
+
+      - name: Log in to GitHub's image registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the tested image (without a name yet)
+        if: github.event_name != 'pull_request'
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          build-args: VERSION=${{ steps.version.outputs.version }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+      - name: Remember its digest
+        if: github.event_name != 'pull_request'
+        id: digest
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: echo "digest-${{ matrix.arch }}=$DIGEST" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish ghcr.io/franzgra/franzplay
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - name: Names for the image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: One name for both kinds of machine
+        env:
+          AMD64: ${{ needs.build.outputs.digest-amd64 }}
+          ARM64: ${{ needs.build.outputs.digest-arm64 }}
+        run: |
+          for d in "$AMD64" "$ARM64"; do
+            [[ "$d" == sha256:* ]] || { echo "missing digest: amd64=$AMD64 arm64=$ARM64"; exit 1; }
+          done
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            "$IMAGE@$AMD64" "$IMAGE@$ARM64"
+      - name: Show what was published
+        run: docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"

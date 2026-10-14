@@ -1,0 +1,382 @@
+/* Design tokens: every color, size and radius used by the interface lives here. */
+:root {
+  color-scheme: dark;
+
+  /* Colors: a neutral zinc scale (like shadcn/ui) plus one blue accent.
+     Each person can choose another accent in the profile (app/accent.ts). */
+  --color-bg: #09090b;
+  --color-surface: #18181b;
+  --color-surface-raised: #27272a;
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-text: #fafafa;
+  --color-text-muted: #a1a1aa;
+  --color-accent-own: #2997ff; /* FranzPLAY's own accent, even when someone chose another */
+  --color-accent: var(--color-accent-own);
+  --color-accent-hover: #5cb0ff;
+  --color-accent-light: #4aa8ff;
+  --color-accent-rgb: 41 151 255; /* the accent as numbers, for see-through shades */
+  --color-accent-glow: rgb(var(--color-accent-rgb) / 0.25);
+  --color-on-accent: #ffffff;
+  --color-star: #facc15; /* the shining icon on top of the Home */
+  --color-star-rgb: 250 204 21;
+  --color-danger: #fca5a5;
+  --color-danger-bg: rgb(239 68 68 / 0.14);
+  --color-danger-strong: #dc2626; /* buttons that delete for good */
+  --color-warning: #fcd34d; /* something to look at soon, not broken yet */
+  --color-warning-bg: rgb(245 158 11 / 0.14);
+  --color-success: #86efac; /* all is well */
+  --color-success-bg: rgb(34 197 94 / 0.12);
+
+  /* Glass: translucent surfaces that blur what is behind them (like Apple's Liquid Glass). */
+  --glass-bg: rgb(24 24 27 / 0.55);
+  --glass-bg-strong: rgb(24 24 27 / 0.72);
+  /* For bars that text scrolls under: it must stay readable over anything. */
+  --glass-bg-bar: rgb(18 18 21 / 0.94);
+  --glass-border: 1px solid rgb(255 255 255 / 0.09);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
+  --glass-blur: blur(24px) saturate(180%);
+
+  --font-sans: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-s: 10px;
+  --radius-m: 16px;
+  --radius-l: 22px;
+  --radius-pill: 999px;
+
+  /* Motion: short, soft and cheap. Only opacity and transform move, so even
+     a Raspberry Pi's browser keeps up. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Starts and ends gently: for things that change size. */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* overshoots a little, then settles */
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --duration-slow: 360ms;
+  --press-scale: 0.96;
+  /* Ready-made animations for the components. They live in variables so
+     CSS Modules leave the names alone and every page shares the same moves. */
+  --motion-enter: enter var(--duration-slow) var(--ease-out) both;
+  --motion-pop-in: pop-in var(--duration-normal) var(--ease-out) both;
+  --motion-pop: pop 420ms var(--ease-spring);
+  --motion-fade-in: fade-in var(--duration-normal) ease-out both;
+  /* Leaving moves are quicker than arriving ones: what goes away should
+     not keep the person waiting. They keep their last frame ("both") until
+     the component takes the element away (lib/presence.ts). */
+  --motion-pop-out: pop-out var(--duration-fast) ease-in both;
+  --motion-fade-out: fade-out var(--duration-normal) ease-in both;
+  --motion-sink-out: sink-out var(--duration-normal) ease-in both;
+  /* A window that covers the whole phone screen rises from the bottom
+     edge and goes back down there. */
+  --motion-rise-in: rise-in 420ms var(--ease-out) both;
+  --motion-drop-out: drop-out var(--duration-normal) ease-in both;
+  /* An icon that just got pressed: it squashes, jumps and settles. */
+  --motion-bounce: bounce 520ms var(--ease-out);
+  /* An icon that turns into another (play and pause). */
+  --motion-swap-in: swap-in var(--duration-normal) var(--ease-spring) both;
+
+  --header-height: 72px;
+  --tabbar-height: 68px;
+  --touch: 44px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background-color: var(--color-bg);
+  /* Two soft lights behind the glass, so translucent surfaces have something to show. */
+  background-image:
+    radial-gradient(60rem 40rem at 10% -10%, rgb(var(--color-accent-rgb) / 0.12), transparent 60%),
+    radial-gradient(50rem 40rem at 110% 110%, rgb(139 92 246 / 0.08), transparent 60%);
+  background-attachment: fixed;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  /* On Android a touched link or button flashes a gray or blue box: the
+     browser's own mark, not ours. Each piece shows its own press instead. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* On a phone, Safari zooms the whole page into a field whose letters are
+   smaller than 16px, as soon as it is touched, and leaves it zoomed. So
+   on touch screens every field writes at least at 16px. The :root makes
+   this win over the sizes the components set. */
+@media (pointer: coarse) {
+  :root
+    :is(input, textarea, select):not(
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="color"]
+    ) {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* Buttons and links change color softly, never with a jump, and a button
+   sinks a little under the finger or the mouse, then springs back. `scale`
+   is its own property, so it adds to a button's transform instead of
+   replacing it. A component that sets its own transition lists
+   `scale var(--duration-fast) var(--ease-out)` in it too. */
+:where(button, a, input, textarea, select) {
+  transition:
+    scale var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast),
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast),
+    color var(--duration-fast),
+    opacity var(--duration-fast);
+}
+
+:where(button:not(:disabled):active) {
+  scale: var(--press-scale);
+}
+
+/* With the browser's flash gone, a link under a finger fades a little, so
+   the touch is still felt. Cards (glow) stay still: a finger on a card is
+   mostly scrolling the page. The fade waits a moment, so a finger that
+   only passes by does not light anything up. */
+@media (hover: none) {
+  :where(a:not(.glow):active) {
+    opacity: 0.6;
+    transition-delay: 40ms;
+  }
+}
+
+/* The shared moves: something appearing rises a little and fades in; a
+   panel opening grows from slightly smaller; a pressed heart pops. */
+@keyframes enter {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+
+@keyframes pop {
+  40% {
+    scale: 1.25;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sink-out {
+  to {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    translate: 0 100%;
+  }
+}
+
+@keyframes drop-out {
+  to {
+    translate: 0 100%;
+  }
+}
+
+@keyframes bounce {
+  0% {
+    scale: 1;
+  }
+  20% {
+    scale: 0.82;
+  }
+  45% {
+    scale: 1.22;
+    rotate: -10deg;
+  }
+  70% {
+    scale: 0.96;
+    rotate: 3deg;
+  }
+  100% {
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+
+@keyframes swap-in {
+  from {
+    opacity: 0;
+    scale: 0.5;
+    rotate: -60deg;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* A glass panel: use it for cards, bars and menus that float above the page. */
+.glass {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+/* A card that lights up under the mouse, as in the old FranzPLAY: it keeps
+   its size and place, and a glass panel softly appears around all of it,
+   picture and words. The panel lies just outside the card, so nothing on
+   the page moves. */
+.glow {
+  position: relative;
+  isolation: isolate;
+}
+
+.glow::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border: var(--glass-border);
+  border-color: rgb(255 255 255 / 0.14);
+  border-radius: calc(var(--radius-m) + 6px);
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.03));
+  box-shadow:
+    var(--glass-highlight),
+    0 0 0 1px rgb(var(--color-accent-rgb) / 0.12),
+    0 12px 32px rgb(0 0 0 / 0.35),
+    0 0 28px rgb(var(--color-accent-rgb) / 0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .glow:hover::before,
+  .glow:focus-visible::before {
+    opacity: 1;
+  }
+}
+
+/* A list whose items come in one after the other: put it on the list. Only
+   the first few wait, so a long list never feels slow. */
+.stagger > * {
+  animation: var(--motion-enter);
+}
+
+.stagger > :nth-child(2) {
+  animation-delay: 35ms;
+}
+
+.stagger > :nth-child(3) {
+  animation-delay: 70ms;
+}
+
+.stagger > :nth-child(4) {
+  animation-delay: 105ms;
+}
+
+.stagger > :nth-child(5) {
+  animation-delay: 140ms;
+}
+
+.stagger > :nth-child(6) {
+  animation-delay: 175ms;
+}
+
+.stagger > :nth-child(n + 7) {
+  animation-delay: 210ms;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--color-surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* A page that rearranges itself (theater mode, morph in lib/motion.ts)
+   glides from the old look to the new one, gently at both ends. */
+::view-transition-group(*) {
+  animation-duration: var(--duration-slow);
+  animation-timing-function: var(--ease-in-out);
+}
+
+/* For whoever asked their device for less motion: everything still works,
+   it just happens at once. Components take their timings and animations
+   from the variables above, so changing them here is enough. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 1ms;
+    --duration-normal: 1ms;
+    --duration-slow: 1ms;
+    --motion-enter: none;
+    --motion-pop-in: none;
+    --motion-pop: none;
+    --motion-fade-in: none;
+    --motion-pop-out: none;
+    --motion-fade-out: none;
+    --motion-sink-out: none;
+    --motion-rise-in: none;
+    --motion-drop-out: none;
+    --motion-bounce: none;
+    --motion-swap-in: none;
+  }
+}

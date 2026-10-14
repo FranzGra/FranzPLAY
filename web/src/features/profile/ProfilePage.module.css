@@ -1,0 +1,262 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--color-accent-light), var(--color-accent));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 6px 20px rgb(var(--color-accent-rgb) / 0.3);
+  color: var(--color-on-accent);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.upload:hover {
+  color: var(--color-on-accent);
+  filter: brightness(1.08);
+}
+
+.upload:disabled {
+  opacity: 0.45;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: -16px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 16px;
+  color: var(--color-text);
+}
+
+/* The rows that are buttons look like the ones that are links. */
+button.row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+.row:hover {
+  color: var(--color-text);
+  background: rgb(255 255 255 / 0.05);
+}
+
+.chevron {
+  color: var(--color-text-muted);
+}
+
+.version {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.role {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.signOut {
+  align-self: flex-start;
+  height: var(--touch);
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.signOut:hover {
+  background: var(--glass-bg-strong);
+}
+
+.signOutError {
+  margin: -12px 0 0;
+  font-size: 13px;
+  color: var(--color-danger);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border-radius: var(--radius-l);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.field input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.formProblem {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.formButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.save {
+  height: var(--touch);
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.save:disabled {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.formNote {
+  margin: -6px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.danger {
+  align-self: flex-start;
+  height: var(--touch);
+  padding: 0 20px;
+  border: 1px solid var(--color-danger-bg);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.danger:hover {
+  background: var(--color-danger-bg);
+}
+
+.dangerForm {
+  border-color: var(--color-danger-bg);
+}
+
+.dangerText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dangerSave {
+  height: var(--touch);
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger-strong);
+  color: var(--color-on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dangerSave:disabled {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.fileInput {
+  display: none;
+}
+
+.photoButtons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-top: 6px;
+}
+
+.link {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--color-accent-hover);
+}

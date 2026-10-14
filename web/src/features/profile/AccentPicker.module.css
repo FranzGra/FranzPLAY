@@ -1,0 +1,116 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: var(--radius-l);
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--touch), 1fr));
+  gap: 10px;
+}
+
+.swatch {
+  width: var(--touch);
+  height: var(--touch);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    transform var(--duration-normal) var(--ease-spring),
+    scale var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast);
+}
+
+.swatch:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+/* The chosen color pops into place. */
+.swatch[aria-pressed="true"] {
+  animation: var(--motion-pop);
+}
+
+.swatch[aria-pressed="true"] {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 3px var(--color-bg) inset;
+}
+
+.swatch:disabled {
+  cursor: default;
+}
+
+.custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.customLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.customInput {
+  width: var(--touch);
+  height: var(--touch);
+  padding: 0;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: none;
+  cursor: pointer;
+}
+
+.customInput::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.customInput::-webkit-color-swatch {
+  border: 0;
+  border-radius: var(--radius-pill);
+}
+
+.customInput::-moz-color-swatch {
+  border: 0;
+  border-radius: var(--radius-pill);
+}
+
+.customChosen {
+  border-color: var(--color-text);
+}
+
+.save {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.problem {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-danger);
+}
