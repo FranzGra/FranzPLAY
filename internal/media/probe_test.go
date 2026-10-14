@@ -97,6 +97,29 @@ func TestProberSavesWhatFFprobeFound(t *testing.T) {
 	}
 }
 
+// TestProberLeavesOutVideosTooShort: once its length is known, a video of
+// the folders shorter than the administrator's minimum is not shown.
+func TestProberLeavesOutVideosTooShort(t *testing.T) {
+	db, id := catalog(t, "/videos", "anteprima.mp4")
+	if _, err := db.Exec(`INSERT INTO settings (key, value) VALUES ('library.min_duration', '20')`); err != nil {
+		t.Fatal(err)
+	}
+	var args []string
+	p := NewProber(db, "ffprobe")
+	p.run = fakeRun(`{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2","duration":"10.0"},
+		"streams":[{"codec_type":"video","codec_name":"h264","width":640,"height":360,"pix_fmt":"yuv420p"}]}`, nil, &args)
+	if err := p.Handle(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	var visible bool
+	if err := db.QueryRow(`SELECT visible FROM videos WHERE id = ?`, id).Scan(&visible); err != nil {
+		t.Fatal(err)
+	}
+	if visible {
+		t.Error("a 10 s video is shown with a minimum of 20 s")
+	}
+}
+
 func TestProberFailures(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -28,7 +28,7 @@ export function VideoTable({ videos }: { videos: AdminVideo[] }) {
             return (
               <tr key={video.id}>
                 <th scope="row" className={styles.tableTitle}>
-                  {video.hidden || video.missing ? (
+                  {video.hidden || video.missing || video.tooShort ? (
                     video.title
                   ) : (
                     <Link to={`/video/${video.id}`}>{video.title}</Link>
@@ -62,6 +62,7 @@ function formatText(video: AdminVideo): string {
 function stateText(video: AdminVideo): string {
   if (video.missing) return "Non trovato";
   if (video.hidden) return "Nascosto";
+  if (video.tooShort) return "Troppo corto";
   if (video.duration === null) return "Da leggere";
   return "Visibile";
 }

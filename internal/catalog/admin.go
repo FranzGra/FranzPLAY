@@ -34,6 +34,9 @@ type AdminVideo struct {
 	Path    string `json:"path"`   // inside the folder, with "/"
 	Hidden  bool   `json:"hidden"`
 	Missing bool   `json:"missing"` // not found at the last scan
+	// TooShort: shorter than the minimum the administrator chose for the
+	// video folders, so nobody sees it.
+	TooShort bool `json:"tooShort"`
 	// What FranzPLAY found by itself, shown when the administrator
 	// changes title or category, to put it back.
 	FoundTitle    string `json:"foundTitle"`
@@ -62,6 +65,7 @@ const (
 	allVideos     adminFilter = ""
 	hiddenVideos  adminFilter = "hidden"
 	missingVideos adminFilter = "missing"
+	shortVideos   adminFilter = "short"
 )
 
 // AdminRoutes adds the administrator's video API to mux:
@@ -141,7 +145,7 @@ func parseAdminQuery(values url.Values) (listQuery, adminFilter, error) {
 	}
 	q.category = ""
 	switch f := adminFilter(values.Get("show")); f {
-	case allVideos, hiddenVideos, missingVideos:
+	case allVideos, hiddenVideos, missingVideos, shortVideos:
 		return q, f, nil
 	default:
 		return listQuery{}, "", fmt.Errorf(`%w: show must be "hidden" or "missing"`, errBadQuery)
@@ -226,6 +230,8 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		where = `v.hidden_at IS NOT NULL`
 	case missingVideos:
 		where = `v.missing_since IS NOT NULL`
+	case shortVideos:
+		where = `v.too_short`
 	}
 	for _, w := range q.words {
 		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
@@ -236,7 +242,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		return nil, 0, fmt.Errorf("count videos: %w", err)
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL,
+		SELECT `+videoColumns+`, l.path, v.path, v.hidden_at IS NOT NULL, v.missing_since IS NOT NULL, v.too_short,
 		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
 		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL,
 		       v.own_cover IS NOT NULL, v.cover_second, v.own_clip IS NOT NULL, v.no_clip,
@@ -253,7 +259,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		var av AdminVideo
 		var ownCover, ownClip, noClip bool
 		var second sql.NullInt64
-		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing,
+		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing, &av.TooShort,
 			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second, &ownClip, &noClip,
 			&av.VideoCodec, &av.AudioCodec, &av.HasCopy}})
 		if err != nil {

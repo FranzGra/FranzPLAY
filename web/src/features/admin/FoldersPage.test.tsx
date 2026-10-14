@@ -34,7 +34,15 @@ function scan(overrides: Record<string, unknown> = {}) {
 }
 
 function overview(overrides: Record<string, unknown> = {}) {
-  return { scanning: false, interval: 60, lastScan: scan(), folders: [folder()], ...overrides };
+  return {
+    scanning: false,
+    interval: 60,
+    lastScan: scan(),
+    folders: [folder()],
+    minDuration: 0,
+    tooShort: 0,
+    ...overrides,
+  };
 }
 
 describe("describeChanges", () => {
@@ -131,5 +139,52 @@ describe("folders page", () => {
     act(() => FakeEventSource.last?.emit("scan"));
     expect(await screen.findByRole("button", { name: "Controlla adesso" })).toBeEnabled();
     expect(screen.getByRole("region", { name: "Ultimo controllo" })).toHaveTextContent("1 nuovo");
+  });
+
+  it("leaves out the videos too short, and brings them back", async () => {
+    stubEventSource();
+    let library = overview();
+    const { user, server } = renderApp("/admin/cartelle", {
+      ...signedIn(),
+      "GET /api/library": () => new Response(JSON.stringify(library)),
+      "PUT /api/library/min-duration": () => {
+        library = overview({ minDuration: 20, tooShort: 37 });
+        return new Response(null, { status: 204 });
+      },
+    });
+    const form = await screen.findByRole("form", { name: "Video troppo corti" });
+    const save = within(form).getByRole("button", { name: "Salva" });
+    expect(save).toBeDisabled();
+    expect(within(form).queryByRole("spinbutton")).not.toBeInTheDocument();
+
+    await user.click(within(form).getByRole("checkbox", { name: "Escludi i video più corti di" }));
+    const seconds = within(form).getByRole("spinbutton", { name: "Secondi" });
+    expect(seconds).toHaveValue(10);
+    await user.clear(seconds);
+    await user.type(seconds, "20");
+    await user.click(save);
+
+    const put = server.requests.find((r) => r.method === "PUT");
+    expect(await put?.json()).toEqual({ seconds: 20 });
+    expect(
+      await screen.findByText(/37 video non si vedono perché durano meno di 20 secondi/),
+    ).toBeInTheDocument();
+  });
+
+  it("refuses a minimum out of range", async () => {
+    const { user, server } = renderApp("/admin/cartelle", {
+      ...signedIn(),
+      "GET /api/library": { body: overview({ minDuration: 10, tooShort: 1 }) },
+    });
+    const form = await screen.findByRole("form", { name: "Video troppo corti" });
+    expect(within(form).getByRole("status")).toHaveTextContent(
+      "1 video non si vede perché dura meno di 10 secondi",
+    );
+    const seconds = within(form).getByRole("spinbutton", { name: "Secondi" });
+    await user.clear(seconds);
+    await user.type(seconds, "9999");
+    await user.click(within(form).getByRole("button", { name: "Salva" }));
+    expect(await within(form).findByRole("alert")).toHaveTextContent("tra 1 e 600");
+    expect(server.requests.some((r) => r.method === "PUT")).toBe(false);
   });
 });
