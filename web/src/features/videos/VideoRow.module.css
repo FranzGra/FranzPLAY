@@ -202,9 +202,9 @@
   /* Room around the cards for their glow under the mouse: a row that
      scrolls sideways would otherwise cut it. The negative margin keeps the
      cards where they were. */
-  margin: -10px -10px 0;
-  padding: 10px 10px 16px;
-  scroll-padding-inline: 10px;
+  margin: -14px -14px 0;
+  padding: 14px 14px 20px;
+  scroll-padding-inline: 14px;
   list-style: none;
   overflow-x: auto;
   scroll-snap-type: x mandatory;

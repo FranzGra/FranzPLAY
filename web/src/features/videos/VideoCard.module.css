@@ -10,6 +10,13 @@
   color: var(--color-text);
 }
 
+/* In a grid the glow under the mouse reaches a little further beside and
+   below the text than above the cover, so the title and the details do not
+   touch its edge. Only the glow grows: the card at rest stays where it was. */
+.root[data-layout="grid"]::before {
+  inset: calc(-1 * var(--glow-gap)) -12px -14px;
+}
+
 .cover {
   position: relative;
   aspect-ratio: 16 / 9;
