@@ -24,6 +24,8 @@ import {
   pickAudio,
   skipSeconds,
   tapZone,
+  wheelStep,
+  wheelVolume,
 } from "./controls";
 import styles from "./Player.module.css";
 import { SettingsMenu } from "./SettingsMenu";
@@ -198,6 +200,7 @@ export function Player({
 }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
+  const volumeBox = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(false);
   const [time, setTime] = useState(0);
@@ -623,6 +626,31 @@ export function Player({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [run]);
 
+  // The mouse wheel over the volume turns it up or down in small steps,
+  // and does not scroll the page. React listens to the wheel without the
+  // right to stop the page, so the listener is added by hand.
+  useEffect(() => {
+    const box = volumeBox.current;
+    if (!box) return;
+    let rest = 0;
+    const onWheel = (event: WheelEvent) => {
+      const v = video.current;
+      if (!v) return;
+      event.preventDefault();
+      const turn = wheelVolume(rest, event.deltaY, event.deltaMode);
+      rest = turn.rest;
+      if (turn.steps === 0) return;
+      const from = v.muted ? 0 : v.volume;
+      const next = clampVolume(from + turn.steps * wheelStep);
+      v.volume = next; // right away: the next notch may come before React
+      setVolume(next);
+      setMuted(next === 0);
+      setSilenced(false);
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, []);
+
   // On a touch screen a tap shows the controls and a double tap on the
   // sides jumps; with a mouse a click plays or pauses.
   function onSurfacePointerUp(event: PointerEvent<HTMLDivElement>) {
@@ -930,7 +958,7 @@ export function Player({
           >
             <Icon name="forward15" size={26} />
           </button>
-          <div className={styles.volume}>
+          <div ref={volumeBox} className={styles.volume}>
             <button
               type="button"
               className={styles.button}

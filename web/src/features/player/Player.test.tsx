@@ -214,6 +214,26 @@ describe("player", () => {
     expect(container.querySelector("video")?.volume).toBe(0.35);
   });
 
+  it("turns the volume with the mouse wheel, in steps of 5 %, without scrolling the page", () => {
+    const { video } = setup();
+    const slider = screen.getByRole("slider", { name: "Volume" });
+    fireEvent.change(slider, { target: { value: "0.5" } });
+    const wheel = (deltaY: number) => {
+      const event = new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true });
+      act(() => {
+        slider.dispatchEvent(event);
+      });
+      return event;
+    };
+    expect(wheel(100).defaultPrevented).toBe(true);
+    wheel(100);
+    expect(video.volume).toBe(0.4);
+    expect(slider).toHaveValue("0.4");
+    for (let i = 0; i < 20; i++) wheel(-100);
+    expect(video.volume).toBe(1);
+    expect(slider).toHaveValue("1");
+  });
+
   it("shows where the video is on the timeline", () => {
     const { video } = setup();
     video.currentTime = 62;
