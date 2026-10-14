@@ -63,9 +63,15 @@ export function HomePage() {
       {categories.length > 0 && (
         <CategoryChips categories={categories} chosen={category} onChoose={setCategory} />
       )}
-      {category === "" && layout.ready && (
+      {category === "" && (
         <SectionsContext.Provider value={layout.look.sections}>
-          <div className={`stagger ${styles.sections}`}>
+          {/* The rows load their videos at once, together with the layout,
+              but show only when it is known: a closed row does not flash
+              open. */}
+          <div
+            className={`stagger ${styles.sections}`}
+            style={layout.ready ? undefined : { display: "none" }}
+          >
             <ContinueRow fold={layout.fold("continue")} />
             <SavedRow fold={layout.fold("saved")} />
             <LikedRow fold={layout.fold("liked")} />

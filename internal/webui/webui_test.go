@@ -155,3 +155,50 @@ func TestHandlerZipsBuiltCode(t *testing.T) {
 		})
 	}
 }
+
+func TestHandlerSendsPrecompressedCopies(t *testing.T) {
+	files := testFiles()
+	files["assets/app-1a.js.br"] = &fstest.MapFile{Data: []byte("BROTLI")}
+	files["assets/app-1a.js.gz"] = &fstest.MapFile{Data: []byte("GZIP")}
+	files["assets/only-gz-1a.css"] = &fstest.MapFile{Data: []byte("body{}")}
+	files["assets/only-gz-1a.css.gz"] = &fstest.MapFile{Data: []byte("GZIPCSS")}
+
+	tests := []struct {
+		name, target, accept, wantCoding, wantBody, wantType string
+	}{
+		{"brotli first", "/assets/app-1a.js", "gzip, deflate, br", "br", "BROTLI", "text/javascript"},
+		{"brotli in any case", "/assets/app-1a.js", "BR;q=1.0", "br", "BROTLI", "text/javascript"},
+		{"gzip when brotli refused", "/assets/app-1a.js", "gzip, br;q=0", "gzip", "GZIP", "text/javascript"},
+		{"gzip only", "/assets/app-1a.js", "gzip", "gzip", "GZIP", "text/javascript"},
+		{"no copy in brotli", "/assets/only-gz-1a.css", "br, gzip", "gzip", "GZIPCSS", "text/css"},
+		{"plain for old browsers", "/assets/app-1a.js", "", "", "console.log(1)", "text/javascript"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.target, nil)
+			if tt.accept != "" {
+				req.Header.Set("Accept-Encoding", tt.accept)
+			}
+			rec := httptest.NewRecorder()
+			Handler(files, slog.New(slog.NewTextHandler(io.Discard, nil))).ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			if got := rec.Header().Get("Content-Encoding"); got != tt.wantCoding {
+				t.Errorf("Content-Encoding = %q, want %q", got, tt.wantCoding)
+			}
+			if got := rec.Body.String(); got != tt.wantBody {
+				t.Errorf("body = %q, want %q", got, tt.wantBody)
+			}
+			if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, tt.wantType) {
+				t.Errorf("Content-Type = %q, want %s", got, tt.wantType)
+			}
+			if got := rec.Header().Get("Vary"); got != "Accept-Encoding" {
+				t.Errorf("Vary = %q, want Accept-Encoding", got)
+			}
+			if got := rec.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+				t.Errorf("Cache-Control = %q", got)
+			}
+		})
+	}
+}

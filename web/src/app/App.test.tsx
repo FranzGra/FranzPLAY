@@ -24,9 +24,12 @@ describe("navigation", () => {
 
     await user.click(within(tabbar).getByRole("link", { name: "Profilo" }));
 
-    expect(within(tabbar).getByRole("link", { name: "Profilo" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    // The profile's code arrives on its own, the first time it is opened.
+    await waitFor(() =>
+      expect(within(tabbar).getByRole("link", { name: "Profilo" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      ),
     );
     expect(within(tabbar).getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current");
   });
@@ -153,7 +156,8 @@ describe("navigation", () => {
 
     it("lets the new page rise softly into place", async () => {
       await goToProfile();
-      expect(animate).toHaveBeenCalledTimes(1);
+      // The new page moves once its code has arrived.
+      await waitFor(() => expect(animate).toHaveBeenCalledTimes(1));
       expect(animate).toHaveBeenCalledWith(
         [
           { opacity: 0, translate: "0 10px" },
@@ -193,7 +197,7 @@ describe("search", () => {
   it("goes to the search page with the typed text", async () => {
     const { user } = renderApp("/");
     await user.type(await screen.findByRole("searchbox"), "  vacanze  {Enter}");
-    expect(screen.getByText("Nessun video trovato per «vacanze».")).toBeInTheDocument();
+    expect(await screen.findByText("Nessun video trovato per «vacanze».")).toBeInTheDocument();
   });
 
   it("does nothing when the search box is empty", async () => {

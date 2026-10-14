@@ -59,7 +59,10 @@ func Handler(files fs.FS, logger *slog.Logger) http.Handler {
 				if compressible(name) {
 					// Caches between here and the browser must keep both versions apart.
 					w.Header().Add("Vary", "Accept-Encoding")
-					if acceptsGzip(r) {
+					if servePrecompressed(w, r, files, name, logger) {
+						return
+					}
+					if accepts(r, "gzip") {
 						err := zipped.serve(w, r, name, logger)
 						if err == nil {
 							return
@@ -118,19 +121,64 @@ func compressible(name string) bool {
 	return false
 }
 
-// acceptsGzip reports whether the browser can read zipped files.
-// Every browser in use today says so.
-func acceptsGzip(r *http.Request) bool {
+// accepts reports whether the browser can read files compressed with coding
+// ("gzip" or "br"). Every browser in use today reads both.
+func accepts(r *http.Request, coding string) bool {
 	for _, part := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
-		coding, params, _ := strings.Cut(strings.TrimSpace(part), ";")
-		if strings.EqualFold(strings.TrimSpace(coding), "gzip") {
+		got, params, _ := strings.Cut(strings.TrimSpace(part), ";")
+		if strings.EqualFold(strings.TrimSpace(got), coding) {
 			return strings.ReplaceAll(params, " ", "") != "q=0"
 		}
 	}
 	return false
 }
 
-// gzipCache keeps a zipped copy of each built file, made the first time a
+// precompressed lists the copies the build writes next to each file
+// ("make web" makes them), best first: brotli is about 15% smaller than gzip.
+var precompressed = []struct{ coding, ext string }{
+	{"br", ".br"},
+	{"gzip", ".gz"},
+}
+
+// servePrecompressed sends the best copy of name, compressed at build time,
+// that the browser can read. It reports false when there is none, so the
+// caller compresses or sends the plain file instead.
+func servePrecompressed(w http.ResponseWriter, r *http.Request, files fs.FS, name string, logger *slog.Logger) bool {
+	for _, p := range precompressed {
+		if !accepts(r, p.coding) || !isFile(files, name+p.ext) {
+			continue
+		}
+		data, err := fs.ReadFile(files, name+p.ext)
+		if err != nil {
+			logger.ErrorContext(r.Context(), "read compressed interface file", "file", name+p.ext, "error", err)
+			continue
+		}
+		send(w, r, name, p.coding, data, logger)
+		return true
+	}
+	return false
+}
+
+// send writes data, the content of name compressed with coding.
+func send(w http.ResponseWriter, r *http.Request, name, coding string, data []byte, logger *slog.Logger) {
+	h := w.Header()
+	if ct := mime.TypeByExtension(path.Ext(name)); ct != "" {
+		h.Set("Content-Type", ct)
+	}
+	h.Set("Content-Encoding", coding)
+	h.Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if _, err := w.Write(data); err != nil {
+		// The status is already sent: a failed write only means the browser left.
+		logger.DebugContext(r.Context(), "write interface file", "file", name, "error", err)
+	}
+}
+
+// gzipCache keeps a zipped copy of each built file that has none from the
+// build (an interface built without the precompress step), made the first time a
 // browser asks for it. The interface code shrinks to about a third, so pages
 // open faster on a phone or away from home; zipping once keeps the work off
 // the Raspberry's processor for every later visit.
@@ -175,19 +223,6 @@ func (c *gzipCache) serve(w http.ResponseWriter, r *http.Request, name string, l
 	if err != nil {
 		return err
 	}
-	h := w.Header()
-	if ct := mime.TypeByExtension(path.Ext(name)); ct != "" {
-		h.Set("Content-Type", ct)
-	}
-	h.Set("Content-Encoding", "gzip")
-	h.Set("Content-Length", strconv.Itoa(len(z)))
-	w.WriteHeader(http.StatusOK)
-	if r.Method == http.MethodHead {
-		return nil
-	}
-	if _, err := w.Write(z); err != nil {
-		// The status is already sent: a failed write only means the browser left.
-		logger.DebugContext(r.Context(), "write interface file", "file", name, "error", err)
-	}
+	send(w, r, name, "gzip", z, logger)
 	return nil
 }

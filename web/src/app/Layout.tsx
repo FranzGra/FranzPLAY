@@ -1,4 +1,12 @@
-import { type FormEvent, type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type RefObject,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { avatarUrl } from "../api/auth";
 import { fetchPlaylists, onPlaylistsChanged, type Playlist, playlistName } from "../api/playlists";
@@ -7,6 +15,8 @@ import { Icon } from "../components/Icon";
 import { SiteName } from "../components/SiteName";
 import { useAccount } from "./auth";
 import styles from "./Layout.module.css";
+import { preloadLikelyPages } from "./lazyPages";
+import { PageLoading } from "./PageLoading";
 import { type PageWidth, PageWidthContext } from "./pageWidth";
 
 // sideLinks are the first links of the side menu; the channel is mine.
@@ -59,6 +69,8 @@ export function Layout() {
   const [query, setQuery] = useState("");
   const page = useRef<HTMLDivElement>(null);
   useEnterOnNavigate(page);
+  // Once the first page shows, fetch the code of the pages opened most often.
+  useEffect(preloadLikelyPages, []);
   const { pathname } = useLocation();
   const currentTab = tabFor(pathname);
   // On a video's page the side menu hides, like on YouTube: the player and
@@ -167,7 +179,9 @@ export function Layout() {
         <main className={styles.main}>
           <div ref={page} className={styles.page}>
             <PageWidthContext.Provider value={setWidth}>
-              <Outlet />
+              <Suspense fallback={<PageLoading />}>
+                <Outlet />
+              </Suspense>
             </PageWidthContext.Provider>
           </div>
         </main>
