@@ -80,7 +80,7 @@ export const doubleTapWithin = 300;
 // doubleClickWithin is how long a click of the mouse waits before playing
 // or pausing: if a second click comes first, it was a double click, which
 // only goes full screen.
-export const doubleClickWithin = 250;
+export const doubleClickWithin = 200;
 // slowDoubleClick is the longest double click computers allow by default.
 const slowDoubleClick = 500;
 
