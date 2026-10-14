@@ -149,12 +149,31 @@ describe("save button", () => {
     });
   });
 
-  it("stays a small panel by the button on a computer", async () => {
+  it("stays a small panel by the button on a computer, above everything", async () => {
     const { user } = setup({ "GET /api/playlists": { body: [later] } });
-    await user.click(screen.getByRole("button", { name: "Salva" }));
+    const button = screen.getByRole("button", { name: "Salva" });
+    button.getBoundingClientRect = () => new DOMRect(100, 50, 90, 40);
+    await user.click(button);
     const panel = screen.getByRole("dialog", { name: "Salva in una playlist" });
     expect(panel).not.toHaveAttribute("aria-modal");
-    expect(panel.parentElement).not.toBe(document.body);
     expect(screen.queryByRole("button", { name: "Fatto" })).not.toBeInTheDocument();
+    // It lives in the page's body, so the videos on the right cannot cover
+    // it, and it hangs just under the button.
+    expect(panel.parentElement).toBe(document.body);
+    expect(panel.style.left).toBe("100px");
+    expect(panel.style.top).toBe("98px");
+    expect(screen.getByRole("button", { name: "Chiudi" })).toHaveFocus();
+  });
+
+  it("opens above the button when there is no room under it", async () => {
+    const { user } = setup({ "GET /api/playlists": { body: [later] } });
+    const button = screen.getByRole("button", { name: "Salva" });
+    const top = window.innerHeight - 200;
+    button.getBoundingClientRect = () => new DOMRect(100, top, 90, 40);
+    await user.click(button);
+    const panel = screen.getByRole("dialog", { name: "Salva in una playlist" });
+    expect(panel).toHaveAttribute("data-above");
+    expect(panel.style.bottom).toBe("208px");
+    expect(panel.style.top).toBe("");
   });
 });
