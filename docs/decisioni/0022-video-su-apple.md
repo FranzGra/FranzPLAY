@@ -4,7 +4,7 @@
 
 ## Il problema
 
-Francesco vuole che FranzPLAY apra tutto, come VLC. Su iPhone, iPad e Mac però molti video non
+FranzPLAY deve aprire tutto, come VLC. Su iPhone, iPad e Mac però molti video non
 partivano, soprattutto i `.mkv`.
 
 Il motivo: FranzPLAY decideva se un video "va su tutti i browser" guardando Chrome e Firefox.

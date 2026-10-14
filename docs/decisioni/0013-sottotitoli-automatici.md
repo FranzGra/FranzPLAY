@@ -6,8 +6,8 @@
 
 Il vecchio FranzPLAY sapeva **scrivere i sottotitoli da solo**: ascoltava l'audio di un video con
 Whisper (un programma che trasforma la voce in testo) e poi li **traduceva** in altre lingue con
-LibreTranslate (un traduttore che gira in casa, senza internet). Francesco vuole che il nuovo lo
-sappia fare ancora: nessuna funzione del vecchio si perde.
+LibreTranslate (un traduttore che gira in casa, senza internet). Il nuovo lo deve
+saper fare ancora: nessuna funzione del vecchio si perde.
 
 Però il vecchio lo faceva con due contenitori Python in più, pesanti: fino a 3 GB di memoria per
 Whisper e 2 GB per il traduttore. Il nuovo deve restare un programma solo e girare su un Raspberry

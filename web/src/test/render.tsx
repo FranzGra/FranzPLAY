@@ -6,7 +6,7 @@ import { App } from "../app/App";
 
 export const testAccount: Account = {
   id: 1,
-  name: "Francesco",
+  name: "Paolo",
   role: "admin",
   canUpload: true,
   uploadQuota: 10737418240,
@@ -58,7 +58,7 @@ export const emptyLibrary: Routes = {
   "GET /api/site": { body: { nameFirst: "Franz", nameSecond: "PLAY", color: "#2997ff" } },
 };
 
-// signedIn are the routes of a server where Francesco is logged in.
+// signedIn are the routes of a server where Paolo is logged in.
 export function signedIn(account: Account = testAccount): Routes {
   return { ...emptyLibrary, "GET /api/me": { body: account } };
 }

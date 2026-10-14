@@ -5,7 +5,7 @@ const waiting = {
   id: 1,
   note: "Nonna Maria",
   canUpload: false,
-  createdBy: "Francesco",
+  createdBy: "Paolo",
   createdAt: "2026-10-12T10:00:00Z",
   expiresAt: "2026-10-19T10:00:00Z",
   status: "waiting",

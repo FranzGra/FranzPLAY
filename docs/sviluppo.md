@@ -1,8 +1,8 @@
 # FranzPLAY: istruzioni per chi lavora al progetto
 
-Questo file lo legge per primo chiunque lavori a FranzPLAY, persona o IA.
+Questo file lo legge per primo chiunque lavori a FranzPLAY.
 La visione completa (cosa, per chi, funzioni e priorità, decisioni prese) è in
-[`docs/visione.md`](docs/visione.md): leggila prima di proporre funzioni o cambiare architettura.
+[`docs/visione.md`](visione.md): leggila prima di proporre funzioni o cambiare architettura.
 
 ## In breve
 
@@ -17,15 +17,12 @@ Deve girare bene su un **Raspberry Pi 4 con 2 GB** di RAM.
 - Tempo reale: **SSE** (il server avvisa il browser), niente WebSocket.
 - Video: **ffmpeg / ffprobe**, lanciati solo dal programma.
 
-## Lavorare con Francesco
+## Come si lavora
 
-Francesco sta imparando Go e il modo moderno di scrivere software costruendo FranzPLAY.
-
-- **Spiega prima di scrivere**: cosa stai per fare e perché, in **italiano semplice**, con pochi
-  termini tecnici. Ogni termine nuovo si spiega la prima volta che compare.
+- **Spiegare prima di scrivere**: ogni pull request dice cosa cambia e perché, in **italiano
+  semplice**, con pochi termini tecnici. Ogni termine nuovo si spiega la prima volta che compare.
 - **Passi piccoli**: una pull request = una cosa sola, con i suoi test.
 - **Qualità prima della velocità**: codice ordinato, pensato, pulito e testato. Niente fretta.
-- Quando ha senso, proponi a Francesco un **piccolo esercizio** su un pezzo vero del progetto.
 - La soluzione **più semplice che funziona**; si complica solo quando serve davvero.
 
 ## Le regole che non si discutono
@@ -99,7 +96,7 @@ web/src/styles/       colori, misure e caratteri, tutti in un posto solo (variab
 - **Niente dati finti** nell'interfaccia: una pagina senza dati mostra uno stato vuoto che spiega
   cosa comparirà.
 - Sul telefono la barra in basso ha **quattro tasti**: Home, Categorie, Playlist, Profilo
-  (Categorie aggiunta da Francesco il 13 ottobre 2026).
+  (Categorie aggiunta il 13 ottobre 2026).
   "Carica un video" sta nella pagina Profilo. Non esistono iscrizioni ai canali.
 - Stili con **CSS Modules** (`Nome.module.css` accanto al componente) e i colori solo da
   `styles/global.css`. Per un pannello di vetro si usa la classe `glass`.
@@ -113,8 +110,8 @@ web/src/styles/       colori, misure e caratteri, tutti in un posto solo (variab
 
 ## Convenzioni
 
-- **Lingua**: codice, nomi e commenti nel codice in **inglese**. Documenti per Francesco e
-  conversazioni in **italiano semplice**.
+- **Lingua**: codice, nomi e commenti nel codice in **inglese**. Documenti in **italiano
+  semplice**.
 - **Formattazione**: `make fmt` (gofmt + goimports). Non si discute di spazi.
 - **Test**: accanto al codice (`xxx_test.go`), a tabella quando ci sono più casi.
   Ogni bug corretto riceve prima un test che lo riproduce.
@@ -142,7 +139,7 @@ make docker  # costruisce l'immagine Docker e la prova davvero (docker/smoke-tes
 ```
 
 **Docker** è il modo di installare FranzPLAY: `Dockerfile`, `compose.yaml` e `.env.example` nella
-cartella principale, guida in [`docs/docker.md`](docs/docker.md). Una variabile `FRANZPLAY_*`
+cartella principale, guida in [`docs/docker.md`](docker.md). Una variabile `FRANZPLAY_*`
 nuova va anche in `.env.example` (e in `compose.yaml` se chi installa deve poterla cambiare).
 
 Impostazioni:

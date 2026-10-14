@@ -1,7 +1,7 @@
 # FranzPLAY: la visione
 
 > Il documento completo su cosa stiamo costruendo, per chi e con quali regole.
-> Le istruzioni di lavoro brevi sono in [`CLAUDE.md`](../CLAUDE.md). Le parti segnate con ❓ sono
+> Le regole di lavoro brevi sono in [`docs/sviluppo.md`](sviluppo.md). Le parti segnate con ❓ sono
 > decisioni ancora aperte (elenco nella sezione 13).
 
 ---
@@ -24,12 +24,10 @@ riprendere da dove lo si era lasciato. Esattamente come su YouTube.
   né la sua community.
 - **FranzPLAY** sta in mezzo: la semplicità di YouTube, sul tuo computer, con i tuoi file.
 
-### I due scopi del progetto
+### Un codice che si capisce
 
-1. **Il prodotto**: lo YouTube personale descritto sopra.
-2. **Imparare**: Francesco usa il progetto per imparare Go e il modo moderno di scrivere software,
-   costruendolo insieme all'IA. Quindi il codice deve essere **chiaro e spiegabile**, non solo
-   funzionante (vedi sezione 10).
+Il codice deve essere **chiaro e spiegabile**, non solo funzionante (vedi sezione 10): chiunque
+lo apra deve poter capire cosa fa e perché.
 
 ---
 
@@ -366,22 +364,17 @@ Vengono dall'audit della versione vecchia: ognuna esiste perché lì è successo
 ### Lingua
 
 ✅ **Deciso (12/10/2026)**: il codice e i commenti nel codice sono in **inglese**. La documentazione
-per Francesco e le conversazioni restano in **italiano semplice**.
+resta in **italiano semplice**.
 
 ---
 
-## 11. Come lavoriamo insieme (Francesco + IA)
+## 11. Come si lavora al progetto
 
-Questo è anche un percorso di studio. Per questo:
-
-- **L'IA spiega prima di scrivere**: cosa sta per fare e perché, in parole semplici, con pochi
-  termini tecnici. Ogni termine nuovo viene spiegato la prima volta che compare.
+- **Spiegare prima di scrivere**: ogni modifica dice cosa cambia e perché, in parole semplici, con
+  pochi termini tecnici.
 - **Passi piccoli**: una funzione alla volta, ognuna con i suoi test. Niente modifiche giganti.
-- **Francesco scrive dei pezzi da solo**: per ogni tappa, l'IA propone un piccolo esercizio su un
-  pezzo vero del progetto (es. "scrivi la funzione che decide se un video è stato visto tutto"),
-  poi lo rivede insieme a lui.
-- **I test controllano l'IA**: se l'IA sbaglia, un test lo deve scoprire. Il codice che nessuno
-  capisce non entra.
+- **I test controllano il codice**: se qualcosa è sbagliato, un test lo deve scoprire. Il codice che
+  nessuno capisce non entra.
 - **Prima la versione semplice**: si sceglie sempre la soluzione più semplice che funziona;
   si complica solo quando serve davvero.
 
@@ -414,9 +407,8 @@ Questo è anche un percorso di studio. Per questo:
 - **Niente iscrizioni ai canali**: gli utenti sono pochi. Restano cronologia, categorie, il mio
   canale e le mie playlist.
 - **Sul telefono, quattro tasti in basso**: Home, Categorie, Playlist, Profilo (Categorie
-  aggiunta il 13 ottobre 2026, su richiesta di Francesco). Il tasto "Carica un video" sta nella
+  aggiunta il 13 ottobre 2026). Il tasto "Carica un video" sta nella
   pagina del profilo, non nella barra.
-- Proposta grafica: https://claude.ai/artifact/TRM8naidqDGSB8qjMGjUyT
 - **Veloce anche su telefoni economici** e connessioni lente.
 - Prima di scrivere il codice di una pagina, si disegna com'è fatta e la si approva insieme.
 
@@ -429,7 +421,7 @@ Questo è anche un percorso di studio. Per questo:
 | ✅ A | Per chi è | **Deciso**: la persona a casa che condivide con familiari e amici. Il creator è solo un esempio d'uso. |
 | ✅ B | Interfaccia | **Deciso**: rifatta da zero in React + TypeScript, stile minimale alla Apple, simile alla vecchia ma migliore. |
 | ✅ C | Lingua | **Deciso**: inglese nel codice, italiano nei documenti. |
-| ✅ D | Licenza | **Deciso**: doppia licenza. **AGPL-3.0** per tutti (codice pubblico; chi lo modifica o lo offre online deve pubblicare le modifiche) più una **licenza commerciale** che può concedere solo Francesco. Chi contribuisce firma un accordo (CLA) che lascia a Francesco i diritti per poter dare la licenza commerciale. Il nome FranzPLAY si potrà proteggere come marchio. |
+| ✅ D | Licenza | **Deciso**: doppia licenza. **AGPL-3.0** per tutti (codice pubblico; chi lo modifica o lo offre online deve pubblicare le modifiche) più una **licenza commerciale** che può concedere solo il titolare dei diritti. Chi contribuisce firma un accordo (CLA) che gli lascia i diritti per poter dare la licenza commerciale. Il nome FranzPLAY si potrà proteggere come marchio. |
 | ✅ E | Fonti esterne per copertine e informazioni | **Deciso**: YouTube, TMDB e ThePornDB, spente finché l'admin non le accende. Sezione 7. |
 | ✅ F | "Non mi piace" accanto al like | **Deciso**: solo il like. Tra familiari e amici il "non mi piace" serve poco e può offendere. |
 | ✅ H | Chi carica video | **Deciso**: solo gli utenti abilitati dall'admin, con uno spazio massimo. Sezione 5 bis. |
@@ -442,14 +434,12 @@ Questo è anche un percorso di studio. Per questo:
 Obiettivo: **un programma vuoto che si compila, si avvia e ha i controlli automatici attivi.**
 Niente funzioni ancora, ma la "casa" è pronta e ordinata.
 
-1. Questo documento entra nel progetto come `CLAUDE.md`, insieme alla licenza (AGPL-3.0 più la nota
+1. Questo documento entra nel progetto, insieme alla licenza (AGPL-3.0 più la nota
    sulla licenza commerciale) e a un README breve.
 2. Lo scheletro del programma Go: si avvia, legge la configurazione, risponde "sono vivo" a un
    indirizzo, e si spegne in modo pulito.
 3. I controlli automatici su GitHub: formattazione, lint e test a ogni modifica.
 4. Il primo test vero, sulla prima funzione pura: il tipo **Durata in secondi**.
-5. **Esercizio per Francesco**: il tour ufficiale di Go (go.dev/tour), poi un piccolo programma che
-   elenca i video di una cartella con nome, dimensione e data. Lo rivediamo insieme.
 
 **Fatto quando**: chiunque scarica il progetto, lo avvia con un comando e i controlli su GitHub sono verdi.
 

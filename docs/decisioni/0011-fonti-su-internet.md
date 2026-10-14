@@ -10,7 +10,7 @@ chiedere a YouTube copertina, titolo e canale.
 
 ## Cosa abbiamo deciso
 
-Francesco ha scelto (12/10/2026) tre fonti, da fare **una alla volta**:
+Si sono scelte (12/10/2026) tre fonti, da fare **una alla volta**:
 1. **YouTube**.
 2. **TMDB**, per i film.
 3. **ThePornDB**, per tutti gli altri video.

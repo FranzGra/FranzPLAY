@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 
 export const BASE = "http://127.0.0.1:8091";
-export const ADMIN = "Francesco";
+export const ADMIN = "Paolo";
 export const PEOPLE = ["Giulia"];
 export const PASSWORD = "password-lunga-123";
 // Where global-setup leaves what global-teardown needs.

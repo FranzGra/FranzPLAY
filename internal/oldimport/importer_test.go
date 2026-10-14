@@ -93,13 +93,13 @@ func TestImportBringsEverything(t *testing.T) {
 	var hash, role string
 	var color sql.NullString
 	var lastLogin sql.NullInt64
-	if err := db.QueryRow(`SELECT password_hash, role, accent_color, last_login FROM users WHERE name = 'Francesco'`).
+	if err := db.QueryRow(`SELECT password_hash, role, accent_color, last_login FROM users WHERE name = 'Paolo'`).
 		Scan(&hash, &role, &color, &lastLogin); err != nil {
 		t.Fatal(err)
 	}
 	if hash != "$2y$10$FRx/ktSH1VVy7vVPqX7NIOQg2EGYNH/ntGZ1h8WtckxhdWnUDvzVy" || role != "admin" ||
 		color.String != "#dc2626" || lastLogin.Int64 != time.Date(2026, 10, 1, 19, 0, 0, 0, time.UTC).Unix() {
-		t.Errorf("Francesco = %s %s %v %v", hash, role, color, lastLogin)
+		t.Errorf("Paolo = %s %s %v %v", hash, role, color, lastLogin)
 	}
 	if got := count(t, db, `SELECT count(*) FROM users WHERE name = 'nonna_pina' AND role = 'user' AND accent_color IS NULL`); got != 1 {
 		t.Error("nonna_pina not added as a normal user")
@@ -111,9 +111,9 @@ func TestImportBringsEverything(t *testing.T) {
 	if got := count(t, db, `SELECT count(*) FROM users WHERE name = 'Al_' AND accent_color IS NULL`); got != 1 {
 		t.Error("Al not added as Al_")
 	}
-	// Francesco had closed the "saved" row of the Home.
+	// Paolo had closed the "saved" row of the Home.
 	if got := count(t, db, `SELECT count(*) FROM closed_home_rows r JOIN users u ON u.id = r.user_id
-		WHERE u.name = 'Francesco' AND r.row = 'saved'`); got != 1 || count(t, db, `SELECT count(*) FROM closed_home_rows`) != 1 {
+		WHERE u.name = 'Paolo' AND r.row = 'saved'`); got != 1 || count(t, db, `SELECT count(*) FROM closed_home_rows`) != 1 {
 		t.Error("closed home rows not brought")
 	}
 
@@ -123,9 +123,9 @@ func TestImportBringsEverything(t *testing.T) {
 		t.Errorf("likes = %+v", r.Likes)
 	}
 	if got := count(t, db, `SELECT count(*) FROM likes l JOIN users u ON u.id = l.user_id
-		WHERE u.name = 'Francesco' AND l.video_id = 1 AND l.created_at = ?`,
+		WHERE u.name = 'Paolo' AND l.video_id = 1 AND l.created_at = ?`,
 		time.Date(2025, 6, 1, 8, 0, 0, 0, time.UTC).Unix()); got != 1 {
-		t.Error("Francesco's like on the sea video is missing or has the wrong time")
+		t.Error("Paolo's like on the sea video is missing or has the wrong time")
 	}
 	if got := count(t, db, `SELECT count(*) FROM likes WHERE video_id = 4`); got != 0 {
 		t.Error("a like went to the other video with the same name")
@@ -181,8 +181,8 @@ func TestImportBringsEverything(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]mark{
-		"Francesco/2":  {3000, false, true, time.Date(2025, 8, 1, 20, 0, 0, 0, time.UTC).Unix()},
-		"Francesco/3":  {50, false, true, time.Date(2025, 8, 3, 20, 0, 0, 0, time.UTC).Unix()},
+		"Paolo/2":      {3000, false, true, time.Date(2025, 8, 1, 20, 0, 0, 0, time.UTC).Unix()},
+		"Paolo/3":      {50, false, true, time.Date(2025, 8, 3, 20, 0, 0, 0, time.UTC).Unix()},
 		"nonna_pina/1": {0, true, false, time.Date(2025, 8, 2, 20, 0, 0, 0, time.UTC).Unix()},
 	}
 	if len(marks) != len(want) {
@@ -199,8 +199,8 @@ func TestImportBringsEverything(t *testing.T) {
 		t.Errorf("logins = %+v", r.Logins)
 	}
 	if got := count(t, db, `SELECT count(*) FROM logins l JOIN users u ON u.id = l.user_id
-		WHERE u.name = 'Francesco' AND l.outcome = 'entered' AND l.address = '192.168.1.5'`); got != 1 {
-		t.Error("Francesco's login is missing")
+		WHERE u.name = 'Paolo' AND l.outcome = 'entered' AND l.address = '192.168.1.5'`); got != 1 {
+		t.Error("Paolo's login is missing")
 	}
 	if got := count(t, db, `SELECT count(*) FROM logins WHERE name = 'hacker' AND user_id IS NULL AND outcome = 'wrong_password'`); got != 1 {
 		t.Error("the wrong login is missing")
@@ -261,8 +261,8 @@ func TestImportTwiceAddsNothing(t *testing.T) {
 
 func TestImportKeepsWhatTheNewFranzPLAYAlreadyHas(t *testing.T) {
 	db := newFranzPLAY(t)
-	// Francesco set up the new FranzPLAY first, and watched the film further.
-	exec(t, db, `INSERT INTO users (id, name, password_hash, role, created_at) VALUES (7, 'francesco', 'argon2id$new', 'admin', 0)`)
+	// Paolo set up the new FranzPLAY first, and watched the film further.
+	exec(t, db, `INSERT INTO users (id, name, password_hash, role, created_at) VALUES (7, 'paolo', 'argon2id$new', 'admin', 0)`)
 	newer := time.Date(2026, 10, 12, 21, 0, 0, 0, time.UTC).Unix()
 	exec(t, db, `INSERT INTO watch_progress (user_id, video_id, position, updated_at) VALUES (7, 2, 4000, ?)`, newer)
 	// He also gave the film a title, and the folder a name.
@@ -275,11 +275,11 @@ func TestImportKeepsWhatTheNewFranzPLAYAlreadyHas(t *testing.T) {
 		count(t, db, `SELECT count(*) FROM categories WHERE name = 'Film' AND label = 'Cinema'`) != 1 {
 		t.Errorf("the new title or category name was changed: titles %+v, categories %+v", r.Titles, r.Categories)
 	}
-	if len(r.People.Existing) != 1 || r.People.Existing[0] != "Francesco" {
+	if len(r.People.Existing) != 1 || r.People.Existing[0] != "Paolo" {
 		t.Errorf("existing = %v", r.People.Existing)
 	}
 	if got := count(t, db, `SELECT count(*) FROM users WHERE id = 7 AND password_hash = 'argon2id$new' AND accent_color IS NULL`); got != 1 {
-		t.Error("the new account of Francesco was changed")
+		t.Error("the new account of Paolo was changed")
 	}
 	if got := count(t, db, `SELECT count(*) FROM closed_home_rows`); got != 0 {
 		t.Error("old Home choices overwrote the new ones")

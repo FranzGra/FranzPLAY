@@ -4,10 +4,10 @@ import { renderApp, signedIn, testAccount } from "../../test/render";
 describe("profile page", () => {
   it("shows who is logged in", async () => {
     renderApp("/profilo");
-    expect(await screen.findByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Paolo" })).toBeInTheDocument();
     expect(screen.getByText("Amministratore")).toBeInTheDocument();
     // The same round initial as on the channel page.
-    expect(screen.getByRole("main")).toHaveTextContent(/^F/);
+    expect(screen.getByRole("main")).toHaveTextContent(/^P/);
   });
 
   it("shows a normal user as such", async () => {
@@ -103,28 +103,28 @@ describe("profile page", () => {
       within(screen.getByRole("form")).getByRole("button", { name: "Cambia password" }),
     );
     expect(await screen.findByText("La password attuale non è giusta.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Paolo" })).toBeInTheDocument();
   });
 
   it("changes my name, everywhere at once", async () => {
     const { user, server } = renderApp("/profilo", {
       ...signedIn(),
-      "PUT /api/me/name": { body: { ...testAccount, name: "Franz" } },
+      "PUT /api/me/name": { body: { ...testAccount, name: "Paoletto" } },
     });
     await user.click(await screen.findByRole("button", { name: "Cambia nome" }));
     const form = screen.getByRole("form", { name: "Cambia nome" });
     expect(within(form).getByText(/anche il nome con cui entri/)).toBeInTheDocument();
     const field = within(form).getByLabelText("Nuovo nome");
     await user.clear(field);
-    await user.type(field, "Fr");
+    await user.type(field, "Pa");
     await user.click(within(form).getByRole("button", { name: "Salva il nome" }));
     expect(within(form).getByRole("alert")).toHaveTextContent("da 3 a 32 caratteri");
 
-    await user.type(field, "anz");
+    await user.type(field, "oletto");
     await user.click(within(form).getByRole("button", { name: "Salva il nome" }));
-    expect(await screen.findByRole("heading", { name: "Franz" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Paoletto" })).toBeInTheDocument();
     expect(screen.getByText(/Nome cambiato/)).toHaveAttribute("role", "status");
-    expect(await server.requests.at(-1)?.json()).toEqual({ name: "Franz" });
+    expect(await server.requests.at(-1)?.json()).toEqual({ name: "Paoletto" });
   });
 
   it("explains when the name is already used", async () => {
@@ -139,7 +139,7 @@ describe("profile page", () => {
     await user.type(field, "Giulia");
     await user.click(screen.getByRole("button", { name: "Salva il nome" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("lo usa già un'altra persona");
-    expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Paolo" })).toBeInTheDocument();
   });
 
   it("deletes my account after asking for the password", async () => {
@@ -179,7 +179,7 @@ describe("profile page", () => {
     status = 409;
     await user.click(screen.getByRole("button", { name: "Elimina per sempre" }));
     expect(await screen.findByText(/unico amministratore/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Paolo" })).toBeInTheDocument();
   });
 
   it("chooses the color of the interface", async () => {
@@ -286,6 +286,6 @@ describe("profile page", () => {
     });
     await user.click(await screen.findByRole("button", { name: "Esci" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Uscita non riuscita");
-    expect(screen.getByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Paolo" })).toBeInTheDocument();
   });
 });

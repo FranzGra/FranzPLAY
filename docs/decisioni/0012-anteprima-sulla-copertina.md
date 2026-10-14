@@ -5,7 +5,7 @@
 ## Il problema
 
 Nella versione vecchia, tenendo il mouse su un video partiva un pezzetto del video al posto della
-copertina. Francesco lo vuole anche qui, e anche sul telefono.
+copertina. Lo vogliamo anche qui, e anche sul telefono.
 
 ## Cosa abbiamo deciso
 

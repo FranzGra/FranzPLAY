@@ -61,7 +61,7 @@ describe("channel page", () => {
   it("tells me where my uploaded videos will appear", async () => {
     renderApp("/canale/1", {
       ...signedIn({ ...testAccount, canUpload: true }),
-      "GET /api/channels/1": { body: channel({ id: 1, name: "Francesco" }) },
+      "GET /api/channels/1": { body: channel({ id: 1, name: "Paolo" }) },
       "GET /api/videos": { body: { videos: [], total: 0 } },
     });
     expect(await screen.findByText("Nessun video caricato")).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe("channel page", () => {
   it("tells me how to fill my own channel", async () => {
     renderApp("/canale/1", {
       ...signedIn(),
-      "GET /api/channels/1": { body: channel({ id: 1, name: "Francesco", playlists: [] }) },
+      "GET /api/channels/1": { body: channel({ id: 1, name: "Paolo", playlists: [] }) },
     });
     expect(await screen.findByText("Il tuo canale è ancora vuoto")).toBeInTheDocument();
     expect(screen.getByText(/questo è il tuo canale/)).toBeInTheDocument();

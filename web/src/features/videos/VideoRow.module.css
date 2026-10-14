@@ -261,8 +261,8 @@
   }
 }
 
-/* On a phone one card at a time, as wide as the screen, as Francesco
-   asked: the finger slides the row to the next one, which stops in place. */
+/* On a phone one card at a time, as wide as the screen:
+   the finger slides the row to the next one, which stops in place. */
 @media (max-width: 599px) {
   .list {
     grid-auto-columns: 100%;

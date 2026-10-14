@@ -75,8 +75,8 @@
   color: var(--color-danger);
 }
 
-/* On a phone one card per line, as wide as the screen, as Francesco
-   asked. minmax(0, 1fr) keeps a wide picture inside its card: the card
+/* On a phone one card per line, as wide as the screen,
+   like YouTube. minmax(0, 1fr) keeps a wide picture inside its card: the card
    never grows past the screen. */
 @media (max-width: 599px) {
   .grid {

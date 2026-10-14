@@ -54,7 +54,7 @@ describe("join page", () => {
       "POST /api/join/check": { status: 204 },
       "POST /api/join": { status: 409, body: { error: "this name is already used" } },
     });
-    await user.type(await screen.findByLabelText("Nome"), "Francesco");
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));

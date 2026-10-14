@@ -84,7 +84,7 @@ func TestImportPhotos(t *testing.T) {
 		t.Fatalf("photos = %+v, left out %d", r.Photos, r.LeftOut.Photos)
 	}
 	var id, version int64
-	if err := db.QueryRow(`SELECT id, avatar FROM users WHERE name = 'Francesco'`).Scan(&id, &version); err != nil {
+	if err := db.QueryRow(`SELECT id, avatar FROM users WHERE name = 'Paolo'`).Scan(&id, &version); err != nil {
 		t.Fatal(err)
 	}
 	if version != importDay.UnixMilli() {

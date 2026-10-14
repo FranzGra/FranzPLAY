@@ -5,7 +5,7 @@
 ## Il problema
 
 L'anteprima che parte sulla copertina ([0012](0012-anteprima-sulla-copertina.md)) era solo a
-360 pixel: leggera, ma un po' sfocata sugli schermi nitidi di oggi. Francesco vuole anteprime di
+360 pixel: leggera, ma un po' sfocata sugli schermi nitidi di oggi. Servono anteprime di
 qualità quando la connessione è buona (a casa), e leggere quando non lo è.
 
 ## Cosa abbiamo deciso

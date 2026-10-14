@@ -42,7 +42,7 @@ CREATE TABLE `Accessi` (
 LOCK TABLES `Accessi` WRITE;
 /*!40000 ALTER TABLE `Accessi` DISABLE KEYS */;
 INSERT INTO `Accessi` VALUES
-(1,'192.168.1.5','2026-10-12 20:51:34',1,'Francesco'),
+(1,'192.168.1.5','2026-10-12 20:51:34',1,'Paolo'),
 (2,'10.0.0.9','2026-10-12 20:51:34',0,'hacker');
 /*!40000 ALTER TABLE `Accessi` ENABLE KEYS */;
 UNLOCK TABLES;
@@ -412,7 +412,7 @@ CREATE TABLE `Utenti` (
 LOCK TABLES `Utenti` WRITE;
 /*!40000 ALTER TABLE `Utenti` DISABLE KEYS */;
 INSERT INTO `Utenti` VALUES
-(1,'Francesco','$2y$10$FRx/ktSH1VVy7vVPqX7NIOQg2EGYNH/ntGZ1h8WtckxhdWnUDvzVy','f@example.com',NULL,NULL,'user_1_1700000000.jpg','2026-10-01 21:00:00','#DC2626','{\"saved\": false, \"recent\": true}',1),
+(1,'Paolo','$2y$10$FRx/ktSH1VVy7vVPqX7NIOQg2EGYNH/ntGZ1h8WtckxhdWnUDvzVy','f@example.com',NULL,NULL,'user_1_1700000000.jpg','2026-10-01 21:00:00','#DC2626','{\"saved\": false, \"recent\": true}',1),
 (2,'nonna_pina','$2y$10$57J.H2UJ4iGdCGtqa6YL1uxKYDLEsl8QTybMVNkKsKyqlawfmSPUa',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0),
 (3,'Al','$2y$10$57J.H2UJ4iGdCGtqa6YL1uxKYDLEsl8QTybMVNkKsKyqlawfmSPUa',NULL,NULL,NULL,NULL,NULL,'rosso',NULL,0);
 /*!40000 ALTER TABLE `Utenti` ENABLE KEYS */;

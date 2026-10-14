@@ -2,7 +2,7 @@ import { type PointerEvent, useCallback, useEffect, useRef, useState } from "rea
 
 // How long the pointer rests on a card before its clip plays: moving the
 // mouse across the grid does not start every clip on the way. A full
-// second, as Francesco asked: only a card the person stops on plays.
+// second: only a card the person stops on plays.
 export const hoverDelay = 1000; // milliseconds
 // How long the page must stay still on a touch screen before the card in
 // the middle plays: a finger flicking through the list starts nothing.

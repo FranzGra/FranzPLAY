@@ -2,7 +2,7 @@
 // The Player component asks these what to do, and they are easy to test.
 
 // skipSeconds is how far the ±15 buttons, the keys and double taps jump.
-// 15 as Francesco asked: a bit more than YouTube's 10.
+// 15: a bit more than YouTube's 10.
 export const skipSeconds = 15;
 
 // speeds are the playback speeds offered in the settings menu.

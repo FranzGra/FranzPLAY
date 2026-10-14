@@ -23,7 +23,7 @@ type adminFixture struct {
 
 func newAdminFixture(t *testing.T) *adminFixture {
 	fx := &adminFixture{fixture: newFixture(t, "Gita [dQw4w9WgXcQ].mp4", false),
-		who: users.Account{ID: 1, Name: "Francesco", Role: users.Admin}}
+		who: users.Account{ID: 1, Name: "Paolo", Role: users.Admin}}
 	if _, err := fx.db.Exec(`INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, added_at, missing_since)
 		VALUES ('fingerprint-2', 1, 'via.mp4', 1, 1, 'via', 1, 5)`); err != nil {
 		t.Fatal(err)

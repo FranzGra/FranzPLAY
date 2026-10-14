@@ -74,7 +74,7 @@ describe("navigation", () => {
       id,
       kind,
       name,
-      owner: { id: 1, name: "Francesco" },
+      owner: { id: 1, name: "Paolo" },
       public: false,
       videos: 0,
       cover: null,
@@ -100,7 +100,7 @@ describe("navigation", () => {
       id,
       kind,
       name,
-      owner: { id: 1, name: "Francesco" },
+      owner: { id: 1, name: "Paolo" },
       public: false,
       videos: 0,
       cover: null,
@@ -173,7 +173,7 @@ describe("navigation", () => {
 
   it("shows my initial in the top bar, as on my profile", async () => {
     renderApp("/");
-    expect(await screen.findByRole("link", { name: "Il tuo profilo" })).toHaveTextContent("F");
+    expect(await screen.findByRole("link", { name: "Il tuo profilo" })).toHaveTextContent("P");
   });
 
   it("has no channel subscriptions in the side menu", async () => {

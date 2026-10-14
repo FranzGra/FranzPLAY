@@ -11,7 +11,7 @@ first to talk about what you would like to change.
 
 ## How we work
 
-The rules and conventions are in [`CLAUDE.md`](CLAUDE.md) (in Italian). In short:
+The rules and conventions are in [`docs/sviluppo.md`](docs/sviluppo.md) (in Italian). In short:
 
 - One pull request does one thing, with tests.
 - `make check` must pass before you push.

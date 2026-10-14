@@ -43,7 +43,7 @@ func TestReadMariaDBDump(t *testing.T) {
 		t.Errorf("columns = %v, want %v", users.Columns, want)
 	}
 	first := users.Rows[0]
-	if first["Nome_Utente"].S != "Francesco" || first["Admin"].S != "1" ||
+	if first["Nome_Utente"].S != "Paolo" || first["Admin"].S != "1" ||
 		first["Password"].S != "$2y$10$FRx/ktSH1VVy7vVPqX7NIOQg2EGYNH/ntGZ1h8WtckxhdWnUDvzVy" ||
 		first["preferenze_home"].S != `{"saved": false, "recent": true}` {
 		t.Errorf("first user = %v", first)

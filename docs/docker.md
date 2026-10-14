@@ -211,7 +211,7 @@ docker/smoke-test.sh smoke
   `9000`, e apri `http://indirizzo:9000`.
 - **I video non compaiono**: in Amministrazione › Cartelle FranzPLAY dice se non riesce a leggere
   la cartella. Controlla il percorso in `.env` e che il tuo utente possa leggere i file.
-- **Windows**: nei percorsi usa le barre `/`, per esempio `C:/Users/Francesco/Videos`.
+- **Windows**: nei percorsi usa le barre `/`, per esempio `C:/Users/Nome/Videos`.
 - **Sistema a 32 bit** (vecchi Raspberry Pi): l'immagine non c'è. Usa il programma da solo,
   come spiegato in [provare-sul-pc.md](provare-sul-pc.md).
 

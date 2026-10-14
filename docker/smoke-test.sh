@@ -91,7 +91,7 @@ compose logs --no-color franzplay | grep -q 'first person who opens the site' ||
 	fail "the log does not say the site creates the administrator"
 jar="$work/cookies"
 curl -fsS -c "$jar" -H "Origin: $base" -H 'Content-Type: application/json' \
-	-d '{"name":"francesco","password":"una-password-lunga"}' \
+	-d '{"name":"paolo","password":"una-password-lunga"}' \
 	"$base/api/setup" >/dev/null || fail "setup"
 
 echo "--- Waiting for the video, its duration and its cover"

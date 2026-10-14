@@ -22,7 +22,7 @@ l'amministratore.
 codice lo vede solo chi può leggere il terminale. Una volta creato l'amministratore il codice non
 serve più e non viene più mostrato.
 
-**Aggiornamento del 13 ottobre 2026: il codice ora è spento di serie.** Francesco non vuole dover
+**Aggiornamento del 13 ottobre 2026: il codice ora è spento di serie.** Non si vuole dover
 cercare un codice nel terminale: chi installa apre il sito e crea subito l'amministratore. Il
 rischio resta quello detto sopra, ma è piccolo: la pagina esiste solo nei pochi minuti tra
 l'installazione e la creazione dell'amministratore, di solito su una rete di casa, e dopo non si

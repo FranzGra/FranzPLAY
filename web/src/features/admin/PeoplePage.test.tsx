@@ -33,14 +33,14 @@ async function rowOf(name: string) {
 describe("people page", () => {
   it("says when each person last entered", async () => {
     renderApp("/admin/persone", people());
-    expect(await rowOf("Francesco")).toHaveTextContent("Ultimo accesso 3 ore fa");
+    expect(await rowOf("Paolo")).toHaveTextContent("Ultimo accesso 3 ore fa");
     expect(await rowOf("Giulia")).toHaveTextContent("Non è ancora entrato con nome e password");
   });
 
   it("shows who I am and what I cannot do to myself", async () => {
     renderApp("/admin/persone", people());
     expect(await screen.findByRole("heading", { name: "Amministrazione" })).toBeInTheDocument();
-    const me = await rowOf("Francesco");
+    const me = await rowOf("Paolo");
     const sections = screen.getByRole("navigation", { name: "Sezioni dell'amministrazione" });
     expect(within(sections).getByRole("link", { name: "Persone" })).toHaveAttribute(
       "aria-current",

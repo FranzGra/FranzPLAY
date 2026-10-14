@@ -25,14 +25,14 @@ describe("login", () => {
       ...signedOut,
       "POST /api/login": { body: testAccount },
     });
-    await user.type(await screen.findByLabelText("Nome"), "Francesco");
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.click(screen.getByRole("button", { name: "Entra" }));
 
     // It stays on the page that was asked for.
-    expect(await screen.findByRole("heading", { name: "Francesco" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Paolo" })).toBeInTheDocument();
     const sent = server.requests.find((r) => r.url.endsWith("/api/login"));
-    expect(await sent?.json()).toEqual({ name: "Francesco", password: "una-password" });
+    expect(await sent?.json()).toEqual({ name: "Paolo", password: "una-password" });
   });
 
   it.each([
@@ -44,7 +44,7 @@ describe("login", () => {
       ...signedOut,
       "POST /api/login": { status, body: { error: "refused" } },
     });
-    await user.type(await screen.findByLabelText("Nome"), "Francesco");
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "sbagliata");
     await user.click(screen.getByRole("button", { name: "Entra" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
@@ -86,14 +86,14 @@ describe("first setup", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Codice di installazione")).not.toBeInTheDocument();
     expect(screen.queryByText(/setup_code/)).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText("Nome"), "Francesco");
+    await user.type(screen.getByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));
 
     expect(await screen.findByRole("heading", { name: "Ancora nessun video" })).toBeInTheDocument();
     const sent = server.requests.find((r) => r.method === "POST");
-    expect(await sent?.json()).toEqual({ code: "", name: "Francesco", password: "una-password" });
+    expect(await sent?.json()).toEqual({ code: "", name: "Paolo", password: "una-password" });
   });
 
   it("asks for the code when the installer turned it on", async () => {
@@ -103,7 +103,7 @@ describe("first setup", () => {
     });
     expect(await screen.findByText(/setup_code/)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Codice di installazione"), "ABCD-EFGH-JKMN");
-    await user.type(screen.getByLabelText("Nome"), "Francesco");
+    await user.type(screen.getByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));
@@ -112,7 +112,7 @@ describe("first setup", () => {
     const sent = server.requests.find((r) => r.method === "POST");
     expect(await sent?.json()).toEqual({
       code: "ABCD-EFGH-JKMN",
-      name: "Francesco",
+      name: "Paolo",
       password: "una-password",
     });
   });
@@ -124,7 +124,7 @@ describe("first setup", () => {
       "POST /api/setup": { status: 201, body: testAccount },
       "PUT /api/site": { body: chosen },
     });
-    await user.type(await screen.findByLabelText("Nome"), "Francesco");
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
     const site = screen.getByRole("region", { name: "Il tuo sito" });
@@ -142,7 +142,7 @@ describe("first setup", () => {
 
   it("does not ask the server when the passwords differ", async () => {
     const { user, server } = renderApp("/", newFranzPLAY);
-    await user.type(await screen.findByLabelText("Nome"), "Francesco");
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "altra-password");
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));
@@ -157,7 +157,7 @@ describe("first setup", () => {
       "POST /api/setup": { status: 401, body: { error: "the setup code is not right" } },
     });
     await user.type(await screen.findByLabelText("Codice di installazione"), "SBAGLIATO");
-    await user.type(screen.getByLabelText("Nome"), "Francesco");
+    await user.type(screen.getByLabelText("Nome"), "Paolo");
     await user.type(screen.getByLabelText("Password"), "una-password");
     await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));
@@ -239,8 +239,8 @@ describe("checkSetup", () => {
   it.each([
     ["ab", "una-password", "una-password", "Il nome deve avere da 3 a 32 caratteri."],
     ["  ab  ", "una-password", "una-password", "Il nome deve avere da 3 a 32 caratteri."],
-    ["Francesco", "corta", "corta", "La password deve avere da 8 a 128 caratteri."],
-    ["Francesco", "una-password", "un-altra", "Le due password non sono uguali."],
+    ["Paolo", "corta", "corta", "La password deve avere da 8 a 128 caratteri."],
+    ["Paolo", "una-password", "un-altra", "Le due password non sono uguali."],
     ["Niccolò", "èèèèèèèè", "èèèèèèèè", ""],
   ])("checks %s / %s", (name, password, confirm, want) => {
     expect(checkSetup(name, password, confirm)).toBe(want);

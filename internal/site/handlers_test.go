@@ -31,7 +31,7 @@ func newFixture(t *testing.T) *fixture {
 			t.Error(err)
 		}
 	})
-	fx := &fixture{who: users.Account{ID: 1, Name: "Francesco", Role: users.Admin}, logged: true}
+	fx := &fixture{who: users.Account{ID: 1, Name: "Paolo", Role: users.Admin}, logged: true}
 	a := api{db: db, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		account: func(context.Context) (users.Account, bool) { return fx.who, fx.logged }}
 	fx.mux = http.NewServeMux()

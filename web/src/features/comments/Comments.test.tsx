@@ -86,7 +86,7 @@ describe("comments", () => {
         status: 201,
         body: comment({
           id: 5,
-          author: { id: 1, name: "Francesco", avatar: 0 },
+          author: { id: 1, name: "Paolo", avatar: 0 },
           body: "Ciao a tutti",
           canDelete: true,
         }),
@@ -98,7 +98,7 @@ describe("comments", () => {
     await user.click(screen.getByRole("button", { name: "Commenta" }));
 
     const articles = await screen.findAllByRole("article");
-    expect(articles[0]).toHaveAccessibleName("Commento di Francesco");
+    expect(articles[0]).toHaveAccessibleName("Commento di Paolo");
     expect(box).toHaveValue("");
     expect(screen.getByRole("heading", { name: "2 commenti" })).toBeInTheDocument();
     const post = server.requests.find((r) => r.method === "POST");
@@ -116,7 +116,7 @@ describe("comments", () => {
         status: 201,
         body: comment({
           id: 9,
-          author: { id: 1, name: "Francesco", avatar: 0 },
+          author: { id: 1, name: "Paolo", avatar: 0 },
           body: "Anche per me",
         }),
       },

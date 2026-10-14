@@ -148,7 +148,7 @@ describe("video page", () => {
       "GET /api/videos/7": {
         body: videoJSON({
           private: true,
-          uploader: { id: 1, name: "Francesco" },
+          uploader: { id: 1, name: "Paolo" },
           sharedWith: [
             { id: 3, name: "Anna", avatar: 0 },
             { id: 4, name: "Marco", avatar: 0 },
