@@ -5,7 +5,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { NameForm } from "./NameForm";
-import { PlaylistCard } from "./PlaylistCard";
+import { Pile, PlaylistCard } from "./PlaylistCard";
 import styles from "./Playlists.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; lists: Playlist[] };
@@ -104,8 +104,11 @@ function LikedCard() {
   return (
     <li>
       <Link to="/mi-piace" className={`glow ${styles.card}`}>
+        <Pile />
         <span className={styles.cover}>
-          <Icon name="like" size={32} />
+          <span className={styles.noCover}>
+            <Icon name="like" size={32} />
+          </span>
         </span>
         <span className={styles.cardName}>Mi piace</span>
         <span className={styles.cardCount}>I video che ti piacciono</span>
@@ -120,8 +123,11 @@ function SharedCard() {
   return (
     <li>
       <Link to="/condivisi" className={`glow ${styles.card}`}>
+        <Pile />
         <span className={styles.cover}>
-          <Icon name="share" size={32} />
+          <span className={styles.noCover}>
+            <Icon name="share" size={32} />
+          </span>
         </span>
         <span className={styles.cardName}>Condivisi con te</span>
         <span className={styles.cardCount}>Solo per te e pochi altri</span>
