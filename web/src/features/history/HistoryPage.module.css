@@ -1,7 +1,9 @@
 /* Title, button and list share one column, so the button lines up with
-   the right edge of the cards under it. */
+   the right edge of the cards under it. The column sits in the middle of
+   the page. */
 .page {
   max-width: 820px;
+  margin-inline: auto;
 }
 
 .top {
