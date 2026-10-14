@@ -1,0 +1,20 @@
+import { useEffect, useState } from "react";
+const none = [];
+// useSuggestions loads a list of suggested videos, again whenever load
+// changes. Suggestions are a bonus: if they do not load, the list stays
+// empty and the failure only goes to the console.
+export function useSuggestions(load) {
+    const [list, setList] = useState(none);
+    useEffect(() => {
+        const controller = new AbortController();
+        setList(none);
+        load(controller.signal)
+            .then(setList)
+            .catch((error) => {
+            if (!controller.signal.aborted)
+                console.error(error);
+        });
+        return () => controller.abort();
+    }, [load]);
+    return list;
+}
