@@ -1,12 +1,19 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { type AdminShow, type AdminVideo, fetchAdminVideos } from "../../api/adminVideos";
+import {
+  type AdminCounts,
+  type AdminShow,
+  type AdminVideo,
+  fetchAdminVideos,
+} from "../../api/adminVideos";
 import { onServerEvent } from "../../api/events";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
 import { loadSetting, saveSetting } from "../../lib/storage";
 import styles from "./Admin.module.css";
+import type { ListState } from "./AdminVideoPage";
+import { FilterMenu } from "./FilterMenu";
 import { qualityLabel } from "./quality";
 import { VideoTable } from "./VideoTable";
 
@@ -39,6 +46,8 @@ export function VideosPage() {
   const [q, setQ] = useState("");
   const [show, setShow] = useState<AdminShow>("");
   const [state, setState] = useState<State>({ kind: "loading" });
+  // How many videos each filter shows, from the same answer as the list.
+  const [counts, setCounts] = useState<AdminCounts | undefined>(undefined);
   const [view, setView] = useState<View>(() => loadSetting(viewKey, parseView, "cards"));
   const changeView = (next: View) => {
     setView(next);
@@ -49,7 +58,10 @@ export function VideosPage() {
   const load = useCallback(
     (limit: number, signal?: AbortSignal) => {
       fetchAdminVideos({ q, show, limit }, signal)
-        .then(({ videos, total }) => setState({ kind: "ready", videos, total }))
+        .then(({ videos, total, counts: c }) => {
+          setState({ kind: "ready", videos, total });
+          setCounts(c);
+        })
         .catch((error: unknown) => {
           if (signal?.aborted) return;
           console.error(error);
@@ -82,12 +94,11 @@ export function VideosPage() {
 
   return (
     <>
-      <p className={styles.lead}>
-        Qui vedi tutti i video, anche quelli nascosti e quelli il cui file non si trova più. Apri un
-        video per cambiarne titolo, copertina, chi lo vede e il link pubblico.
+      <p className={styles.leadShort}>
+        Tutti i video, anche nascosti o non trovati. Aprine uno per cambiarlo.
       </p>
-      <div className={styles.tools}>
-        <search className={styles.searchForm}>
+      <div className={styles.toolbar}>
+        <search className={styles.toolbarSearch}>
           <form onSubmit={search}>
             <label className={`glass ${styles.searchBox}`}>
               <Icon name="search" size={18} />
@@ -101,39 +112,43 @@ export function VideosPage() {
             </label>
           </form>
         </search>
-        <fieldset className={`glass ${styles.segmented}`}>
-          <legend className="visually-hidden">Quali video</legend>
-          {filters.map((f) => (
+        <div className={styles.toolbarSide}>
+          <FilterMenu
+            options={filters.map((f) => ({
+              value: f.show,
+              label: f.label,
+              count: counts?.[f.show],
+            }))}
+            value={show}
+            onChange={setShow}
+          />
+          <fieldset className={`glass ${styles.viewSwitch}`}>
+            <legend className="visually-hidden">Come mostrarli</legend>
             <button
-              key={f.show}
               type="button"
-              className={styles.segment}
-              aria-pressed={show === f.show}
-              onClick={() => setShow(f.show)}
+              className={styles.viewButton}
+              aria-pressed={view === "cards"}
+              aria-label="Schede"
+              title="Schede"
+              onClick={() => changeView("cards")}
             >
-              {f.label}
+              <Icon name="categories" size={18} />
             </button>
-          ))}
-        </fieldset>
-        <fieldset className={`glass ${styles.segmented}`}>
-          <legend className="visually-hidden">Come mostrarli</legend>
-          <button
-            type="button"
-            className={styles.segment}
-            aria-pressed={view === "cards"}
-            onClick={() => changeView("cards")}
-          >
-            Schede
-          </button>
-          <button
-            type="button"
-            className={styles.segment}
-            aria-pressed={view === "table"}
-            onClick={() => changeView("table")}
-          >
-            Tabella
-          </button>
-        </fieldset>
+            <button
+              type="button"
+              className={styles.viewButton}
+              aria-pressed={view === "table"}
+              aria-label="Tabella"
+              title="Tabella"
+              onClick={() => changeView("table")}
+            >
+              <Icon name="menu" size={18} />
+            </button>
+          </fieldset>
+          {state.kind === "ready" && (
+            <span className={styles.toolbarCount}>{state.total.toLocaleString("it-IT")} video</span>
+          )}
+        </div>
       </div>
 
       {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
@@ -147,14 +162,13 @@ export function VideosPage() {
       )}
       {state.kind === "ready" && state.videos.length > 0 && (
         <>
-          <p className={styles.count}>{state.total.toLocaleString("it-IT")} video</p>
           {view === "table" ? (
             <VideoTable videos={state.videos} />
           ) : (
             <ul className={`stagger ${styles.list}`} aria-label="Video">
               {state.videos.map((video) => (
                 <li key={video.id}>
-                  <VideoRow video={video} />
+                  <VideoRow video={video} ids={state.videos.map((v) => v.id)} />
                 </li>
               ))}
             </ul>
@@ -180,7 +194,7 @@ export function VideosPage() {
 // VideoRow is one video in the list, light: its picture, title, a line
 // about it and at most two states. The whole row opens its page, where
 // everything about the video is changed; "Modifica" says so.
-function VideoRow({ video }: { video: AdminVideo }) {
+function VideoRow({ video, ids }: { video: AdminVideo; ids: number[] }) {
   const meta = [
     video.uploader ? `Caricato da ${video.uploader.name}` : video.category,
     video.duration === null ? "" : formatDuration(video.duration),
@@ -199,7 +213,7 @@ function VideoRow({ video }: { video: AdminVideo }) {
       </span>
       <div className={styles.videoRowText}>
         <p className={styles.name}>
-          <Link to={page} className={styles.rowLink}>
+          <Link to={page} state={{ ids } satisfies ListState} className={styles.rowLink}>
             {video.title}
           </Link>
         </p>
@@ -217,6 +231,7 @@ function VideoRow({ video }: { video: AdminVideo }) {
       </div>
       <Link
         to={page}
+        state={{ ids } satisfies ListState}
         className={`glass ${styles.action} ${styles.small} ${styles.rowEdit}`}
         aria-label={`Modifica ${video.title}`}
       >

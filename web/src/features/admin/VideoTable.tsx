@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { AdminVideo } from "../../api/adminVideos";
 import { formatDuration } from "../../lib/format";
 import styles from "./Admin.module.css";
+import type { ListState } from "./AdminVideoPage";
 import { compatibility, qualityLabel } from "./quality";
 
 // VideoTable shows the videos as a compact table, many at a glance: what
@@ -51,6 +52,7 @@ export function VideoTable({ videos }: { videos: AdminVideo[] }) {
                 <td>
                   <Link
                     to={`/admin/video/${video.id}`}
+                    state={{ ids: videos.map((v) => v.id) } satisfies ListState}
                     className={`glass ${styles.action} ${styles.small}`}
                     aria-label={`Modifica ${video.title}`}
                   >

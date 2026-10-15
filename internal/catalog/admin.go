@@ -158,6 +158,9 @@ func parseAdminQuery(values url.Values) (listQuery, adminFilter, error) {
 type adminList struct {
 	Videos []AdminVideo `json:"videos"`
 	Total  int          `json:"total"`
+	// Counts are how many videos each filter shows for the same search,
+	// for the filter menu: "" (all), "public", "hidden", "missing", "short".
+	Counts map[adminFilter]int `json:"counts"`
 }
 
 func (a admin) handleList(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +174,12 @@ func (a admin) handleList(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	respond.JSON(w, r, a.logger, http.StatusOK, adminList{Videos: videos, Total: total})
+	counts, err := a.store.adminCounts(r.Context(), q)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	respond.JSON(w, r, a.logger, http.StatusOK, adminList{Videos: videos, Total: total, Counts: counts})
 }
 
 func (a admin) handleOne(w http.ResponseWriter, r *http.Request) {
@@ -243,6 +251,30 @@ func (a admin) handleRefresh(w http.ResponseWriter, r *http.Request) {
 
 // adminList returns a page of every video, hidden and missing ones too,
 // newest first, and how many match in total.
+// adminCounts counts, in one read, the videos of each filter of the
+// administrator's list for the same search.
+func (s store) adminCounts(ctx context.Context, q listQuery) (map[adminFilter]int, error) {
+	where := `1`
+	args := []any{}
+	for _, w := range q.words {
+		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
+		p := likePattern(w)
+		args = append(args, p, p, p)
+	}
+	var all, public, hidden, missing, short int
+	err := s.db.QueryRowContext(ctx, `SELECT count(*),
+		coalesce(sum(v.id IN (SELECT p.video_id FROM public_links p)), 0),
+		coalesce(sum(v.hidden_at IS NOT NULL), 0),
+		coalesce(sum(v.missing_since IS NOT NULL), 0),
+		coalesce(sum(v.too_short), 0)
+		FROM videos v WHERE `+where, args...).Scan(&all, &public, &hidden, &missing, &short)
+	if err != nil {
+		return nil, fmt.Errorf("count videos: %w", err)
+	}
+	return map[adminFilter]int{allVideos: all, publicVideos: public, hiddenVideos: hidden,
+		missingVideos: missing, shortVideos: short}, nil
+}
+
 func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, id int64) (_ []AdminVideo, total int, err error) {
 	where := `1`
 	args := []any{}

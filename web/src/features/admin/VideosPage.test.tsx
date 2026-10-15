@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import { FakeEventSource, stubEventSource } from "../../test/eventSource";
 import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
@@ -128,9 +128,11 @@ describe("videos page", () => {
       "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
     });
     await screen.findByRole("list", { name: "Video" });
-    await user.click(screen.getByRole("button", { name: "Pubblici" }));
+    await user.click(screen.getByRole("button", { name: "Filtro: Tutti" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /Pubblici/ }));
     await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("show=public"));
-    await user.click(screen.getByRole("button", { name: "Nascosti" }));
+    await user.click(screen.getByRole("button", { name: "Filtro: Pubblici" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /Nascosti/ }));
     await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("show=hidden"));
     await user.type(screen.getByRole("searchbox", { name: "Cerca tra i video" }), "mare{Enter}");
     await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("q=mare"));
@@ -148,6 +150,38 @@ describe("videos page", () => {
     videos = [adminVideo({ id: 10, title: "Nuovo" }), ...videos];
     act(() => FakeEventSource.last?.emit("library"));
     expect(await screen.findByText("Nuovo")).toBeInTheDocument();
+  });
+
+  it("filters from a menu with how many each shows, by keyboard too", async () => {
+    const { user } = renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": {
+        body: {
+          videos: [adminVideo()],
+          total: 9,
+          counts: { "": 9, public: 2, hidden: 1, missing: 0, short: 3 },
+        },
+      },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    expect(screen.getByText("9 video")).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Filtro: Tutti" });
+    await user.click(button);
+    const menu = screen.getByRole("menu", { name: "Quali video" });
+    expect(within(menu).getByRole("menuitemradio", { name: /Tutti/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(within(menu).getByRole("menuitemradio", { name: /Pubblici/ })).toHaveTextContent("2");
+    expect(within(menu).getByRole("menuitemradio", { name: /Tutti/ })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(within(menu).getByRole("menuitemradio", { name: /Pubblici/ })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+    await user.click(button);
+    await user.click(document.body);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("opens the page of a video from its row", async () => {
@@ -176,59 +210,82 @@ async function detail(video = adminVideo(), routes: Record<string, unknown> = {}
     "GET /api/admin/videos/7": { body: video },
     ...routes,
   });
-  await screen.findByRole("heading", { level: 2, name: video.title as string }, { timeout: 3000 });
+  await screen.findByRole("textbox", { name: "Titolo" }, { timeout: 3000 });
   return app;
 }
 
-function section(name: string) {
+function group(name: string) {
   return screen.getByRole("region", { name });
 }
 
 describe("page of a video in the administration", () => {
-  it("has every section, each reachable from the list of sections", async () => {
-    await detail();
-    const nav = screen.getByRole("navigation", { name: "Sezioni del video" });
-    for (const name of [
-      "Informazioni",
-      "Copertina e anteprima",
-      "Visibilità e condivisione",
-      "Formato",
-    ]) {
-      expect(section(name)).toBeInTheDocument();
-      const link = within(nav).getByRole("link", { name });
-      expect(link.getAttribute("href")).toBe(`#${section(name).id}`);
+  it("shows the video and its file, and every group of the form", async () => {
+    const { user } = await detail();
+    expect(screen.getByRole("list", { name: "Il file" })).toHaveTextContent("4:05");
+    expect(screen.getByRole("list", { name: "Il file" })).toHaveTextContent("1080p");
+    expect(screen.getByText("/media/video/Vacanze/Mare 2024.mp4")).toBeInTheDocument();
+    for (const name of ["Chi lo vede", "Copertina", "Formato"]) {
+      expect(group(name)).toBeInTheDocument();
     }
-    expect(section("Formato")).toHaveTextContent("Va su tutti i browser");
+    expect(
+      within(group("Chi lo vede")).getByRole("radio", { name: /Tutti con account/ }),
+    ).toBeChecked();
+    // No list of sections beside the form.
+    expect(screen.queryByRole("navigation", { name: "Sezioni del video" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guarda Mare 2024" }));
+    expect(document.querySelector("video")).toHaveAttribute("src", "/api/videos/7/stream");
   });
 
-  it("changes the title and category of a video", async () => {
+  it("goes to the video before and after in the list", async () => {
+    renderApp({ pathname: "/admin/video/7", state: { ids: [5, 7, 9] } } as never, {
+      ...signedIn(),
+      "GET /api/admin/videos/7": { body: adminVideo() },
+    });
+    await screen.findByRole("textbox", { name: "Titolo" }, { timeout: 3000 });
+    expect(screen.getByRole("link", { name: "Video precedente" })).toHaveAttribute(
+      "href",
+      "/admin/video/5",
+    );
+    expect(screen.getByRole("link", { name: "Video successivo" })).toHaveAttribute(
+      "href",
+      "/admin/video/9",
+    );
+    expect(screen.getByText("2 di 3")).toBeInTheDocument();
+  });
+
+  it("changes the title and category in place, saving only on Salva", async () => {
     const { user, server } = await detail(adminVideo(), {
       "GET /api/categories": { body: [{ name: "Viaggi", videos: 3, color: "", image: null }] },
       "PUT /api/admin/videos/7/details": { status: 204 },
     });
-    await user.click(screen.getByRole("button", { name: "Modifica titolo e categoria" }));
+    expect(screen.queryByText("Modifiche non salvate")).not.toBeInTheDocument();
     await vi.waitFor(() =>
       expect(document.querySelector('#admin-categories option[value="Viaggi"]')).not.toBeNull(),
     );
-    const form = screen.getByRole("form", { name: "Modifica Mare 2024" });
-    const title = within(form).getByRole("textbox", { name: /Titolo/ });
+    const title = screen.getByRole("textbox", { name: "Titolo" });
     await user.clear(title);
     await user.type(title, "Al mare con la nonna");
-    expect(within(form).getByText(/Trovato da FranzPLAY: «Mare 2024»/)).toBeInTheDocument();
-    const category = within(form).getByRole("combobox", { name: /Categoria/ });
+    expect(screen.getByText(/Nome del file: «Mare 2024»/)).toBeInTheDocument();
+    const category = screen.getByRole("combobox", { name: "Categoria" });
     await user.clear(category);
     await user.type(category, "Viaggi");
-    await user.click(within(form).getByRole("button", { name: "Salva" }));
-    expect(await within(section("Informazioni")).findByRole("status")).toHaveTextContent(
-      "Salvato.",
-    );
-    expect(
-      screen.getByRole("heading", { level: 2, name: "Al mare con la nonna" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Modifiche non salvate")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Salva" }));
+    expect(await screen.findByText("Salvato")).toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({
       title: "Al mare con la nonna",
       category: "Viaggi",
     });
+  });
+
+  it("undoes the changes not saved", async () => {
+    const { user, server } = await detail();
+    const title = screen.getByRole("textbox", { name: "Titolo" });
+    await user.type(title, " bis");
+    await user.click(screen.getByRole("button", { name: "Annulla" }));
+    expect(title).toHaveValue("Mare 2024");
+    expect(screen.queryByText("Modifiche non salvate")).not.toBeInTheDocument();
+    expect(server.requests.some((r) => r.method === "PUT")).toBe(false);
   });
 
   it("puts back the title and category FranzPLAY found", async () => {
@@ -236,36 +293,34 @@ describe("page of a video in the administration", () => {
       adminVideo({ title: "Al mare", category: "", titleSet: true, categorySet: true }),
       { "PUT /api/admin/videos/7/details": { status: 204 } },
     );
-    await user.click(screen.getByRole("button", { name: "Modifica titolo e categoria" }));
-    const form = screen.getByRole("form", { name: "Modifica Al mare" });
-    await user.click(within(form).getByRole("button", { name: "Rimetti questo" }));
-    await user.click(within(form).getByRole("button", { name: "Rimetti questa" }));
-    await user.click(within(form).getByRole("button", { name: "Salva" }));
-    expect(await within(section("Informazioni")).findByRole("status")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Usa questo" }));
+    await user.click(screen.getByRole("button", { name: "Usa questa" }));
+    await user.click(screen.getByRole("button", { name: "Salva" }));
+    expect(await screen.findByText("Salvato")).toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({ title: null, category: null });
   });
 
   it("refuses an empty title", async () => {
     const { user, server } = await detail();
-    await user.click(screen.getByRole("button", { name: "Modifica titolo e categoria" }));
-    const form = screen.getByRole("form", { name: "Modifica Mare 2024" });
-    await user.clear(within(form).getByRole("textbox", { name: /Titolo/ }));
-    await user.click(within(form).getByRole("button", { name: "Salva" }));
-    expect(within(form).getByRole("alert")).toHaveTextContent("Il titolo deve avere");
+    await user.clear(screen.getByRole("textbox", { name: "Titolo" }));
+    await user.click(screen.getByRole("button", { name: "Salva" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Il titolo deve avere");
     expect(server.requests.some((r) => r.url.includes("/details"))).toBe(false);
   });
 
-  it("hides a video and shows it again", async () => {
+  it("hides a video with a switch, and shows it again", async () => {
     const { user, server } = await detail(adminVideo(), {
       "PUT /api/admin/videos/7/hidden": { status: 204 },
     });
-    const box = section("Visibilità e condivisione");
-    await user.click(within(box).getByRole("button", { name: "Nascondi" }));
-    expect(await within(box).findByRole("status")).toHaveTextContent("Nascosto a tutti.");
+    const hidden = screen.getByRole("switch", { name: /Nascosto/ });
+    await user.click(hidden);
+    expect(await screen.findByRole("status")).toHaveTextContent("Nascosto a tutti.");
     expect(await server.requests.at(-1)?.json()).toEqual({ hidden: true });
-    await user.click(within(box).getByRole("button", { name: "Mostra" }));
-    expect(await within(box).findByRole("status")).toHaveTextContent("Di nuovo visibile a tutti.");
-    expect(await server.requests.at(-1)?.json()).toEqual({ hidden: false });
+    await vi.waitFor(() => expect(hidden).toBeChecked());
+    await user.click(hidden);
+    await vi.waitFor(async () =>
+      expect(await server.requests.at(-1)?.clone().json()).toEqual({ hidden: false }),
+    );
   });
 
   it("says when an action fails", async () => {
@@ -273,31 +328,49 @@ describe("page of a video in the administration", () => {
     const { user } = await detail(adminVideo(), {
       "PUT /api/admin/videos/7/hidden": { status: 500, body: { error: "internal error" } },
     });
-    const box = section("Visibilità e condivisione");
-    await user.click(within(box).getByRole("button", { name: "Nascondi" }));
-    expect(await within(box).findByRole("alert")).toBeInTheDocument();
-    expect(within(box).getByRole("button", { name: "Nascondi" })).toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: /Nascosto/ }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Non ci sono riuscito");
+    expect(screen.getByRole("switch", { name: /Nascosto/ })).not.toBeChecked();
   });
 
-  it("has the cover made again, but not for a file not found", async () => {
-    const { user, server } = await detail(adminVideo(), {
-      "POST /api/admin/videos/7/refresh": { status: 204 },
-    });
-    const box = section("Copertina e anteprima");
-    await user.click(within(box).getByRole("button", { name: "Rifai copertina e anteprime" }));
-    expect(await within(box).findByRole("status")).toHaveTextContent("In coda");
-    expect(server.requests.at(-1)?.method).toBe("POST");
+  it("chooses a moment of the video as cover, and remakes it", async () => {
+    const { user, server } = await detail(
+      adminVideo({
+        preview: {
+          src: "/api/previews/7-abc.jpg",
+          gap: 10,
+          count: 24,
+          columns: 6,
+          width: 160,
+          height: 90,
+        },
+      }),
+      {
+        "PUT /api/admin/videos/7/cover-second": { status: 204 },
+        "POST /api/admin/videos/7/refresh": { status: 204 },
+      },
+    );
+    const covers = screen.getByRole("group", { name: "Scegli la copertina" });
+    expect(within(covers).getByRole("radio", { name: "Quella scelta da FranzPLAY" })).toBeChecked();
+    const moments = within(covers).getAllByRole("radio", { name: /Il momento/ });
+    expect(moments.length).toBeGreaterThan(3);
+    await user.click(moments[0] as HTMLElement);
+    expect(await screen.findByRole("status")).toHaveTextContent("la nuova copertina arriva");
+    expect(await server.requests.at(-1)?.json()).toEqual({ second: 20 });
+    expect(moments[0]).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Rigenera" }));
+    await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("/refresh"));
   });
 
   it("keeps the actions on the file closed when the file is not found", async () => {
     await detail(adminVideo({ missing: true }));
-    const box = section("Copertina e anteprima");
-    for (const name of ["Cambia copertina", "Cambia anteprima", "Rifai copertina e anteprime"]) {
-      expect(within(box).getByRole("button", { name })).toBeDisabled();
+    for (const name of ["Carica immagine o cerca", "Cambia anteprima", "Rigenera"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
     }
+    expect(screen.queryByRole("switch", { name: /Link pubblico/ })).not.toBeInTheDocument();
   });
 
-  it("manages the public link without asking for it again", async () => {
+  it("turns the public link on, copies it, and off after asking", async () => {
     const key = "abcdefghijklmnopqrstuv";
     const { user, server } = await detail(adminVideo(), {
       "POST /api/videos/7/public-link": {
@@ -305,24 +378,43 @@ describe("page of a video in the administration", () => {
       },
       "DELETE /api/videos/7/public-link": { status: 204 },
     });
-    const box = section("Visibilità e condivisione");
-    expect(within(box).getByText("Non pubblico")).toBeInTheDocument();
-    await user.click(within(box).getByRole("button", { name: "Crea link pubblico" }));
-    expect(await within(box).findByRole("textbox", { name: "Link del video" })).toHaveValue(
+    // jsdom has no clipboard: the old way of copying says yes.
+    Object.defineProperty(document, "execCommand", { value: () => true, configurable: true });
+    const box = group("Chi lo vede");
+    const on = within(box).getByRole("switch", { name: /Link pubblico/ });
+    expect(on).not.toBeChecked();
+    await user.click(on);
+    expect(await within(box).findByRole("textbox", { name: "Link pubblico" })).toHaveValue(
       `${window.location.origin}/p/${key}`,
     );
-    expect(within(box).getByText("Pubblico")).toBeInTheDocument();
-    expect(within(box).getByRole("button", { name: "Copia link" })).toBeInTheDocument();
-    expect(within(box).getByRole("button", { name: "Rinnova link" })).toBeInTheDocument();
-    await user.click(within(box).getByRole("button", { name: "Disattiva link" }));
-    await waitFor(() => expect(within(box).getByText("Non pubblico")).toBeInTheDocument());
+    await user.click(within(box).getByRole("button", { name: "Copia link" }));
+    expect(await within(box).findByRole("button", { name: "Copiato" })).toBeInTheDocument();
+    expect(within(box).getByRole("button", { name: "Genera nuovo link" })).toBeInTheDocument();
+    await user.click(within(box).getByRole("switch", { name: /Link pubblico/ }));
+    const ask = within(box).getByRole("alertdialog", { name: "Disattivare il link?" });
+    await user.click(within(ask).getByRole("button", { name: "Disattiva" }));
+    await vi.waitFor(() =>
+      expect(within(box).getByRole("switch", { name: /Link pubblico/ })).not.toBeChecked(),
+    );
+    expect(server.requests.filter((r) => r.method === "DELETE")).toHaveLength(1);
     expect(
       server.requests.filter((r) => r.method === "GET" && r.url.includes("public-link")),
     ).toEqual([]);
   });
 
+  it("offers a copy for every browser when the file needs one", async () => {
+    const { user, server } = await detail(adminVideo({ playable: false }), {
+      "POST /api/videos/7/prepare": { body: { state: "waiting" } },
+    });
+    expect(group("Formato")).toHaveTextContent("Non va su tutti i browser");
+    await user.click(screen.getByRole("button", { name: "Crea copia compatibile" }));
+    await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("/prepare"));
+  });
+
   it("says when the video is not there", async () => {
     renderApp("/admin/video/99", signedIn());
-    expect(await screen.findByRole("heading", { name: "Video non trovato" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Video non trovato" }, { timeout: 3000 }),
+    ).toBeInTheDocument();
   });
 });
