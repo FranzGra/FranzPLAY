@@ -66,11 +66,13 @@ const (
 	hiddenVideos  adminFilter = "hidden"
 	missingVideos adminFilter = "missing"
 	shortVideos   adminFilter = "short"
+	publicVideos  adminFilter = "public" // with a public link
 )
 
 // AdminRoutes adds the administrator's video API to mux:
 //
-//	GET  /api/admin/videos                 every video (?q=&show=hidden|missing&limit=&offset=)
+//	GET  /api/admin/videos                 every video (?q=&show=hidden|missing|short|public&limit=&offset=)
+//	GET  /api/admin/videos/{id}            one video, as in the list
 //	PUT  /api/admin/videos/{id}/hidden     hide or show again {hidden}
 //	POST /api/admin/videos/{id}/refresh    read it again and remake cover and previews
 //	PUT  /api/admin/videos/{id}/details    another title and category {title, category};
@@ -106,6 +108,7 @@ type admin struct {
 
 func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/videos", a.only(a.handleList))
+	mux.HandleFunc("GET /api/admin/videos/{id}", a.only(a.handleOne))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/hidden", a.only(a.handleHidden))
 	mux.HandleFunc("POST /api/admin/videos/{id}/refresh", a.only(a.handleRefresh))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/details", a.only(a.handleDetails))
@@ -145,10 +148,10 @@ func parseAdminQuery(values url.Values) (listQuery, adminFilter, error) {
 	}
 	q.category = ""
 	switch f := adminFilter(values.Get("show")); f {
-	case allVideos, hiddenVideos, missingVideos, shortVideos:
+	case allVideos, hiddenVideos, missingVideos, shortVideos, publicVideos:
 		return q, f, nil
 	default:
-		return listQuery{}, "", fmt.Errorf(`%w: show must be "hidden" or "missing"`, errBadQuery)
+		return listQuery{}, "", fmt.Errorf(`%w: show must be "hidden", "missing", "short" or "public"`, errBadQuery)
 	}
 }
 
@@ -163,12 +166,30 @@ func (a admin) handleList(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusBadRequest, err.Error())
 		return
 	}
-	videos, total, err := a.store.adminList(r.Context(), q, filter)
+	videos, total, err := a.store.adminList(r.Context(), q, filter, 0)
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
 	respond.JSON(w, r, a.logger, http.StatusOK, adminList{Videos: videos, Total: total})
+}
+
+func (a admin) handleOne(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r.PathValue("id"))
+	if !ok {
+		respond.Error(w, r, a.logger, http.StatusNotFound, errNotFound.Error())
+		return
+	}
+	videos, _, err := a.store.adminList(r.Context(), listQuery{limit: 1}, allVideos, id)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	if len(videos) == 0 {
+		respond.Error(w, r, a.logger, http.StatusNotFound, errNotFound.Error())
+		return
+	}
+	respond.JSON(w, r, a.logger, http.StatusOK, videos[0])
 }
 
 func (a admin) handleHidden(w http.ResponseWriter, r *http.Request) {
@@ -222,16 +243,22 @@ func (a admin) handleRefresh(w http.ResponseWriter, r *http.Request) {
 
 // adminList returns a page of every video, hidden and missing ones too,
 // newest first, and how many match in total.
-func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (_ []AdminVideo, total int, err error) {
+func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, id int64) (_ []AdminVideo, total int, err error) {
 	where := `1`
 	args := []any{}
+	if id > 0 {
+		where = `v.id = ?`
+		args = append(args, id)
+	}
 	switch filter {
+	case publicVideos:
+		where += ` AND v.id IN (SELECT p.video_id FROM public_links p)`
 	case hiddenVideos:
-		where = `v.hidden_at IS NOT NULL`
+		where += ` AND v.hidden_at IS NOT NULL`
 	case missingVideos:
-		where = `v.missing_since IS NOT NULL`
+		where += ` AND v.missing_since IS NOT NULL`
 	case shortVideos:
-		where = `v.too_short`
+		where += ` AND v.too_short`
 	}
 	for _, w := range q.words {
 		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`

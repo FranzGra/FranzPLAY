@@ -25,13 +25,13 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
 }
 
 async function openClip(video: Record<string, unknown>, routes: Record<string, unknown>) {
-  const app = renderApp("/admin/video", {
+  const app = renderApp("/admin/video/7", {
     ...signedIn(),
-    "GET /api/admin/videos": { body: { videos: [video], total: 1 } },
+    "GET /api/admin/videos/7": { body: video },
     ...routes,
   });
-  await screen.findByRole("list", { name: "Video" });
-  await app.user.click(screen.getByRole("button", { name: "Anteprima" }));
+  await screen.findByRole("heading", { level: 2, name: "Mare 2024" });
+  await app.user.click(screen.getByRole("button", { name: "Cambia anteprima" }));
   return { ...app, panel: screen.getByRole("region", { name: "Anteprima di Mare 2024" }) };
 }
 
@@ -49,7 +49,7 @@ describe("choosing a clip", () => {
     const sent = server.requests.at(-1);
     expect(sent?.url).toContain("/api/admin/videos/7/clip");
     expect(sent?.headers.get("Content-Type")).toBe("video/mp4");
-    expect(screen.getByText("Anteprima caricata")).toBeInTheDocument();
+    expect(screen.getByText(/Anteprima caricata/)).toBeInTheDocument();
   });
 
   it("refuses a video too large before sending it", async () => {
@@ -70,10 +70,10 @@ describe("choosing a clip", () => {
     });
     await user.click(within(panel).getByRole("button", { name: "Nessuna anteprima" }));
     expect(await screen.findByText(/niente anteprima/)).toBeInTheDocument();
-    expect(screen.getByText("Senza anteprima")).toBeInTheDocument();
+    expect(screen.getByText(/Senza anteprima/)).toBeInTheDocument();
     expect(server.requests.at(-1)?.method).toBe("DELETE");
 
-    await user.click(screen.getByRole("button", { name: "Anteprima" }));
+    await user.click(screen.getByRole("button", { name: "Cambia anteprima" }));
     const again = screen.getByRole("region", { name: "Anteprima di Mare 2024" });
     expect(again).toHaveTextContent("non ha anteprima");
     expect(within(again).queryByRole("button", { name: "Nessuna anteprima" })).toBeNull();
