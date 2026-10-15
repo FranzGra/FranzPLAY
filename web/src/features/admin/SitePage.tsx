@@ -6,14 +6,17 @@ import { useSite } from "../../app/site";
 import { EmptyState } from "../../components/EmptyState";
 import styles from "./Admin.module.css";
 import { LookFields } from "./LookFields";
+import { UpdateSettings } from "./UpdateSettings";
 
 // SitePage holds the settings of the whole site: its name and color, and
-// whether anyone may create an account by themselves.
+// whether anyone may create an account by themselves, and the check for
+// new versions.
 export function SitePage() {
   return (
     <>
       <LookSettings />
       <RegistrationSettings />
+      <UpdateSettings />
     </>
   );
 }
