@@ -49,7 +49,7 @@ describe("choosing a clip", () => {
     const sent = server.requests.at(-1);
     expect(sent?.url).toContain("/api/admin/videos/7/clip");
     expect(sent?.headers.get("Content-Type")).toBe("video/mp4");
-    expect(screen.getByText(/Anteprima caricata/)).toBeInTheDocument();
+    expect(screen.getByText(/Caricata da te/)).toBeInTheDocument();
   });
 
   it("refuses a video too large before sending it", async () => {

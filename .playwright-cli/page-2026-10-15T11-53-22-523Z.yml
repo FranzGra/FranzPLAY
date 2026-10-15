@@ -1,0 +1,61 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "FranzTUBELocal" [ref=e5] [cursor=pointer]:
+      - /url: /
+    - search [ref=e10]:
+      - generic [ref=e12]:
+        - generic [ref=e16]: Cerca
+        - searchbox "Cerca" [ref=e17]
+    - link "Il tuo profilo" [ref=e18] [cursor=pointer]:
+      - /url: /profilo
+      - generic [aria-hidden] [ref=e19]: P
+  - generic [ref=e20]:
+    - navigation "Menu principale" [ref=e21]:
+      - link "Home" [ref=e22] [cursor=pointer]:
+        - /url: /
+      - link "Cronologia" [ref=e26] [cursor=pointer]:
+        - /url: /cronologia
+      - link "Mi piace" [ref=e31] [cursor=pointer]:
+        - /url: /mi-piace
+      - link "Condivisi con te" [ref=e35] [cursor=pointer]:
+        - /url: /condivisi
+      - link "Categorie" [ref=e39] [cursor=pointer]:
+        - /url: /categorie
+      - link "Il mio canale" [ref=e45] [cursor=pointer]:
+        - /url: /canale/1
+      - generic [ref=e49]: Le tue playlist
+      - link "Guarda più tardi" [ref=e50] [cursor=pointer]:
+        - /url: /playlist/1
+      - link "Tutte le playlist" [ref=e55] [cursor=pointer]:
+        - /url: /playlist
+      - generic [ref=e58]: Gestione
+      - link "Amministrazione" [ref=e59] [cursor=pointer]:
+        - /url: /admin
+    - main [ref=e63]:
+      - generic [ref=e64]:
+        - heading "Amministrazione" [level=1] [ref=e65]
+        - navigation "Sezioni dell'amministrazione" [ref=e69]:
+          - link "Riepilogo" [ref=e70] [cursor=pointer]:
+            - /url: /admin/riepilogo
+          - link "Persone" [ref=e71] [cursor=pointer]:
+            - /url: /admin/persone
+          - link "Inviti" [ref=e72] [cursor=pointer]:
+            - /url: /admin/inviti
+          - link "Accessi" [ref=e73] [cursor=pointer]:
+            - /url: /admin/accessi
+          - link "Video" [ref=e74] [cursor=pointer]:
+            - /url: /admin/video
+          - link "Categorie" [ref=e75] [cursor=pointer]:
+            - /url: /admin/categorie
+          - link "Sottotitoli" [ref=e76] [cursor=pointer]:
+            - /url: /admin/sottotitoli
+          - link "Commenti" [ref=e77] [cursor=pointer]:
+            - /url: /admin/commenti
+          - link "Cartelle" [ref=e78] [cursor=pointer]:
+            - /url: /admin/cartelle
+          - link "Internet" [ref=e79] [cursor=pointer]:
+            - /url: /admin/internet
+          - link "Lavori" [ref=e80] [cursor=pointer]:
+            - /url: /admin/lavori
+          - link "Sito" [ref=e81] [cursor=pointer]:
+            - /url: /admin/sito

@@ -247,6 +247,9 @@ func TestAdminOneVideoAndPublicFilter(t *testing.T) {
 	if list.Total != 1 || list.Videos[0].ID != id {
 		t.Errorf("public filter = %+v", list)
 	}
+	if want := map[adminFilter]int{"": 2, "public": 1, "hidden": 0, "missing": 0, "short": 0}; !reflect.DeepEqual(list.Counts, want) {
+		t.Errorf("counts = %v, want %v", list.Counts, want)
+	}
 	s.who = users.Account{ID: 2, Role: users.User}
 	s.do(t, "GET", "/api/admin/videos/"+strconv.FormatInt(id, 10), "", http.StatusForbidden)
 }

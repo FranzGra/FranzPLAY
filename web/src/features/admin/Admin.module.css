@@ -1016,11 +1016,17 @@ label.action:focus-within {
   outline-offset: 2px;
 }
 
-/* Above the row's link, so it stays its own target. */
+/* Above the row's link, so it stays its own target. Quiet: the accent
+   stays for the actions that save. */
 .rowEdit {
   position: relative;
   z-index: 1;
   flex: none;
+  color: var(--color-text);
+}
+
+.rowEdit:hover {
+  color: var(--color-text);
 }
 
 /* The states of a video, all alike and quiet. */
@@ -1047,5 +1053,91 @@ label.action:focus-within {
 @media (max-width: 600px) {
   .rowEdit {
     display: none;
+  }
+}
+
+/* The list's tools on one line: the search takes the room, then the
+   filter, the view and how many. On a phone, the search on its own line. */
+.leadShort {
+  margin: 0 0 16px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.toolbarSearch {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.toolbarSide {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbarCount {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.viewSwitch {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  border: var(--glass-border);
+  border-radius: var(--radius-pill);
+}
+
+.viewButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.viewButton:hover {
+  color: var(--color-text);
+}
+
+.viewButton[aria-pressed="true"] {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.viewButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .toolbarSearch {
+    flex-basis: 100%;
+  }
+
+  .toolbarSide {
+    width: 100%;
+  }
+
+  .toolbarCount {
+    margin-left: auto;
   }
 }

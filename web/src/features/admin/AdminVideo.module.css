@@ -1,239 +1,698 @@
-/* The page of one video in the administration: a large picture and the
-   title, then the sections. On a computer the list of sections stays on
-   the left; on a phone they stack, one after the other. */
+/* The page of one video in the administration. On a computer: the video
+   on the left, staying in view, and the form on the right; on a phone,
+   one after the other. Spacing follows 8 / 12 / 16 / 24 / 32. */
 .page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .back {
-  margin: 0;
-}
-
-.back a {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 16px 0 10px;
+  gap: 4px;
+  height: 36px;
+  padding: 0 14px 0 8px;
   border-radius: var(--radius-pill);
   color: var(--color-text);
   font-size: 14px;
   font-weight: 600;
 }
 
-.back a:hover {
+.back:hover {
   background: var(--glass-bg-strong);
+  color: var(--color-text);
+}
+
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepCount {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.step {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+}
+
+.step:hover {
+  background: var(--glass-bg-strong);
+  color: var(--color-text);
+}
+
+.stepOff {
+  color: var(--color-text-muted);
+  opacity: 0.35;
 }
 
 .placeholder {
-  height: 220px;
+  aspect-ratio: 16 / 9;
+  max-width: 58%;
   border-radius: var(--radius-l);
   background: var(--color-surface);
 }
 
-.head {
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+  align-items: start;
+  gap: 32px;
+}
+
+/* The video, with what its file is, under it. */
+.media {
+  position: sticky;
+  top: calc(var(--header-height) + 24px);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 20px 24px;
-}
-
-.cover {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: min(320px, 100%);
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border-radius: var(--radius-m);
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-}
-
-.cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.headText {
-  flex: 1 1 280px;
+  flex-direction: column;
+  gap: 12px;
   min-width: 0;
 }
 
-.title {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
+.stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-l);
+  background: #000;
 }
 
-.meta {
-  margin: 8px 0 0;
+.stage > :not(.play) {
+  width: 100%;
+  height: 100%;
+}
+
+.poster {
+  display: block;
+  object-fit: cover;
+}
+
+.noPoster {
+  display: grid;
+  place-items: center;
   color: var(--color-text-muted);
-  font-size: 15px;
+  background: var(--color-surface-raised);
 }
 
-.meta a {
-  color: var(--color-accent);
-  font-weight: 600;
+.play {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  padding-left: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  translate: -50% -50%;
+  transition: scale var(--duration-fast) var(--ease-out);
+}
+
+.play:hover {
+  scale: 1.06;
+}
+
+.play:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.facts li {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-strong);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .path {
-  margin: 4px 0 0;
+  margin: 0;
   overflow: hidden;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  align-items: start;
-  gap: 24px;
+.quiet {
+  align-self: flex-start;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 0.25);
+  text-underline-offset: 3px;
 }
 
-.nav {
+.quiet:hover {
+  color: var(--color-text);
+}
+
+/* The form: one surface, groups apart by space and a faint line. */
+.form {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.details,
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px 0;
+}
+
+.details {
+  padding-top: 0;
+}
+
+.group {
+  border-top: 1px solid var(--color-border);
+}
+
+.groupTitle,
+.label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.value {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.titleInput {
+  width: calc(100% + 10px);
+  margin: -6px 0 0 -10px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  resize: none;
+  field-sizing: content;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.titleInput:hover {
+  background: var(--glass-bg);
+}
+
+.titleInput:focus {
+  outline: none;
+  background: var(--glass-bg-strong);
+  box-shadow: 0 0 0 2px rgb(var(--color-accent-rgb) / 0.6);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  background: var(--glass-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 15px;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.25);
+}
+
+.textButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.textButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.textButton:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  text-decoration: none;
+}
+
+.textButton:focus-visible,
+.iconButton:focus-visible,
+.primary:focus-visible,
+.danger:focus-visible,
+.switch:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.problem {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+/* Comes up when title or category differ from what is saved. */
+.saveBar {
   position: sticky;
-  top: calc(var(--header-height) + 16px);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--radius-pill);
+  animation: var(--motion-rise-in);
+}
+
+.saveText {
+  flex: 1;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.primary,
+.danger {
+  height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.primary:disabled,
+.danger:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* Who sees it: three choices, shown; its uploader changes them. */
+.segmented {
+  margin: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+}
+
+.segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.segment:has(input:checked) {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.segment svg {
+  flex: none;
+}
+
+.segmented:disabled .segment:not(:has(input:checked)) {
+  opacity: 0.75;
+}
+
+/* A switch like on a phone: the row is its label. */
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.switchRow + .switchRow {
+  margin-top: 8px;
+}
+
+.switchText {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.nav a {
-  padding: 8px 12px;
-  border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.nav a:hover,
-.nav a:focus-visible {
-  background: var(--glass-bg-strong);
-  color: var(--color-text);
-}
-
-.sections {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-width: 0;
-}
-
-.section {
-  scroll-margin-top: calc(var(--header-height) + 16px);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 22px 24px;
-  border-radius: var(--radius-l);
-}
-
-.sectionTitle {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.subsection {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 14px;
-}
-
-.subTitle {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.text {
-  margin: 0;
+.switchLabel {
   color: var(--color-text);
   font-size: 15px;
-  line-height: 1.5;
+  font-weight: 500;
 }
 
-.row {
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.18);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: translate var(--duration-fast) var(--ease-out);
+}
+
+.switch:checked {
+  background: var(--color-accent);
+}
+
+.switch:checked::after {
+  translate: 18px 0;
+}
+
+.switch:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.confirm {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--radius-m);
+  background: var(--color-danger-bg);
+}
+
+.confirmText {
+  flex: 1 1 200px;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.linkField {
+  display: flex;
+  gap: 8px;
+}
+
+.linkField .input {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+
+.iconButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  background: var(--glass-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.iconButton:hover {
+  background: var(--glass-bg-strong);
+}
+
+.copied {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+/* The covers to choose from: the one in use framed in the accent. */
+.thumbs {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.thumb img,
+.frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-repeat: no-repeat;
+}
+
+.thumb[data-checked="false"] {
+  opacity: 0.7;
+}
+
+.thumb:hover {
+  opacity: 1;
+}
+
+.thumb[data-checked="true"] {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.thumb:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.thumbs:disabled .thumb {
+  cursor: default;
+}
+
+.thumbAuto {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actionsLine {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+}
+
+.clipRow {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
+  gap: 16px;
+  margin-top: 8px;
 }
 
-.actions {
+.clipRow > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.format {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
 }
 
-.facts {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 8px 20px;
-  margin: 0;
-  font-size: 15px;
-}
-
-.facts dt {
+.format .value {
   color: var(--color-text-muted);
+  font-size: 14px;
 }
 
-.facts dd {
+/* The short message after an action that took effect at once. */
+.toastBox {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 50;
+  translate: -50% 0;
+  pointer-events: none;
+}
+
+.toast {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 0;
-  overflow-wrap: anywhere;
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  box-shadow: var(--glass-shadow);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  animation: var(--motion-rise-in);
 }
 
-@media (max-width: 860px) {
+.toast svg {
+  color: var(--color-success);
+}
+
+.toastBad svg {
+  color: var(--color-danger);
+}
+
+@media (max-width: 1100px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
   }
 
-  /* On a phone the sections follow each other: no list beside them, but
-     a row of pills to jump, scrolling sideways. */
-  .nav {
+  .media {
     position: static;
-    flex-direction: row;
-    margin: 0 calc(-1 * var(--page-side, 16px));
-    padding: 0 var(--page-side, 16px);
-    overflow-x: auto;
-    scrollbar-width: none;
   }
 
-  .cover {
-    width: 100%;
+  .placeholder {
+    max-width: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .titleInput {
+    font-size: 24px;
   }
 
-  .nav a {
-    flex: none;
-  }
-
-  .section {
-    padding: 18px 16px;
-  }
-
-  .facts {
-    grid-template-columns: minmax(0, 1fr);
+  .segment {
+    flex-direction: column;
     gap: 2px;
+    height: auto;
+    padding: 8px 4px;
+    font-size: 12px;
+    white-space: normal;
+    text-align: center;
   }
 
-  .facts dd {
-    margin-bottom: 8px;
+  .segmented {
+    border-radius: var(--radius-m);
+  }
+
+  .segment:has(input:checked) {
+    border-radius: calc(var(--radius-m) - 3px);
+  }
+
+  .toastBox {
+    bottom: calc(var(--tabbar-height, 72px) + 16px + env(safe-area-inset-bottom));
   }
 }
