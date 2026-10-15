@@ -1,0 +1,105 @@
+/* The notice of a new version: a pill at the bottom of the side menu and
+   a window that says how to update. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  margin: auto 12px 0;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(6px);
+  animation: var(--motion-fade-in);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 460px;
+  padding: 24px 20px;
+  border-radius: var(--radius-l);
+  background: var(--glass-bg-bar);
+  animation: var(--motion-pop-in);
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.text {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.command {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: var(--glass-border);
+  border-radius: var(--radius-s);
+  background: rgb(0 0 0 / 0.3);
+  color: var(--color-text);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.primary,
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.action {
+  color: var(--color-text);
+}

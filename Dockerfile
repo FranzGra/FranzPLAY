@@ -32,11 +32,14 @@ COPY internal/ internal/
 COPY --from=web /src/internal/webui/dist/app internal/webui/dist/app
 ARG TARGETOS TARGETARCH TARGETVARIANT
 ARG VERSION=dev
+# RELEASE is the official release ("1.2.3" or "v1.2.3"), only when the
+# image is built from a v1.2.3 tag. Empty: a development build.
+ARG RELEASE=
 # SQLite is pure Go here: no C compiler, one static file.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
-    go build -trimpath -ldflags "-s -w -X main.version=$VERSION" \
+    go build -trimpath -ldflags "-s -w -X main.version=$VERSION -X main.release=$RELEASE" \
       -o /out/franzplay ./cmd/franzplay
 
 # --- 3. whisper.cpp, for automatic subtitles. Built on the target system
