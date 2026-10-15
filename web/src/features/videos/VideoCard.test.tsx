@@ -56,10 +56,10 @@ describe("clip on the video card", () => {
     expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
   });
 
-  it("waits a full second of the mouse resting before playing", () => {
+  it("waits for the mouse to rest a moment before playing", () => {
     show(video());
     fireEvent.pointerEnter(card(), { pointerType: "mouse" });
-    wait(999);
+    wait(hoverDelay - 1);
     expect(screen.queryByTestId("clip")).not.toBeInTheDocument();
     wait(1);
     expect(screen.getByTestId("clip")).toBeInTheDocument();
