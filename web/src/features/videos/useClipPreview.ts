@@ -1,9 +1,10 @@
 import { type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 
 // How long the pointer rests on a card before its clip plays: moving the
-// mouse across the grid does not start every clip on the way. A full
-// second: only a card the person stops on plays.
-export const hoverDelay = 1000; // milliseconds
+// mouse across the grid does not start every clip on the way. A little
+// over half a second: long enough to skip the cards the mouse only passes
+// over, short enough to feel quick on the one it stops on.
+export const hoverDelay = 600; // milliseconds
 // How long the page must stay still on a touch screen before the card in
 // the middle plays: a finger flicking through the list starts nothing.
 export const settleDelay = 600; // milliseconds
