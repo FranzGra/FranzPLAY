@@ -142,11 +142,16 @@ func (c *Checker) last(ctx context.Context) (Latest, error) {
 	if err != nil {
 		return Latest{}, fmt.Errorf("read last update check: %w", err)
 	}
+	return decodeLatest(value), nil
+}
+
+// decodeLatest reads a saved check; a broken one reads as never checked.
+func decodeLatest(value string) Latest {
 	var l Latest
 	if json.Unmarshal([]byte(value), &l) != nil {
-		return Latest{}, nil // broken: as if never checked
+		return Latest{}
 	}
-	return l, nil
+	return l
 }
 
 func (c *Checker) saveLast(ctx context.Context, l Latest) error {
