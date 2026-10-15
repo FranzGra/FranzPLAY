@@ -265,6 +265,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter) (
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
 		}
+		av.showPublicLink() // the list is only for administrators, who manage every link
 		switch {
 		case ownCover:
 			av.CoverChoice = "image"

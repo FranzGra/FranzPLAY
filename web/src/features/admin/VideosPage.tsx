@@ -13,6 +13,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatDuration } from "../../lib/format";
 import { loadSetting, saveSetting } from "../../lib/storage";
+import { PublicLinkToggle } from "../public/PublicLinkToggle";
 import styles from "./Admin.module.css";
 import { ClipForm } from "./ClipForm";
 import { CoverForm } from "./CoverForm";
@@ -286,6 +287,7 @@ function VideoRow({
             {video.missing && <span className={styles.badge}>Non trovato</span>}
             {video.tooShort && <span className={styles.badge}>Troppo corto</span>}
             {video.private && <span className={styles.badge}>Solo per chi l'ha caricato</span>}
+            {video.publicLink !== null && <span className={styles.badgeOk}>Link pubblico</span>}
             {video.duration === null ? (
               <span className={styles.badge}>Non ancora letto</span>
             ) : (
@@ -371,6 +373,14 @@ function VideoRow({
           {video.hidden ? "Mostra" : "Nascondi"}
         </button>
       </div>
+      {!video.missing && (
+        <PublicLinkToggle
+          videoId={video.id}
+          title={video.title}
+          link={video.publicLink}
+          onChange={(publicLink) => onChanged({ ...video, publicLink })}
+        />
+      )}
       {editing && (
         <DetailsForm
           video={video}

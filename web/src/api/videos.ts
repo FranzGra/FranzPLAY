@@ -41,6 +41,10 @@ export type Video = {
   // link is the address that lets anyone with it watch the video, when it
   // is seen by link: only for its uploader, on the video; null otherwise.
   link: string | null;
+  // publicLink is the address of its public link, "/p/…", only for who may
+  // manage it (its uploader with the permission, the administrators on
+  // their list); null otherwise or when it has none.
+  publicLink: string | null;
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
@@ -180,6 +184,9 @@ export function parseVideo(data: unknown): Video {
   if (v.link !== undefined && !isLink(v.link)) {
     throw new Error("video link: not the address of a video");
   }
+  if (v.publicLink !== undefined && !isPublicLinkAddress(v.publicLink)) {
+    throw new Error("video publicLink: not the address of a public link");
+  }
   if (typeof v.author !== "string") {
     throw new Error("video author: not text");
   }
@@ -214,6 +221,7 @@ export function parseVideo(data: unknown): Video {
       v.sharedWith === undefined ? [] : parseSharePeople(v.sharedWith, "video sharedWith"),
     audience: v.audience === undefined ? null : v.audience,
     link: v.link === undefined ? null : v.link,
+    publicLink: v.publicLink === undefined ? null : v.publicLink,
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",
@@ -393,6 +401,11 @@ function isAudience(value: unknown): value is Audience {
 // isLink checks the address of a video seen by link, as the server makes it.
 export function isLink(value: unknown): value is string {
   return typeof value === "string" && /^\/video\/\d+\?k=[A-Za-z0-9_-]{22}$/.test(value);
+}
+
+// isPublicLinkAddress checks the address of a public link, as the server makes it.
+export function isPublicLinkAddress(value: unknown): value is string {
+  return typeof value === "string" && /^\/p\/[A-Za-z0-9_-]{22}$/.test(value);
 }
 
 // openVideoLink tells the server I opened the link of a video seen by

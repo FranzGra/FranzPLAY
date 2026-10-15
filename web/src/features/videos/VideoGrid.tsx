@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
+import type { Video } from "../../api/videos";
 import { EmptyState } from "../../components/EmptyState";
 import type { VideoListState } from "./useVideoList";
 import { VideoCard } from "./VideoCard";
@@ -9,11 +10,13 @@ type VideoGridProps = {
   onMore: () => void;
   label: string; // for screen readers: what the list is
   empty: { title: string; text: string };
+  // below adds something under a card, like the public link on my channel.
+  below?: (video: Video) => ReactNode;
 };
 
 // VideoGrid shows a list of videos as a grid of cards, with a button to
 // see more when there are more.
-export function VideoGrid({ state, onMore, label, empty }: VideoGridProps) {
+export function VideoGrid({ state, onMore, label, empty, below }: VideoGridProps) {
   // The same "now" for every card, so they all agree on what "today" is.
   const [now] = useState(() => new Date());
 
@@ -44,6 +47,7 @@ export function VideoGrid({ state, onMore, label, empty }: VideoGridProps) {
             {state.videos.map((video) => (
               <li key={video.id}>
                 <VideoCard video={video} now={now} />
+                {below?.(video)}
               </li>
             ))}
           </ul>

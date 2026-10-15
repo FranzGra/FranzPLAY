@@ -225,3 +225,45 @@
   background: var(--glass-bg-strong);
   color: var(--color-text);
 }
+
+/* The same panel inside a row of a list: no box of its own. */
+.panelCompact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Whether a video has a public link, as a little pill. */
+.stateOn,
+.stateOff {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stateOn {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.stateOff {
+  background: var(--glass-bg-strong);
+  color: var(--color-text-muted);
+}
+
+/* Under a card of my channel: the state and the button to manage it. */
+.cardLink {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
