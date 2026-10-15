@@ -31,6 +31,24 @@ docker compose up -d   # then open http://localhost:8090
 Every setting is explained in [`.env.example`](.env.example). Full guide (in Italian):
 [`docs/docker.md`](docs/docker.md).
 
+### Updates
+
+FranzPLAY never updates itself and never touches Docker. Once a day (the first time about a
+minute after it starts) it asks GitHub for the latest **official release** of this project,
+at `https://api.github.com/repos/FranzGra/FranzPLAY/releases/latest`: drafts, pre-releases and
+plain commits on `main` are never proposed. Only that request leaves your server, with no data
+about your videos or people. When a newer release exists, administrators see a "Nuova versione"
+pill in the side menu and a window with the release notes and the command to run next to
+`compose.yaml`:
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+To turn the check off: **Amministrazione → Sito → Aggiornamenti**. When it is off, GitHub is
+never contacted. An image built from a commit (not from a `v1.2.3` tag) is a development build:
+it shows its commit and the latest release, but never asks you to update.
+
 ## Try it from the source code
 
 You need [Go](https://go.dev/dl/) 1.26 or newer and [Node.js](https://nodejs.org/) 22. [FFmpeg](https://ffmpeg.org/) is needed to read video details and make covers.

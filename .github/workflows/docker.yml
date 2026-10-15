@@ -47,14 +47,27 @@ jobs:
           fetch-depth: 0 # for the version name, from the tags
       - name: Version name
         id: version
-        run: echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+        # release is set only for a v1.2.3 tag: the program then knows it is
+        # that official release. Any other build is a development build.
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+          if [[ "$REF_TYPE" == tag && "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=" >> "$GITHUB_OUTPUT"
+          fi
       - uses: docker/setup-buildx-action@v3
       - name: Build
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/${{ matrix.arch }}
-          build-args: VERSION=${{ steps.version.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            RELEASE=${{ steps.version.outputs.release }}
           tags: ${{ env.IMAGE }}:smoke
           load: true
           cache-from: type=gha,scope=${{ matrix.arch }}
@@ -76,7 +89,9 @@ jobs:
         with:
           context: .
           platforms: linux/${{ matrix.arch }}
-          build-args: VERSION=${{ steps.version.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            RELEASE=${{ steps.version.outputs.release }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.arch }}
       - name: Remember its digest

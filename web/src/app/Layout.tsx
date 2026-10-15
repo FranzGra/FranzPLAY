@@ -18,6 +18,7 @@ import styles from "./Layout.module.css";
 import { preloadLikelyPages } from "./lazyPages";
 import { PageLoading } from "./PageLoading";
 import { type PageWidth, PageWidthContext } from "./pageWidth";
+import { UpdateDialog, UpdatePill, useNewVersion, useUpdateWindow } from "./UpdateNotice";
 
 // sideLinks are the first links of the side menu; the channel is mine.
 function sideLinks(me: number) {
@@ -79,6 +80,8 @@ export function Layout() {
   const drawer = pathname.startsWith("/video/");
   const menu = useDrawer(pathname);
   const [width, setWidth] = useState<PageWidth>("normal");
+  const newVersion = useNewVersion(account.role === "admin");
+  const updateWindow = useUpdateWindow(newVersion);
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -167,6 +170,7 @@ export function Layout() {
               </NavLink>
             </>
           )}
+          {newVersion && <UpdatePill updates={newVersion} onOpen={updateWindow.show} />}
         </nav>
 
         <main className={styles.main}>
@@ -179,6 +183,10 @@ export function Layout() {
           </div>
         </main>
       </div>
+
+      {newVersion && updateWindow.open && (
+        <UpdateDialog updates={newVersion} onClose={updateWindow.close} />
+      )}
 
       <nav className={`glass ${styles.tabbar}`} aria-label="Menu del telefono">
         {tabs.map((tab, i) => (
