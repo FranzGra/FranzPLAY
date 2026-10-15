@@ -30,7 +30,7 @@ export type ClipChoice = "" | "video" | "none";
 // uploaded, a "moment" of the video they chose, or "" when FranzPLAY picks.
 export type CoverChoice = "" | "image" | "moment";
 
-export type AdminShow = "" | "hidden" | "missing" | "short";
+export type AdminShow = "" | "public" | "hidden" | "missing" | "short";
 
 export type AdminVideoList = { videos: AdminVideo[]; total: number };
 
@@ -164,4 +164,9 @@ export async function remakeClip(id: number): Promise<void> {
 // removeClip leaves the video's card without a clip.
 export async function removeClip(id: number): Promise<void> {
   await request(`/api/admin/videos/${id}/clip`, { method: "DELETE" });
+}
+
+// fetchAdminVideo reads one video, as in the list, for its own page.
+export async function fetchAdminVideo(id: number, signal?: AbortSignal): Promise<AdminVideo> {
+  return parseAdminVideo(await request(`/api/admin/videos/${id}`, { signal }));
 }

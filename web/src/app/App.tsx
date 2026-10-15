@@ -7,6 +7,7 @@ import { Layout } from "./Layout";
 import {
   AccessPage,
   AdminPage,
+  AdminVideoPage,
   AuthPage,
   CategoriesAdminPage,
   CategoriesPage,
@@ -106,6 +107,7 @@ function Pages() {
           <Route path="inviti" element={<InvitesPage />} />
           <Route path="accessi" element={<AccessPage />} />
           <Route path="video" element={<VideosPage />} />
+          <Route path="video/:id" element={<AdminVideoPage />} />
           <Route path="categorie" element={<CategoriesAdminPage />} />
           <Route path="sottotitoli" element={<SubtitlesPage />} />
           <Route path="commenti" element={<CommentsPage />} />

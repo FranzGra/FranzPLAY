@@ -1,0 +1,104 @@
+- generic [ref=f3e3]:
+  - banner [ref=f3e4]:
+    - link "FranzPLAY" [ref=f3e5] [cursor=pointer]:
+      - /url: /
+    - link "Cerca" [ref=f3e10] [cursor=pointer]:
+      - /url: /cerca
+  - main [ref=f3e15]:
+    - generic [ref=f3e16]:
+      - heading "Amministrazione" [level=1] [ref=f3e17]
+      - navigation "Sezioni dell'amministrazione" [ref=f3e21]:
+        - link "Riepilogo" [ref=f3e22] [cursor=pointer]:
+          - /url: /admin/riepilogo
+        - link "Persone" [ref=f3e23] [cursor=pointer]:
+          - /url: /admin/persone
+        - link "Inviti" [ref=f3e24] [cursor=pointer]:
+          - /url: /admin/inviti
+        - link "Accessi" [ref=f3e25] [cursor=pointer]:
+          - /url: /admin/accessi
+        - link "Video" [ref=f3e26] [cursor=pointer]:
+          - /url: /admin/video
+        - link "Categorie" [ref=f3e27] [cursor=pointer]:
+          - /url: /admin/categorie
+        - link "Sottotitoli" [ref=f3e28] [cursor=pointer]:
+          - /url: /admin/sottotitoli
+        - link "Commenti" [ref=f3e29] [cursor=pointer]:
+          - /url: /admin/commenti
+        - link "Cartelle" [ref=f3e30] [cursor=pointer]:
+          - /url: /admin/cartelle
+        - link "Internet" [ref=f3e31] [cursor=pointer]:
+          - /url: /admin/internet
+        - link "Lavori" [ref=f3e32] [cursor=pointer]:
+          - /url: /admin/lavori
+        - link "Sito" [ref=f3e33] [cursor=pointer]:
+          - /url: /admin/sito
+      - generic [ref=f3e34]:
+        - paragraph [ref=f3e35]:
+          - link "Video" [ref=f3e36] [cursor=pointer]:
+            - /url: /admin/video
+        - generic [ref=f3e41]:
+          - heading "IMG_4700" [level=2] [ref=f3e42]
+          - paragraph [ref=f3e43]: Categoria 2 · 2:12 · 2K
+          - paragraph [ref=f3e44]: Categoria 2/IMG_4700.MOV
+          - paragraph [ref=f3e45]:
+            - link "Guarda il video" [ref=f3e46] [cursor=pointer]:
+              - /url: /video/7
+        - generic [ref=f3e47]:
+          - navigation "Sezioni del video" [ref=f3e48]:
+            - link "Informazioni" [ref=f3e49] [cursor=pointer]:
+              - /url: "#informazioni"
+            - link "Copertina e anteprima" [ref=f3e50] [cursor=pointer]:
+              - /url: "#immagini"
+            - link "Visibilità e condivisione" [ref=f3e51] [cursor=pointer]:
+              - /url: "#visibilita"
+            - link "Formato" [ref=f3e52] [cursor=pointer]:
+              - /url: "#formato"
+          - generic [ref=f3e53]:
+            - region [ref=f3e54]:
+              - heading "Informazioni" [level=3] [ref=f3e55]
+              - generic [ref=f3e56]:
+                - term [ref=f3e57]: Titolo
+                - definition [ref=f3e58]: IMG_4700
+                - term [ref=f3e59]: Categoria
+                - definition [ref=f3e60]: Categoria 2
+              - button "Modifica titolo e categoria" [ref=f3e62] [cursor=pointer]
+            - region [ref=f3e63]:
+              - heading "Copertina e anteprima" [level=3] [ref=f3e64]
+              - paragraph [ref=f3e65]: La copertina la sceglie FranzPLAY.
+              - paragraph [ref=f3e66]: L'anteprima la fa FranzPLAY.
+              - generic [ref=f3e67]:
+                - button "Cambia copertina" [ref=f3e68] [cursor=pointer]
+                - button "Cambia anteprima" [ref=f3e69] [cursor=pointer]
+                - button "Rifai copertina e anteprime" [ref=f3e70] [cursor=pointer]
+            - region [ref=f3e71]:
+              - heading "Visibilità e condivisione" [level=3] [ref=f3e72]
+              - paragraph [ref=f3e73]: Lo vedono tutti quelli che hanno un account.
+              - generic [ref=f3e74]:
+                - paragraph [ref=f3e75]: Non è nascosto.
+                - button "Nascondi" [ref=f3e76] [cursor=pointer]
+              - region "Link pubblico" [ref=f3e78]:
+                - paragraph [ref=f3e79]:
+                  - text: Link pubblico
+                  - generic [ref=f3e83]: Non pubblico
+                - paragraph [ref=f3e84]: Con un link pubblico chiunque lo riceva può guardare questo video, anche senza account. Vedrà solo questo video, niente altro di FranzPLAY.
+                - button "Crea link pubblico" [ref=f3e86] [cursor=pointer]
+            - region [ref=f3e87]:
+              - heading "Formato" [level=3] [ref=f3e88]
+              - generic [ref=f3e89]:
+                - term [ref=f3e90]: File
+                - definition [ref=f3e91]: MOV · hevc · aac
+                - term [ref=f3e92]: Qualità
+                - definition [ref=f3e93]: 2K
+                - term [ref=f3e94]: Browser
+                - definition [ref=f3e95]: Non va su tutti i browser
+                - term [ref=f3e96]: Copia per tutti i browser
+                - definition [ref=f3e97]: Nessuna
+  - navigation "Menu del telefono" [ref=f3e98]:
+    - link "Home" [ref=f3e99] [cursor=pointer]:
+      - /url: /
+    - link "Categorie" [ref=f3e103] [cursor=pointer]:
+      - /url: /categorie
+    - link "Playlist" [ref=f3e109] [cursor=pointer]:
+      - /url: /playlist
+    - link "Profilo" [ref=f3e112] [cursor=pointer]:
+      - /url: /profilo
