@@ -89,7 +89,7 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id := strconv.FormatInt(videoID, 10)
+	base := videoBase(r.Context(), videoID)
 	inside, err := h.store.embedded(r.Context(), videoID)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
@@ -106,7 +106,7 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 			Key:   s.Key,
 			Lang:  video.LangCode(s.Lang),
 			Label: video.SubtitleLabel(s.Lang),
-			Src:   "/api/videos/" + id + "/subtitles/" + url.PathEscape(s.Key),
+			Src:   base + "/subtitles/" + url.PathEscape(s.Key),
 		})
 	}
 	for _, s := range inside {
@@ -115,7 +115,7 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 			Key:   key,
 			Lang:  video.LangCode(s.Lang),
 			Label: s.Label(),
-			Src:   "/api/videos/" + id + "/subtitles/" + key,
+			Src:   base + "/subtitles/" + key,
 		})
 	}
 	for _, a := range auto {
@@ -124,7 +124,7 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 			Key:   key,
 			Lang:  a.lang,
 			Label: video.SubtitleLabel(a.lang) + " (automatici)",
-			Src:   "/api/videos/" + id + "/subtitles/" + key,
+			Src:   base + "/subtitles/" + key,
 		})
 	}
 	respond.JSON(w, r, h.logger, http.StatusOK, tracks)

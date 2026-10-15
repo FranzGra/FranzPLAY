@@ -217,6 +217,21 @@ function PersonRow({
 
   const change = (role: Account["role"], canUpload: boolean, uploadQuota?: number) =>
     run(async () => onChanged(await updateUser(person.id, { role, canUpload, uploadQuota })));
+  // Taking the permission away also turns off every public link the
+  // person made: the server does it, here we only say so.
+  const changePublic = (canSharePublic: boolean) =>
+    run(async () => {
+      onChanged(
+        await updateUser(person.id, {
+          role: person.role,
+          canUpload: person.canUpload,
+          canSharePublic,
+        }),
+      );
+      if (!canSharePublic && person.role !== "admin") {
+        setDone(`I link pubblici creati da ${person.name} non funzionano più.`);
+      }
+    });
 
   return (
     <div className={`glass ${styles.person}`}>
@@ -230,6 +245,7 @@ function PersonRow({
           <p className={styles.role}>
             {person.role === "admin" ? "Amministratore" : "Utente"}
             {person.canUpload && ` · carica video, fino a ${formatBytes(person.uploadQuota)}`}
+            {person.canSharePublic && person.role !== "admin" && " · crea link pubblici"}
           </p>
           <p className={styles.role}>
             {person.lastLogin
@@ -265,6 +281,22 @@ function PersonRow({
             />
           </label>
         )}
+        <label
+          className={styles.check}
+          title={
+            person.role === "admin"
+              ? "Gli amministratori possono sempre creare link pubblici."
+              : "Link che chiunque può aprire, anche senza account. Se lo togli, i suoi link smettono di funzionare."
+          }
+        >
+          <input
+            type="checkbox"
+            checked={person.role === "admin" || person.canSharePublic}
+            disabled={busy || person.role === "admin"}
+            onChange={(e) => changePublic(e.target.checked)}
+          />
+          Può creare link pubblici
+        </label>
         <label className={styles.check}>
           <input
             type="checkbox"

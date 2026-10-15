@@ -112,10 +112,12 @@ function optionalCount(value: unknown, what: string): number | null {
   return value === null ? null : count(value, what);
 }
 
-function parsePreview(data: unknown): Preview | null {
+// parsePreview checks the frames of a video; through a public link their
+// address starts with /api/public/ instead.
+export function parsePreview(data: unknown, prefix = "/api/previews/"): Preview | null {
   if (data === null) return null;
   const p = record(data, "video preview");
-  if (typeof p.src !== "string" || !p.src.startsWith("/api/previews/")) {
+  if (typeof p.src !== "string" || !p.src.startsWith(prefix)) {
     throw new Error("video preview src: not a preview address");
   }
   const preview = {
@@ -330,7 +332,7 @@ export type SubtitleTrack = {
   src: string;
 };
 
-export function parseSubtitles(data: unknown): SubtitleTrack[] {
+export function parseSubtitles(data: unknown, prefix = "/api/videos/"): SubtitleTrack[] {
   if (!Array.isArray(data)) {
     throw new Error("subtitles: not a list");
   }
@@ -339,7 +341,7 @@ export function parseSubtitles(data: unknown): SubtitleTrack[] {
     if (typeof s.key !== "string" || s.key === "") throw new Error("subtitle key: empty");
     if (typeof s.lang !== "string") throw new Error("subtitle lang: not text");
     if (typeof s.label !== "string" || s.label === "") throw new Error("subtitle label: empty");
-    if (typeof s.src !== "string" || !s.src.startsWith("/api/videos/")) {
+    if (typeof s.src !== "string" || !s.src.startsWith(prefix)) {
       throw new Error("subtitle src: not a subtitle address");
     }
     return { key: s.key, lang: s.lang, label: s.label, src: s.src };

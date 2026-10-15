@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { renderApp, signedIn, testAccount } from "../../test/render";
 
 const giulia = {
@@ -200,5 +200,46 @@ describe("people page", () => {
     const list = screen.getByRole("list", { name: "Persone" });
     await vi.waitFor(() => expect(within(list).queryByText("Giulia")).not.toBeInTheDocument());
     expect(server.requests.at(-1)?.method).toBe("DELETE");
+  });
+
+  it("lets the administrator allow public links, off for a new person", async () => {
+    let sent: unknown = null;
+    const { user } = renderApp(
+      "/admin/persone",
+      people({
+        "PUT /api/users/2": async (request: Request) => {
+          sent = await request.json();
+          return Response.json({ ...giulia, canSharePublic: true });
+        },
+      }),
+    );
+    const row = await rowOf("Giulia");
+    const box = within(row).getByRole("checkbox", { name: "Può creare link pubblici" });
+    expect(box).not.toBeChecked();
+    await user.click(box);
+    await waitFor(() =>
+      expect(sent).toEqual({ role: "user", canUpload: false, canSharePublic: true }),
+    );
+    // An administrator always may: the box is ticked and locked.
+    const mine = within(await rowOf("Paolo")).getByRole("checkbox", {
+      name: "Può creare link pubblici",
+    });
+    expect(mine).toBeChecked();
+    expect(mine).toBeDisabled();
+  });
+
+  it("says the links stop working when the permission goes away", async () => {
+    const { user } = renderApp(
+      "/admin/persone",
+      people({
+        "GET /api/users": { body: [me, { ...giulia, canSharePublic: true }] },
+        "PUT /api/users/2": { body: { ...giulia, canSharePublic: false } },
+      }),
+    );
+    const row = await rowOf("Giulia");
+    await user.click(within(row).getByRole("checkbox", { name: "Può creare link pubblici" }));
+    expect(
+      await screen.findByText("I link pubblici creati da Giulia non funzionano più."),
+    ).toBeInTheDocument();
   });
 });

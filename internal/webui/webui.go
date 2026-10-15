@@ -103,6 +103,11 @@ func serveIndex(w http.ResponseWriter, r *http.Request, files fs.FS, logger *slo
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	if strings.HasPrefix(r.URL.Path, "/p/") {
+		// The address of a public link holds its secret: never pass it on
+		// to the sites its page links to.
+		w.Header().Set("Referrer-Policy", "no-referrer")
+	}
 	if r.Method == http.MethodHead {
 		return
 	}
