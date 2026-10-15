@@ -143,7 +143,7 @@ func (c *Checker) last(ctx context.Context) (Latest, error) {
 		return Latest{}, fmt.Errorf("read last update check: %w", err)
 	}
 	var l Latest
-	if err := json.Unmarshal([]byte(value), &l); err != nil {
+	if json.Unmarshal([]byte(value), &l) != nil {
 		return Latest{}, nil // broken: as if never checked
 	}
 	return l, nil
