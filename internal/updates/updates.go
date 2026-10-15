@@ -144,7 +144,7 @@ func (c *Checker) last(ctx context.Context) (Latest, error) {
 	}
 	var l Latest
 	if err := json.Unmarshal([]byte(value), &l); err != nil {
-		return Latest{}, nil // broken: as if never checked
+		return Latest{}, nil //nolint:nilerr // broken: as if never checked
 	}
 	return l, nil
 }
