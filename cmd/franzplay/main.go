@@ -37,6 +37,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/sharing"
 	"github.com/FranzGra/FranzPLAY/internal/site"
 	"github.com/FranzGra/FranzPLAY/internal/translate"
+	"github.com/FranzGra/FranzPLAY/internal/updates"
 	"github.com/FranzGra/FranzPLAY/internal/uploads"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/webui"
@@ -44,6 +45,11 @@ import (
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
+
+// release is the version of the official release this program was built
+// from ("1.2.3"), set at build time with -ldflags "-X main.release=...".
+// Empty for a build from a commit: a development build.
+var release = ""
 
 // remuxPlayers is how many videos can play at once with another sound
 // track. Each one is an ffmpeg copying the picture: light, but not free
@@ -237,12 +243,15 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	scanner.OnScanning(func(bool) { hub.Publish(events.Scan) })
 	uploader.OnChange(func() { worker.Wake(); hub.Publish(events.Library) })
 
+	updater := updates.New(db, release, version, logger)
+
 	bgCtx, stopBackground := context.WithCancel(ctx)
 	var background sync.WaitGroup
 	background.Go(func() { worker.Run(bgCtx) })
 	background.Go(func() { scanner.Run(bgCtx, scanInterval) })
 	background.Go(func() { downloader.Run(bgCtx) })
 	background.Go(func() { cleanUploads(bgCtx, uploader, logger) })
+	background.Go(func() { updater.Run(bgCtx) })
 	defer func() {
 		stopBackground()
 		background.Wait()
@@ -277,6 +286,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		site.Routes(db, logger),
 		overview.Routes(db, overview.Settings{Version: version, DataDir: cfg.DataDir,
 			Libraries: cfg.Libraries, Tools: available[jobs.Probe] && available[jobs.Cover]}, logger),
+		updater.Routes(logger),
 		hub.Routes(logger),
 	)
 
@@ -292,7 +302,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 
 	serveErr := make(chan error, 1)
 	go func() {
-		logger.Info("FranzPLAY started", "version", version, "addr", cfg.Addr, "data_dir", cfg.DataDir,
+		logger.Info("FranzPLAY started", "version", version, "release", release, "addr", cfg.Addr, "data_dir", cfg.DataDir,
 			"libraries", cfg.Libraries)
 		serveErr <- srv.ListenAndServe()
 	}()
