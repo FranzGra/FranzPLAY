@@ -142,8 +142,12 @@ const mineToo = `v.uploaded_by = ? AND (v.visible OR (v.private AND v.missing_si
 const sharedWithMe = `(v.private AND v.missing_since IS NULL AND v.hidden_at IS NULL
 	AND EXISTS (SELECT 1 FROM video_shares s WHERE s.video_id = v.id AND s.user_id = ?))`
 
-// viewer returns who is asking; 0, nobody, outside a logged-in request.
+// viewer returns who is asking; 0, nobody, outside a logged-in request
+// and on the addresses of a public link, where everybody is a guest.
 func viewer(ctx context.Context) int64 {
+	if _, public := publicKey(ctx); public {
+		return 0
+	}
 	a, ok := users.FromContext(ctx)
 	if !ok {
 		return 0
@@ -332,7 +336,7 @@ func (s store) listShuffled(ctx context.Context, where string, args []any, q lis
 func (s store) get(ctx context.Context, id int64) (Video, error) {
 	var description sql.NullString
 	v, err := scanVideo(moreColumns{s.db.QueryRowContext(ctx,
-		`SELECT `+videoColumns+`, v.shown_description FROM videos v WHERE v.id = ? AND `+watchable, id, viewer(ctx)),
+		`SELECT `+videoColumns+`, v.shown_description FROM videos v WHERE v.id = ? AND `+opens(ctx), id, opener(ctx)),
 		[]any{&description}})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, errNotFound
@@ -462,7 +466,7 @@ func (s store) file(ctx context.Context, id int64) (string, error) {
 	var root, rel string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT l.path, v.path FROM videos v JOIN libraries l ON l.id = v.library_id
-		WHERE v.id = ? AND `+watchable, id, viewer(ctx)).Scan(&root, &rel)
+		WHERE v.id = ? AND `+opens(ctx), id, opener(ctx)).Scan(&root, &rel)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}
@@ -480,7 +484,7 @@ func (s store) played(ctx context.Context, id int64, convertedDir string, origin
 	var converted sql.NullString
 	err = s.db.QueryRowContext(ctx, `
 		SELECT l.path, v.path, v.converted FROM videos v JOIN libraries l ON l.id = v.library_id
-		WHERE v.id = ? AND `+watchable, id, viewer(ctx)).Scan(&root, &rel, &converted)
+		WHERE v.id = ? AND `+opens(ctx), id, opener(ctx)).Scan(&root, &rel, &converted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, errNotFound
 	}
@@ -526,7 +530,7 @@ func (s store) embedded(ctx context.Context, id int64) (subs []embeddedSubtitle,
 func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, error) {
 	var name string
 	err := s.db.QueryRowContext(ctx, `SELECT s.file FROM video_subtitles s JOIN videos v ON v.id = s.video_id
-		WHERE s.video_id = ? AND s.stream = ? AND `+watchable, id, stream, viewer(ctx)).Scan(&name)
+		WHERE s.video_id = ? AND s.stream = ? AND `+opens(ctx), id, stream, opener(ctx)).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}
@@ -569,8 +573,8 @@ func (s store) auto(ctx context.Context, id int64) (subs []autoSubtitle, err err
 func (s store) autoFile(ctx context.Context, id int64, lang string) (string, error) {
 	var name string
 	err := s.db.QueryRowContext(ctx, `SELECT a.file FROM auto_subtitles a JOIN videos v ON v.id = a.video_id
-		WHERE a.video_id = ? AND a.lang = ? AND a.fingerprint = v.fingerprint AND `+watchable,
-		id, lang, viewer(ctx)).Scan(&name)
+		WHERE a.video_id = ? AND a.lang = ? AND a.fingerprint = v.fingerprint AND `+opens(ctx),
+		id, lang, opener(ctx)).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}

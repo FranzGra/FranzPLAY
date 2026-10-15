@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
-import { avatarUrl } from "../../api/auth";
+import { avatarUrl, maySharePublic } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { fetchProgress, saveProgress } from "../../api/progress";
 import { fetchSimilar, reasonText } from "../../api/recommend";
@@ -27,6 +27,7 @@ import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
 import { SaveButton } from "../playlists/SaveButton";
+import { PublicLinkPanel } from "../public/PublicLinkPanel";
 import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
 import { namesList } from "../sharing/audience";
@@ -264,6 +265,7 @@ function Watch({
           <span>{details.join(" · ")}</span>
         </p>
         {video.private && <PrivateNote video={video} />}
+        <PublicLinkFor video={video} />
         {video.description && (
           <div className={styles.below}>
             <Description text={video.description} />
@@ -330,6 +332,16 @@ function PrivateNote({ video }: { video: Video }) {
       {change}
     </p>
   );
+}
+
+// PublicLinkFor shows the public link panel to who may make one for this
+// video: its uploader, when the administrator allowed them, or an
+// administrator, also for the videos of the folders.
+function PublicLinkFor({ video }: { video: Video }) {
+  const me = useAccount();
+  const mine = me.role === "admin" || (video.uploader !== null && video.uploader.id === me.id);
+  if (!mine || !maySharePublic(me)) return null;
+  return <PublicLinkPanel videoId={video.id} />;
 }
 
 // UpNext lists the videos to watch after this one, each saying why.

@@ -23,6 +23,9 @@ function page<C extends ComponentType<any>>(load: () => Promise<C>) {
 }
 
 export const VideoPage = page(() => import("../features/video/VideoPage").then((m) => m.VideoPage));
+export const PublicVideoPage = page(() =>
+  import("../features/public/PublicVideoPage").then((m) => m.PublicVideoPage),
+);
 export const PlaylistsPage = page(() =>
   import("../features/playlists/PlaylistsPage").then((m) => m.PlaylistsPage),
 );

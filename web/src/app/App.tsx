@@ -25,6 +25,7 @@ import {
   PlaylistPage,
   PlaylistsPage,
   ProfilePage,
+  PublicVideoPage,
   SearchPage,
   SharedPage,
   SitePage,
@@ -53,7 +54,12 @@ export function App() {
 function Gate() {
   const { state } = useAuth();
   // An invite link opens its own page, logged in or not.
-  const invite = useLocation().pathname === "/invito";
+  const { pathname } = useLocation();
+  const invite = pathname === "/invito";
+  // A public link opens its video for anybody, logged in or not.
+  if (pathname.startsWith("/p/") && (state.kind === "signed-out" || state.kind === "signed-in")) {
+    return <PublicVideoPage />;
+  }
   if (invite && (state.kind === "signed-out" || state.kind === "signed-in")) {
     return <JoinPage />;
   }

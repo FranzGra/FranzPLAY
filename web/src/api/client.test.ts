@@ -48,7 +48,8 @@ describe("parseAccount", () => {
   };
 
   it("accepts a valid user", () => {
-    expect(parseAccount(giulia)).toEqual(giulia);
+    expect(parseAccount(giulia)).toEqual({ ...giulia, canSharePublic: false });
+    expect(parseAccount({ ...giulia, canSharePublic: true }).canSharePublic).toBe(true);
   });
 
   it.each([
