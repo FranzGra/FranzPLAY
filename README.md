@@ -49,6 +49,9 @@ To turn the check off: **Amministrazione → Sito → Aggiornamenti**. When it i
 never contacted. An image built from a commit (not from a `v1.2.3` tag) is a development build:
 it shows its commit and the latest release, but never asks you to update.
 
+Image tags: `latest` is the newest official release, `1.2.3` / `1.2` pin a release, and `dev`
+follows every commit on `main` (a development build, for testing only).
+
 ## Try it from the source code
 
 You need [Go](https://go.dev/dl/) 1.26 or newer and [Node.js](https://nodejs.org/) 22. [FFmpeg](https://ffmpeg.org/) is needed to read video details and make covers.
