@@ -221,7 +221,9 @@ test("who sees a list opens over the page, without moving its title", async ({
     headers: { Origin: BASE },
   });
   const list = (await made.json()) as { id: number };
-  await page.request.put(`/api/playlists/${list.id}/videos/${all[0].id}`, {
+  // The last video, and the list goes away at the end: the other checks
+  // expect the first video in no list ("Salva", not "Salvato").
+  await page.request.put(`/api/playlists/${list.id}/videos/${all[all.length - 1].id}`, {
     headers: { Origin: BASE },
   });
   await page.goto(`/playlist/${list.id}`);
@@ -263,6 +265,7 @@ test("who sees a list opens over the page, without moving its title", async ({
   await expect(panel.getByRole("button", { name: "Salva" })).toBeInViewport();
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
+  await page.request.delete(`/api/playlists/${list.id}`, { headers: { Origin: BASE } });
 });
 
 test("on the computer the side menu stays in place while the page scrolls", async ({
