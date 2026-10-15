@@ -278,4 +278,36 @@ describe("videos page", () => {
     act(() => FakeEventSource.last?.emit("library"));
     expect(await screen.findByText("Nuovo")).toBeInTheDocument();
   });
+
+  it("manages the public link of every video, without asking row by row", async () => {
+    const key = "abcdefghijklmnopqrstuv";
+    const { user, server } = renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": {
+        body: {
+          videos: [
+            adminVideo(),
+            adminVideo({ id: 8, title: "Montagna", publicLink: "/p/ZYXWVUTSRQPONMLKJIHGFE" }),
+          ],
+          total: 2,
+        },
+      },
+      "POST /api/videos/7/public-link": {
+        body: { link: `/p/${key}`, createdAt: "2026-10-15T10:00:00Z" },
+      },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    const sea = rowOf("Mare 2024");
+    expect(within(sea).getByText("Non pubblico")).toBeInTheDocument();
+    expect(within(rowOf("Montagna")).getByText("Pubblico")).toBeInTheDocument();
+    await user.click(within(sea).getByRole("button", { name: "Link pubblico di Mare 2024" }));
+    await user.click(within(sea).getByRole("button", { name: "Crea link pubblico" }));
+    expect(await within(sea).findByRole("textbox", { name: "Link del video" })).toHaveValue(
+      `${window.location.origin}/p/${key}`,
+    );
+    expect(within(sea).getAllByText("Pubblico").length).toBeGreaterThan(0);
+    expect(
+      server.requests.filter((r) => r.method === "GET" && r.url.includes("public-link")),
+    ).toEqual([]);
+  });
 });

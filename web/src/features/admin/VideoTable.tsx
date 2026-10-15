@@ -20,6 +20,7 @@ export function VideoTable({ videos }: { videos: AdminVideo[] }) {
             <th scope="col">Formato</th>
             <th scope="col">Browser</th>
             <th scope="col">Stato</th>
+            <th scope="col">Link pubblico</th>
           </tr>
         </thead>
         <tbody>
@@ -43,6 +44,7 @@ export function VideoTable({ videos }: { videos: AdminVideo[] }) {
                   {compat?.label ?? "—"}
                 </td>
                 <td>{stateText(video)}</td>
+                <td>{video.publicLink === null ? "No" : "Sì"}</td>
               </tr>
             );
           })}

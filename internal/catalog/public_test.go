@@ -14,6 +14,7 @@ import (
 
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
+	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
 // newPublicSite is newSite with the addresses of the public links too.
@@ -169,5 +170,69 @@ func TestPublicLinkKeepsTheLoggedInPersonOut(t *testing.T) {
 	rec = s.getAs(t, 2, "/api/public/"+key)
 	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "videoId") {
 		t.Errorf("Zoe: status %d, body %s", rec.Code, rec.Body)
+	}
+}
+
+// TestListsSayWhichVideosArePublic checks the public link in the lists:
+// every one for the administrator, on my channel only mine and only with
+// the permission, never for the others.
+func TestListsSayWhichVideosArePublic(t *testing.T) {
+	s := newAdminSite(t)
+	if _, err := s.db.Exec(`INSERT INTO users (name, password_hash, role, created_at) VALUES
+		('Admin', 'x', 'admin', 1), ('Giulia', 'x', 'user', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	const giulia = 2
+	const key = "abcdefghijklmnopqrstuv"
+	id := s.addVideo(t, "mio.mp4", "x", "", 1, true)
+	plain := s.addVideo(t, "altro.mp4", "y", "", 2, true)
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = ? WHERE id IN (?, ?)`, giulia, id, plain); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO public_links (video_id, token, created_by, created_at) VALUES (?, ?, ?, 1)`,
+		id, key, giulia); err != nil {
+		t.Fatal(err)
+	}
+	links := func(body string) map[int64]string {
+		t.Helper()
+		var got struct {
+			Videos []struct {
+				ID         int64   `json:"id"`
+				PublicLink *string `json:"publicLink"`
+			} `json:"videos"`
+		}
+		if err := json.Unmarshal([]byte(body), &got); err != nil {
+			t.Fatal(err)
+		}
+		out := map[int64]string{}
+		for _, v := range got.Videos {
+			if v.PublicLink != nil {
+				out[v.ID] = *v.PublicLink
+			}
+		}
+		return out
+	}
+
+	got := links(s.do(t, "GET", "/api/admin/videos", "", http.StatusOK).Body.String())
+	if len(got) != 1 || got[id] != "/p/"+key {
+		t.Errorf("administrator's list: %v", got)
+	}
+
+	channel := "/api/videos?uploader=" + strconv.Itoa(giulia)
+	as := func(a users.Account) map[int64]string {
+		req := httptest.NewRequest(http.MethodGet, channel, nil)
+		req = req.WithContext(users.NewContext(req.Context(), a))
+		rec := httptest.NewRecorder()
+		s.handler.ServeHTTP(rec, req)
+		return links(rec.Body.String())
+	}
+	if got := as(users.Account{ID: giulia, Role: users.User, CanSharePublic: true}); len(got) != 1 || got[id] != "/p/"+key {
+		t.Errorf("Giulia with the permission: %v", got)
+	}
+	if got := as(users.Account{ID: giulia, Role: users.User}); len(got) != 0 {
+		t.Errorf("Giulia without the permission: %v", got)
+	}
+	if got := as(users.Account{ID: 1, Role: users.Admin}); len(got) != 0 {
+		t.Errorf("someone else's channel: %v", got)
 	}
 }
