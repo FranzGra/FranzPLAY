@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ADMIN, logIn, PEOPLE, videos, watchErrors } from "./franzplay";
+import { ADMIN, BASE, logIn, PEOPLE, videos, watchErrors } from "./franzplay";
 
 // Every page opens without errors and fits the screen: nothing may make
 // the page wider than the window, or on the phone it slides sideways
@@ -206,6 +206,61 @@ test("on the computer Salva opens over everything, the videos on the right inclu
     return points.filter(([x, y]) => !element.contains(document.elementFromPoint(x, y))).length;
   });
   expect(covered).toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+});
+
+test("who sees a list opens over the page, without moving its title", async ({
+  page,
+  isMobile,
+}) => {
+  await logIn(page, PEOPLE[0]);
+  const all = await videos(page);
+  const made = await page.request.post("/api/playlists", {
+    data: { name: "Chi la vede" },
+    headers: { Origin: BASE },
+  });
+  const list = (await made.json()) as { id: number };
+  await page.request.put(`/api/playlists/${list.id}/videos/${all[0].id}`, {
+    headers: { Origin: BASE },
+  });
+  await page.goto(`/playlist/${list.id}`);
+  const title = page.getByRole("heading", { level: 1 });
+  const row = page.getByRole("main").getByRole("listitem").last();
+  await expect(row).toBeVisible();
+  await page.waitForTimeout(600); // the page slides in
+  const before = { title: await title.boundingBox(), row: await row.boundingBox() };
+  await page.getByRole("button", { name: "Chi la vede" }).click();
+  const panel = page.getByRole("dialog", { name: "Chi la vede" });
+  await expect(panel.getByRole("radio", { name: "Solo io" })).toBeChecked();
+  await page.waitForTimeout(500); // it grows out of the button, or rises
+  // Nothing on the page moved or stretched to make room for it.
+  expect(await title.boundingBox()).toEqual(before.title);
+  expect(await row.boundingBox()).toEqual(before.row);
+  if (isMobile) {
+    const size = page.viewportSize();
+    expect(await panel.boundingBox()).toEqual({
+      x: 0,
+      y: 0,
+      width: size?.width,
+      height: size?.height,
+    });
+  }
+  // Every corner of the window is the window itself: nothing lies on top
+  // of it, the bottom bar on a phone included. (A bit inside the corners,
+  // which are round.)
+  const covered = await panel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const points = [
+      [box.left + 20, box.top + 20],
+      [box.right - 20, box.top + 20],
+      [box.left + 20, box.bottom - 20],
+      [box.right - 20, box.bottom - 20],
+    ];
+    return points.filter(([x, y]) => !element.contains(document.elementFromPoint(x, y))).length;
+  });
+  expect(covered).toBe(0);
+  await expect(panel.getByRole("button", { name: "Salva" })).toBeInViewport();
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
 });

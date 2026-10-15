@@ -1,12 +1,10 @@
 import {
-  type CSSProperties,
   type Dispatch,
   type FormEvent,
   type Ref,
   type SetStateAction,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -20,25 +18,16 @@ import {
   putInPlaylist,
 } from "../../api/playlists";
 import { Icon } from "../../components/Icon";
+import { type Place, placeStyle, useAnchored } from "../../lib/anchored";
 import { usePresence } from "../../lib/presence";
 import { useWide } from "../home/look";
 import styles from "./SaveButton.module.css";
 
-// gap is the space between the button and the panel, in pixels.
-const gap = 8;
-// margin keeps the panel this far from the window's edges.
-const margin = 8;
 // panelWidth is the panel's width on a computer.
 const panelWidth = 320;
 // roomWanted is the height under the button that is enough to open there:
 // a few lists, the rest scroll. Only with less room does it open above.
 const roomWanted = 240;
-
-// Place is where the panel sits in the window, measured from the button.
-type Place = { left: number; width: number; maxHeight: number } & (
-  | { top: number }
-  | { bottom: number }
-);
 
 // SaveButton opens a panel where I put the video in my lists, or make a
 // new list for it. On a computer the panel grows out of the button and
@@ -53,7 +42,6 @@ export function SaveButton({ videoId }: { videoId: number }) {
   const [saved, setSaved] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
-  const [place, setPlace] = useState<Place | null>(null);
   // The lists live here, not in the panel: the button tells how many
   // hold the video, before the panel opens and while ticks change.
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -76,30 +64,7 @@ export function SaveButton({ videoId }: { videoId: number }) {
   // On a computer the panel hangs from the button, or rises above it when
   // there is more room there. It lives at the end of the page (a portal),
   // so no column next to it, like the videos on the right, can cover it.
-  const measure = useCallback(() => {
-    const box = button.current?.getBoundingClientRect();
-    if (!box) return;
-    const width = Math.min(panelWidth, window.innerWidth - 2 * margin);
-    const left = Math.max(margin, Math.min(box.left, window.innerWidth - width - margin));
-    const below = window.innerHeight - box.bottom - gap - margin;
-    const above = box.top - gap - margin;
-    setPlace(
-      below >= roomWanted || below >= above
-        ? { left, width, top: box.bottom + gap, maxHeight: below }
-        : { left, width, bottom: window.innerHeight - box.top + gap, maxHeight: above },
-    );
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open || sheet) return;
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [open, sheet, measure]);
+  const place = useAnchored(button, open && !sheet, panelWidth, roomWanted);
 
   // Closing gives the focus back to the button, for the keyboard.
   const close = useCallback(() => {
@@ -243,22 +208,13 @@ function Panel({
     );
   };
 
-  const where: CSSProperties | undefined =
-    sheet || !place
-      ? undefined
-      : {
-          left: place.left,
-          width: place.width,
-          maxHeight: place.maxHeight,
-          ...("top" in place ? { top: place.top } : { bottom: place.bottom }),
-        };
-
   return (
     <div
       ref={ref}
       className={`glass ${sheet ? styles.sheet : styles.panel}`}
-      style={where}
+      style={sheet || !place ? undefined : placeStyle(place)}
       data-above={(place && "bottom" in place) || undefined}
+      data-right={place?.fromRight || undefined}
       role="dialog"
       aria-label="Salva in una playlist"
       aria-modal={sheet || undefined}

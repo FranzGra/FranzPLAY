@@ -169,6 +169,30 @@ describe("playlist page", () => {
     ]);
   });
 
+  it("asks who sees a list in a window over the page, closed without saving", async () => {
+    const { user, server } = renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/playlists/2": { body: { ...page, playlist: trips } },
+    });
+    const button = await screen.findByRole("button", { name: "Chi la vede" });
+    await user.click(button);
+    const who = screen.getByRole("dialog", { name: "Chi la vede" });
+    // The title and the other buttons stay where they were.
+    expect(screen.getByRole("heading", { level: 1, name: "Gite" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rinomina" })).toBeInTheDocument();
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    await user.click(within(who).getByRole("radio", { name: "Tutti" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Chi la vede" })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+    await user.click(button);
+    // Opened again, it shows what is saved, not what was left unsaved.
+    expect(screen.getByRole("radio", { name: "Solo io" })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Annulla" }));
+    expect(screen.queryByRole("dialog", { name: "Chi la vede" })).not.toBeInTheDocument();
+    expect(server.requests.some((r) => r.method === "PUT")).toBe(false);
+  });
+
   it("shares a list with some people", async () => {
     const anna = { id: 3, name: "Anna", avatar: 0 };
     let sharedWith: unknown[] = [];

@@ -29,17 +29,21 @@ export function WhoSees({
   hints,
   link = null,
   linkLater = "Il link da copiare comparirà appena salvi.",
+  hideLegend = false,
 }: {
   choice: Choice;
   onChange: (choice: Choice) => void;
   hints: Hints;
   link?: string | null;
   linkLater?: string;
+  // hideLegend keeps the title for screen readers only, when a window
+  // around the choice already says it.
+  hideLegend?: boolean;
 }) {
   const group = useId();
   return (
     <fieldset className={styles.root}>
-      <legend>Chi può vederlo</legend>
+      <legend className={hideLegend ? "visually-hidden" : undefined}>Chi può vederlo</legend>
       <div className={styles.options}>
         {options
           .filter((o) => hints[o.audience] !== undefined)

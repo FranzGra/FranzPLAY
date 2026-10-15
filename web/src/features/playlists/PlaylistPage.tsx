@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ApiError } from "../../api/client";
 import {
@@ -17,7 +17,8 @@ import { usePageTitle } from "../../components/PageTitle";
 import { formatVideos } from "../../lib/format";
 import { removeSmoothly } from "../../lib/motion";
 import { type Choice, choiceOf, namesList, playlistSharing, ready } from "../sharing/audience";
-import { type Hints, WhoSees } from "../sharing/WhoSees";
+import type { Hints } from "../sharing/WhoSees";
+import { WhoSeesWindow } from "../sharing/WhoSeesWindow";
 import { RemovableCard } from "../videos/RemovableCard";
 import { VideoCard } from "../videos/VideoCard";
 import { NameForm } from "./NameForm";
@@ -43,6 +44,7 @@ export function PlaylistPage() {
   const [mode, setMode] = useState<"view" | "rename" | "who" | "delete">("view");
   const [who, setWho] = useState<Choice>({ audience: "me", people: [] });
   const [problem, setProblem] = useState("");
+  const whoButton = useRef<HTMLButtonElement>(null);
   usePageTitle(
     state.kind === "ready"
       ? playlistName(state.playlist)
@@ -207,12 +209,18 @@ export function PlaylistPage() {
               )}
             </p>
           </div>
-          {mine && !later && mode === "view" && (
+          {mine && !later && (mode === "view" || mode === "who") && (
             <div className={styles.buttons}>
               <button
+                ref={whoButton}
                 type="button"
                 className={`glass ${styles.action}`}
+                aria-expanded={mode === "who"}
                 onClick={() => {
+                  if (mode === "who") {
+                    setMode("view");
+                    return;
+                  }
                   setWho(choiceOf(!playlist.public, playlist.sharedWith));
                   setProblem("");
                   setMode("who");
@@ -239,33 +247,6 @@ export function PlaylistPage() {
               </button>
             </div>
           )}
-          {mode === "who" && (
-            <form
-              className={`glass ${styles.who}`}
-              aria-label="Chi la vede"
-              onSubmit={(event) => {
-                event.preventDefault();
-                share();
-              }}
-            >
-              <WhoSees choice={who} onChange={setWho} hints={playlistHints} />
-              <div className={styles.buttons}>
-                <button type="submit" className={styles.primary}>
-                  Salva
-                </button>
-                <button
-                  type="button"
-                  className={`glass ${styles.action}`}
-                  onClick={() => {
-                    setProblem("");
-                    setMode("view");
-                  }}
-                >
-                  Annulla
-                </button>
-              </div>
-            </form>
-          )}
           {mode === "delete" && (
             <div className={styles.buttons}>
               <span>Eliminare la playlist? I video restano nella libreria.</span>
@@ -287,10 +268,26 @@ export function PlaylistPage() {
           )}
         </div>
       )}
-      {problem && (
+      {problem && mode !== "who" && (
         <p role="alert" className={styles.problem}>
           {problem}
         </p>
+      )}
+      {mine && !later && (
+        <WhoSeesWindow
+          open={mode === "who"}
+          button={whoButton}
+          title="Chi la vede"
+          choice={who}
+          onChange={setWho}
+          hints={playlistHints}
+          problem={problem}
+          onSave={share}
+          onClose={() => {
+            setProblem("");
+            setMode((m) => (m === "who" ? "view" : m));
+          }}
+        />
       )}
       {videos.length === 0 ? (
         <EmptyState title={later ? "Niente da guardare più tardi" : "Playlist vuota"}>
