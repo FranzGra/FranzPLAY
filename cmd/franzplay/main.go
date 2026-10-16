@@ -261,6 +261,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	if err != nil {
 		return err
 	}
+	accounts.SetTrustedProxies(cfg.TrustedProxies)
 	site := server.New(version, logger, webui.Handler(webui.Files(), logger, catalog.LinkPreview(db, logger)),
 		accounts.Routes,
 		catalog.Routes(db, cfg.DataDir, logger),

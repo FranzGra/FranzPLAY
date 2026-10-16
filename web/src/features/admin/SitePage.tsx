@@ -1,5 +1,13 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { fetchRegistration, saveRegistration } from "../../api/auth";
+import {
+  fetchRegistration,
+  fetchServerMethods,
+  type Method,
+  methodNames,
+  methods,
+  saveRegistration,
+  saveServerMethods,
+} from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { type Look, lookProblem, saveLook } from "../../api/site";
 import { useSite } from "../../app/site";
@@ -16,6 +24,7 @@ export function SitePage() {
     <>
       <LookSettings />
       <RegistrationSettings />
+      <LoginMethodSettings />
       <UpdateSettings />
     </>
   );
@@ -172,6 +181,109 @@ function RegistrationSettings() {
             />
           </label>
         </li>
+      </ul>
+      {problem && (
+        <p role="alert" className={styles.problem}>
+          {problem}
+        </p>
+      )}
+      {done && (
+        <p role="status" className={styles.done}>
+          {done}
+        </p>
+      )}
+    </>
+  );
+}
+
+const methodHints: Record<Method, string> = {
+  password: "La più sicura.",
+  pin: "6 cifre su un tastierino: comodo sulla TV e sul telefono, ma meno sicuro.",
+  pattern: "Una sequenza di almeno 5 punti su 9, come su Android: comoda, ma meno sicura.",
+};
+
+// LoginMethodSettings chooses how people may log in on this server. Each
+// person can be narrowed further in Persone. A method taken away keeps
+// working once for whoever uses it: then they must choose an allowed one.
+function LoginMethodSettings() {
+  const [list, setList] = useState<Method[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  const [done, setDone] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchServerMethods(controller.signal)
+      .then(setList)
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        setFailed(true);
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (failed) {
+    return (
+      <EmptyState title="Modi di accesso non disponibili">
+        Il server non ha risposto. Ricarica la pagina tra poco.
+      </EmptyState>
+    );
+  }
+  if (list === null) return <div className={styles.placeholder} aria-busy="true" />;
+
+  const toggle = (m: Method, on: boolean) => {
+    const next = methods.filter((x) => (x === m ? on : list.includes(x)));
+    if (next.length === 0) {
+      setProblem("Lascia almeno un modo di entrare.");
+      return;
+    }
+    setBusy(true);
+    setProblem("");
+    setDone("");
+    saveServerMethods(next)
+      .then((saved) => {
+        setList(saved);
+        setDone(
+          on
+            ? `${methodNames[m]} ammess${m === "pin" ? "o" : "a"}: le persone possono sceglierlo dal profilo.`
+            : `${methodNames[m]} non più ammess${m === "pin" ? "o" : "a"}. Chi lo usa entra ancora una volta, poi deve sceglierne un altro.`,
+        );
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+        setProblem("Non si è riusciti a salvare. Riprova tra poco.");
+      })
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <>
+      <h2 className={styles.groupTitle}>Modi per entrare</h2>
+      <p className={styles.lead}>
+        Scegli come possono entrare le persone. Vale per tutti; in Persone puoi restringere i modi
+        di una persona sola.
+      </p>
+      <ul className={`stagger ${styles.list}`} aria-label="Modi per entrare">
+        {methods.map((m) => (
+          <li key={m} className={`glass ${styles.setting}`}>
+            <div>
+              <p className={styles.name}>{methodNames[m]}</p>
+              <p className={styles.role}>{methodHints[m]}</p>
+            </div>
+            <label className={styles.toggle}>
+              {list.includes(m) ? "Ammesso" : "Non ammesso"}
+              <input
+                type="checkbox"
+                aria-label={`${methodNames[m]} ammesso`}
+                checked={list.includes(m)}
+                disabled={busy || (list.length === 1 && list.includes(m))}
+                onChange={(e) => toggle(m, e.target.checked)}
+              />
+            </label>
+          </li>
+        ))}
       </ul>
       {problem && (
         <p role="alert" className={styles.problem}>

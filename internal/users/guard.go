@@ -15,14 +15,15 @@ const cookieName = "franzplay_session"
 
 // publicAPI are the API addresses that work without logging in.
 var publicAPI = map[string]bool{
-	"/api/health":     true,
-	"/api/setup":      true,
-	"/api/login":      true,
-	"/api/join":       true, // with an invite code, instead of a login
-	"/api/join/check": true,
-	"/api/register":   true, // refused by itself unless the administrator allows it
-	"/api/site":       true, // name and color, for the login page; changing them checks the role itself
-	"/api/me":         true, // answers 401 itself, so the interface knows to show the login
+	"/api/health":       true,
+	"/api/setup":        true,
+	"/api/login":        true,
+	"/api/login/method": true, // the method of a name, or a decoy: see methodOf
+	"/api/join":         true, // with an invite code, instead of a login
+	"/api/join/check":   true,
+	"/api/register":     true, // refused by itself unless the administrator allows it
+	"/api/site":         true, // name and color, for the login page; changing them checks the role itself
+	"/api/me":           true, // answers 401 itself, so the interface knows to show the login
 }
 
 // isPublicLink reports whether a request reads the video of a public
@@ -63,6 +64,8 @@ func (s *Service) Protect(next http.Handler) http.Handler {
 		}
 		a, token, err := s.account(r)
 		switch {
+		case err == nil && a.MustChooseMethod && !whileChoosing[r.URL.Path]:
+			respond.Error(w, r, s.logger, http.StatusForbidden, errMustChoose.Error())
 		case err == nil:
 			ctx := NewContext(r.Context(), a)
 			ctx = context.WithValue(ctx, tokenKey{}, token)
@@ -77,6 +80,18 @@ func (s *Service) Protect(next http.Handler) http.Handler {
 	})
 }
 
+// whileChoosing are the API addresses that work for a user whose login
+// method the administrator no longer allows: enough to pick a new one.
+var whileChoosing = map[string]bool{
+	"/api/health":        true,
+	"/api/setup":         true,
+	"/api/site":          true,
+	"/api/me":            true,
+	"/api/me/credential": true,
+	"/api/me/check":      true,
+	"/api/logout":        true,
+}
+
 type tokenKey struct{}
 
 // account finds the user of the request's session cookie.
@@ -85,7 +100,11 @@ func (s *Service) account(r *http.Request) (Account, string, error) {
 	if err != nil || c.Value == "" || len(c.Value) > 100 {
 		return Account{}, "", errNoSession
 	}
-	a, err := s.store.sessionAccount(r.Context(), hashToken(c.Value), s.now())
+	stored, err := s.store.sessionAccount(r.Context(), hashToken(c.Value), s.now())
+	if err != nil {
+		return Account{}, "", err
+	}
+	a, err := s.withMethods(r.Context(), stored.Account, stored.method, stored.own)
 	return a, c.Value, err
 }
 

@@ -87,6 +87,10 @@ func (b *browser) do(method, path string, body any, header ...string) *httptest.
 	}
 	req := httptest.NewRequest(method, path, r)
 	for i := 0; i+1 < len(header); i += 2 {
+		if header[i] == "RemoteAddr" { // not a header: where the request comes from
+			req.RemoteAddr = header[i+1]
+			continue
+		}
 		req.Header.Set(header[i], header[i+1])
 	}
 	if b.cookie != "" {
@@ -134,7 +138,7 @@ func TestFirstVisitorCreatesTheAdministrator(t *testing.T) {
 	b := s.browser()
 	rec := b.do("GET", "/api/setup", nil)
 	expect(t, rec, http.StatusOK)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"codeNeeded":false,"openRegistration":false}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"codeNeeded":false,"openRegistration":false,"methods":["password","pin","pattern"]}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 	rec = b.do("POST", "/api/setup", map[string]string{"name": "Admin", "password": "admin-password"})
@@ -153,7 +157,7 @@ func TestFirstVisitorCreatesTheAdministrator(t *testing.T) {
 		"name": "Second", "password": "second-password",
 	}), http.StatusConflict)
 	rec = b.do("GET", "/api/setup", nil)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"codeNeeded":false,"openRegistration":false}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"codeNeeded":false,"openRegistration":false,"methods":["password","pin","pattern"]}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 }
@@ -198,7 +202,7 @@ func TestSetupNeedsTheCodeFromTheLogWhenAsked(t *testing.T) {
 	b := s.browser()
 	rec := b.do("GET", "/api/setup", nil)
 	expect(t, rec, http.StatusOK)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"codeNeeded":true,"openRegistration":false}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":true,"codeNeeded":true,"openRegistration":false,"methods":["password","pin","pattern"]}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 	expect(t, b.do("POST", "/api/setup", map[string]string{
@@ -227,7 +231,7 @@ func TestSetupNeedsTheCodeFromTheLogWhenAsked(t *testing.T) {
 		"code": code, "name": "Second", "password": "second-password",
 	}), http.StatusConflict)
 	rec = b.do("GET", "/api/setup", nil)
-	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"codeNeeded":false,"openRegistration":false}` {
+	if strings.TrimSpace(rec.Body.String()) != `{"needed":false,"codeNeeded":false,"openRegistration":false,"methods":["password","pin","pattern"]}` {
 		t.Fatalf("setup status %s", rec.Body)
 	}
 }
@@ -316,17 +320,20 @@ func TestTooManyWrongPasswords(t *testing.T) {
 	s := newSite(t)
 	s.setUp()
 	b := s.browser()
-	for range maxFailures {
+	for range passwordPolicy.threshold - 1 {
 		expect(t, b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "wrong-password"}),
 			http.StatusUnauthorized)
 	}
-	// Even the right password must wait.
-	rec := b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"})
+	// The wrong try that starts the block already says how long it lasts.
+	rec := b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "wrong-password"})
 	expect(t, rec, http.StatusTooManyRequests)
 	if rec.Header().Get("Retry-After") != "60" {
 		t.Fatalf("Retry-After = %q", rec.Header().Get("Retry-After"))
 	}
-	s.now = s.now.Add(lockout)
+	// Even the right password must wait.
+	expect(t, b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"}),
+		http.StatusTooManyRequests)
+	s.now = s.now.Add(time.Minute)
 	expect(t, b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"}),
 		http.StatusOK)
 }

@@ -13,6 +13,7 @@ import {
   CategoriesPage,
   CategoryPage,
   ChannelPage,
+  ChooseMethodPage,
   CommentsPage,
   FoldersPage,
   HistoryPage,
@@ -78,7 +79,7 @@ function Gate() {
         />
       );
     case "signed-in":
-      return <Pages />;
+      return state.account.mustChooseMethod ? <ChooseMethodPage /> : <Pages />;
   }
 }
 

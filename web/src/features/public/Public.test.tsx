@@ -149,6 +149,7 @@ describe("page of a public link", () => {
         loggedIn
           ? Response.json(giulia)
           : Response.json({ error: "login required" }, { status: 401 }),
+      "POST /api/login/method": { body: { method: "password" } },
       "POST /api/login": () => {
         loggedIn = true;
         return Response.json(giulia);
@@ -161,7 +162,8 @@ describe("page of a public link", () => {
     await user.click(screen.getByRole("button", { name: "Commenta" }));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Accedi" }));
     await user.type(await screen.findByLabelText("Nome"), "Giulia");
-    await user.type(screen.getByLabelText("Password"), "giulia-password");
+    await user.click(screen.getByRole("button", { name: "Avanti" }));
+    await user.type(await screen.findByLabelText("Password"), "giulia-password");
     await user.click(screen.getByRole("button", { name: "Entra" }));
     expect(
       await screen.findByRole("heading", { level: 1, name: "Mare 2024 (pagina)" }),

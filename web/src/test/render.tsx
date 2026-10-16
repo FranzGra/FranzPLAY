@@ -14,6 +14,10 @@ export const testAccount: Account = {
   accentColor: "",
   avatar: 0,
   skipSeconds: 15,
+  loginMethod: "password",
+  allowedMethods: ["password", "pin", "pattern"],
+  ownMethods: null,
+  mustChooseMethod: false,
 };
 
 // A route of the fake server: what it answers to "METHOD /path".

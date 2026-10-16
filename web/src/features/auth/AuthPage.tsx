@@ -1,5 +1,14 @@
-import { type FormEvent, useId, useState } from "react";
-import { login, nameProblem, passwordProblem, register, setup } from "../../api/auth";
+import { type FormEvent, useEffect, useId, useState } from "react";
+import {
+  fetchSetup,
+  login,
+  loginMethod,
+  type Method,
+  nameProblem,
+  passwordProblem,
+  register,
+  setup,
+} from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { type Look, lookProblem, saveLook, siteName } from "../../api/site";
 import { useAuth } from "../../app/auth";
@@ -8,6 +17,9 @@ import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { LookFields } from "../admin/LookFields";
 import styles from "./AuthPage.module.css";
+import { type NewChoice, NewSecret } from "./secret/NewSecret";
+import { SecretInput } from "./secret/SecretInput";
+import { blockedText } from "./secret/wait";
 
 type Mode = "login" | "setup" | "register";
 
@@ -54,13 +66,70 @@ export function AuthPage({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const errorId = useId();
+  // Logging in goes in two steps: the name, then the way that person
+  // enters (method), asked of the server. null: still at the name.
+  const [method, setMethod] = useState<Method | null>(null);
+  const [shake, setShake] = useState(0);
+  // Registering: the methods allowed, and what the person chose.
+  const [allowed, setAllowed] = useState<Method[]>(["password"]);
+  const [choice, setChoice] = useState<NewChoice | null>(null);
+
+  useEffect(() => {
+    if (mode !== "register") return;
+    const stop = new AbortController();
+    fetchSetup(stop.signal)
+      .then((s) => setAllowed(s.methods))
+      .catch((err: unknown) => {
+        if (!stop.signal.aborted) console.error(err);
+      });
+    return () => stop.abort();
+  }, [mode]);
+
+  // askMethod is the first step of logging in.
+  async function askMethod() {
+    if (name.trim() === "") {
+      setError("Scrivi il tuo nome.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      setMethod(await loginMethod(name));
+      setPassword("");
+    } catch (err) {
+      setError(explain(err, mode, "password"));
+    }
+    setBusy(false);
+  }
+
+  async function enter(secret: string) {
+    if (method === null) return;
+    if (secret === "") {
+      setError(method === "password" ? "Scrivi la password." : "");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      signedIn(await login(name, secret));
+    } catch (err) {
+      setError(explain(err, mode, method));
+      setPassword("");
+      setShake((n) => n + 1);
+      setBusy(false);
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mode === "login") {
+      await (method === null ? askMethod() : enter(password));
+      return;
+    }
     const problem =
-      mode === "login"
-        ? ""
-        : checkSetup(name, password, confirm) || (mode === "setup" ? lookProblem(newLook) : "");
+      mode === "register"
+        ? nameProblem(name) || choice?.problem || ""
+        : checkSetup(name, password, confirm) || lookProblem(newLook);
     if (problem) {
       setError(problem);
       return;
@@ -71,15 +140,13 @@ export function AuthPage({
       const account =
         mode === "setup"
           ? await setup(setupCode ? code : "", name, password)
-          : mode === "register"
-            ? await register(name, password)
-            : await login(name, password);
+          : await register(name, choice?.method ?? "password", choice?.secret ?? "");
       if (mode === "setup") {
         await keepLook(newLook);
       }
       signedIn(account);
     } catch (err) {
-      setError(explain(err, mode));
+      setError(explain(err, mode, choice?.method ?? "password"));
       setBusy(false);
     }
   }
@@ -122,9 +189,7 @@ export function AuthPage({
         )}
 
         {mode === "register" && (
-          <p className={styles.intro}>
-            Scegli il nome e la password con cui entrerai in FranzPLAY.
-          </p>
+          <p className={styles.intro}>Scegli il nome e il modo in cui entrerai in FranzPLAY.</p>
         )}
 
         {mode === "setup" && setupCode && (
@@ -137,31 +202,75 @@ export function AuthPage({
             describedBy={describedBy}
           />
         )}
-        <Field
-          label="Nome"
-          value={name}
-          onChange={setName}
-          autoComplete="username"
-          describedBy={describedBy}
-        />
-        <Field
-          label="Password"
-          type="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete={mode === "login" ? "current-password" : "new-password"}
-          describedBy={describedBy}
-        />
-        {mode !== "login" && (
+        {mode === "login" && method !== null ? (
+          <>
+            <p className={styles.who}>
+              <span>{name.trim()}</span>
+              <button
+                type="button"
+                className={styles.link}
+                onClick={() => {
+                  setMethod(null);
+                  setPassword("");
+                  setError("");
+                }}
+              >
+                Cambia nome
+              </button>
+            </p>
+            {/* For password managers: the name goes with the password. */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={name}
+              readOnly
+              hidden
+            />
+            <SecretInput
+              method={method}
+              value={password}
+              onChange={(value) => {
+                setPassword(value);
+                if (value !== "" && method !== "password") setError("");
+              }}
+              onComplete={(value) => void enter(value)}
+              autoFocus
+              disabled={busy}
+              shake={shake}
+              describedBy={describedBy}
+            />
+          </>
+        ) : (
           <Field
-            label="Ripeti la password"
-            type="password"
-            value={confirm}
-            onChange={setConfirm}
-            autoComplete="new-password"
+            label="Nome"
+            value={name}
+            onChange={setName}
+            autoComplete="username"
             describedBy={describedBy}
           />
         )}
+        {mode === "setup" && (
+          <>
+            <Field
+              label="Password"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+              describedBy={describedBy}
+            />
+            <Field
+              label="Ripeti la password"
+              type="password"
+              value={confirm}
+              onChange={setConfirm}
+              autoComplete="new-password"
+              describedBy={describedBy}
+            />
+          </>
+        )}
+        {mode === "register" && <NewSecret allowed={allowed} onChange={setChoice} />}
         {mode === "setup" && (
           <section className={styles.siteLook} aria-label="Il tuo sito">
             <p className={styles.intro}>
@@ -178,9 +287,11 @@ export function AuthPage({
           </p>
         )}
 
-        <button type="submit" className={styles.submit} disabled={busy}>
-          {mode === "login" ? "Entra" : "Crea e entra"}
-        </button>
+        {(mode !== "login" || method === null || method === "password") && (
+          <button type="submit" className={styles.submit} disabled={busy}>
+            {mode !== "login" ? "Crea e entra" : method === null ? "Avanti" : "Entra"}
+          </button>
+        )}
 
         {openRegistration && mode !== "setup" && (
           <p className={styles.switch}>
@@ -192,6 +303,8 @@ export function AuthPage({
                 setMode(mode === "login" ? "register" : "login");
                 setError("");
                 setConfirm("");
+                setMethod(null);
+                setPassword("");
               }}
             >
               {mode === "login" ? "Registrati" : "Accedi"}
@@ -260,20 +373,28 @@ export function checkSetup(name: string, password: string, confirm: string): str
   return "";
 }
 
+const wrongWhat: Record<Method, string> = {
+  password: "Nome o password sbagliati.",
+  pin: "Nome o PIN sbagliati.",
+  pattern: "Nome o sequenza sbagliati.",
+};
+
 // explain turns a refusal of the server into a sentence for people.
-function explain(error: unknown, mode: Mode): string {
+function explain(error: unknown, mode: Mode, method: Method): string {
   if (!(error instanceof ApiError)) {
     return "Il server non risponde. Controlla che FranzPLAY sia acceso e riprova.";
   }
   switch (error.status) {
     case 400:
-      return mode === "login"
-        ? "Scrivi nome e password."
-        : "Il nome può contenere solo lettere, numeri, spazi, punti, trattini e trattini bassi.";
+      if (mode === "login") return "Scrivi nome e password.";
+      if (error.message.includes("method")) {
+        return "Questo modo di entrare non è ammesso su questo server: scegline un altro.";
+      }
+      return "Il nome può contenere solo lettere, numeri, spazi, punti, trattini e trattini bassi.";
     case 401:
       return mode === "setup"
         ? "Il codice di installazione non è giusto. Copialo dal terminale."
-        : "Nome o password sbagliati.";
+        : wrongWhat[method];
     case 403:
       if (mode !== "register" || error.message === "request from another site") {
         return "Il server ha rifiutato la richiesta perché arriva da un indirizzo diverso da quello del sito. Se usi un proxy, controlla che passi l'indirizzo giusto.";
@@ -286,7 +407,7 @@ function explain(error: unknown, mode: Mode): string {
     case 429:
       return mode === "register"
         ? "Troppi account nuovi da questa rete. Aspetta qualche minuto e riprova."
-        : "Troppe password sbagliate. Aspetta un minuto e riprova.";
+        : blockedText(error);
     default:
       return "Qualcosa è andato storto sul server. Riprova tra poco.";
   }

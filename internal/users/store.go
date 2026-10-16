@@ -29,6 +29,17 @@ type Account struct {
 	// SkipSeconds is how far the player jumps forward or back for the
 	// user: one of SkipChoices.
 	SkipSeconds int `json:"skipSeconds"`
+	// LoginMethod is how the user logs in: password, PIN or pattern.
+	LoginMethod Method `json:"loginMethod"`
+	// AllowedMethods are the methods the user may choose now.
+	AllowedMethods Methods `json:"allowedMethods"`
+	// OwnMethods is the administrator's narrowing for this user; nil when
+	// the user follows the server's choice.
+	OwnMethods Methods `json:"ownMethods"`
+	// MustChooseMethod says the administrator no longer allows the user's
+	// method: it still opens the door once, then the user must pick an
+	// allowed one before doing anything else.
+	MustChooseMethod bool `json:"mustChooseMethod"`
 }
 
 // MaySharePublic reports whether the user may make public links.
@@ -96,9 +107,16 @@ func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now tim
 		a.UploadQuota = DefaultUploadQuota
 	}
 	a.SkipSeconds = DefaultSkip // the database default
+	if a.LoginMethod == "" {
+		a.LoginMethod = Password
+	}
+	var own any // NULL: the user follows the server
+	if len(a.OwnMethods) > 0 {
+		own = a.OwnMethods.String()
+	}
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO users (name, password_hash, role, can_upload, upload_quota, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		a.Name, hash, string(a.Role), a.CanUpload, a.UploadQuota, now.Unix())
+		INSERT INTO users (name, password_hash, login_method, allowed_methods, role, can_upload, upload_quota, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.Name, hash, string(a.LoginMethod), own, string(a.Role), a.CanUpload, a.UploadQuota, now.Unix())
 	if err != nil {
 		return Account{}, fmt.Errorf("create user: %w", err)
 	}
@@ -108,38 +126,57 @@ func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now tim
 	return a, nil
 }
 
-// credentials returns a user and its password hash, by name.
-func (s store) credentials(ctx context.Context, name string) (Account, string, error) {
-	var a Account
-	var hash, role string
-	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds, password_hash FROM users WHERE name = ?`, name).
-		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds, &hash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Account{}, "", errUserNotFound
-	}
-	if err != nil {
-		return Account{}, "", fmt.Errorf("read user: %w", err)
+// accountColumns are the columns read by scanAccount, from users.
+const accountColumns = `id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds, login_method, coalesce(allowed_methods, '')`
+
+// storedAccount is a user as read from the database, with its method
+// columns still as text: Service.withMethods completes it.
+type storedAccount struct {
+	Account
+	method, own string
+}
+
+type scanner interface{ Scan(dest ...any) error }
+
+func scanAccount(row scanner, extra ...any) (storedAccount, error) {
+	var a storedAccount
+	var role string
+	dest := append([]any{&a.ID, &a.Name, &role, &a.CanUpload, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds, &a.method, &a.own}, extra...)
+	if err := row.Scan(dest...); err != nil {
+		return storedAccount{}, err
 	}
 	r, ok := parseRole(role)
 	if !ok {
-		return Account{}, "", fmt.Errorf("user %d has unknown role %q", a.ID, role)
+		return storedAccount{}, fmt.Errorf("user %d has unknown role %q", a.ID, role)
 	}
 	a.Role = r
+	return a, nil
+}
+
+// credentials returns a user and its password hash, by name.
+func (s store) credentials(ctx context.Context, name string) (storedAccount, string, error) {
+	var hash string
+	a, err := scanAccount(s.db.QueryRowContext(ctx, `SELECT `+accountColumns+`, password_hash FROM users WHERE name = ?`, name), &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return storedAccount{}, "", errUserNotFound
+	}
+	if err != nil {
+		return storedAccount{}, "", fmt.Errorf("read user: %w", err)
+	}
 	return a, hash, nil
 }
 
-// passwordHash returns the stored hash of a user, by id.
-func (s store) passwordHash(ctx context.Context, id int64) (string, error) {
+// byID returns a user and its hash, by id.
+func (s store) byID(ctx context.Context, id int64) (storedAccount, string, error) {
 	var hash string
-	err := s.db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ?`, id).Scan(&hash)
+	a, err := scanAccount(s.db.QueryRowContext(ctx, `SELECT `+accountColumns+`, password_hash FROM users WHERE id = ?`, id), &hash)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", errUserNotFound
+		return storedAccount{}, "", errUserNotFound
 	}
 	if err != nil {
-		return "", fmt.Errorf("read user: %w", err)
+		return storedAccount{}, "", fmt.Errorf("read user: %w", err)
 	}
-	return hash, nil
+	return a, hash, nil
 }
 
 // Person is a user as the administrator sees them in the list of people.
@@ -148,25 +185,27 @@ type Person struct {
 	LastLogin *time.Time `json:"lastLogin"` // nil if they never logged in with name and password
 }
 
-func (s store) list(ctx context.Context) (_ []Person, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds, last_login FROM users ORDER BY name`)
+// storedPerson is a Person whose methods are still text.
+type storedPerson struct {
+	storedAccount
+	LastLogin *time.Time
+}
+
+func (s store) list(ctx context.Context) (_ []storedPerson, err error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+accountColumns+`, last_login FROM users ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
-	out := []Person{}
+	out := []storedPerson{}
 	for rows.Next() {
-		var p Person
-		var role string
+		var p storedPerson
 		var last sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Name, &role, &p.CanUpload, &p.CanSharePublic, &p.UploadQuota, &p.AccentColor, &p.Avatar, &p.SkipSeconds, &last); err != nil {
+		a, err := scanAccount(rows, &last)
+		if err != nil {
 			return nil, fmt.Errorf("list users: %w", err)
 		}
-		r, ok := parseRole(role)
-		if !ok {
-			return nil, fmt.Errorf("user %d has unknown role %q", p.ID, role)
-		}
-		p.Role = r
+		p.storedAccount = a
 		if last.Valid {
 			t := time.Unix(last.Int64, 0).UTC()
 			p.LastLogin = &t
@@ -215,30 +254,29 @@ func (s store) deleteUser(ctx context.Context, id int64) (err error) {
 // A user who may no longer share in public (no permission and not an
 // administrator) loses the public links they made, in the same
 // transaction: those links stop working at once. revoked is how many.
-func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bool, canSharePublic *bool, quota *int64) (_ Account, revoked int64, err error) {
+func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bool, canSharePublic *bool, quota *int64, own *Methods) (_ storedAccount, revoked int64, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return Account{}, 0, fmt.Errorf("update user: %w", err)
+		return storedAccount{}, 0, fmt.Errorf("update user: %w", err)
 	}
 	defer func() { err = finish(tx, err) }()
 
-	a := Account{ID: id, Role: role, CanUpload: canUpload}
-	var old string
-	err = tx.QueryRowContext(ctx, `SELECT name, role, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds FROM users WHERE id = ?`, id).
-		Scan(&a.Name, &old, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds)
+	a, err := scanAccount(tx.QueryRowContext(ctx, `SELECT `+accountColumns+` FROM users WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Account{}, 0, errUserNotFound
+		return storedAccount{}, 0, errUserNotFound
 	}
 	if err != nil {
-		return Account{}, 0, fmt.Errorf("update user: %w", err)
+		return storedAccount{}, 0, fmt.Errorf("update user: %w", err)
 	}
-	if Role(old) == Admin && role != Admin {
+	old := a.Role
+	a.Role, a.CanUpload = role, canUpload
+	if old == Admin && role != Admin {
 		var admins int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE role = 'admin'`).Scan(&admins); err != nil {
-			return Account{}, 0, fmt.Errorf("update user: %w", err)
+			return storedAccount{}, 0, fmt.Errorf("update user: %w", err)
 		}
 		if admins <= 1 {
-			return Account{}, 0, errLastAdmin
+			return storedAccount{}, 0, errLastAdmin
 		}
 	}
 	if quota != nil {
@@ -247,32 +285,39 @@ func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bo
 	if canSharePublic != nil {
 		a.CanSharePublic = *canSharePublic
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE users SET role = ?, can_upload = ?, can_share_public = ?, upload_quota = ? WHERE id = ?`,
-		string(role), canUpload, a.CanSharePublic, a.UploadQuota, id); err != nil {
-		return Account{}, 0, fmt.Errorf("update user: %w", err)
+	if own != nil {
+		a.own = own.String()
+	}
+	var ownValue any // NULL: the user follows the server
+	if a.own != "" {
+		ownValue = a.own
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET role = ?, can_upload = ?, can_share_public = ?, upload_quota = ?, allowed_methods = ? WHERE id = ?`,
+		string(role), canUpload, a.CanSharePublic, a.UploadQuota, ownValue, id); err != nil {
+		return storedAccount{}, 0, fmt.Errorf("update user: %w", err)
 	}
 	if !a.MaySharePublic() {
 		res, err := tx.ExecContext(ctx, `DELETE FROM public_links WHERE created_by = ?`, id)
 		if err != nil {
-			return Account{}, 0, fmt.Errorf("revoke public links: %w", err)
+			return storedAccount{}, 0, fmt.Errorf("revoke public links: %w", err)
 		}
 		if revoked, err = res.RowsAffected(); err != nil {
-			return Account{}, 0, fmt.Errorf("revoke public links: %w", err)
+			return storedAccount{}, 0, fmt.Errorf("revoke public links: %w", err)
 		}
 	}
 	return a, revoked, nil
 }
 
-// setPassword changes a password and closes every session of the user
-// except keep (the browser that made the change), so a stolen session
-// stops working. An empty keep closes them all.
-func (s store) setPassword(ctx context.Context, id int64, hash string, keep []byte) (err error) {
+// setPassword changes a password (or PIN, or pattern: m says which) and
+// closes every session of the user except keep (the browser that made the
+// change), so a stolen session stops working. An empty keep closes them all.
+func (s store) setPassword(ctx context.Context, id int64, m Method, hash string, keep []byte) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("set password: %w", err)
 	}
 	defer func() { err = finish(tx, err) }()
-	res, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, hash, id)
+	res, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = ?, login_method = ? WHERE id = ?`, hash, string(m), id)
 	if err != nil {
 		return fmt.Errorf("set password: %w", err)
 	}

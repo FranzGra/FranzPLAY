@@ -1482,3 +1482,20 @@ label.action:focus-within {
     font-size: 14px;
   }
 }
+
+/* The login methods allowed for one person: a tile of switches. */
+.methods {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.methods legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}

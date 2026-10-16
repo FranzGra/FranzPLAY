@@ -1,13 +1,16 @@
 import { type FormEvent, useState } from "react";
-import { deleteMe } from "../../api/auth";
+import { deleteMe, type Method } from "../../api/auth";
 import { ApiError } from "../../api/client";
-import { useAuth } from "../../app/auth";
+import { useAccount, useAuth } from "../../app/auth";
+import { SecretInput } from "../auth/secret/SecretInput";
+import { blockedText } from "../auth/secret/wait";
 import styles from "./ProfilePage.module.css";
 
 // DeleteAccount removes my account for good. It first says what is lost,
 // then asks for the password: a phone left on the table is not enough.
 export function DeleteAccount() {
   const { sessionClosed } = useAuth();
+  const method = useAccount().loginMethod;
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [sending, setSending] = useState(false);
@@ -21,17 +24,21 @@ export function DeleteAccount() {
     );
   }
 
-  const send = (event: FormEvent) => {
-    event.preventDefault();
+  const remove = (secret: string) => {
     setSending(true);
     setProblem("");
-    deleteMe(password)
+    deleteMe(secret)
       .then(sessionClosed)
       .catch((error: unknown) => {
         console.error(error);
-        setProblem(explain(error));
+        setProblem(explain(error, method));
+        if (method !== "password") setPassword("");
         setSending(false);
       });
+  };
+  const send = (event: FormEvent) => {
+    event.preventDefault();
+    if (method === "password") remove(password);
   };
 
   return (
@@ -44,17 +51,15 @@ export function DeleteAccount() {
         Il tuo account sparisce per sempre, insieme a cronologia, mi piace, playlist e commenti. Non
         si può tornare indietro. I video restano dove sono.
       </p>
-      <label className={styles.field}>
-        Scrivi la tua password per confermare
-        <input
-          type="password"
-          value={password}
-          autoComplete="current-password"
-          // biome-ignore lint/a11y/noAutofocus: the person just asked to delete
-          autoFocus
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </label>
+      <SecretInput
+        method={method}
+        label={confirmLabel[method]}
+        value={password}
+        onChange={setPassword}
+        onComplete={remove}
+        autoFocus
+        disabled={sending}
+      />
       {problem && (
         <p role="alert" className={styles.formProblem}>
           {problem}
@@ -72,23 +77,35 @@ export function DeleteAccount() {
         >
           Annulla
         </button>
-        <button type="submit" className={styles.dangerSave} disabled={sending || password === ""}>
-          Elimina per sempre
-        </button>
+        {method === "password" && (
+          <button type="submit" className={styles.dangerSave} disabled={sending || password === ""}>
+            Elimina per sempre
+          </button>
+        )}
       </div>
     </form>
   );
 }
 
-function explain(error: unknown): string {
+const confirmLabel: Record<Method, string> = {
+  password: "Scrivi la tua password per confermare",
+  pin: "Scrivi il tuo PIN per confermare: l'account sparisce subito",
+  pattern: "Disegna la tua sequenza per confermare: l'account sparisce subito",
+};
+
+function explain(error: unknown, method: Method): string {
   if (!(error instanceof ApiError)) return "Il server non risponde. Riprova tra poco.";
   switch (error.status) {
     case 403:
-      return "La password non è giusta.";
+      return {
+        password: "La password non è giusta.",
+        pin: "Il PIN non è giusto.",
+        pattern: "La sequenza non è giusta.",
+      }[method];
     case 409:
       return "Sei l'unico amministratore: prima rendi amministratore un'altra persona.";
     case 429:
-      return "Troppe password sbagliate. Aspetta un minuto e riprova.";
+      return blockedText(error);
     default:
       return "Qualcosa è andato storto sul server. Riprova tra poco.";
   }

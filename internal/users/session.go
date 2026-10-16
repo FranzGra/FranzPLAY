@@ -55,30 +55,23 @@ func (s store) createSession(ctx context.Context, userID int64, hash []byte, now
 
 // sessionAccount returns the user of a valid session and keeps the session
 // alive.
-func (s store) sessionAccount(ctx context.Context, hash []byte, now time.Time) (Account, error) {
-	var a Account
-	var role string
+func (s store) sessionAccount(ctx context.Context, hash []byte, now time.Time) (storedAccount, error) {
 	var lastSeen int64
-	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.name, u.role, u.can_upload, u.can_share_public, u.upload_quota, coalesce(u.accent_color, ''), u.avatar, u.skip_seconds, s.last_seen
+	a, err := scanAccount(s.db.QueryRowContext(ctx, `
+		SELECT u.id, u.name, u.role, u.can_upload, u.can_share_public, u.upload_quota, coalesce(u.accent_color, ''), u.avatar, u.skip_seconds,
+			u.login_method, coalesce(u.allowed_methods, ''), s.last_seen
 		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = ? AND s.expires_at > ?`, hash, now.Unix()).
-		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds, &lastSeen)
+		WHERE s.token_hash = ? AND s.expires_at > ?`, hash, now.Unix()), &lastSeen)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Account{}, errNoSession
+		return storedAccount{}, errNoSession
 	}
 	if err != nil {
-		return Account{}, fmt.Errorf("read session: %w", err)
+		return storedAccount{}, fmt.Errorf("read session: %w", err)
 	}
-	r, ok := parseRole(role)
-	if !ok {
-		return Account{}, fmt.Errorf("user %d has unknown role %q", a.ID, role)
-	}
-	a.Role = r
 	if needsTouch(time.Unix(lastSeen, 0), now) {
 		if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET last_seen = ?, expires_at = ? WHERE token_hash = ?`,
 			now.Unix(), now.Add(sessionLife).Unix(), hash); err != nil {
-			return Account{}, fmt.Errorf("touch session: %w", err)
+			return storedAccount{}, fmt.Errorf("touch session: %w", err)
 		}
 	}
 	return a, nil

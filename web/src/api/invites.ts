@@ -1,6 +1,6 @@
 // Invites: links that let family and friends create their own account.
 
-import { type Account, parseAccount } from "./auth";
+import { type Account, type Method, parseAccount } from "./auth";
 import { ApiError, request } from "./client";
 
 export type InviteStatus = "waiting" | "used" | "expired";
@@ -92,8 +92,13 @@ export async function checkInvite(code: string, signal?: AbortSignal): Promise<b
 }
 
 // join creates the account of someone invited, and logs them in.
-export async function join(code: string, name: string, password: string): Promise<Account> {
+export async function join(
+  code: string,
+  name: string,
+  password: string,
+  method: Method = "password",
+): Promise<Account> {
   return parseAccount(
-    await request("/api/join", { method: "POST", body: { code, name, password } }),
+    await request("/api/join", { method: "POST", body: { code, name, method, password } }),
   );
 }

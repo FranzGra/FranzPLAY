@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +20,7 @@ var (
 	errAlreadySetUp   = errors.New("FranzPLAY is already set up")
 	errBadSetupCode   = errors.New("the setup code is not right")
 	errBadCredentials = errors.New("wrong name or password")
-	errTooManyTries   = errors.New("too many wrong passwords: wait a minute and try again")
+	errTooManyTries   = errors.New("too many wrong tries: wait and try again")
 )
 
 // maxHashing is how many passwords may be checked at the same time. Each
@@ -32,7 +34,6 @@ type Service struct {
 	dataDir string // FranzPLAY's data folder, where profile photos live
 	logger  *slog.Logger
 	now     func() time.Time
-	limiter *limiter
 	// registrations counts the accounts people make by themselves.
 	registrations *registrations
 	hashing       chan struct{} // one slot per password check in progress
@@ -43,6 +44,14 @@ type Service struct {
 	// setupCode, when not "", must be typed to create the administrator.
 	// It exists only when the installer asked for it.
 	setupCode string
+
+	// methods are the login methods the server allows, kept in memory
+	// (nil until read: see serverMethodsCached).
+	methods Methods
+	// methodKey picks the method shown for names that do not exist.
+	methodKey []byte
+	// trusted are the reverse proxies whose X-Forwarded-For is believed.
+	trusted []netip.Prefix
 
 	// dummyHash is checked when a name does not exist, so that answering
 	// "wrong name" takes as long as "wrong password" and does not reveal
@@ -67,10 +76,12 @@ func NewService(ctx context.Context, db *sql.DB, dataDir string, requireSetupCod
 		dataDir:       dataDir,
 		logger:        logger,
 		now:           time.Now,
-		limiter:       newLimiter(),
 		registrations: newRegistrations(),
 		hashing:       make(chan struct{}, maxHashing),
 		dummyHash:     dummy,
+	}
+	if s.methodKey, err = s.store.methodSecret(ctx); err != nil {
+		return nil, err
 	}
 	n, err := s.store.countUsers(ctx)
 	if err != nil {
@@ -144,7 +155,7 @@ func (s *Service) setup(ctx context.Context, code, name, password string) (Accou
 			return Account{}, errBadSetupCode
 		}
 	}
-	a, err := s.create(ctx, name, password, Admin, true, true)
+	a, err := s.create(ctx, name, Password, password, Admin, true, true)
 	if err != nil {
 		return Account{}, err
 	}
@@ -155,20 +166,50 @@ func (s *Service) setup(ctx context.Context, code, name, password string) (Accou
 	return a, nil
 }
 
-// create checks and adds a user.
-func (s *Service) create(ctx context.Context, name, password string, role Role, canUpload, first bool) (Account, error) {
+// create checks and adds a user, who logs in with method m and secret.
+func (s *Service) create(ctx context.Context, name string, m Method, secret string, role Role, canUpload, first bool) (Account, error) {
+	return s.createWith(ctx, Account{Role: role, CanUpload: canUpload, LoginMethod: m}, name, secret, first)
+}
+
+// createWith adds a user like a, with its name checked and its secret
+// hashed. a.OwnMethods, when set, narrows the methods the user may use.
+func (s *Service) createWith(ctx context.Context, a Account, name, secret string, first bool) (Account, error) {
 	clean, err := CleanName(name)
 	if err != nil {
 		return Account{}, err
 	}
-	if err := checkNewPassword(password); err != nil {
+	if a.LoginMethod == "" {
+		a.LoginMethod = Password
+	}
+	if err := checkNewSecret(a.LoginMethod, secret); err != nil {
 		return Account{}, err
 	}
-	hash, err := s.hash(ctx, password)
+	hash, err := s.hash(ctx, secret)
 	if err != nil {
 		return Account{}, err
 	}
-	return s.store.createUser(ctx, Account{Name: clean, Role: role, CanUpload: canUpload}, hash, s.now(), first)
+	a.Name = clean
+	a, err = s.store.createUser(ctx, a, hash, s.now(), first)
+	if err != nil {
+		return Account{}, err
+	}
+	return s.withMethods(ctx, a, string(a.LoginMethod), a.OwnMethods.String())
+}
+
+// checkFirstSecret controls the method and secret of someone who makes
+// their own account: the method must be one the server allows.
+func (s *Service) checkFirstSecret(ctx context.Context, m Method, secret string) error {
+	if m == "" {
+		m = Password
+	}
+	server, err := s.serverMethodsCached(ctx)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(server, m) {
+		return errMethodNotAllowed
+	}
+	return checkNewSecret(m, secret)
 }
 
 // hash makes a password hash, waiting for a free slot.
@@ -200,54 +241,66 @@ func (s *Service) acquire(ctx context.Context) error {
 
 func (s *Service) release() { <-s.hashing }
 
-// login checks name and password and opens a session. It returns the
-// cookie token. Every try is written in the access log, with the address
-// it came from.
-func (s *Service) login(ctx context.Context, address, name, password string) (Account, string, error) {
+// login checks name and password (or PIN, or pattern) and opens a
+// session. It returns the cookie token. Every try is written in the access
+// log, with the address it came from.
+//
+// Wrong tries block the name and the address for a while (see blocks.go).
+// A name that does not exist is treated like one that does, with the
+// decoy method shown at login, so the answers never tell them apart.
+func (s *Service) login(ctx context.Context, address, name, secret string) (Account, string, error) {
 	name = strings.TrimSpace(name)
 	now := s.now()
-	if !s.limiter.allowed(name, now) {
-		if err := s.store.recordLogin(ctx, now, name, 0, address, Locked); err != nil {
-			return Account{}, "", err
+	key := blockKey(name)
+	if err := s.checkTries(ctx, key, addressKey(address)); err != nil {
+		if errors.Is(err, errTooManyTries) {
+			if rerr := s.store.recordLogin(ctx, now, name, 0, address, Locked); rerr != nil {
+				return Account{}, "", rerr
+			}
 		}
-		return Account{}, "", errTooManyTries
-	}
-	if len(password) > 4*maxPasswordLen {
-		if err := s.store.recordLogin(ctx, now, name, 0, address, WrongPassword); err != nil {
-			return Account{}, "", err
-		}
-		return Account{}, "", errBadCredentials
+		return Account{}, "", err
 	}
 
-	a, stored, err := s.store.credentials(ctx, name)
+	stored, hash, err := s.store.credentials(ctx, name)
+	m := Method(stored.method)
 	switch {
 	case errors.Is(err, errUserNotFound):
-		stored = s.dummyHash
+		hash = s.dummyHash
+		if m, err = s.methodOf(ctx, name); err != nil {
+			return Account{}, "", err
+		}
 	case err != nil:
 		return Account{}, "", err
 	}
-	ok, err := s.verify(ctx, password, stored)
-	if err != nil {
-		return Account{}, "", err
-	}
-	if !ok || a.ID == 0 {
-		s.limiter.failed(name, now)
-		s.logger.WarnContext(ctx, "login failed", "name", name, "address", address)
-		if err := s.store.recordLogin(ctx, now, name, a.ID, address, WrongPassword); err != nil {
+	ok := false
+	if fits(m, secret) {
+		if ok, err = s.verify(ctx, secret, hash); err != nil {
 			return Account{}, "", err
 		}
-		return Account{}, "", errBadCredentials
 	}
-	s.limiter.succeeded(name)
-	if needsRehash(stored) {
-		s.rehash(ctx, a, password, stored)
+	if !ok || stored.ID == 0 {
+		s.logger.WarnContext(ctx, "login failed", "name", name, "address", address)
+		if err := s.store.recordLogin(ctx, now, name, stored.ID, address, WrongPassword); err != nil {
+			return Account{}, "", err
+		}
+		return Account{}, "", s.wrongTry(ctx, key, m, address)
 	}
-
-	token, hash, err := newToken()
+	if err := s.store.clearBlock(ctx, key); err != nil {
+		return Account{}, "", err
+	}
+	a, err := s.withMethods(ctx, stored.Account, stored.method, stored.own)
 	if err != nil {
 		return Account{}, "", err
 	}
-	if err := s.store.createSession(ctx, a.ID, hash, now); err != nil {
+	if needsRehash(hash) {
+		s.rehash(ctx, a, secret, hash)
+	}
+
+	token, tokenHash, err := newToken()
+	if err != nil {
+		return Account{}, "", err
+	}
+	if err := s.store.createSession(ctx, a.ID, tokenHash, now); err != nil {
 		return Account{}, "", err
 	}
 	if err := s.store.recordLogin(ctx, now, name, a.ID, address, Entered); err != nil {
@@ -280,46 +333,77 @@ func (s *Service) startSession(ctx context.Context, a Account) (string, error) {
 	return token, s.store.createSession(ctx, a.ID, hash, s.now())
 }
 
-// changePassword checks the current password and sets a new one.
-// Wrong current passwords count like wrong logins, so a stolen session
-// cannot be used to guess the password.
-func (s *Service) changePassword(ctx context.Context, a Account, token, current, next string) error {
-	if err := checkNewPassword(next); err != nil {
+// confirmSecret checks a user's current password, PIN or pattern, before
+// a change that needs it. Wrong ones count like wrong logins, so a stolen
+// session cannot be used to guess it.
+func (s *Service) confirmSecret(ctx context.Context, a Account, current string) error {
+	key := blockKey(a.Name)
+	if err := s.checkTries(ctx, key); err != nil {
 		return err
 	}
-	now := s.now()
-	if !s.limiter.allowed(a.Name, now) {
-		return errTooManyTries
-	}
-	stored, err := s.store.passwordHash(ctx, a.ID)
+	stored, hash, err := s.store.byID(ctx, a.ID)
 	if err != nil {
 		return err
 	}
-	ok, err := s.verify(ctx, current, stored)
-	if err != nil {
-		return err
+	m := Method(stored.method)
+	ok := false
+	if fits(m, current) {
+		if ok, err = s.verify(ctx, current, hash); err != nil {
+			return err
+		}
 	}
 	if !ok {
-		s.limiter.failed(a.Name, now)
-		s.logger.WarnContext(ctx, "password change refused: wrong current password", "name", a.Name)
-		return errBadCredentials
+		s.logger.WarnContext(ctx, "change refused: wrong current secret", "name", a.Name)
+		return s.wrongTry(ctx, key, m, "")
 	}
-	s.limiter.succeeded(a.Name)
+	return s.store.clearBlock(ctx, key)
+}
+
+// changeCredential checks the current secret and sets a new one, of
+// method m: a user may switch to any method they are allowed.
+func (s *Service) changeCredential(ctx context.Context, a Account, token, current string, m Method, next string) error {
+	if !slices.Contains(a.AllowedMethods, m) {
+		return errMethodNotAllowed
+	}
+	if err := checkNewSecret(m, next); err != nil {
+		return err
+	}
+	if err := s.confirmSecret(ctx, a, current); err != nil {
+		return err
+	}
 	hash, err := s.hash(ctx, next)
 	if err != nil {
 		return err
 	}
-	return s.store.setPassword(ctx, a.ID, hash, hashToken(token))
-}
-
-// resetPassword sets a new password chosen by an administrator, for a user
-// who forgot theirs. Every session of that user is closed, except the
-// administrator's own when they reset their own password.
-func (s *Service) resetPassword(ctx context.Context, admin Account, token string, id int64, password string) error {
-	if err := checkNewPassword(password); err != nil {
+	if err := s.store.setPassword(ctx, a.ID, m, hash, hashToken(token)); err != nil {
 		return err
 	}
-	hash, err := s.hash(ctx, password)
+	s.logger.InfoContext(ctx, "login method changed", "name", a.Name, "method", m)
+	return nil
+}
+
+// resetPassword sets a new password, PIN or pattern chosen by an
+// administrator, for a user who forgot theirs. Every session of that user
+// is closed, except the administrator's own when they reset their own.
+func (s *Service) resetPassword(ctx context.Context, admin Account, token string, id int64, m Method, secret string) error {
+	if m == "" {
+		m = Password
+	}
+	stored, _, err := s.store.byID(ctx, id)
+	if err != nil {
+		return err
+	}
+	user, err := s.withMethods(ctx, stored.Account, stored.method, stored.own)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(user.AllowedMethods, m) {
+		return errMethodNotAllowed
+	}
+	if err := checkNewSecret(m, secret); err != nil {
+		return err
+	}
+	hash, err := s.hash(ctx, secret)
 	if err != nil {
 		return err
 	}
@@ -327,5 +411,9 @@ func (s *Service) resetPassword(ctx context.Context, admin Account, token string
 	if id == admin.ID {
 		keep = hashToken(token)
 	}
-	return s.store.setPassword(ctx, id, hash, keep)
+	if err := s.store.setPassword(ctx, id, m, hash, keep); err != nil {
+		return err
+	}
+	// Whoever was blocked starts again: the administrator vouches for them.
+	return s.store.clearBlock(ctx, blockKey(user.Name))
 }

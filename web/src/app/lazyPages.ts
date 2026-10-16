@@ -93,6 +93,9 @@ export const OnlinePage = page(() =>
 );
 export const JobsPage = page(() => import("../features/admin/JobsPage").then((m) => m.JobsPage));
 export const SitePage = page(() => import("../features/admin/SitePage").then((m) => m.SitePage));
+export const ChooseMethodPage = page(() =>
+  import("../features/auth/ChooseMethodPage").then((m) => m.ChooseMethodPage),
+);
 export const AuthPage = page(() => import("../features/auth/AuthPage").then((m) => m.AuthPage));
 export const JoinPage = page(() => import("../features/auth/JoinPage").then((m) => m.JoinPage));
 

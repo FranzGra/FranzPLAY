@@ -102,7 +102,7 @@ func TestLockedNamesGoInTheAccessLog(t *testing.T) {
 	s := newSite(t)
 	admin := s.setUp()
 	b := s.browser()
-	for range maxFailures {
+	for range passwordPolicy.threshold {
 		b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "indovino!"})
 	}
 	expect(t, b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"}),

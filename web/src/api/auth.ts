@@ -27,6 +27,49 @@ export function passwordProblem(password: string): string {
     : "";
 }
 
+// The ways to log in: a password, a PIN of exactly pinLength digits, or a
+// pattern joining at least patternMin dots of a 3×3 grid. A pattern is
+// written as the numbers of its dots in order, 1 to 9 row by row: "14789".
+export type Method = "password" | "pin" | "pattern";
+export const methods: readonly Method[] = ["password", "pin", "pattern"];
+export const pinLength = 6;
+export const patternMin = 5;
+
+export const methodNames: Record<Method, string> = {
+  password: "Password",
+  pin: "PIN",
+  pattern: "Sequenza",
+};
+
+export function isMethod(value: unknown): value is Method {
+  return value === "password" || value === "pin" || value === "pattern";
+}
+
+function parseMethodList(value: unknown, what: string): Method[] {
+  if (!Array.isArray(value) || !value.every(isMethod)) {
+    throw new Error(`${what}: bad method list`);
+  }
+  return value;
+}
+
+// secretProblem explains what is wrong with a new password, PIN or pattern.
+export function secretProblem(method: Method, secret: string): string {
+  switch (method) {
+    case "password":
+      return passwordProblem(secret);
+    case "pin":
+      return new RegExp(`^[0-9]{${pinLength}}$`).test(secret)
+        ? ""
+        : `Il PIN deve avere esattamente ${pinLength} cifre.`;
+    case "pattern":
+      return /^[1-9]+$/.test(secret) &&
+        new Set(secret).size === secret.length &&
+        secret.length >= patternMin
+        ? ""
+        : `La sequenza deve unire almeno ${patternMin} punti.`;
+  }
+}
+
 export type Account = {
   id: number;
   name: string;
@@ -39,6 +82,11 @@ export type Account = {
   accentColor: string; // "#rrggbb", or "" for FranzPLAY's own
   avatar: number; // version of the profile photo, 0 = none (the initial shows)
   skipSeconds: number; // how far the player jumps forward or back
+  loginMethod: Method; // how I log in
+  allowedMethods: Method[]; // what I may choose
+  ownMethods: Method[] | null; // the administrator's narrowing, null = the server's choice
+  // mustChooseMethod: the administrator removed my method; I must pick another.
+  mustChooseMethod: boolean;
 };
 
 // skipChoices are the jumps a person may choose for the player, in seconds.
@@ -49,9 +97,21 @@ export function parseAccount(data: unknown): Account {
   if (typeof data !== "object" || data === null) {
     throw new Error("account: response is not an object");
   }
-  const { id, name, role, canUpload, canSharePublic, uploadQuota, accentColor, avatar } =
-    data as Record<string, unknown>;
-  const { skipSeconds } = data as Record<string, unknown>;
+  const {
+    id,
+    name,
+    role,
+    canUpload,
+    canSharePublic,
+    uploadQuota,
+    accentColor,
+    avatar,
+    loginMethod,
+    allowedMethods,
+    ownMethods,
+    mustChooseMethod,
+    skipSeconds,
+  } = data as Record<string, unknown>;
   if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
     throw new Error("account: bad id");
   }
@@ -78,6 +138,8 @@ export function parseAccount(data: unknown): Account {
   }
   // An older server does not send canSharePublic: then nobody may; nor
   // skipSeconds: then the player's own 15.
+  // An older server sends neither canSharePublic nor the methods.
+  const method = isMethod(loginMethod) ? loginMethod : "password";
   return {
     id,
     name,
@@ -88,6 +150,16 @@ export function parseAccount(data: unknown): Account {
     accentColor,
     avatar,
     skipSeconds: typeof skipSeconds === "number" ? skipSeconds : 15,
+    loginMethod: method,
+    allowedMethods:
+      allowedMethods === undefined || allowedMethods === null
+        ? [method]
+        : parseMethodList(allowedMethods, "account"),
+    ownMethods:
+      ownMethods === undefined || ownMethods === null
+        ? null
+        : parseMethodList(ownMethods, "account"),
+    mustChooseMethod: mustChooseMethod === true,
   };
 }
 
@@ -114,6 +186,7 @@ export type SetupStatus = {
   needed: boolean; // FranzPLAY still waits for its administrator
   codeNeeded: boolean; // creating it asks for the code written in the log
   openRegistration: boolean; // anyone may create an account by themselves
+  methods: Method[]; // the login methods a new account may choose
 };
 
 // fetchSetup asks the server what the login page should offer.
@@ -122,7 +195,12 @@ export async function fetchSetup(signal?: AbortSignal): Promise<SetupStatus> {
   if (typeof data !== "object" || data === null) {
     throw new Error("setup: response is not an object");
   }
-  const { needed, codeNeeded, openRegistration } = data as Record<string, unknown>;
+  const {
+    needed,
+    codeNeeded,
+    openRegistration,
+    methods: allowed,
+  } = data as Record<string, unknown>;
   if (typeof needed !== "boolean") {
     throw new Error("setup: missing needed");
   }
@@ -132,9 +210,24 @@ export async function fetchSetup(signal?: AbortSignal): Promise<SetupStatus> {
   if (typeof openRegistration !== "boolean") {
     throw new Error("setup: missing openRegistration");
   }
-  return { needed, codeNeeded, openRegistration };
+  return {
+    needed,
+    codeNeeded,
+    openRegistration,
+    methods: allowed === undefined ? ["password"] : parseMethodList(allowed, "setup"),
+  };
 }
 
+// loginMethod asks how a name logs in, to show the right field after it.
+// A name that does not exist gets an answer too, so it reveals nothing.
+export async function loginMethod(name: string): Promise<Method> {
+  const data = await request("/api/login/method", { method: "POST", body: { name } });
+  const method = (data as Record<string, unknown> | null)?.method;
+  if (!isMethod(method)) throw new Error("login method: bad answer");
+  return method;
+}
+
+// login sends the password, the PIN or the pattern.
 export async function login(name: string, password: string): Promise<Account> {
   return parseAccount(await request("/api/login", { method: "POST", body: { name, password } }));
 }
@@ -149,8 +242,25 @@ export async function setup(code: string, name: string, password: string): Promi
 
 // register creates my account without an invite, when the administrator
 // allows it, and logs me in.
-export async function register(name: string, password: string): Promise<Account> {
-  return parseAccount(await request("/api/register", { method: "POST", body: { name, password } }));
+export async function register(name: string, method: Method, password: string): Promise<Account> {
+  return parseAccount(
+    await request("/api/register", { method: "POST", body: { name, method, password } }),
+  );
+}
+
+// fetchServerMethods tells the administrator which methods people may use.
+export async function fetchServerMethods(signal?: AbortSignal): Promise<Method[]> {
+  return parseServerMethods(await request("/api/login-methods", { signal }));
+}
+
+export async function saveServerMethods(list: Method[]): Promise<Method[]> {
+  return parseServerMethods(
+    await request("/api/login-methods", { method: "PUT", body: { methods: list } }),
+  );
+}
+
+function parseServerMethods(data: unknown): Method[] {
+  return parseMethodList((data as Record<string, unknown> | null)?.methods, "login methods");
 }
 
 // fetchRegistration tells the administrator whether anyone may register.
@@ -181,6 +291,22 @@ export async function logout(): Promise<void> {
 // changePassword sets a new password; the other devices are logged out.
 export async function changePassword(current: string, next: string): Promise<void> {
   await request("/api/me/password", { method: "POST", body: { current, new: next } });
+}
+
+// changeCredential sets my new password, PIN or pattern, after checking
+// the current one; the other devices are logged out.
+export async function changeCredential(
+  current: string,
+  method: Method,
+  secret: string,
+): Promise<void> {
+  await request("/api/me/credential", { method: "PUT", body: { current, method, secret } });
+}
+
+// checkCredential confirms my current password, PIN or pattern; a wrong
+// one is refused with 403 and counts as a wrong try.
+export async function checkCredential(current: string): Promise<void> {
+  await request("/api/me/check", { method: "POST", body: { current } });
 }
 
 // rename changes my name, which is also the one I log in with.

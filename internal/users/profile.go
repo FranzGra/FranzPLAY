@@ -87,27 +87,9 @@ func oneRow(res sql.Result, what string) error {
 // account. Wrong passwords count like wrong logins. The last administrator
 // cannot leave, or nobody could manage FranzPLAY.
 func (s *Service) deleteMyself(ctx context.Context, a Account, password string) error {
-	now := s.now()
-	if !s.limiter.allowed(a.Name, now) {
-		return errTooManyTries
-	}
-	if len(password) > 4*maxPasswordLen {
-		return errBadCredentials
-	}
-	stored, err := s.store.passwordHash(ctx, a.ID)
-	if err != nil {
+	if err := s.confirmSecret(ctx, a, password); err != nil {
 		return err
 	}
-	ok, err := s.verify(ctx, password, stored)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		s.limiter.failed(a.Name, now)
-		s.logger.WarnContext(ctx, "account deletion refused: wrong password", "name", a.Name)
-		return errBadCredentials
-	}
-	s.limiter.succeeded(a.Name)
 	if err := s.store.deleteUser(ctx, a.ID); err != nil {
 		return err
 	}

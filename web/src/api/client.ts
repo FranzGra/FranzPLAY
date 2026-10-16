@@ -4,11 +4,14 @@
 // ApiError is a refusal from the server, with its HTTP status and message.
 export class ApiError extends Error {
   readonly status: number;
+  // retryAfter is how many seconds the server asks to wait (429), or 0.
+  readonly retryAfter: number;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, retryAfter = 0) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -52,7 +55,12 @@ export async function request(path: string, options: RequestOptions = {}): Promi
         listener();
       }
     }
-    throw new ApiError(response.status, errorMessage(data, response.status));
+    const wait = Number.parseInt(response.headers?.get("Retry-After") ?? "", 10);
+    throw new ApiError(
+      response.status,
+      errorMessage(data, response.status),
+      Number.isFinite(wait) && wait > 0 ? wait : 0,
+    );
   }
   return data;
 }

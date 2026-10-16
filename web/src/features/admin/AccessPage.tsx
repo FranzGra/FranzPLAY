@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { fetchLogins, type Login, type Outcome } from "../../api/logins";
+import {
+  type Block,
+  fetchBlocks,
+  fetchLogins,
+  type Login,
+  type Outcome,
+  unblock,
+} from "../../api/logins";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import styles from "./Admin.module.css";
@@ -11,7 +18,7 @@ type State =
 
 const outcomes: Record<Outcome, string> = {
   entered: "Entrato",
-  wrong_password: "Password sbagliata",
+  wrong_password: "Accesso sbagliato",
   locked: "Bloccato: troppi tentativi",
 };
 
@@ -68,9 +75,11 @@ export function AccessPage() {
       <div className={styles.top}>
         <p className={styles.lead}>
           Chi ha provato a entrare negli ultimi 90 giorni, quando e da quale indirizzo. Tante
-          password sbagliate di seguito possono voler dire che qualcuno prova a indovinarle.
+          password, PIN o sequenze sbagliate di seguito possono voler dire che qualcuno prova a
+          indovinarle: FranzPLAY allora blocca per un po' quel nome e quell'indirizzo.
         </p>
       </div>
+      <Blocks />
       <div className={styles.tools}>
         <search className={styles.searchForm}>
           <label className={`glass ${styles.searchBox}`}>
@@ -136,5 +145,74 @@ export function AccessPage() {
         </>
       )}
     </>
+  );
+}
+
+const until = new Intl.DateTimeFormat("it-IT", { timeStyle: "short" });
+
+// Blocks lists the names and addresses blocked now, after too many wrong
+// tries, and lets the administrator lift a block at once.
+function Blocks() {
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [busy, setBusy] = useState("");
+  const [problem, setProblem] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchBlocks(controller.signal)
+      .then(setBlocks)
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        setProblem("Non si riesce a leggere i blocchi attivi. Ricarica la pagina tra poco.");
+      });
+    return () => controller.abort();
+  }, []);
+
+  const lift = (key: string) => {
+    setBusy(key);
+    setProblem("");
+    unblock(key)
+      .then(() => setBlocks((list) => list.filter((b) => b.key !== key)))
+      .catch((error: unknown) => {
+        console.error(error);
+        setProblem("Sblocco non riuscito. Riprova tra poco.");
+      })
+      .finally(() => setBusy(""));
+  };
+
+  if (blocks.length === 0 && !problem) return null;
+  return (
+    <section aria-label="Bloccati adesso">
+      <h2 className={styles.groupTitle}>Bloccati adesso</h2>
+      {problem && (
+        <p role="alert" className={styles.problem}>
+          {problem}
+        </p>
+      )}
+      <ul className={`stagger ${styles.list}`}>
+        {blocks.map((b) => (
+          <li key={b.key} className={`glass ${styles.person}`}>
+            <div>
+              <p className={styles.name}>
+                {b.kind === "account" ? `Nome «${b.value}»` : `Indirizzo ${b.value}`}
+              </p>
+              <p className={styles.role}>
+                Fino alle {until.format(b.until)}
+                {b.level > 1 && ` · ${b.level}° blocco di seguito`}
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`glass ${styles.action}`}
+              disabled={busy === b.key}
+              onClick={() => lift(b.key)}
+            >
+              Sblocca
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

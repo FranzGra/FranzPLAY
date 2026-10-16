@@ -107,7 +107,7 @@ func (s *Service) checkInvite(ctx context.Context, token string) error {
 // invite is checked before the password is hashed, so made-up codes cost
 // nothing; then checked again, used and the account created all at once,
 // so one link never makes two accounts.
-func (s *Service) join(ctx context.Context, token, name, password string) (Account, error) {
+func (s *Service) join(ctx context.Context, token, name string, method Method, password string) (Account, error) {
 	if len(token) > 100 {
 		return Account{}, errInviteInvalid
 	}
@@ -119,14 +119,21 @@ func (s *Service) join(ctx context.Context, token, name, password string) (Accou
 	if err != nil {
 		return Account{}, err
 	}
-	if err := checkNewPassword(password); err != nil {
+	if method == "" {
+		method = Password
+	}
+	if err := s.checkFirstSecret(ctx, method, password); err != nil {
 		return Account{}, err
 	}
 	passwordHash, err := s.hash(ctx, password)
 	if err != nil {
 		return Account{}, err
 	}
-	return s.store.joinWithInvite(ctx, hash, clean, passwordHash, s.now())
+	a, err := s.store.joinWithInvite(ctx, hash, clean, method, passwordHash, s.now())
+	if err != nil {
+		return Account{}, err
+	}
+	return s.withMethods(ctx, a, string(method), "")
 }
 
 // queryer is what both the database and a transaction can do.
@@ -163,7 +170,7 @@ func (s store) waitingInvite(ctx context.Context, q queryer, hash []byte, now ti
 }
 
 // joinWithInvite uses an invite and creates its account, in one transaction.
-func (s store) joinWithInvite(ctx context.Context, hash []byte, name, passwordHash string, now time.Time) (_ Account, err error) {
+func (s store) joinWithInvite(ctx context.Context, hash []byte, name string, method Method, passwordHash string, now time.Time) (_ Account, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Account{}, fmt.Errorf("join: %w", err)
@@ -174,7 +181,7 @@ func (s store) joinWithInvite(ctx context.Context, hash []byte, name, passwordHa
 	if err != nil {
 		return Account{}, err
 	}
-	a, err := insertUser(ctx, tx, Account{Name: name, Role: User, CanUpload: canUpload}, passwordHash, now)
+	a, err := insertUser(ctx, tx, Account{Name: name, Role: User, CanUpload: canUpload, LoginMethod: method}, passwordHash, now)
 	if err != nil {
 		return Account{}, err
 	}
