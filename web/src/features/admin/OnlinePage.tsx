@@ -91,7 +91,7 @@ export function OnlinePage() {
         </p>
       </div>
       <ul className={`stagger ${styles.list}`} aria-label="Fonti su internet">
-        <li className={`glass ${styles.person}`}>
+        <li className={`glass ${styles.setting}`}>
           <div>
             <p className={styles.name}>YouTube</p>
             <p className={styles.role}>
@@ -100,7 +100,8 @@ export function OnlinePage() {
               canale. Non serve nessuna chiave.
             </p>
           </div>
-          <label className={styles.check}>
+          <label className={styles.toggle}>
+            {before.youtube ? "Accesa" : "Spenta"}
             <input
               type="checkbox"
               aria-label="YouTube accesa"
@@ -108,10 +109,9 @@ export function OnlinePage() {
               disabled={busy}
               onChange={(e) => change({ ...before, youtube: e.target.checked })}
             />
-            Accesa
           </label>
         </li>
-        <li className={`glass ${styles.person}`}>
+        <li className={`glass ${styles.setting}`}>
           <div>
             <p className={styles.name}>TMDB (film)</p>
             <p className={styles.role}>
@@ -132,7 +132,8 @@ export function OnlinePage() {
               Questo prodotto usa l'API di TMDB ma non è approvato né certificato da TMDB.
             </p>
           </div>
-          <label className={styles.check}>
+          <label className={styles.toggle}>
+            {before.tmdb ? "Accesa" : "Spenta"}
             <input
               type="checkbox"
               aria-label="TMDB accesa"
@@ -140,11 +141,10 @@ export function OnlinePage() {
               disabled={busy || !before.tmdbKey}
               onChange={(e) => change({ ...before, tmdb: e.target.checked })}
             />
-            Accesa
           </label>
           <KeyForm source="tmdb" name="TMDB" hasKey={before.tmdbKey} onSaved={keySaved} />
         </li>
-        <li className={`glass ${styles.person}`}>
+        <li className={`glass ${styles.setting}`}>
           <div>
             <p className={styles.name}>ThePornDB</p>
             <p className={styles.role}>
@@ -162,7 +162,8 @@ export function OnlinePage() {
               {before.tpdbKey ? "La chiave è salvata." : "Nessuna chiave salvata."}
             </p>
           </div>
-          <label className={styles.check}>
+          <label className={styles.toggle}>
+            {before.tpdb ? "Accesa" : "Spenta"}
             <input
               type="checkbox"
               aria-label="ThePornDB accesa"
@@ -170,7 +171,6 @@ export function OnlinePage() {
               disabled={busy || !before.tpdbKey}
               onChange={(e) => change({ ...before, tpdb: e.target.checked })}
             />
-            Accesa
           </label>
           <KeyForm source="tpdb" name="ThePornDB" hasKey={before.tpdbKey} onSaved={keySaved} />
         </li>
