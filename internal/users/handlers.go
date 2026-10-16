@@ -51,6 +51,7 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/me/password", s.handlePassword)
 	mux.HandleFunc("PUT /api/me/name", s.handleRename)
 	mux.HandleFunc("PUT /api/me/color", s.handleAccentColor)
+	mux.HandleFunc("PUT /api/me/skip", s.handleSkipSeconds)
 	mux.HandleFunc("PUT /api/me/avatar", s.handleSetAvatar)
 	mux.HandleFunc("DELETE /api/me/avatar", s.handleRemoveAvatar)
 	mux.HandleFunc("GET /api/users/{id}/avatar", s.handleAvatar)
@@ -84,7 +85,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errBadName), errors.Is(err, errWeakPassword), errors.Is(err, errBadNote),
-		errors.Is(err, errBadColor), errors.Is(err, errBadAvatar):
+		errors.Is(err, errBadColor), errors.Is(err, errBadAvatar), errors.Is(err, errBadSkip):
 		respond.Error(w, r, s.logger, http.StatusBadRequest, err.Error())
 	case errors.Is(err, errBadCredentials), errors.Is(err, errBadSetupCode):
 		respond.Error(w, r, s.logger, http.StatusUnauthorized, err.Error())
@@ -297,6 +298,8 @@ type updateRequest struct {
 	Role        string `json:"role"`
 	CanUpload   bool   `json:"canUpload"`
 	UploadQuota *int64 `json:"uploadQuota"` // nil: unchanged
+	// CanSharePublic lets them make public links; nil: unchanged.
+	CanSharePublic *bool `json:"canSharePublic"`
 }
 
 func (s *Service) handleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -318,14 +321,15 @@ func (s *Service) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, s.logger, http.StatusBadRequest, "the upload quota must be between 1 GiB and 100 TiB")
 		return
 	}
-	a, err := s.store.updateUser(r.Context(), id, role, req.CanUpload, req.UploadQuota)
+	a, revoked, err := s.store.updateUser(r.Context(), id, role, req.CanUpload, req.CanSharePublic, req.UploadQuota)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	admin, _ := FromContext(r.Context())
 	s.logger.InfoContext(r.Context(), "user changed", "name", a.Name, "role", a.Role,
-		"can_upload", a.CanUpload, "upload_quota", a.UploadQuota, "by", admin.Name)
+		"can_upload", a.CanUpload, "can_share_public", a.CanSharePublic, "upload_quota", a.UploadQuota,
+		"public_links_revoked", revoked, "by", admin.Name)
 	respond.JSON(w, r, s.logger, http.StatusOK, a)
 }
 

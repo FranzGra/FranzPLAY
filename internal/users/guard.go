@@ -25,6 +25,13 @@ var publicAPI = map[string]bool{
 	"/api/me":         true, // answers 401 itself, so the interface knows to show the login
 }
 
+// isPublicLink reports whether a request reads the video of a public
+// link, under /api/public/: anybody may, and those addresses only ever
+// open the one video of the key in them (see catalog.PublicRoutes).
+func isPublicLink(r *http.Request) bool {
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasPrefix(r.URL.Path, "/api/public/")
+}
+
 type accountKey struct{}
 
 // FromContext returns the logged-in user of a request, set by Protect.
@@ -60,7 +67,7 @@ func (s *Service) Protect(next http.Handler) http.Handler {
 			ctx := NewContext(r.Context(), a)
 			ctx = context.WithValue(ctx, tokenKey{}, token)
 			next.ServeHTTP(w, r.WithContext(ctx))
-		case publicAPI[r.URL.Path]:
+		case publicAPI[r.URL.Path], isPublicLink(r):
 			next.ServeHTTP(w, r)
 		case errors.Is(err, errNoSession):
 			respond.Error(w, r, s.logger, http.StatusUnauthorized, "login required")

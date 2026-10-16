@@ -76,6 +76,11 @@ describe("keyAction", () => {
   ])("%j", (key, want) => {
     expect(keyAction(key)).toEqual(want);
   });
+
+  it("jumps as far as the person chose", () => {
+    expect(keyAction("ArrowLeft", 5)).toEqual({ kind: "seek-by", seconds: -5 });
+    expect(keyAction("l", 30)).toEqual({ kind: "seek-by", seconds: 30 });
+  });
 });
 
 describe("tapZone", () => {

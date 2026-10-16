@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 import { ComingSoonPage } from "../features/ComingSoonPage";
 import { HomePage } from "../features/home/HomePage";
 import { AuthProvider, useAuth } from "./auth";
@@ -7,6 +7,7 @@ import { Layout } from "./Layout";
 import {
   AccessPage,
   AdminPage,
+  AdminVideoPage,
   AuthPage,
   CategoriesAdminPage,
   CategoriesPage,
@@ -25,6 +26,7 @@ import {
   PlaylistPage,
   PlaylistsPage,
   ProfilePage,
+  PublicVideoPage,
   SearchPage,
   SharedPage,
   SitePage,
@@ -53,7 +55,12 @@ export function App() {
 function Gate() {
   const { state } = useAuth();
   // An invite link opens its own page, logged in or not.
-  const invite = useLocation().pathname === "/invito";
+  const { pathname } = useLocation();
+  const invite = pathname === "/invito";
+  // A public link opens its video for anybody, logged in or not.
+  if (pathname.startsWith("/p/") && (state.kind === "signed-out" || state.kind === "signed-in")) {
+    return <PublicVideoPage />;
+  }
   if (invite && (state.kind === "signed-out" || state.kind === "signed-in")) {
     return <JoinPage />;
   }
@@ -94,12 +101,13 @@ function Pages() {
         <Route path="categorie" element={<CategoriesPage />} />
         <Route path="categorie/:name" element={<CategoryPage />} />
         <Route path="admin" element={<AdminPage />}>
-          <Route index element={<Navigate to="riepilogo" replace />} />
+          <Route index element={null} />
           <Route path="riepilogo" element={<OverviewPage />} />
           <Route path="persone" element={<PeoplePage />} />
           <Route path="inviti" element={<InvitesPage />} />
           <Route path="accessi" element={<AccessPage />} />
           <Route path="video" element={<VideosPage />} />
+          <Route path="video/:id" element={<AdminVideoPage />} />
           <Route path="categorie" element={<CategoriesAdminPage />} />
           <Route path="sottotitoli" element={<SubtitlesPage />} />
           <Route path="commenti" element={<CommentsPage />} />

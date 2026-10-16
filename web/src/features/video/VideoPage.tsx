@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
-import { avatarUrl } from "../../api/auth";
+import { avatarUrl, maySharePublic } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { fetchProgress, saveProgress } from "../../api/progress";
 import { fetchSimilar, reasonText } from "../../api/recommend";
@@ -26,11 +26,14 @@ import { loadSetting, saveSetting } from "../../lib/storage";
 import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
+import { useSkip } from "../player/useSkip";
 import { SaveButton } from "../playlists/SaveButton";
+import { PublicLinkPanel } from "../public/PublicLinkPanel";
 import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
 import { namesList } from "../sharing/audience";
 import { CopyLink } from "../sharing/CopyLink";
+import { setWatching } from "../videos/coverMorph";
 import { VideoCard } from "../videos/VideoCard";
 import { Description } from "./Description";
 import { subtitleLabel } from "./subtitleLabel";
@@ -58,6 +61,12 @@ export function VideoPage() {
   const key = useSearchParams()[0].get("k");
   const [state, setState] = useState<State>({ kind: "loading" });
   const [theater, toggleTheater] = useTheater();
+  const cover = coverFromCard(useLocation().state, id);
+  // The way back to the card this video came from (coverMorph).
+  useEffect(() => {
+    setWatching(id);
+    return () => setWatching(null);
+  }, [id]);
   usePageWidth(theater ? "full" : "wide");
   usePageTitle(
     state.kind === "ready"
@@ -95,8 +104,12 @@ export function VideoPage() {
     case "loading":
       return (
         <div className={layoutClass(theater, false)}>
-          <div className={styles.player}>
-            <div className={styles.placeholder} aria-busy="true" />
+          <div className={styles.player} data-video-frame={id}>
+            {/* Opened from a card, its cover waits in the player's place, so
+                the cover that grows here (coverMorph) lands on itself. */}
+            <div className={styles.placeholder} aria-busy="true">
+              {cover && <img src={cover} alt="" decoding="sync" />}
+            </div>
           </div>
         </div>
       );
@@ -125,6 +138,14 @@ export function VideoPage() {
         />
       );
   }
+}
+
+// coverFromCard is the cover the card that opened this video passed
+// along, if the page was opened from a card of this same video.
+function coverFromCard(state: unknown, id: number): string | null {
+  const from = state as { cover?: unknown; video?: unknown } | null;
+  if (from?.video !== id || typeof from.cover !== "string") return null;
+  return from.cover;
 }
 
 // openLink tells the server the person opened the link of a video, so
@@ -196,6 +217,7 @@ function Watch({
   const subtitles = useSubtitles(video.id);
   const copy = useCopy(video, canPlayType);
   const audio = useAudio(video.id);
+  const { skip, onSkip } = useSkip();
   const findAudio = useCallback(
     (stream: number, at: number) => fetchAudioStart(video.id, stream, at),
     [video.id],
@@ -216,7 +238,7 @@ function Watch({
 
   return (
     <div className={layoutClass(theater, video.private)}>
-      <div className={styles.player}>
+      <div className={styles.player} data-video-frame={video.id}>
         <Player
           key={`${video.id}-${copy.round}`}
           src={streamURL(video.id, video.copy && playsFileItself(video, canPlayType))}
@@ -231,6 +253,8 @@ function Watch({
           autoPlay
           theater={theater}
           onTheater={onTheater}
+          skip={skip}
+          onSkip={onSkip}
           unsupportedHint={copyHint(video, copy.state, copy.percent)}
           onUnsupported={copy.unsupported}
         />
@@ -264,6 +288,7 @@ function Watch({
           <span>{details.join(" · ")}</span>
         </p>
         {video.private && <PrivateNote video={video} />}
+        <PublicLinkFor video={video} />
         {video.description && (
           <div className={styles.below}>
             <Description text={video.description} />
@@ -330,6 +355,16 @@ function PrivateNote({ video }: { video: Video }) {
       {change}
     </p>
   );
+}
+
+// PublicLinkFor shows the public link panel to who may make one for this
+// video: its uploader, when the administrator allowed them, or an
+// administrator, also for the videos of the folders.
+function PublicLinkFor({ video }: { video: Video }) {
+  const me = useAccount();
+  const mine = me.role === "admin" || (video.uploader !== null && video.uploader.id === me.id);
+  if (!mine || !maySharePublic(me)) return null;
+  return <PublicLinkPanel videoId={video.id} />;
 }
 
 // UpNext lists the videos to watch after this one, each saying why.

@@ -1,9 +1,11 @@
 // The player's decisions, as plain functions: no video element, no screen.
 // The Player component asks these what to do, and they are easy to test.
 
-// skipSeconds is how far the ±15 buttons, the keys and double taps jump.
-// 15: a bit more than YouTube's 10.
-export const skipSeconds = 15;
+// defaultSkip is how far the jump buttons, the keys and double taps go,
+// in seconds, for whoever did not choose: a bit more than YouTube's 10.
+// Each person can choose one of skipChoices in the settings.
+export const defaultSkip = 15;
+export const skipChoices = [5, 10, 15, 20, 30] as const;
 
 // speeds are the playback speeds offered in the settings menu.
 export const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
@@ -76,7 +78,8 @@ export type Action =
 
 // keyAction decides what a key does, as on YouTube. null: the key is not
 // the player's, and the browser should handle it as usual.
-export function keyAction(key: string): Action | null {
+// skip is how many seconds the arrows and j / l jump.
+export function keyAction(key: string, skip: number = defaultSkip): Action | null {
   switch (key) {
     case " ":
     case "k":
@@ -85,11 +88,11 @@ export function keyAction(key: string): Action | null {
     case "ArrowLeft":
     case "j":
     case "J":
-      return { kind: "seek-by", seconds: -skipSeconds };
+      return { kind: "seek-by", seconds: -skip };
     case "ArrowRight":
     case "l":
     case "L":
-      return { kind: "seek-by", seconds: skipSeconds };
+      return { kind: "seek-by", seconds: skip };
     case "ArrowUp":
       return { kind: "volume-by", amount: 0.1 };
     case "ArrowDown":

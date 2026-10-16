@@ -14,6 +14,10 @@ type Account struct {
 	Name      string `json:"name"`
 	Role      Role   `json:"role"`
 	CanUpload bool   `json:"canUpload"`
+	// CanSharePublic lets the user make public links, which anybody may
+	// open without an account. Off until the administrator turns it on;
+	// administrators may always (see MaySharePublic).
+	CanSharePublic bool `json:"canSharePublic"`
 	// UploadQuota is how many bytes of uploaded videos the user may keep.
 	UploadQuota int64 `json:"uploadQuota"`
 	// AccentColor is the color the user chose for the interface; "" means
@@ -22,7 +26,13 @@ type Account struct {
 	// Avatar is the version of the user's profile photo, 0 when there is
 	// none: the interface shows the initial of the name instead.
 	Avatar int64 `json:"avatar"`
+	// SkipSeconds is how far the player jumps forward or back for the
+	// user: one of SkipChoices.
+	SkipSeconds int `json:"skipSeconds"`
 }
+
+// MaySharePublic reports whether the user may make public links.
+func (a Account) MaySharePublic() bool { return a.Role == Admin || a.CanSharePublic }
 
 // Limits of the upload quota: a person starts with DefaultUploadQuota and
 // the administrator can choose from MinUploadQuota to MaxUploadQuota.
@@ -85,6 +95,7 @@ func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now tim
 	if a.UploadQuota == 0 {
 		a.UploadQuota = DefaultUploadQuota
 	}
+	a.SkipSeconds = DefaultSkip // the database default
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO users (name, password_hash, role, can_upload, upload_quota, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		a.Name, hash, string(a.Role), a.CanUpload, a.UploadQuota, now.Unix())
@@ -102,8 +113,8 @@ func (s store) credentials(ctx context.Context, name string) (Account, string, e
 	var a Account
 	var hash, role string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, role, can_upload, upload_quota, coalesce(accent_color, ''), avatar, password_hash FROM users WHERE name = ?`, name).
-		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.UploadQuota, &a.AccentColor, &a.Avatar, &hash)
+		SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds, password_hash FROM users WHERE name = ?`, name).
+		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, "", errUserNotFound
 	}
@@ -138,7 +149,7 @@ type Person struct {
 }
 
 func (s store) list(ctx context.Context) (_ []Person, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, upload_quota, coalesce(accent_color, ''), avatar, last_login FROM users ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds, last_login FROM users ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -148,7 +159,7 @@ func (s store) list(ctx context.Context) (_ []Person, err error) {
 		var p Person
 		var role string
 		var last sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Name, &role, &p.CanUpload, &p.UploadQuota, &p.AccentColor, &p.Avatar, &last); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &role, &p.CanUpload, &p.CanSharePublic, &p.UploadQuota, &p.AccentColor, &p.Avatar, &p.SkipSeconds, &last); err != nil {
 			return nil, fmt.Errorf("list users: %w", err)
 		}
 		r, ok := parseRole(role)
@@ -197,43 +208,59 @@ func (s store) deleteUser(ctx context.Context, id int64) (err error) {
 	return nil
 }
 
-// updateUser changes what a user may do. A nil quota keeps the one the
-// user has. The last administrator cannot become a normal user, for the
-// same reason it cannot be removed.
-func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bool, quota *int64) (_ Account, err error) {
+// updateUser changes what a user may do. A nil quota, or a nil
+// canSharePublic, keeps what the user has. The last administrator cannot
+// become a normal user, for the same reason it cannot be removed.
+//
+// A user who may no longer share in public (no permission and not an
+// administrator) loses the public links they made, in the same
+// transaction: those links stop working at once. revoked is how many.
+func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bool, canSharePublic *bool, quota *int64) (_ Account, revoked int64, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return Account{}, fmt.Errorf("update user: %w", err)
+		return Account{}, 0, fmt.Errorf("update user: %w", err)
 	}
 	defer func() { err = finish(tx, err) }()
 
 	a := Account{ID: id, Role: role, CanUpload: canUpload}
 	var old string
-	err = tx.QueryRowContext(ctx, `SELECT name, role, upload_quota, coalesce(accent_color, ''), avatar FROM users WHERE id = ?`, id).
-		Scan(&a.Name, &old, &a.UploadQuota, &a.AccentColor, &a.Avatar)
+	err = tx.QueryRowContext(ctx, `SELECT name, role, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds FROM users WHERE id = ?`, id).
+		Scan(&a.Name, &old, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Account{}, errUserNotFound
+		return Account{}, 0, errUserNotFound
 	}
 	if err != nil {
-		return Account{}, fmt.Errorf("update user: %w", err)
+		return Account{}, 0, fmt.Errorf("update user: %w", err)
 	}
 	if Role(old) == Admin && role != Admin {
 		var admins int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE role = 'admin'`).Scan(&admins); err != nil {
-			return Account{}, fmt.Errorf("update user: %w", err)
+			return Account{}, 0, fmt.Errorf("update user: %w", err)
 		}
 		if admins <= 1 {
-			return Account{}, errLastAdmin
+			return Account{}, 0, errLastAdmin
 		}
 	}
 	if quota != nil {
 		a.UploadQuota = *quota
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE users SET role = ?, can_upload = ?, upload_quota = ? WHERE id = ?`,
-		string(role), canUpload, a.UploadQuota, id); err != nil {
-		return Account{}, fmt.Errorf("update user: %w", err)
+	if canSharePublic != nil {
+		a.CanSharePublic = *canSharePublic
 	}
-	return a, nil
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET role = ?, can_upload = ?, can_share_public = ?, upload_quota = ? WHERE id = ?`,
+		string(role), canUpload, a.CanSharePublic, a.UploadQuota, id); err != nil {
+		return Account{}, 0, fmt.Errorf("update user: %w", err)
+	}
+	if !a.MaySharePublic() {
+		res, err := tx.ExecContext(ctx, `DELETE FROM public_links WHERE created_by = ?`, id)
+		if err != nil {
+			return Account{}, 0, fmt.Errorf("revoke public links: %w", err)
+		}
+		if revoked, err = res.RowsAffected(); err != nil {
+			return Account{}, 0, fmt.Errorf("revoke public links: %w", err)
+		}
+	}
+	return a, revoked, nil
 }
 
 // setPassword changes a password and closes every session of the user

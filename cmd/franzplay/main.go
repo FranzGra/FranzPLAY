@@ -261,9 +261,10 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	if err != nil {
 		return err
 	}
-	site := server.New(version, logger, webui.Handler(webui.Files(), logger),
+	site := server.New(version, logger, webui.Handler(webui.Files(), logger, catalog.LinkPreview(db, logger)),
 		accounts.Routes,
 		catalog.Routes(db, cfg.DataDir, logger),
+		catalog.PublicRoutes(db, cfg.DataDir, logger),
 		catalog.AudioRoutes(db, cfg.DataDir, remux, logger),
 		catalog.PrepareRoutes(db, cfg.DataDir, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		catalog.AdminRoutes(db, cfg.DataDir,
@@ -278,6 +279,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		playlists.Routes(db, catalog.NewLookup(db), logger),
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),
 		sharing.Routes(db, logger),
+		sharing.PublicRoutes(db, logger),
 		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
 		autosubs.Routes(db, subtitles, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),

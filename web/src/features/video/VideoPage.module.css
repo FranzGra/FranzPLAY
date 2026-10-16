@@ -73,8 +73,21 @@
 
 .placeholder {
   aspect-ratio: 16 / 9;
+  overflow: hidden;
   border-radius: var(--radius-l);
   background: var(--color-surface);
+}
+
+/* The cover of the card that opened the video, as the player will show
+   it before the video starts: whole, on black. */
+.placeholder:has(img) {
+  background: #000;
+}
+
+.placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 /* The same size as the player in theater mode (Player.module.css). */
@@ -352,4 +365,14 @@ div.private p {
 ::view-transition-new(video-side) {
   inline-size: auto;
   block-size: auto;
+}
+
+/* While a video opens from a card on this page (a suggestion), the
+   browser takes its picture "before" with the card's cover as the
+   player: this player, its title and its column have no names then
+   (coverMorph in features/videos). */
+:root[data-morph-before] .player,
+:root[data-morph-before] .info,
+:root[data-morph-before] .side {
+  view-transition-name: none;
 }

@@ -34,13 +34,13 @@ function adminVideo(overrides: Record<string, unknown> = {}) {
 }
 
 async function openCover(routes: Record<string, unknown>) {
-  const app = renderApp("/admin/video", {
+  const app = renderApp("/admin/video/7", {
     ...signedIn(),
-    "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
+    "GET /api/admin/videos/7": { body: adminVideo() },
     ...routes,
   });
-  await screen.findByRole("list", { name: "Video" });
-  await app.user.click(screen.getByRole("button", { name: "Copertina" }));
+  await screen.findByRole("heading", { level: 2, name: "Mare 2024" });
+  await app.user.click(screen.getByRole("button", { name: "Carica immagine o cerca" }));
   return { ...app, panel: screen.getByRole("region", { name: "Copertina di Mare 2024" }) };
 }
 
@@ -74,7 +74,7 @@ describe("choosing a cover", () => {
     expect(sent?.url).toContain("/api/admin/videos/7/cover");
     expect(sent?.headers.get("Content-Type")).toBe("image/jpeg");
     expect(await screen.findByRole("status")).toHaveTextContent("la nuova copertina arriva");
-    expect(screen.getByText("Copertina scelta")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Immagine caricata" })).toBeChecked();
   });
 
   it("uses a moment of the video", async () => {
@@ -91,28 +91,26 @@ describe("choosing a cover", () => {
     expect(await server.requests.at(-1)?.json()).toEqual({ second: 75 });
 
     // Opened again, it says which moment it is, and can go back.
-    await user.click(screen.getByRole("button", { name: "Copertina" }));
+    await user.click(screen.getByRole("button", { name: "Carica immagine o cerca" }));
     const again = screen.getByRole("region", { name: "Copertina di Mare 2024" });
     expect(again).toHaveTextContent("il momento 1:15 del video");
     expect(within(again).getByRole("button", { name: "Torna a quella automatica" })).toBeVisible();
   });
 
   it("goes back to the cover FranzPLAY picks", async () => {
-    const { user, server } = renderApp("/admin/video", {
+    const { user, server } = renderApp("/admin/video/7", {
       ...signedIn(),
-      "GET /api/admin/videos": {
-        body: { videos: [adminVideo({ coverChoice: "image" })], total: 1 },
-      },
+      "GET /api/admin/videos/7": { body: adminVideo({ coverChoice: "image" }) },
       "DELETE /api/admin/videos/7/cover": { status: 204 },
     });
-    await screen.findByRole("list", { name: "Video" });
-    await user.click(screen.getByRole("button", { name: "Copertina" }));
+    await screen.findByRole("heading", { level: 2, name: "Mare 2024" });
+    await user.click(screen.getByRole("button", { name: "Carica immagine o cerca" }));
     const panel = screen.getByRole("region", { name: "Copertina di Mare 2024" });
     expect(panel).toHaveTextContent("un'immagine caricata da te");
     await user.click(within(panel).getByRole("button", { name: "Torna a quella automatica" }));
     await waitFor(() => expect(server.requests.at(-1)?.method).toBe("DELETE"));
     expect(await screen.findByRole("status")).toBeInTheDocument();
-    expect(screen.queryByText("Copertina scelta")).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Quella scelta da FranzPLAY" })).toBeChecked();
   });
 
   it("says when the image is too large", async () => {

@@ -139,4 +139,37 @@ describe("channel page", () => {
       "/canale/1",
     );
   });
+
+  it("lets me manage the public links of my videos only with the permission", async () => {
+    const routes = (canSharePublic: boolean) => ({
+      ...signedIn({ ...testAccount, role: "user", canSharePublic }),
+      "GET /api/channels/1": { body: channel({ id: 1, name: "Paolo" }) },
+      "GET /api/videos": {
+        body: {
+          videos: [
+            videoJSON({
+              id: 1,
+              title: "Al mare",
+              uploader: { id: 1, name: "Paolo" },
+              publicLink: canSharePublic ? "/p/abcdefghijklmnopqrstuv" : undefined,
+            }),
+          ],
+          total: 1,
+        },
+      },
+    });
+    const { unmount } = renderApp("/canale/1", routes(false));
+    await screen.findByRole("heading", { name: "Al mare" });
+    expect(screen.queryByRole("button", { name: /Link pubblico/ })).not.toBeInTheDocument();
+    unmount();
+
+    const { user } = renderApp("/canale/1", routes(true));
+    await screen.findByRole("heading", { name: "Al mare" });
+    expect(screen.getByText("Pubblico")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Link pubblico di Al mare" }));
+    expect(screen.getByRole("textbox", { name: "Link del video" })).toHaveValue(
+      `${window.location.origin}/p/abcdefghijklmnopqrstuv`,
+    );
+    expect(screen.getByRole("button", { name: "Copia link" })).toBeInTheDocument();
+  });
 });

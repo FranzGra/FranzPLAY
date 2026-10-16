@@ -1,0 +1,61 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - link "FranzPLAY" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+    - search [ref=f1e10]:
+      - generic [ref=f1e12]:
+        - generic [ref=f1e16]: Cerca
+        - searchbox "Cerca" [ref=f1e17]
+    - link "Il tuo profilo" [ref=f1e18] [cursor=pointer]:
+      - /url: /profilo
+      - generic [aria-hidden] [ref=f1e19]: P
+  - generic [ref=f1e20]:
+    - navigation "Menu principale" [ref=f1e21]:
+      - link "Home" [ref=f1e22] [cursor=pointer]:
+        - /url: /
+      - link "Cronologia" [ref=f1e26] [cursor=pointer]:
+        - /url: /cronologia
+      - link "Mi piace" [ref=f1e31] [cursor=pointer]:
+        - /url: /mi-piace
+      - link "Condivisi con te" [ref=f1e35] [cursor=pointer]:
+        - /url: /condivisi
+      - link "Categorie" [ref=f1e39] [cursor=pointer]:
+        - /url: /categorie
+      - link "Il mio canale" [ref=f1e45] [cursor=pointer]:
+        - /url: /canale/1
+      - generic [ref=f1e49]: Le tue playlist
+      - link "Guarda più tardi" [ref=f1e50] [cursor=pointer]:
+        - /url: /playlist/1
+      - link "Tutte le playlist" [ref=f1e55] [cursor=pointer]:
+        - /url: /playlist
+      - generic [ref=f1e58]: Gestione
+      - link "Amministrazione" [ref=f1e59] [cursor=pointer]:
+        - /url: /admin
+    - main [ref=f1e63]:
+      - generic [ref=f1e64]:
+        - heading "Amministrazione" [level=1] [ref=f1e65]
+        - navigation "Sezioni dell'amministrazione" [ref=f1e69]:
+          - link "Riepilogo" [ref=f1e70] [cursor=pointer]:
+            - /url: /admin/riepilogo
+          - link "Persone" [ref=f1e71] [cursor=pointer]:
+            - /url: /admin/persone
+          - link "Inviti" [ref=f1e72] [cursor=pointer]:
+            - /url: /admin/inviti
+          - link "Accessi" [ref=f1e73] [cursor=pointer]:
+            - /url: /admin/accessi
+          - link "Video" [ref=f1e74] [cursor=pointer]:
+            - /url: /admin/video
+          - link "Categorie" [ref=f1e75] [cursor=pointer]:
+            - /url: /admin/categorie
+          - link "Sottotitoli" [ref=f1e76] [cursor=pointer]:
+            - /url: /admin/sottotitoli
+          - link "Commenti" [ref=f1e77] [cursor=pointer]:
+            - /url: /admin/commenti
+          - link "Cartelle" [ref=f1e78] [cursor=pointer]:
+            - /url: /admin/cartelle
+          - link "Internet" [ref=f1e79] [cursor=pointer]:
+            - /url: /admin/internet
+          - link "Lavori" [ref=f1e80] [cursor=pointer]:
+            - /url: /admin/lavori
+          - link "Sito" [ref=f1e81] [cursor=pointer]:
+            - /url: /admin/sito

@@ -3,6 +3,7 @@ package catalog
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -219,4 +220,36 @@ func TestVideosAdminIsForAdministrators(t *testing.T) {
 	s.do(t, "POST", "/api/admin/videos/1/refresh", "", http.StatusForbidden)
 	s.who = users.Account{}
 	s.do(t, "GET", "/api/admin/videos", "", http.StatusUnauthorized)
+}
+
+func TestAdminOneVideoAndPublicFilter(t *testing.T) {
+	s := newAdminSite(t)
+	if _, err := s.db.Exec(`INSERT INTO users (name, password_hash, role, created_at) VALUES ('Admin', 'x', 'admin', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	id := s.addVideo(t, "uno.mp4", "x", "", 1, true)
+	other := s.addVideo(t, "due.mp4", "y", "", 2, true)
+	if _, err := s.db.Exec(`INSERT INTO public_links (video_id, token, created_by, created_at) VALUES (?, 'abcdefghijklmnopqrstuv', 1, 1)`, id); err != nil {
+		t.Fatal(err)
+	}
+	var one AdminVideo
+	if err := json.Unmarshal(s.do(t, "GET", "/api/admin/videos/"+strconv.FormatInt(other, 10), "", http.StatusOK).Body.Bytes(), &one); err != nil {
+		t.Fatal(err)
+	}
+	if one.ID != other || one.Path != "due.mp4" || one.PublicLink != nil {
+		t.Errorf("one video = %+v", one)
+	}
+	s.do(t, "GET", "/api/admin/videos/999", "", http.StatusNotFound)
+	var list adminList
+	if err := json.Unmarshal(s.do(t, "GET", "/api/admin/videos?show=public", "", http.StatusOK).Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if list.Total != 1 || list.Videos[0].ID != id {
+		t.Errorf("public filter = %+v", list)
+	}
+	if want := map[adminFilter]int{"": 2, "public": 1, "hidden": 0, "missing": 0, "short": 0}; !reflect.DeepEqual(list.Counts, want) {
+		t.Errorf("counts = %v, want %v", list.Counts, want)
+	}
+	s.who = users.Account{ID: 2, Role: users.User}
+	s.do(t, "GET", "/api/admin/videos/"+strconv.FormatInt(id, 10), "", http.StatusForbidden)
 }

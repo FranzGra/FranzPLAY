@@ -1,0 +1,43 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - link "FranzTUBELocal" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+    - link "Cerca" [ref=f1e10] [cursor=pointer]:
+      - /url: /cerca
+  - main [ref=f1e15]:
+    - generic [ref=f1e16]:
+      - heading "Amministrazione" [level=1] [ref=f1e17]
+      - navigation "Sezioni dell'amministrazione" [ref=f1e21]:
+        - link "Riepilogo" [ref=f1e22] [cursor=pointer]:
+          - /url: /admin/riepilogo
+        - link "Persone" [ref=f1e23] [cursor=pointer]:
+          - /url: /admin/persone
+        - link "Inviti" [ref=f1e24] [cursor=pointer]:
+          - /url: /admin/inviti
+        - link "Accessi" [ref=f1e25] [cursor=pointer]:
+          - /url: /admin/accessi
+        - link "Video" [ref=f1e26] [cursor=pointer]:
+          - /url: /admin/video
+        - link "Categorie" [ref=f1e27] [cursor=pointer]:
+          - /url: /admin/categorie
+        - link "Sottotitoli" [ref=f1e28] [cursor=pointer]:
+          - /url: /admin/sottotitoli
+        - link "Commenti" [ref=f1e29] [cursor=pointer]:
+          - /url: /admin/commenti
+        - link "Cartelle" [ref=f1e30] [cursor=pointer]:
+          - /url: /admin/cartelle
+        - link "Internet" [ref=f1e31] [cursor=pointer]:
+          - /url: /admin/internet
+        - link "Lavori" [ref=f1e32] [cursor=pointer]:
+          - /url: /admin/lavori
+        - link "Sito" [ref=f1e33] [cursor=pointer]:
+          - /url: /admin/sito
+  - navigation "Menu del telefono" [ref=f1e35]:
+    - link "Home" [ref=f1e36] [cursor=pointer]:
+      - /url: /
+    - link "Categorie" [ref=f1e40] [cursor=pointer]:
+      - /url: /categorie
+    - link "Playlist" [ref=f1e46] [cursor=pointer]:
+      - /url: /playlist
+    - link "Profilo" [ref=f1e49] [cursor=pointer]:
+      - /url: /profilo

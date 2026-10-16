@@ -66,38 +66,17 @@ const paths = {
       <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
     </>
   ),
-  back15: (
+  // The jump icons: the number of seconds is written inside by Icon's text.
+  skipBack: (
     <>
       <path d="M4 12a8 8 0 1 0 2.4-5.7" />
       <path d="M4 3v4h4" />
-      <text
-        x="12"
-        y="15.5"
-        fontSize="7.5"
-        textAnchor="middle"
-        fill="currentColor"
-        stroke="none"
-        fontWeight="700"
-      >
-        15
-      </text>
     </>
   ),
-  forward15: (
+  skipForward: (
     <>
       <path d="M20 12a8 8 0 1 1-2.4-5.7" />
       <path d="M20 3v4h-4" />
-      <text
-        x="12"
-        y="15.5"
-        fontSize="7.5"
-        textAnchor="middle"
-        fill="currentColor"
-        stroke="none"
-        fontWeight="700"
-      >
-        15
-      </text>
     </>
   ),
   volume: (
@@ -245,6 +224,35 @@ const paths = {
       <path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5" />
     </>
   ),
+  gauge: (
+    <>
+      <path d="M3.5 17a9 9 0 1 1 17 0" />
+      <path d="M12 13l4-4.5" />
+      <circle cx="12" cy="13" r="1.5" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <path d="M4 7.5l8 5.5 8-5.5" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M11 12l9-9" />
+      <path d="M16.5 6.5l2.5 2.5" />
+      <path d="M14 9l2 2" />
+    </>
+  ),
+  comment: <path d="M20 11.5a7.5 7.5 0 0 1-11 6.6L4 19.5l1.4-4.3A7.5 7.5 0 1 1 20 11.5z" />,
+  layers: (
+    <>
+      <path d="M12 3l9 5-9 5-9-5z" />
+      <path d="M3 12.5l9 5 9-5" />
+      <path d="M3 17l9 5 9-5" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof paths;
@@ -252,9 +260,11 @@ export type IconName = keyof typeof paths;
 type IconProps = {
   name: IconName;
   size?: number;
+  // text is written small in the middle, as the seconds of the jump icons.
+  text?: string;
 };
 
-export function Icon({ name, size = 22 }: IconProps) {
+export function Icon({ name, size = 22, text }: IconProps) {
   return (
     <svg
       width={size}
@@ -268,6 +278,19 @@ export function Icon({ name, size = 22 }: IconProps) {
       aria-hidden="true"
     >
       {paths[name]}
+      {text && (
+        <text
+          x="12"
+          y="15.5"
+          fontSize="7.5"
+          textAnchor="middle"
+          fill="currentColor"
+          stroke="none"
+          fontWeight="700"
+        >
+          {text}
+        </text>
+      )}
     </svg>
   );
 }

@@ -31,10 +31,14 @@ export function AuthPage({
   mode: startMode,
   setupCode = false,
   openRegistration = false,
+  onBack,
 }: {
-  mode: "login" | "setup";
+  mode: Mode;
   setupCode?: boolean;
   openRegistration?: boolean;
+  // onBack, when given, offers a way back to the page the person came
+  // from, like the video of a public link.
+  onBack?: () => void;
 }) {
   const [mode, setMode] = useState<Mode>(startMode);
   usePageTitle({ login: "Accedi", setup: "Benvenuto", register: "Registrati" }[mode]);
@@ -191,6 +195,13 @@ export function AuthPage({
               }}
             >
               {mode === "login" ? "Registrati" : "Accedi"}
+            </button>
+          </p>
+        )}
+        {onBack && (
+          <p className={styles.switch}>
+            <button type="button" className={styles.link} onClick={onBack}>
+              Torna al video
             </button>
           </p>
         )}

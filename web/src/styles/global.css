@@ -379,6 +379,41 @@ input {
   animation-timing-function: var(--ease-in-out);
 }
 
+/* A video card's cover growing into the player, or the player shrinking
+   back into its card (coverMorph in features/videos): the cover glides
+   on a soft curve, the rest of the page only fades across, quickly. */
+:root[data-morph]::view-transition-group(video-player),
+:root[data-morph]::view-transition-group(video-back) {
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-morph]::view-transition-old(root),
+:root[data-morph]::view-transition-new(root),
+:root[data-morph]::view-transition-group(video-info),
+:root[data-morph]::view-transition-group(video-side),
+:root[data-morph]::view-transition-old(video-info),
+:root[data-morph]::view-transition-new(video-info),
+:root[data-morph]::view-transition-old(video-side),
+:root[data-morph]::view-transition-new(video-side) {
+  animation-duration: 280ms;
+}
+
+/* The card and the player can have different shapes (theater mode is
+   wider): each picture keeps its own proportions, at the full height of
+   the moving box, centered, and what is too wide is cut, never squashed. */
+::view-transition-old(video-back),
+::view-transition-new(video-back) {
+  block-size: 100%;
+  inline-size: auto;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+}
+
+::view-transition-image-pair(video-back) {
+  overflow: clip;
+}
+
 /* For whoever asked their device for less motion: everything still works,
    it just happens at once. Components take their timings and animations
    from the variables above, so changing them here is enough. */

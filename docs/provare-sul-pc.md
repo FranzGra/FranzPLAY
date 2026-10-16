@@ -206,7 +206,9 @@ l'audio**.
 
 - **barra del tempo** grande: cliccala o trascinala per spostarti;
 - **±15 secondi** con i tasti accanto a Play, con le frecce o J e L della tastiera, oppure con un
-  doppio tocco ai lati del video sul telefono;
+  doppio tocco ai lati del video sul telefono. Quanti secondi saltare (5, 10, 15, 20 o 30) si
+  sceglie nell'ingranaggio, alla voce **Salto avanti/indietro**: la scelta resta salvata per la
+  persona, su ogni dispositivo;
 - altri tasti: **spazio** o K per pausa, **F** schermo intero, **M** muto, **C** sottotitoli;
 - l'**ingranaggio** apre le impostazioni: velocità, lingua dell'audio (se il video ne ha più di
   una), sottotitoli e il loro stile (dimensione, colore, sfondo, posizione).

@@ -35,10 +35,11 @@ export async function createUser(person: NewPerson): Promise<Account> {
 }
 
 // updateUser changes what a person may do. Without uploadQuota (bytes),
-// the person keeps the space they have.
+// the person keeps the space they have; without canSharePublic, whether
+// they may make public links.
 export async function updateUser(
   id: number,
-  change: { role: Role; canUpload: boolean; uploadQuota?: number },
+  change: { role: Role; canUpload: boolean; uploadQuota?: number; canSharePublic?: boolean },
 ): Promise<Account> {
   return parseAccount(await request(`/api/users/${id}`, { method: "PUT", body: change }));
 }

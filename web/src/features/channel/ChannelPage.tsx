@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
-import { avatarUrl } from "../../api/auth";
+import { avatarUrl, maySharePublic } from "../../api/auth";
 import { type Channel, fetchChannel } from "../../api/channels";
 import { ApiError } from "../../api/client";
 import { useAccount } from "../../app/auth";
@@ -9,6 +9,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { PlaylistCard } from "../playlists/PlaylistCard";
 import listStyles from "../playlists/Playlists.module.css";
+import { PublicLinkToggle } from "../public/PublicLinkToggle";
 import { useVideoList } from "../videos/useVideoList";
 import { VideoGrid } from "../videos/VideoGrid";
 import styles from "./ChannelPage.module.css";
@@ -96,6 +97,7 @@ export function ChannelPage() {
         name={channel.name}
         mine={mine}
         canUpload={mine && account.canUpload}
+        sharePublic={mine && maySharePublic(account)}
       />
       <h2 className={styles.section}>Playlist</h2>
       {channel.playlists.length === 0 ? (
@@ -131,11 +133,14 @@ function ChannelVideos({
   name,
   mine,
   canUpload,
+  sharePublic,
 }: {
   id: number;
   name: string;
   mine: boolean;
   canUpload: boolean;
+  // sharePublic: I may make public links, so each of my videos has one.
+  sharePublic: boolean;
 }) {
   const { state, loadMore } = useVideoList({ uploader: id });
   if (state.kind === "loading") return null;
@@ -155,6 +160,13 @@ function ChannelVideos({
         state={state}
         onMore={loadMore}
         label={mine ? "I tuoi video" : `Video caricati da ${name}`}
+        below={
+          sharePublic
+            ? (video) => (
+                <PublicLinkToggle videoId={video.id} title={video.title} link={video.publicLink} />
+              )
+            : undefined
+        }
         empty={{
           title: "Nessun video caricato",
           text: "I video che carichi da «Carica un video», nel Profilo, compariranno qui, ognuno con scritto chi può vederlo.",

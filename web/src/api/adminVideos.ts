@@ -30,9 +30,22 @@ export type ClipChoice = "" | "video" | "none";
 // uploaded, a "moment" of the video they chose, or "" when FranzPLAY picks.
 export type CoverChoice = "" | "image" | "moment";
 
-export type AdminShow = "" | "hidden" | "missing" | "short";
+export type AdminShow = "" | "public" | "hidden" | "missing" | "short";
 
-export type AdminVideoList = { videos: AdminVideo[]; total: number };
+// AdminCounts are how many videos each filter shows, for the same search.
+export type AdminCounts = Partial<Record<AdminShow, number>>;
+
+export type AdminVideoList = { videos: AdminVideo[]; total: number; counts?: AdminCounts };
+
+function parseCounts(data: unknown): AdminCounts | undefined {
+  if (typeof data !== "object" || data === null) return undefined;
+  const out: AdminCounts = {};
+  for (const key of ["", "public", "hidden", "missing", "short"] as const) {
+    const n = (data as Record<string, unknown>)[key];
+    if (typeof n === "number" && Number.isInteger(n) && n >= 0) out[key] = n;
+  }
+  return out;
+}
 
 export function parseAdminVideo(data: unknown): AdminVideo {
   const video = parseVideo(data);
@@ -107,7 +120,7 @@ export async function fetchAdminVideos(
   if (typeof d.total !== "number" || !Number.isInteger(d.total) || d.total < 0) {
     throw new Error("admin videos: bad total");
   }
-  return { videos: d.videos.map(parseAdminVideo), total: d.total };
+  return { videos: d.videos.map(parseAdminVideo), total: d.total, counts: parseCounts(d.counts) };
 }
 
 // setVideoHidden hides a video from everybody, or shows it again.
@@ -164,4 +177,9 @@ export async function remakeClip(id: number): Promise<void> {
 // removeClip leaves the video's card without a clip.
 export async function removeClip(id: number): Promise<void> {
   await request(`/api/admin/videos/${id}/clip`, { method: "DELETE" });
+}
+
+// fetchAdminVideo reads one video, as in the list, for its own page.
+export async function fetchAdminVideo(id: number, signal?: AbortSignal): Promise<AdminVideo> {
+  return parseAdminVideo(await request(`/api/admin/videos/${id}`, { signal }));
 }

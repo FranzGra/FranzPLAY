@@ -1,0 +1,108 @@
+- generic [ref=f2e3]:
+  - banner [ref=f2e4]:
+    - link "FranzPLAY" [ref=f2e5] [cursor=pointer]:
+      - /url: /
+    - link "Cerca" [ref=f2e10] [cursor=pointer]:
+      - /url: /cerca
+  - main [ref=f2e15]:
+    - generic [ref=f2e16]:
+      - heading "Amministrazione" [level=1] [ref=f2e17]
+      - navigation "Sezioni dell'amministrazione" [ref=f2e21]:
+        - link "Riepilogo" [ref=f2e22] [cursor=pointer]:
+          - /url: /admin/riepilogo
+        - link "Persone" [ref=f2e23] [cursor=pointer]:
+          - /url: /admin/persone
+        - link "Inviti" [ref=f2e24] [cursor=pointer]:
+          - /url: /admin/inviti
+        - link "Accessi" [ref=f2e25] [cursor=pointer]:
+          - /url: /admin/accessi
+        - link "Video" [ref=f2e26] [cursor=pointer]:
+          - /url: /admin/video
+        - link "Categorie" [ref=f2e27] [cursor=pointer]:
+          - /url: /admin/categorie
+        - link "Sottotitoli" [ref=f2e28] [cursor=pointer]:
+          - /url: /admin/sottotitoli
+        - link "Commenti" [ref=f2e29] [cursor=pointer]:
+          - /url: /admin/commenti
+        - link "Cartelle" [ref=f2e30] [cursor=pointer]:
+          - /url: /admin/cartelle
+        - link "Internet" [ref=f2e31] [cursor=pointer]:
+          - /url: /admin/internet
+        - link "Lavori" [ref=f2e32] [cursor=pointer]:
+          - /url: /admin/lavori
+        - link "Sito" [ref=f2e33] [cursor=pointer]:
+          - /url: /admin/sito
+      - paragraph [ref=f2e34]: Qui vedi tutti i video, anche quelli nascosti e quelli il cui file non si trova più. Apri un video per cambiarne titolo, copertina, chi lo vede e il link pubblico.
+      - generic [ref=f2e35]:
+        - search [ref=f2e36]:
+          - generic [ref=f2e38]:
+            - generic [ref=f2e42]: Cerca tra i video
+            - searchbox "Cerca tra i video" [ref=f2e43]
+        - group "Quali video" [ref=f2e44]:
+          - button "Tutti" [pressed] [ref=f2e46] [cursor=pointer]
+          - button "Pubblici" [ref=f2e47] [cursor=pointer]
+          - button "Nascosti" [ref=f2e48] [cursor=pointer]
+          - button "Non trovati" [ref=f2e49] [cursor=pointer]
+          - button "Troppo corti" [ref=f2e50] [cursor=pointer]
+        - group "Come mostrarli" [ref=f2e51]:
+          - button "Schede" [pressed] [ref=f2e53] [cursor=pointer]
+          - button "Tabella" [ref=f2e54] [cursor=pointer]
+      - paragraph [ref=f2e55]: 8 video
+      - list "Video" [ref=f2e56]:
+        - listitem [ref=f2e57]:
+          - generic [ref=f2e60]:
+            - paragraph [ref=f2e61]:
+              - link "Welcome Apple HomeView： Designed for life at home. [hkrYiZ_g9tw]" [ref=f2e62] [cursor=pointer]:
+                - /url: /admin/video/8
+            - paragraph [ref=f2e63]: 3:13 · 1080p
+        - listitem [ref=f2e64]:
+          - generic [ref=f2e67]:
+            - paragraph [ref=f2e68]:
+              - link "IMG_4700" [ref=f2e69] [cursor=pointer]:
+                - /url: /admin/video/7
+            - paragraph [ref=f2e70]: Categoria 2 · 2:12 · 2K
+        - listitem [ref=f2e71]:
+          - generic [ref=f2e74]:
+            - paragraph [ref=f2e75]:
+              - link "IMG_4699" [ref=f2e76] [cursor=pointer]:
+                - /url: /admin/video/6
+            - paragraph [ref=f2e77]: Categoria 2 · 1:12 · 2K
+        - listitem [ref=f2e78]:
+          - generic [ref=f2e81]:
+            - paragraph [ref=f2e82]:
+              - link "IMG_4692" [ref=f2e83] [cursor=pointer]:
+                - /url: /admin/video/5
+            - paragraph [ref=f2e84]: Categoria 2 · 0:09 · 2K
+        - listitem [ref=f2e85]:
+          - generic [ref=f2e88]:
+            - paragraph [ref=f2e89]:
+              - link "IMG_4691" [ref=f2e90] [cursor=pointer]:
+                - /url: /admin/video/4
+            - paragraph [ref=f2e91]: Categoria 2 · 0:16 · 2K
+        - listitem [ref=f2e92]:
+          - generic [ref=f2e95]:
+            - paragraph [ref=f2e96]:
+              - link "Teaching a humanoid robot to play cornhole with Gemini 4 Argon [9PICEmtfpWU]" [ref=f2e97] [cursor=pointer]:
+                - /url: /admin/video/3
+            - paragraph [ref=f2e98]: Categoria 1 · 1:43 · 1080p
+        - listitem [ref=f2e99]:
+          - generic [ref=f2e102]:
+            - paragraph [ref=f2e103]:
+              - link "Gemini 4 Argon Is INSANE – Hands-On With Google’s New Model! [mfsUVN8ykLA]" [ref=f2e104] [cursor=pointer]:
+                - /url: /admin/video/2
+            - paragraph [ref=f2e105]: Categoria 1 · 37:10 · 1080p
+        - listitem [ref=f2e106]:
+          - generic [ref=f2e109]:
+            - paragraph [ref=f2e110]:
+              - link "AI e Reverse Engineering： il software non sarà più lo stesso [771nkTZhRO4]" [ref=f2e111] [cursor=pointer]:
+                - /url: /admin/video/1
+            - paragraph [ref=f2e112]: Categoria 1 · 17:56 · 1080p
+  - navigation "Menu del telefono" [ref=f2e113]:
+    - link "Home" [ref=f2e114] [cursor=pointer]:
+      - /url: /
+    - link "Categorie" [ref=f2e118] [cursor=pointer]:
+      - /url: /categorie
+    - link "Playlist" [ref=f2e124] [cursor=pointer]:
+      - /url: /playlist
+    - link "Profilo" [ref=f2e127] [cursor=pointer]:
+      - /url: /profilo

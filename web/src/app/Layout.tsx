@@ -7,12 +7,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from "react-router";
 import { avatarUrl } from "../api/auth";
 import { fetchPlaylists, onPlaylistsChanged, type Playlist, playlistName } from "../api/playlists";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { SiteName } from "../components/SiteName";
+import { morphing } from "../features/videos/coverMorph";
+import { richMotion } from "../lib/richMotion";
+import { restorePlace } from "../lib/scrollMemory";
 import { useAccount } from "./auth";
 import styles from "./Layout.module.css";
 import { preloadLikelyPages } from "./lazyPages";
@@ -70,6 +73,7 @@ export function Layout() {
   const [query, setQuery] = useState("");
   const page = useRef<HTMLDivElement>(null);
   useEnterOnNavigate(page);
+  useScrollPlaces();
   // Once the first page shows, fetch the code of the pages opened most often.
   useEffect(preloadLikelyPages, []);
   const { pathname } = useLocation();
@@ -94,24 +98,31 @@ export function Layout() {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        {drawer && (
-          <button
-            type="button"
-            className={styles.menuButton}
-            aria-label="Menu"
-            aria-expanded={menu.open}
-            aria-controls="menu-principale"
-            onClick={menu.toggle}
-          >
-            <Icon name="menu" size={22} />
-          </button>
-        )}
-        <Link to="/" className={styles.logo}>
-          <span className={styles.logoMark}>
-            <Icon name="play" size={14} />
-          </span>
-          <SiteName accentClass={styles.logoAccent} />
-        </Link>
+        {/* The bar has three columns as wide on the left as on the right,
+            so the search stays in the middle of the screen whatever the
+            length of the site's name. */}
+        <div className={styles.start}>
+          {drawer && (
+            <button
+              type="button"
+              className={styles.menuButton}
+              aria-label="Menu"
+              aria-expanded={menu.open}
+              aria-controls="menu-principale"
+              onClick={menu.toggle}
+            >
+              <Icon name="menu" size={22} />
+            </button>
+          )}
+          <Link to="/" className={styles.logo}>
+            <span className={styles.logoMark}>
+              <Icon name="play" size={14} />
+            </span>
+            <span className={styles.logoName}>
+              <SiteName accentClass={styles.logoAccent} />
+            </span>
+          </Link>
+        </div>
 
         <search className={styles.search}>
           <form onSubmit={onSearch}>
@@ -229,14 +240,17 @@ function PlaylistLink({ list }: { list: Playlist }) {
 
 // useEnterOnNavigate makes each new page rise softly into place. It moves
 // the page with the browser's own animations instead of drawing it again,
-// so what the page already loaded stays as it is. Nothing moves for whoever
-// asked their device for less motion.
+// so what the page already loaded stays as it is. It is the light entrance
+// for every browser; when a video card grows into the player (coverMorph)
+// that move is the entrance, and this one stays still. Nothing moves for
+// whoever asked their device for less motion or less data, or on a weak
+// device (richMotion).
 function useEnterOnNavigate(page: RefObject<HTMLDivElement | null>) {
   const { pathname } = useLocation();
   // biome-ignore lint/correctness/useExhaustiveDependencies: the animation runs on every new address
   useEffect(() => {
     const element = page.current;
-    if (!element?.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    if (!element?.animate || morphing() || !richMotion()) {
       return;
     }
     const move = element.animate(
@@ -248,6 +262,22 @@ function useEnterOnNavigate(page: RefObject<HTMLDivElement | null>) {
     );
     return () => move.cancel();
   }, [pathname, page]);
+}
+
+// useScrollPlaces opens a new page at its top, and brings a page reached
+// with the back or forward button to where it was left (scrollMemory).
+// Changing only the part after "?" (a filter, a search) keeps the place.
+function useScrollPlaces() {
+  const { pathname, key } = useLocation();
+  const type = useNavigationType();
+  const last = useRef(pathname);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every new entry
+  useEffect(() => {
+    const moved = last.current !== pathname;
+    last.current = pathname;
+    if (type === "POP") restorePlace();
+    else if (moved) window.scrollTo(0, 0);
+  }, [pathname, key]);
 }
 
 // useMyPlaylists loads my lists for the side menu, again after I create,

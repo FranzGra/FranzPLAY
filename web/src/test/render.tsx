@@ -9,9 +9,11 @@ export const testAccount: Account = {
   name: "Paolo",
   role: "admin",
   canUpload: true,
+  canSharePublic: false,
   uploadQuota: 10737418240,
   accentColor: "",
   avatar: 0,
+  skipSeconds: 15,
 };
 
 // A route of the fake server: what it answers to "METHOD /path".

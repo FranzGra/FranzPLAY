@@ -2,32 +2,225 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 0 16px;
+  margin: 0 0 20px;
   font-size: 26px;
   font-weight: 650;
   letter-spacing: -0.02em;
 }
 
-/* The pages of the administration: one row of tabs on a glass bar. On a
-   narrow screen the row slides sideways instead of piling up in lines. */
-.tabs {
-  position: relative;
+/* The frame: on a wide screen the menu of the administration stays on the
+   left, still while the page scrolls, and the open page fills the rest. */
+.frame {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 36px;
+  align-items: start;
+}
+
+.frame[data-inner],
+.frame:not(:has(.side)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.side {
+  position: sticky;
+  top: calc(var(--header-height) + 16px);
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 10px;
+  border-radius: var(--radius-l);
+}
+
+.sideHeading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 0 10px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.content {
+  min-width: 0;
+}
+
+/* The title of the open page, with its icon in a small glass tile. */
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.sectionIcon,
+.menuIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 22%, transparent),
+    color-mix(in srgb, var(--color-accent) 8%, transparent)
+  );
+  color: var(--color-accent);
+}
+
+/* On a phone or tablet: the way back to the menu, above the page title. */
+.backToMenu {
+  display: inline-flex;
+  align-items: center;
   gap: 2px;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 0 24px;
-  padding: 4px;
-  overflow-x: auto;
+  min-height: var(--touch);
+  margin: -8px 0 4px -6px;
+  padding: 0 10px 0 2px;
   border-radius: var(--radius-pill);
-  scrollbar-width: none;
+  color: var(--color-text-muted);
+  font-size: 15px;
+  font-weight: 500;
 }
 
-.tabs::-webkit-scrollbar {
-  display: none;
+.backToMenu:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--color-text);
 }
 
-.tab,
+/* The menu: groups of pages, each with its icon. */
+.menu,
+.menuBig {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.menuBig {
+  gap: 24px;
+  max-width: 640px;
+}
+
+.menuGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menuTitle {
+  margin: 0 0 0 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menuLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+.menu .menuIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border-color: transparent;
+  background: transparent;
+  color: inherit;
+}
+
+.menuLink:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--color-text);
+}
+
+.menu .menuLink[aria-current="page"] {
+  background: var(--glass-bg-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text);
+}
+
+.menu .menuLink[aria-current="page"] .menuIcon {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.menuText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menuLabel {
+  color: inherit;
+}
+
+/* The menu page on a phone: one glass list per group, like the settings
+   of a phone, each page with a line on what it is for. */
+.menuBig .menuList {
+  gap: 0;
+  padding: 4px;
+  border-radius: var(--radius-l);
+}
+
+.menuBig .menuLink {
+  min-height: 64px;
+  padding: 10px 12px 10px 10px;
+  color: var(--color-text-muted);
+}
+
+.menuBig li + li .menuLink {
+  position: relative;
+}
+
+.menuBig li + li .menuLink::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 12px;
+  left: 60px;
+  border-top: 1px solid var(--color-border);
+}
+
+.menuBig .menuLabel {
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.menuHint {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
 .segment {
   display: inline-flex;
   flex: none;
@@ -44,13 +237,11 @@
   cursor: pointer;
 }
 
-.tab:hover,
 .segment:hover {
   background: rgb(255 255 255 / 0.06);
   color: var(--color-text);
 }
 
-.tab[aria-current="page"],
 .segment[aria-pressed="true"] {
   background: var(--color-text);
   color: var(--color-bg);
@@ -223,14 +414,6 @@
 
 .check input[type="checkbox"]:disabled {
   opacity: 0.5;
-}
-
-/* A person's settings sit on their own line under the name, the same for
-   everyone, so the cards line up. */
-.personControls {
-  width: 100%;
-  padding-top: 10px;
-  border-top: 1px solid var(--color-border);
 }
 
 .check:has(input:disabled) {
@@ -973,4 +1156,329 @@ label.action:focus-within {
 /* A few seconds need only a short box. */
 .rules .seconds {
   max-width: 160px;
+}
+
+/* A video in the list: light, one action. The title's link covers the
+   whole row (::after), so a click anywhere opens the video's page. */
+.videoRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.videoRow:hover {
+  background: var(--glass-bg-strong);
+}
+
+.videoRowText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rowLink {
+  color: var(--color-text);
+}
+
+.rowLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.rowLink:focus-visible {
+  outline: none;
+}
+
+.videoRow:has(.rowLink:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Above the row's link, so it stays its own target. Quiet: the accent
+   stays for the actions that save. */
+.rowEdit {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  color: var(--color-text);
+}
+
+.rowEdit:hover {
+  color: var(--color-text);
+}
+
+/* The states of a video, all alike and quiet. */
+.softBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-strong);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* Long names stop at two lines; the page of the video shows them whole. */
+.videoRow .name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* On a phone the whole row is the button: the title gets the room. */
+@media (max-width: 600px) {
+  .rowEdit {
+    display: none;
+  }
+}
+
+/* The list's tools on one line: the search takes the room, then the
+   filter, the view and how many. On a phone, the search on its own line. */
+.leadShort {
+  margin: 0 0 16px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.toolbarSearch {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.toolbarSide {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbarCount {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.viewSwitch {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  border: var(--glass-border);
+  border-radius: var(--radius-pill);
+}
+
+.viewButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.viewButton:hover {
+  color: var(--color-text);
+}
+
+.viewButton[aria-pressed="true"] {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.viewButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .toolbarSearch {
+    flex-basis: 100%;
+  }
+
+  .toolbarSide {
+    width: 100%;
+  }
+
+  .toolbarCount {
+    margin-left: auto;
+  }
+}
+
+/* One person: who they are and the buttons for them on top, what they may
+   do underneath as switches, one small tile each. */
+.personCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px 16px;
+  padding: 16px 20px 18px;
+  border-radius: var(--radius-l);
+}
+
+.personCard > :nth-child(n + 3) {
+  grid-column: 1 / -1;
+}
+
+.personActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.perms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.perm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.025);
+}
+
+.permHint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.permField {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* A switch: the words on the left, a pill on the right that slides on.
+   It is still a tick box for the browser and for screen readers. */
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.toggle input[type="checkbox"] {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 26px;
+  margin: 0;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.12);
+  cursor: inherit;
+  appearance: none;
+  transition: background-color var(--duration-fast) ease;
+}
+
+.toggle input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+  transition: translate var(--duration-fast) var(--ease-spring);
+}
+
+.toggle input[type="checkbox"]:checked {
+  border-color: transparent;
+  background: var(--color-accent);
+}
+
+.toggle input[type="checkbox"]:checked::after {
+  translate: 16px 0;
+}
+
+.toggle input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.toggle:has(input:disabled) {
+  cursor: default;
+}
+
+.toggle input[type="checkbox"]:disabled {
+  opacity: 0.45;
+}
+
+/* A setting on one line: what it is and what it does on the left, its
+   switch on the right. Anything more (a key to type) goes underneath. */
+.setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 24px;
+  padding: 16px 20px;
+  border-radius: var(--radius-l);
+}
+
+.setting > :nth-child(n + 3) {
+  grid-column: 1 / -1;
+}
+
+.setting .toggle {
+  min-height: 0;
+  padding-top: 2px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 599px) {
+  .personCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .personActions {
+    justify-content: flex-start;
+  }
+
+  /* On a phone the words take the whole width, the switch goes under them. */
+  .setting {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .setting .toggle {
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+    font-size: 14px;
+  }
 }

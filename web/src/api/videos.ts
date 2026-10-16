@@ -41,6 +41,10 @@ export type Video = {
   // link is the address that lets anyone with it watch the video, when it
   // is seen by link: only for its uploader, on the video; null otherwise.
   link: string | null;
+  // publicLink is the address of its public link, "/p/…", only for who may
+  // manage it (its uploader with the permission, the administrators on
+  // their list); null otherwise or when it has none.
+  publicLink: string | null;
   // From a file next to the video, like the .info.json of yt-dlp:
   author: string; // who published it; "" = not known
   publishedOn: Date | null; // the day it was published; null = not known
@@ -112,10 +116,12 @@ function optionalCount(value: unknown, what: string): number | null {
   return value === null ? null : count(value, what);
 }
 
-function parsePreview(data: unknown): Preview | null {
+// parsePreview checks the frames of a video; through a public link their
+// address starts with /api/public/ instead.
+export function parsePreview(data: unknown, prefix = "/api/previews/"): Preview | null {
   if (data === null) return null;
   const p = record(data, "video preview");
-  if (typeof p.src !== "string" || !p.src.startsWith("/api/previews/")) {
+  if (typeof p.src !== "string" || !p.src.startsWith(prefix)) {
     throw new Error("video preview src: not a preview address");
   }
   const preview = {
@@ -178,6 +184,9 @@ export function parseVideo(data: unknown): Video {
   if (v.link !== undefined && !isLink(v.link)) {
     throw new Error("video link: not the address of a video");
   }
+  if (v.publicLink !== undefined && !isPublicLinkAddress(v.publicLink)) {
+    throw new Error("video publicLink: not the address of a public link");
+  }
   if (typeof v.author !== "string") {
     throw new Error("video author: not text");
   }
@@ -212,6 +221,7 @@ export function parseVideo(data: unknown): Video {
       v.sharedWith === undefined ? [] : parseSharePeople(v.sharedWith, "video sharedWith"),
     audience: v.audience === undefined ? null : v.audience,
     link: v.link === undefined ? null : v.link,
+    publicLink: v.publicLink === undefined ? null : v.publicLink,
     author: v.author,
     publishedOn: parseDay(v.publishedOn),
     description: typeof v.description === "string" ? v.description : "",
@@ -330,7 +340,7 @@ export type SubtitleTrack = {
   src: string;
 };
 
-export function parseSubtitles(data: unknown): SubtitleTrack[] {
+export function parseSubtitles(data: unknown, prefix = "/api/videos/"): SubtitleTrack[] {
   if (!Array.isArray(data)) {
     throw new Error("subtitles: not a list");
   }
@@ -339,7 +349,7 @@ export function parseSubtitles(data: unknown): SubtitleTrack[] {
     if (typeof s.key !== "string" || s.key === "") throw new Error("subtitle key: empty");
     if (typeof s.lang !== "string") throw new Error("subtitle lang: not text");
     if (typeof s.label !== "string" || s.label === "") throw new Error("subtitle label: empty");
-    if (typeof s.src !== "string" || !s.src.startsWith("/api/videos/")) {
+    if (typeof s.src !== "string" || !s.src.startsWith(prefix)) {
       throw new Error("subtitle src: not a subtitle address");
     }
     return { key: s.key, lang: s.lang, label: s.label, src: s.src };
@@ -391,6 +401,11 @@ function isAudience(value: unknown): value is Audience {
 // isLink checks the address of a video seen by link, as the server makes it.
 export function isLink(value: unknown): value is string {
   return typeof value === "string" && /^\/video\/\d+\?k=[A-Za-z0-9_-]{22}$/.test(value);
+}
+
+// isPublicLinkAddress checks the address of a public link, as the server makes it.
+export function isPublicLinkAddress(value: unknown): value is string {
+  return typeof value === "string" && /^\/p\/[A-Za-z0-9_-]{22}$/.test(value);
 }
 
 // openVideoLink tells the server I opened the link of a video seen by

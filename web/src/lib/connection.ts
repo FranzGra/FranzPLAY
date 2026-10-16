@@ -20,6 +20,13 @@ export function goodConnection(): boolean {
   return isGood((navigator as Navigator & { connection?: NetworkInformation }).connection);
 }
 
+// savesData says whether the person asked the browser to use less data.
+export function savesData(): boolean {
+  return (
+    (navigator as Navigator & { connection?: NetworkInformation }).connection?.saveData === true
+  );
+}
+
 // isGood is goodConnection's decision, on what the browser said.
 export function isGood(connection: NetworkInformation | undefined): boolean {
   if (connection === undefined) return true;

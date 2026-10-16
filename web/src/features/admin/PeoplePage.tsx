@@ -217,9 +217,24 @@ function PersonRow({
 
   const change = (role: Account["role"], canUpload: boolean, uploadQuota?: number) =>
     run(async () => onChanged(await updateUser(person.id, { role, canUpload, uploadQuota })));
+  // Taking the permission away also turns off every public link the
+  // person made: the server does it, here we only say so.
+  const changePublic = (canSharePublic: boolean) =>
+    run(async () => {
+      onChanged(
+        await updateUser(person.id, {
+          role: person.role,
+          canUpload: person.canUpload,
+          canSharePublic,
+        }),
+      );
+      if (!canSharePublic && person.role !== "admin") {
+        setDone(`I link pubblici creati da ${person.name} non funzionano più.`);
+      }
+    });
 
   return (
-    <div className={`glass ${styles.person}`}>
+    <div className={`glass ${styles.personCard}`}>
       <div className={styles.who}>
         <Avatar name={person.name} size={44} photo={avatarUrl(person.id, person.avatar)} />
         <div>
@@ -230,6 +245,7 @@ function PersonRow({
           <p className={styles.role}>
             {person.role === "admin" ? "Amministratore" : "Utente"}
             {person.canUpload && ` · carica video, fino a ${formatBytes(person.uploadQuota)}`}
+            {person.canSharePublic && person.role !== "admin" && " · crea link pubblici"}
           </p>
           <p className={styles.role}>
             {person.lastLogin
@@ -239,47 +255,13 @@ function PersonRow({
         </div>
       </div>
 
-      <div className={`${styles.controls} ${styles.personControls}`}>
-        <label className={styles.check}>
-          <input
-            type="checkbox"
-            checked={person.canUpload}
-            disabled={busy}
-            onChange={(e) => change(person.role, e.target.checked)}
-          />
-          Può caricare video
-        </label>
-        {person.canUpload && (
-          <label className={styles.check}>
-            Spazio
-            <Select
-              compact
-              aria-label="Spazio"
-              value={person.uploadQuota}
-              disabled={busy}
-              options={choicesFor(person.uploadQuota).map((bytes) => ({
-                value: bytes,
-                label: formatBytes(bytes),
-              }))}
-              onChange={(bytes) => change(person.role, true, bytes)}
-            />
-          </label>
-        )}
-        <label className={styles.check}>
-          <input
-            type="checkbox"
-            checked={person.role === "admin"}
-            // Taking away your own role would lock you out of this page.
-            disabled={busy || itsMe}
-            onChange={(e) => change(e.target.checked ? "admin" : "user", person.canUpload)}
-          />
-          Amministratore
-        </label>
+      <div className={styles.personActions}>
         <button
           type="button"
           className={`glass ${styles.action}`}
           onClick={() => setAsking(asking === "password" ? "nothing" : "password")}
         >
+          <Icon name="lock" size={16} />
           Nuova password
         </button>
         {!itsMe && (
@@ -292,6 +274,69 @@ function PersonRow({
             Elimina
           </button>
         )}
+      </div>
+
+      <div className={styles.perms}>
+        <div className={styles.perm}>
+          <label className={styles.toggle}>
+            Può caricare video
+            <input
+              type="checkbox"
+              checked={person.canUpload}
+              disabled={busy}
+              onChange={(e) => change(person.role, e.target.checked)}
+            />
+          </label>
+          {person.canUpload ? (
+            <label className={styles.permField}>
+              Spazio
+              <Select
+                compact
+                aria-label="Spazio"
+                value={person.uploadQuota}
+                disabled={busy}
+                options={choicesFor(person.uploadQuota).map((bytes) => ({
+                  value: bytes,
+                  label: formatBytes(bytes),
+                }))}
+                onChange={(bytes) => change(person.role, true, bytes)}
+              />
+            </label>
+          ) : (
+            <p className={styles.permHint}>Dalla sua pagina Profilo</p>
+          )}
+        </div>
+        <div className={styles.perm}>
+          <label className={styles.toggle}>
+            Può creare link pubblici
+            <input
+              type="checkbox"
+              checked={person.role === "admin" || person.canSharePublic}
+              disabled={busy || person.role === "admin"}
+              onChange={(e) => changePublic(e.target.checked)}
+            />
+          </label>
+          <p className={styles.permHint}>
+            {person.role === "admin"
+              ? "Gli amministratori possono sempre"
+              : "Link che chiunque apre, anche senza account"}
+          </p>
+        </div>
+        <div className={styles.perm}>
+          <label className={styles.toggle}>
+            Amministratore
+            <input
+              type="checkbox"
+              checked={person.role === "admin"}
+              // Taking away your own role would lock you out of this page.
+              disabled={busy || itsMe}
+              onChange={(e) => change(e.target.checked ? "admin" : "user", person.canUpload)}
+            />
+          </label>
+          <p className={styles.permHint}>
+            {itsMe ? "Sei tu: non puoi toglierlo a te stesso" : "Vede e cambia queste pagine"}
+          </p>
+        </div>
       </div>
 
       {asking === "password" && (

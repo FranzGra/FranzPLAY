@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { logIn, PEOPLE, videos, watchErrors } from "./franzplay";
+import { BASE, logIn, PEOPLE, videos, watchErrors } from "./franzplay";
 
 // The heart of FranzPLAY: a video starts quickly and jumps quickly. The
 // limits are generous, for slow CI computers; on a normal day both take
@@ -255,3 +255,155 @@ test("the big play button grows in place under the mouse", async ({ page, isMobi
   expect(x1).toBeCloseTo(x0, 0);
   expect(y1).toBeCloseTo(y0, 0);
 });
+
+test("a card's cover grows into the player, and back into its card", async ({ page }) => {
+  const errors = watchErrors(page);
+  await logIn(page, PEOPLE[0]);
+  await page.goto("/");
+  const cover = page.locator("main [data-card-video]").first();
+  await expect(cover).toBeVisible();
+  const id = await cover.getAttribute("data-card-video");
+  // Notes, from inside the page, whether the browser really ran a view
+  // transition (the ::view-transition pseudo-element tree exists while it
+  // runs) and which elements carried the shared name.
+  await page.evaluate(() => {
+    const seen = { started: 0, pseudo: false };
+    (window as unknown as { seen: typeof seen }).seen = seen;
+    if (!document.startViewTransition) return;
+    const real = document.startViewTransition.bind(document);
+    document.startViewTransition = ((update: () => Promise<void>) => {
+      seen.started++;
+      const t = real(update);
+      t.ready
+        .then(() => {
+          seen.pseudo = document
+            .getAnimations()
+            .some((a) =>
+              (a.effect as KeyframeEffect).pseudoElement?.startsWith("::view-transition"),
+            );
+        })
+        .catch(() => {});
+      return t;
+    }) as typeof document.startViewTransition;
+  });
+  await cover.click();
+  await expect(page).toHaveURL(`/video/${id}`);
+  const player = page.locator(`[data-video-frame="${id}"]`);
+  await expect(player.locator("video")).toHaveCount(1);
+  // The player is in its place, at the top of the page, as wide as it gets.
+  const box = await player.boundingBox();
+  expect(box?.y).toBeLessThan(140);
+  expect(box?.width).toBeGreaterThan(300);
+  const seen = await page.evaluate(
+    () => (window as unknown as { seen: { started: number; pseudo: boolean } }).seen,
+  );
+  expect(seen.started).toBe(1);
+  expect(seen.pseudo).toBe(true);
+  // When it is over, no element keeps the shared name.
+  await expect(page.locator("[style*=view-transition-name]")).toHaveCount(0);
+
+  await page.goBack();
+  await expect(page.locator(`main [data-card-video="${id}"]`).first()).toBeVisible();
+  await expect(page.locator("[style*=view-transition-name]")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("without view transitions, or with less motion, a card is a plain link", async ({
+  browser,
+}) => {
+  for (const [init, reducedMotion] of [
+    ["delete Document.prototype.startViewTransition;", "no-preference"],
+    ["", "reduce"],
+  ] as const) {
+    const context = await browser.newContext({ baseURL: BASE, reducedMotion });
+    if (init) await context.addInitScript(init);
+    await context.addInitScript(`window.calls = 0;
+      if (document.startViewTransition) {
+        const real = document.startViewTransition.bind(document);
+        document.startViewTransition = (u) => { window.calls++; return real(u); };
+      }`);
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await logIn(page, PEOPLE[0]);
+    await page.goto("/");
+    const cover = page.locator("main [data-card-video]").first();
+    const id = await cover.getAttribute("data-card-video");
+    await cover.click();
+    await expect(page).toHaveURL(`/video/${id}`);
+    await expect(page.locator("video")).toHaveCount(1);
+    expect(await page.evaluate(() => (window as unknown as { calls: number }).calls)).toBe(0);
+    await page.goBack();
+    await expect(page.locator("main [data-card-video]").first()).toBeVisible();
+    expect(errors).toEqual([]);
+    await context.close();
+  }
+});
+
+// The cover must start where the card is, and land where the player
+// stays: read from the browser's own keyframes of the moving box.
+for (const hover of [false, true]) {
+  test(`the cover flies from its card to the player's final place (${hover ? "with" : "without"} the mouse on it)`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(hover && isMobile, "a phone has no mouse");
+    const errors = watchErrors(page);
+    await logIn(page, PEOPLE[0]);
+    await page.goto("/");
+    await page.evaluate(() => {
+      const w = window as unknown as { keys: unknown };
+      const real = document.startViewTransition.bind(document);
+      document.startViewTransition = ((update: () => Promise<void>) => {
+        const t = real(update);
+        t.ready
+          .then(() => {
+            const group = document
+              .getAnimations()
+              .find(
+                (a) =>
+                  (a.effect as KeyframeEffect).pseudoElement ===
+                  "::view-transition-group(video-player)",
+              );
+            const k = (group?.effect as KeyframeEffect | undefined)?.getKeyframes() ?? [];
+            w.keys = k.map((f) => ({
+              m: String(f.transform),
+              w: Number.parseFloat(String(f.width)),
+              h: Number.parseFloat(String(f.height)),
+            }));
+          })
+          .catch(() => {});
+        return t;
+      }) as typeof document.startViewTransition;
+    });
+    const cover = page.locator("main [data-card-video]").nth(1);
+    await cover.scrollIntoViewIfNeeded();
+    if (hover) {
+      await cover.hover();
+      await page.waitForTimeout(1000);
+    }
+    const card = await cover.boundingBox();
+    await cover.click();
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { keys?: unknown }).keys))
+      .toBeTruthy();
+    await page.waitForTimeout(1000);
+    const frame = await page.locator("[data-video-frame]").boundingBox();
+    const keys = (await page.evaluate(
+      () => (window as unknown as { keys: { m: string; w: number; h: number }[] }).keys,
+    )) as { m: string; w: number; h: number }[];
+    const at = (m: string) =>
+      m
+        .match(/-?[\d.]+/g)
+        ?.slice(4, 6)
+        .map(Number) ?? [];
+    const [x0, y0] = at(keys[0].m);
+    const [x1, y1] = at(keys[keys.length - 1].m);
+    expect(Math.abs(x0 - (card?.x ?? 0))).toBeLessThan(4);
+    expect(Math.abs(y0 - (card?.y ?? 0))).toBeLessThan(4);
+    expect(Math.abs(keys[0].w - (card?.width ?? 0))).toBeLessThan(4);
+    expect(Math.abs(x1 - (frame?.x ?? 0))).toBeLessThan(4);
+    expect(Math.abs(y1 - (frame?.y ?? 0))).toBeLessThan(4);
+    expect(Math.abs(keys[keys.length - 1].w - (frame?.width ?? 0))).toBeLessThan(4);
+    expect(errors).toEqual([]);
+  });
+}

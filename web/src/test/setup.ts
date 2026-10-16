@@ -17,3 +17,7 @@ afterEach(() => document.documentElement.removeAttribute("style"));
 
 // Settings remembered by the browser do not pass from one test to the next.
 afterEach(() => window.localStorage.clear());
+
+// jsdom does not scroll: scrollTo only says "not implemented". Pages that
+// open at their top (Layout) call it on every new address.
+window.scrollTo = () => {};

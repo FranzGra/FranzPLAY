@@ -19,6 +19,7 @@ const userPages = [
 ];
 
 const adminPages = [
+  "/admin",
   "/admin/riepilogo",
   "/admin/persone",
   "/admin/inviti",
@@ -287,16 +288,61 @@ test("on the computer the side menu stays in place while the page scrolls", asyn
   await expect(menu.getByRole("link", { name: "Home" })).toBeInViewport();
 });
 
-test("the administration tabs stay on one line and show the open page", async ({ page }) => {
+test("the administration menu: beside the page on the computer, a page of its own on the phone", async ({
+  page,
+  isMobile,
+}) => {
   await logIn(page, ADMIN);
-  await page.goto("/admin/sito");
-  const tabs = page.getByRole("navigation", { name: "Sezioni dell'amministrazione" });
-  // One line: on a phone the row slides sideways instead of piling up.
-  // Both are measured at once, as the page may still be sliding in.
-  const tops = await tabs.evaluate((row) =>
-    [...row.querySelectorAll("a")].map((a) => a.getBoundingClientRect().top),
-  );
-  expect(new Set(tops).size).toBe(1);
-  // The last tab is the open page: it was brought into view.
-  await expect(tabs.getByRole("link", { name: "Sito" })).toBeInViewport();
+  const menu = page.getByRole("navigation", { name: "Sezioni dell'amministrazione" });
+  if (!isMobile) {
+    await page.goto("/admin/sito");
+    await expect(menu.getByRole("link", { name: "Sito" })).toHaveAttribute("aria-current", "page");
+    await expect(menu.getByRole("link", { name: "Sito" })).toBeInViewport();
+    // The menu stays on screen, under the top bar, while a long page scrolls.
+    await page.goto("/admin/internet");
+    await page.getByRole("button", { name: "Salva le regole" }).waitFor({ state: "attached" });
+    await page.mouse.wheel(0, 1500);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
+    await expect(menu.getByRole("link", { name: "Riepilogo" })).toBeInViewport();
+    await expect(menu.getByRole("link", { name: "Sito" })).toBeInViewport();
+    return;
+  }
+  await page.goto("/admin");
+  await menu.getByRole("link", { name: /^Sito/ }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Sito" })).toBeVisible();
+  await page.locator("main a[href='/admin']").click();
+  await expect(menu).toBeVisible();
+});
+
+test("on the computer the search stays in the middle, whatever the site's name", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "the phone has a search button instead");
+  await logIn(page, ADMIN);
+  const put = (nameFirst: string, nameSecond: string) =>
+    page.request.put("/api/site", {
+      data: { nameFirst, nameSecond, color: "#2997ff" },
+      headers: { Origin: BASE },
+    });
+  try {
+    for (const [first, second] of [
+      ["Franz", "PLAY"],
+      ["W".repeat(16), "W".repeat(16)],
+    ]) {
+      expect((await put(first, second)).ok()).toBe(true);
+      for (const width of [1440, 1100]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto("/");
+        const box = await page.locator("header search label").boundingBox();
+        const logo = await page.locator("header a[href='/']").boundingBox();
+        expect(box?.width).toBeLessThanOrEqual(420);
+        expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - width / 2)).toBeLessThanOrEqual(2);
+        // A long name ends with "…" before the search.
+        expect((logo?.x ?? 0) + (logo?.width ?? 0)).toBeLessThanOrEqual(box?.x ?? 0);
+      }
+    }
+  } finally {
+    await put("Franz", "PLAY");
+  }
 });

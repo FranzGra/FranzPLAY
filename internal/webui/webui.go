@@ -42,7 +42,10 @@ const notBuiltMessage = "FranzPLAY: the web interface was not built. Run \"make 
 // Real files (scripts, styles, fonts) are served as they are. Any other address,
 // like /playlist or /video/42, gets index.html: the interface itself then shows
 // the right page. Addresses that look like a file but do not exist get 404.
-func Handler(files fs.FS, logger *slog.Logger) http.Handler {
+//
+// preview, when not nil, describes the pages that have a link preview of
+// their own (see Preview); their index.html carries it.
+func Handler(files fs.FS, logger *slog.Logger, preview Previewer) http.Handler {
 	zipped := &gzipCache{files: files}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -79,7 +82,7 @@ func Handler(files fs.FS, logger *slog.Logger) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		serveIndex(w, r, files, logger)
+		serveIndex(w, r, files, preview, logger)
 	})
 }
 
@@ -90,7 +93,7 @@ func isFile(files fs.FS, name string) bool {
 }
 
 // serveIndex sends index.html, which must always be checked for updates.
-func serveIndex(w http.ResponseWriter, r *http.Request, files fs.FS, logger *slog.Logger) {
+func serveIndex(w http.ResponseWriter, r *http.Request, files fs.FS, preview Previewer, logger *slog.Logger) {
 	index, err := fs.ReadFile(files, "index.html")
 	if errors.Is(err, fs.ErrNotExist) {
 		http.Error(w, notBuiltMessage, http.StatusServiceUnavailable)
@@ -103,8 +106,18 @@ func serveIndex(w http.ResponseWriter, r *http.Request, files fs.FS, logger *slo
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	if strings.HasPrefix(r.URL.Path, "/p/") {
+		// The address of a public link holds its secret: never pass it on
+		// to the sites its page links to.
+		w.Header().Set("Referrer-Policy", "no-referrer")
+	}
 	if r.Method == http.MethodHead {
 		return
+	}
+	if preview != nil {
+		if p, ok := preview(r); ok {
+			index = withPreview(index, p, r)
+		}
 	}
 	if _, err := w.Write(index); err != nil {
 		logger.DebugContext(r.Context(), "write index.html", "error", err)

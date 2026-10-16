@@ -21,10 +21,19 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* The menu button and the logo, on the left. */
+.start {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
 .logo {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   color: var(--color-text);
   font-size: 19px;
   font-weight: 700;
@@ -33,6 +42,18 @@
 
 .logo:hover {
   color: var(--color-text);
+}
+
+/* A long site name ends with "…" instead of reaching the search. */
+.logoName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoMark {
+  flex: none;
 }
 
 .logoAccent {
@@ -68,6 +89,26 @@
   justify-content: center;
 }
 
+/* On a computer: three columns, the side ones equally wide, the search
+   (at most 420px) in the middle of the screen; the logo keeps to the
+   left, the profile to the right. */
+@media (min-width: 900px) {
+  .header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 420px) minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .start {
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .avatar {
+    justify-self: end;
+  }
+}
+
 .search form {
   display: flex;
   justify-content: center;
@@ -79,7 +120,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  max-width: 560px;
+  max-width: 420px;
   height: var(--touch);
   padding: 0 16px;
   border-radius: var(--radius-pill);
@@ -304,6 +345,15 @@
   .body[data-drawer] .sidebar:not([data-open]) {
     transition: none;
   }
+}
+
+/* While a video card grows into the player (data-morph, coverMorph), the
+   menu closes at once: the browser takes its picture of the new page right
+   away, and a menu still sliding out would leave the player in the wrong
+   place in it, so the cover would fly to that place and then jump. */
+:root[data-morph] .body .sidebar,
+:root[data-morph] .body .sidebar:not([data-open]) {
+  transition: none;
 }
 
 /* Bottom bar, only on phones: a floating glass capsule */

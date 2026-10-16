@@ -145,7 +145,8 @@ func (c *Checker) last(ctx context.Context) (Latest, error) {
 	return decodeLatest(value), nil
 }
 
-// decodeLatest reads a saved check; a broken one reads as never checked.
+// decodeLatest reads a saved check. A broken value counts as never checked:
+// the next check rewrites it.
 func decodeLatest(value string) Latest {
 	var l Latest
 	if json.Unmarshal([]byte(value), &l) != nil {

@@ -48,7 +48,10 @@ describe("parseAccount", () => {
   };
 
   it("accepts a valid user", () => {
-    expect(parseAccount(giulia)).toEqual(giulia);
+    // An older server sends neither canSharePublic nor skipSeconds.
+    expect(parseAccount(giulia)).toEqual({ ...giulia, canSharePublic: false, skipSeconds: 15 });
+    expect(parseAccount({ ...giulia, skipSeconds: 10 }).skipSeconds).toBe(10);
+    expect(parseAccount({ ...giulia, canSharePublic: true }).canSharePublic).toBe(true);
   });
 
   it.each([
@@ -65,6 +68,8 @@ describe("parseAccount", () => {
     ["no avatar", { ...giulia, avatar: undefined }],
     ["negative avatar", { ...giulia, avatar: -1 }],
     ["not a color", { ...giulia, accentColor: "red" }],
+    ["a jump not offered", { ...giulia, skipSeconds: 7 }],
+    ["text skipSeconds", { ...giulia, skipSeconds: "10" }],
   ])("rejects %s", (_label, data) => {
     expect(() => parseAccount(data)).toThrow();
   });

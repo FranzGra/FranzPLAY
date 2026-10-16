@@ -1,0 +1,105 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - link "FranzTUBELocal" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+    - link "Cerca" [ref=f1e10] [cursor=pointer]:
+      - /url: /cerca
+  - main [ref=f1e15]:
+    - generic [ref=f1e16]:
+      - heading "Amministrazione" [level=1] [ref=f1e17]
+      - navigation "Sezioni dell'amministrazione" [ref=f1e21]:
+        - link "Riepilogo" [ref=f1e22] [cursor=pointer]:
+          - /url: /admin/riepilogo
+        - link "Persone" [ref=f1e23] [cursor=pointer]:
+          - /url: /admin/persone
+        - link "Inviti" [ref=f1e24] [cursor=pointer]:
+          - /url: /admin/inviti
+        - link "Accessi" [ref=f1e25] [cursor=pointer]:
+          - /url: /admin/accessi
+        - link "Video" [ref=f1e26] [cursor=pointer]:
+          - /url: /admin/video
+        - link "Categorie" [ref=f1e27] [cursor=pointer]:
+          - /url: /admin/categorie
+        - link "Sottotitoli" [ref=f1e28] [cursor=pointer]:
+          - /url: /admin/sottotitoli
+        - link "Commenti" [ref=f1e29] [cursor=pointer]:
+          - /url: /admin/commenti
+        - link "Cartelle" [ref=f1e30] [cursor=pointer]:
+          - /url: /admin/cartelle
+        - link "Internet" [ref=f1e31] [cursor=pointer]:
+          - /url: /admin/internet
+        - link "Lavori" [ref=f1e32] [cursor=pointer]:
+          - /url: /admin/lavori
+        - link "Sito" [ref=f1e33] [cursor=pointer]:
+          - /url: /admin/sito
+      - paragraph [ref=f1e34]: Tutti i video, anche nascosti o non trovati. Aprine uno per cambiarlo.
+      - generic [ref=f1e35]:
+        - search [ref=f1e36]:
+          - generic [ref=f1e38]:
+            - generic [ref=f1e42]: Cerca tra i video
+            - searchbox "Cerca tra i video" [ref=f1e43]
+        - generic [ref=f1e44]:
+          - 'button "Filtro: Tutti" [ref=f1e46] [cursor=pointer]':
+            - generic [ref=f1e51]: Tutti
+          - group "Come mostrarli" [ref=f1e54]:
+            - button "Schede" [pressed] [ref=f1e56] [cursor=pointer]
+            - button "Tabella" [ref=f1e62] [cursor=pointer]
+          - generic [ref=f1e65]: 8 video
+      - list "Video" [ref=f1e66]:
+        - listitem [ref=f1e67]:
+          - generic [ref=f1e70]:
+            - paragraph [ref=f1e71]:
+              - link "Welcome Apple HomeView： Designed for life at home. [hkrYiZ_g9tw]" [ref=f1e72] [cursor=pointer]:
+                - /url: /admin/video/8
+            - paragraph [ref=f1e73]: 3:13 · 1080p
+        - listitem [ref=f1e74]:
+          - generic [ref=f1e77]:
+            - paragraph [ref=f1e78]:
+              - link "IMG_4700" [ref=f1e79] [cursor=pointer]:
+                - /url: /admin/video/7
+            - paragraph [ref=f1e80]: Categoria 2 · 2:12 · 2K
+        - listitem [ref=f1e81]:
+          - generic [ref=f1e84]:
+            - paragraph [ref=f1e85]:
+              - link "IMG_4699" [ref=f1e86] [cursor=pointer]:
+                - /url: /admin/video/6
+            - paragraph [ref=f1e87]: Categoria 2 · 1:12 · 2K
+        - listitem [ref=f1e88]:
+          - generic [ref=f1e91]:
+            - paragraph [ref=f1e92]:
+              - link "IMG_4692" [ref=f1e93] [cursor=pointer]:
+                - /url: /admin/video/5
+            - paragraph [ref=f1e94]: Categoria 2 · 0:09 · 2K
+        - listitem [ref=f1e95]:
+          - generic [ref=f1e98]:
+            - paragraph [ref=f1e99]:
+              - link "IMG_4691" [ref=f1e100] [cursor=pointer]:
+                - /url: /admin/video/4
+            - paragraph [ref=f1e101]: Categoria 2 · 0:16 · 2K
+        - listitem [ref=f1e102]:
+          - generic [ref=f1e105]:
+            - paragraph [ref=f1e106]:
+              - link "Teaching a humanoid robot to play cornhole with Gemini 4 Argon [9PICEmtfpWU]" [ref=f1e107] [cursor=pointer]:
+                - /url: /admin/video/3
+            - paragraph [ref=f1e108]: Categoria 1 · 1:43 · 1080p
+        - listitem [ref=f1e109]:
+          - generic [ref=f1e112]:
+            - paragraph [ref=f1e113]:
+              - link "Gemini 4 Argon Is INSANE – Hands-On With Google’s New Model! [mfsUVN8ykLA]" [ref=f1e114] [cursor=pointer]:
+                - /url: /admin/video/2
+            - paragraph [ref=f1e115]: Categoria 1 · 37:10 · 1080p
+        - listitem [ref=f1e116]:
+          - generic [ref=f1e119]:
+            - paragraph [ref=f1e120]:
+              - link "AI e Reverse Engineering： il software non sarà più lo stesso [771nkTZhRO4]" [ref=f1e121] [cursor=pointer]:
+                - /url: /admin/video/1
+            - paragraph [ref=f1e122]: Categoria 1 · 17:56 · 1080p
+  - navigation "Menu del telefono" [ref=f1e123]:
+    - link "Home" [ref=f1e124] [cursor=pointer]:
+      - /url: /
+    - link "Categorie" [ref=f1e128] [cursor=pointer]:
+      - /url: /categorie
+    - link "Playlist" [ref=f1e134] [cursor=pointer]:
+      - /url: /playlist
+    - link "Profilo" [ref=f1e137] [cursor=pointer]:
+      - /url: /profilo

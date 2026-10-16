@@ -60,8 +60,32 @@ type Video struct {
 	PublishedOn *string `json:"publishedOn"`           // "2006-01-02"; null = not known
 	Description *string `json:"description,omitempty"` // only for one video; null = none
 
-	audience string  // as Audience, for every video read; shown only to its uploader
-	linkKey  *string // the key of its link, if it is seen by link
+	// PublicLink is the address of its public link, "/p/…", only for who
+	// may manage it: its uploader allowed to share in public, on their own
+	// channel and on the video, and administrators on their list.
+	PublicLink *string `json:"publicLink,omitempty"`
+
+	audience  string  // as Audience, for every video read; shown only to its uploader
+	linkKey   *string // the key of its link, if it is seen by link
+	publicKey *string // the key of its public link, if it has one
+}
+
+// showPublicLink fills PublicLink from the key read with the video.
+func (v *Video) showPublicLink() {
+	if v.publicKey != nil {
+		address := sharing.PublicLink(*v.publicKey)
+		v.PublicLink = &address
+	}
+}
+
+// forManager fills PublicLink when the person asking may manage the public
+// link of the video: its uploader, allowed to share in public.
+func (v *Video) forManager(ctx context.Context) {
+	a, ok := users.FromContext(ctx)
+	if !ok || viewer(ctx) == 0 || v.Uploader == nil || v.Uploader.ID != a.ID || !a.MaySharePublic() {
+		return
+	}
+	v.showPublicLink()
 }
 
 // forUploader fills Audience, and Link for one video, when the person
@@ -142,8 +166,12 @@ const mineToo = `v.uploaded_by = ? AND (v.visible OR (v.private AND v.missing_si
 const sharedWithMe = `(v.private AND v.missing_since IS NULL AND v.hidden_at IS NULL
 	AND EXISTS (SELECT 1 FROM video_shares s WHERE s.video_id = v.id AND s.user_id = ?))`
 
-// viewer returns who is asking; 0, nobody, outside a logged-in request.
+// viewer returns who is asking; 0, nobody, outside a logged-in request
+// and on the addresses of a public link, where everybody is a guest.
 func viewer(ctx context.Context) int64 {
+	if _, public := publicKey(ctx); public {
+		return 0
+	}
 	a, ok := users.FromContext(ctx)
 	if !ok {
 		return 0
@@ -162,7 +190,8 @@ const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.
 	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private, v.link_key,
 	EXISTS (SELECT 1 FROM video_shares s WHERE s.video_id = v.id),
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
-	(SELECT count(*) FROM likes l WHERE l.video_id = v.id)`
+	(SELECT count(*) FROM likes l WHERE l.video_id = v.id),
+	(SELECT p.token FROM public_links p WHERE p.video_id = v.id)`
 
 // rowScanner is a *sql.Row or *sql.Rows.
 type rowScanner interface{ Scan(dest ...any) error }
@@ -183,15 +212,18 @@ func scanVideo(row rowScanner) (Video, error) {
 	var addedAt int64
 	var relPath string
 	var uploaderID sql.NullInt64
-	var uploaderName, linkKey sql.NullString
+	var uploaderName, linkKey, publicKey sql.NullString
 	var shared bool
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &pixels, &preview, &previewGap, &previewCount, &previewWidth, &previewHeight, &converted,
-		&author, &published, &clip, &clipHD, &v.Private, &linkKey, &shared, &uploaderID, &uploaderName, &v.Likes); err != nil {
+		&author, &published, &clip, &clipHD, &v.Private, &linkKey, &shared, &uploaderID, &uploaderName, &v.Likes, &publicKey); err != nil {
 		return Video{}, err
 	}
 	if linkKey.Valid {
 		v.linkKey = &linkKey.String
+	}
+	if publicKey.Valid {
+		v.publicKey = &publicKey.String
 	}
 	v.audience = sharing.AudienceOf(v.Private, shared, linkKey.Valid)
 	if duration.Valid {
@@ -286,6 +318,7 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		}
 		if q.uploader != 0 {
 			v.forUploader(me, false) // on my channel each video says who sees it
+			v.forManager(ctx)
 		}
 		videos = append(videos, v)
 	}
@@ -332,7 +365,7 @@ func (s store) listShuffled(ctx context.Context, where string, args []any, q lis
 func (s store) get(ctx context.Context, id int64) (Video, error) {
 	var description sql.NullString
 	v, err := scanVideo(moreColumns{s.db.QueryRowContext(ctx,
-		`SELECT `+videoColumns+`, v.shown_description FROM videos v WHERE v.id = ? AND `+watchable, id, viewer(ctx)),
+		`SELECT `+videoColumns+`, v.shown_description FROM videos v WHERE v.id = ? AND `+opens(ctx), id, opener(ctx)),
 		[]any{&description}})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, errNotFound
@@ -347,6 +380,7 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 		return Video{}, fmt.Errorf("read video %d: %w", id, err)
 	}
 	v.forUploader(viewer(ctx), true)
+	v.forManager(ctx)
 	if v.Private && v.Uploader != nil && v.Uploader.ID == viewer(ctx) {
 		people, err := sharing.People(ctx, s.db, `SELECT s.video_id, u.id, u.name, u.avatar
 			FROM video_shares s JOIN users u ON u.id = s.user_id
@@ -462,7 +496,7 @@ func (s store) file(ctx context.Context, id int64) (string, error) {
 	var root, rel string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT l.path, v.path FROM videos v JOIN libraries l ON l.id = v.library_id
-		WHERE v.id = ? AND `+watchable, id, viewer(ctx)).Scan(&root, &rel)
+		WHERE v.id = ? AND `+opens(ctx), id, opener(ctx)).Scan(&root, &rel)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}
@@ -480,7 +514,7 @@ func (s store) played(ctx context.Context, id int64, convertedDir string, origin
 	var converted sql.NullString
 	err = s.db.QueryRowContext(ctx, `
 		SELECT l.path, v.path, v.converted FROM videos v JOIN libraries l ON l.id = v.library_id
-		WHERE v.id = ? AND `+watchable, id, viewer(ctx)).Scan(&root, &rel, &converted)
+		WHERE v.id = ? AND `+opens(ctx), id, opener(ctx)).Scan(&root, &rel, &converted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, errNotFound
 	}
@@ -526,7 +560,7 @@ func (s store) embedded(ctx context.Context, id int64) (subs []embeddedSubtitle,
 func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, error) {
 	var name string
 	err := s.db.QueryRowContext(ctx, `SELECT s.file FROM video_subtitles s JOIN videos v ON v.id = s.video_id
-		WHERE s.video_id = ? AND s.stream = ? AND `+watchable, id, stream, viewer(ctx)).Scan(&name)
+		WHERE s.video_id = ? AND s.stream = ? AND `+opens(ctx), id, stream, opener(ctx)).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}
@@ -569,8 +603,8 @@ func (s store) auto(ctx context.Context, id int64) (subs []autoSubtitle, err err
 func (s store) autoFile(ctx context.Context, id int64, lang string) (string, error) {
 	var name string
 	err := s.db.QueryRowContext(ctx, `SELECT a.file FROM auto_subtitles a JOIN videos v ON v.id = a.video_id
-		WHERE a.video_id = ? AND a.lang = ? AND a.fingerprint = v.fingerprint AND `+watchable,
-		id, lang, viewer(ctx)).Scan(&name)
+		WHERE a.video_id = ? AND a.lang = ? AND a.fingerprint = v.fingerprint AND `+opens(ctx),
+		id, lang, opener(ctx)).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errNotFound
 	}

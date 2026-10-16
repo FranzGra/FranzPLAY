@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { Audience, Video } from "../../api/videos";
 import { VideoPage } from "../../app/lazyPages";
 import { Icon, type IconName } from "../../components/Icon";
 import { goodConnection } from "../../lib/connection";
 import { formatAge, formatDuration } from "../../lib/format";
 import { audienceLabel } from "../sharing/audience";
+import { canOpenWithMorph, openVideo } from "./coverMorph";
 import { useClipPreview } from "./useClipPreview";
 import styles from "./VideoCard.module.css";
 
@@ -31,9 +32,11 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
   const details = [video.category, formatAge(video.addedAt, now)].filter(Boolean).join(" · ");
   const watched =
     position !== undefined && video.duration ? Math.min(1, position / video.duration) : null;
+  const navigate = useNavigate();
+  const to = `/video/${video.id}`;
   return (
     <Link
-      to={`/video/${video.id}`}
+      to={to}
       className={`glow ${styles.root}`}
       data-layout={layout}
       // Fetch the player's code as soon as the card is pointed at.
@@ -41,8 +44,21 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
       onFocus={preloadPlayer}
       onTouchStart={preloadPlayer}
       {...handlers}
+      // Where the browser can, the cover grows into the player (coverMorph);
+      // elsewhere, and with Ctrl, Cmd or the middle button, a plain link.
+      onClick={(event) => {
+        const cover = event.currentTarget.querySelector<HTMLElement>("[data-card-video]");
+        if (!cover || !canOpenWithMorph(event)) return;
+        event.preventDefault();
+        void openVideo(
+          cover,
+          video.id,
+          () => navigate(to, { state: { cover: video.cover, video: video.id } }),
+          VideoPage.preload,
+        );
+      }}
     >
-      <div ref={coverRef} className={styles.cover}>
+      <div ref={coverRef} className={styles.cover} data-card-video={video.id}>
         {video.cover ? (
           <img src={video.cover} alt="" loading="lazy" decoding="async" />
         ) : (
