@@ -80,8 +80,12 @@ export function PatternGrid({
     if (autoFocus && !disabled) dots.current[focused - 1]?.focus();
   }, [autoFocus, disabled]);
 
+  // seenShake is the error count already shown: a pad or grid made anew
+  // (another method, another step) does not shake for an old mistake.
+  const seenShake = useRef(shake);
   useEffect(() => {
-    if (shake === 0) return;
+    if (shake === seenShake.current) return;
+    seenShake.current = shake;
     setWrong(true);
     const timer = window.setTimeout(() => setWrong(false), 600);
     return () => window.clearTimeout(timer);
