@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 import { ComingSoonPage } from "../features/ComingSoonPage";
 import { HomePage } from "../features/home/HomePage";
 import { AuthProvider, useAuth } from "./auth";
@@ -101,7 +101,7 @@ function Pages() {
         <Route path="categorie" element={<CategoriesPage />} />
         <Route path="categorie/:name" element={<CategoryPage />} />
         <Route path="admin" element={<AdminPage />}>
-          <Route index element={<Navigate to="riepilogo" replace />} />
+          <Route index element={null} />
           <Route path="riepilogo" element={<OverviewPage />} />
           <Route path="persone" element={<PeoplePage />} />
           <Route path="inviti" element={<InvitesPage />} />

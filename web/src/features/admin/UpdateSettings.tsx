@@ -62,7 +62,7 @@ export function UpdateSettings() {
     <>
       <h2 className={styles.groupTitle}>Aggiornamenti</h2>
       <ul className={`stagger ${styles.list}`} aria-label="Aggiornamenti">
-        <li className={`glass ${styles.person}`}>
+        <li className={`glass ${styles.setting}`}>
           <div>
             <p className={styles.name}>Controlla automaticamente le nuove versioni (ogni 24 ore)</p>
             <p className={styles.role}>
@@ -72,7 +72,8 @@ export function UpdateSettings() {
               mai contattato.
             </p>
           </div>
-          <label className={styles.check}>
+          <label className={styles.toggle}>
+            {u.enabled ? "Acceso" : "Spento"}
             <input
               type="checkbox"
               aria-label="Controlla automaticamente le nuove versioni"
@@ -80,10 +81,9 @@ export function UpdateSettings() {
               disabled={busy}
               onChange={(e) => change(e.target.checked)}
             />
-            Acceso
           </label>
         </li>
-        <li className={`glass ${styles.person}`}>
+        <li className={`glass ${styles.setting}`}>
           <div>
             <p className={styles.role}>
               Versione installata: <strong>{installedText(u)}</strong>
