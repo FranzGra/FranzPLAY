@@ -265,7 +265,7 @@ test("on the computer the search stays in the middle, whatever the site's name",
         await page.goto("/");
         const box = await page.locator("header search label").boundingBox();
         const logo = await page.locator("header a[href='/']").boundingBox();
-        expect(box?.width).toBeLessThanOrEqual(560);
+        expect(box?.width).toBeLessThanOrEqual(420);
         expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - width / 2)).toBeLessThanOrEqual(2);
         // A long name ends with "…" before the search.
         expect((logo?.x ?? 0) + (logo?.width ?? 0)).toBeLessThanOrEqual(box?.x ?? 0);
