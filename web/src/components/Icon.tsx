@@ -66,38 +66,17 @@ const paths = {
       <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
     </>
   ),
-  back15: (
+  // The jump icons: the number of seconds is written inside by Icon's text.
+  skipBack: (
     <>
       <path d="M4 12a8 8 0 1 0 2.4-5.7" />
       <path d="M4 3v4h4" />
-      <text
-        x="12"
-        y="15.5"
-        fontSize="7.5"
-        textAnchor="middle"
-        fill="currentColor"
-        stroke="none"
-        fontWeight="700"
-      >
-        15
-      </text>
     </>
   ),
-  forward15: (
+  skipForward: (
     <>
       <path d="M20 12a8 8 0 1 1-2.4-5.7" />
       <path d="M20 3v4h-4" />
-      <text
-        x="12"
-        y="15.5"
-        fontSize="7.5"
-        textAnchor="middle"
-        fill="currentColor"
-        stroke="none"
-        fontWeight="700"
-      >
-        15
-      </text>
     </>
   ),
   volume: (
@@ -252,9 +231,11 @@ export type IconName = keyof typeof paths;
 type IconProps = {
   name: IconName;
   size?: number;
+  // text is written small in the middle, as the seconds of the jump icons.
+  text?: string;
 };
 
-export function Icon({ name, size = 22 }: IconProps) {
+export function Icon({ name, size = 22, text }: IconProps) {
   return (
     <svg
       width={size}
@@ -268,6 +249,19 @@ export function Icon({ name, size = 22 }: IconProps) {
       aria-hidden="true"
     >
       {paths[name]}
+      {text && (
+        <text
+          x="12"
+          y="15.5"
+          fontSize="7.5"
+          textAnchor="middle"
+          fill="currentColor"
+          stroke="none"
+          fontWeight="700"
+        >
+          {text}
+        </text>
+      )}
     </svg>
   );
 }

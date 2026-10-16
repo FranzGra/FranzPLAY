@@ -38,7 +38,11 @@ export type Account = {
   uploadQuota: number; // bytes of uploaded videos the person may keep
   accentColor: string; // "#rrggbb", or "" for FranzPLAY's own
   avatar: number; // version of the profile photo, 0 = none (the initial shows)
+  skipSeconds: number; // how far the player jumps forward or back
 };
+
+// skipChoices are the jumps a person may choose for the player, in seconds.
+const skipChoices = [5, 10, 15, 20, 30];
 
 // parseAccount checks a user sent by the server, once, at the edge.
 export function parseAccount(data: unknown): Account {
@@ -47,6 +51,7 @@ export function parseAccount(data: unknown): Account {
   }
   const { id, name, role, canUpload, canSharePublic, uploadQuota, accentColor, avatar } =
     data as Record<string, unknown>;
+  const { skipSeconds } = data as Record<string, unknown>;
   if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
     throw new Error("account: bad id");
   }
@@ -68,7 +73,11 @@ export function parseAccount(data: unknown): Account {
   if (typeof avatar !== "number" || !Number.isInteger(avatar) || avatar < 0) {
     throw new Error("account: bad avatar");
   }
-  // An older server does not send canSharePublic: then nobody may.
+  if (skipSeconds !== undefined && !skipChoices.includes(skipSeconds as number)) {
+    throw new Error("account: bad skipSeconds");
+  }
+  // An older server does not send canSharePublic: then nobody may; nor
+  // skipSeconds: then the player's own 15.
   return {
     id,
     name,
@@ -78,6 +87,7 @@ export function parseAccount(data: unknown): Account {
     uploadQuota,
     accentColor,
     avatar,
+    skipSeconds: typeof skipSeconds === "number" ? skipSeconds : 15,
   };
 }
 
@@ -182,6 +192,11 @@ export async function rename(name: string): Promise<Account> {
 // password once more.
 export async function deleteMe(password: string): Promise<void> {
   await request("/api/me", { method: "DELETE", body: { password } });
+}
+
+// setSkipSeconds saves how far the player jumps for me (5, 10, 15, 20 or 30).
+export async function setSkipSeconds(seconds: number): Promise<Account> {
+  return parseAccount(await request("/api/me/skip", { method: "PUT", body: { seconds } }));
 }
 
 // setAccentColor saves the color I chose for the interface ("" for
