@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { logIn, PEOPLE, videos, watchErrors } from "./franzplay";
+import { BASE, logIn, PEOPLE, videos, watchErrors } from "./franzplay";
 
 // The heart of FranzPLAY: a video starts quickly and jumps quickly. The
 // limits are generous, for slow CI computers; on a normal day both take
@@ -254,4 +254,87 @@ test("the big play button grows in place under the mouse", async ({ page, isMobi
   const [x1, y1] = middle(after);
   expect(x1).toBeCloseTo(x0, 0);
   expect(y1).toBeCloseTo(y0, 0);
+});
+
+test("a card's cover grows into the player, and back into its card", async ({ page }) => {
+  const errors = watchErrors(page);
+  await logIn(page, PEOPLE[0]);
+  await page.goto("/");
+  const cover = page.locator("main [data-card-video]").first();
+  await expect(cover).toBeVisible();
+  const id = await cover.getAttribute("data-card-video");
+  // Notes, from inside the page, whether the browser really ran a view
+  // transition (the ::view-transition pseudo-element tree exists while it
+  // runs) and which elements carried the shared name.
+  await page.evaluate(() => {
+    const seen = { started: 0, pseudo: false };
+    (window as unknown as { seen: typeof seen }).seen = seen;
+    if (!document.startViewTransition) return;
+    const real = document.startViewTransition.bind(document);
+    document.startViewTransition = ((update: () => Promise<void>) => {
+      seen.started++;
+      const t = real(update);
+      t.ready
+        .then(() => {
+          seen.pseudo = document
+            .getAnimations()
+            .some((a) =>
+              (a.effect as KeyframeEffect).pseudoElement?.startsWith("::view-transition"),
+            );
+        })
+        .catch(() => {});
+      return t;
+    }) as typeof document.startViewTransition;
+  });
+  await cover.click();
+  await expect(page).toHaveURL(`/video/${id}`);
+  const player = page.locator(`[data-video-frame="${id}"]`);
+  await expect(player.locator("video")).toHaveCount(1);
+  // The player is in its place, at the top of the page, as wide as it gets.
+  const box = await player.boundingBox();
+  expect(box?.y).toBeLessThan(140);
+  expect(box?.width).toBeGreaterThan(300);
+  const seen = await page.evaluate(
+    () => (window as unknown as { seen: { started: number; pseudo: boolean } }).seen,
+  );
+  expect(seen.started).toBe(1);
+  expect(seen.pseudo).toBe(true);
+  // When it is over, no element keeps the shared name.
+  await expect(page.locator("[style*=view-transition-name]")).toHaveCount(0);
+
+  await page.goBack();
+  await expect(page.locator(`main [data-card-video="${id}"]`).first()).toBeVisible();
+  await expect(page.locator("[style*=view-transition-name]")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("without view transitions, or with less motion, a card is a plain link", async ({
+  browser,
+}) => {
+  for (const [init, reducedMotion] of [
+    ["delete Document.prototype.startViewTransition;", "no-preference"],
+    ["", "reduce"],
+  ] as const) {
+    const context = await browser.newContext({ baseURL: BASE, reducedMotion });
+    if (init) await context.addInitScript(init);
+    await context.addInitScript(`window.calls = 0;
+      if (document.startViewTransition) {
+        const real = document.startViewTransition.bind(document);
+        document.startViewTransition = (u) => { window.calls++; return real(u); };
+      }`);
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await logIn(page, PEOPLE[0]);
+    await page.goto("/");
+    const cover = page.locator("main [data-card-video]").first();
+    const id = await cover.getAttribute("data-card-video");
+    await cover.click();
+    await expect(page).toHaveURL(`/video/${id}`);
+    await expect(page.locator("video")).toHaveCount(1);
+    expect(await page.evaluate(() => (window as unknown as { calls: number }).calls)).toBe(0);
+    await page.goBack();
+    await expect(page.locator("main [data-card-video]").first()).toBeVisible();
+    expect(errors).toEqual([]);
+    await context.close();
+  }
 });
