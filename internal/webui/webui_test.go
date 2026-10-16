@@ -24,7 +24,7 @@ func testFiles() fstest.MapFS {
 func serve(t *testing.T, files fstest.MapFS, method, target string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	Handler(files, slog.New(slog.NewTextHandler(io.Discard, nil))).
+	Handler(files, slog.New(slog.NewTextHandler(io.Discard, nil)), nil).
 		ServeHTTP(rec, httptest.NewRequest(method, target, nil))
 	return rec
 }
@@ -99,7 +99,7 @@ func TestHandlerZipsBuiltCode(t *testing.T) {
 	files := testFiles()
 	files["assets/app-1a.js"] = &fstest.MapFile{Data: []byte(code)}
 	files["assets/font-1a.woff2"] = &fstest.MapFile{Data: []byte("not text")}
-	h := Handler(files, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h := Handler(files, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 
 	get := func(target, accept string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, target, nil)
@@ -180,7 +180,7 @@ func TestHandlerSendsPrecompressedCopies(t *testing.T) {
 				req.Header.Set("Accept-Encoding", tt.accept)
 			}
 			rec := httptest.NewRecorder()
-			Handler(files, slog.New(slog.NewTextHandler(io.Discard, nil))).ServeHTTP(rec, req)
+			Handler(files, slog.New(slog.NewTextHandler(io.Discard, nil)), nil).ServeHTTP(rec, req)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200", rec.Code)
 			}
