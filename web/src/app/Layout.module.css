@@ -90,12 +90,12 @@
 }
 
 /* On a computer: three columns, the side ones equally wide, the search
-   (at most 560px) in the middle of the screen; the logo keeps to the
+   (at most 420px) in the middle of the screen; the logo keeps to the
    left, the profile to the right. */
 @media (min-width: 900px) {
   .header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 560px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 420px) minmax(0, 1fr);
     gap: 24px;
   }
 
@@ -120,7 +120,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  max-width: 560px;
+  max-width: 420px;
   height: var(--touch);
   padding: 0 16px;
   border-radius: var(--radius-pill);
