@@ -18,12 +18,12 @@ import {
   bufferedEnd,
   clampTime,
   clampVolume,
+  defaultSkip,
   insideRanges,
   keyAction,
   nativeAudio,
   originalAudio,
   pickAudio,
-  skipSeconds,
   tapZone,
   wheelStep,
   wheelVolume,
@@ -66,6 +66,11 @@ type PlayerProps = {
   // without it the player has no theater button (and the t key does nothing).
   theater?: boolean;
   onTheater?: () => void;
+  // skip is how many seconds the jump buttons, the keys and double taps
+  // go, as the person chose. onSkip saves a new choice; without it the
+  // settings do not offer one (for example to whoever is not logged in).
+  skip?: number;
+  onSkip?: (seconds: number) => void;
 };
 
 // reportEvery is how often, in seconds of video, onPosition hears the
@@ -84,7 +89,11 @@ export const doubleClickWithin = 200;
 // slowDoubleClick is the longest double click computers allow by default.
 const slowDoubleClick = 500;
 
-type Flash = { icon: "back15" | "forward15" | "play" | "pause" | "volume" | "muted"; key: number };
+type Flash = {
+  icon: "skipBack" | "skipForward" | "play" | "pause" | "volume" | "muted";
+  text?: string; // the seconds of a jump
+  key: number;
+};
 
 const parseVolume = (data: unknown) => {
   if (typeof data !== "number" || data < 0 || data > 1) throw new Error("bad volume");
@@ -186,7 +195,7 @@ function playByItself(v: HTMLVideoElement, onSilenced: () => void, onRefused: ()
 }
 
 // Player is FranzPLAY's video player, made to feel like YouTube's: a big
-// timeline, big buttons, ±10 seconds with buttons, keys and double taps,
+// timeline, big buttons, jumps of ±15 seconds (or as chosen) with buttons, keys and double taps,
 // speed in the settings, full screen.
 export function Player({
   src,
@@ -203,6 +212,8 @@ export function Player({
   autoPlay = false,
   theater = false,
   onTheater,
+  skip = defaultSkip,
+  onSkip,
 }: PlayerProps) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -414,7 +425,10 @@ export function Player({
   }, []);
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
 
-  const showFlash = useCallback((icon: Flash["icon"]) => setFlash({ icon, key: Date.now() }), []);
+  const showFlash = useCallback(
+    (icon: Flash["icon"], text?: string) => setFlash({ icon, text, key: Date.now() }),
+    [],
+  );
 
   const togglePlay = useCallback(() => {
     const v = video.current;
@@ -585,7 +599,10 @@ export function Player({
           break;
         case "seek-by":
           seekTo(realTime(v) + action.seconds);
-          showFlash(action.seconds < 0 ? "back15" : "forward15");
+          showFlash(
+            action.seconds < 0 ? "skipBack" : "skipForward",
+            String(Math.abs(action.seconds)),
+          );
           break;
         case "seek-to-fraction":
           if (Number.isFinite(realDuration(v))) seekTo(realDuration(v) * action.fraction);
@@ -647,14 +664,14 @@ export function Player({
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
       // Space and Enter on a focused button press that button.
       if (target?.closest("button") && (event.key === " " || event.key === "Enter")) return;
-      const action = keyAction(event.key);
+      const action = keyAction(event.key, skip);
       if (!action) return;
       event.preventDefault();
       run(action);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [run]);
+  }, [run, skip]);
 
   // The mouse wheel over the volume turns it up or down in small steps,
   // and does not scroll the page. React listens to the wheel without the
@@ -714,7 +731,7 @@ export function Player({
       if (zone === "middle") {
         toggleFullscreen();
       } else {
-        run({ kind: "seek-by", seconds: zone === "back" ? -skipSeconds : skipSeconds });
+        run({ kind: "seek-by", seconds: zone === "back" ? -skip : skip });
       }
       lastTap.current = 0;
       return;
@@ -895,7 +912,7 @@ export function Player({
 
       {flash && (
         <div key={flash.key} className={styles.flash} aria-hidden="true">
-          <Icon name={flash.icon} size={36} />
+          <Icon name={flash.icon} size={36} text={flash.text} />
         </div>
       )}
 
@@ -953,6 +970,8 @@ export function Player({
           onSubtitleStyle={chooseStyle}
           repeat={repeat}
           onRepeat={setRepeat}
+          skip={skip}
+          onSkip={onSkip}
           onClose={() => setMenuOpen(false)}
         />
       )}
@@ -979,18 +998,18 @@ export function Player({
           <button
             type="button"
             className={styles.button}
-            onClick={() => run({ kind: "seek-by", seconds: -skipSeconds })}
-            aria-label="Indietro di 15 secondi (j)"
+            onClick={() => run({ kind: "seek-by", seconds: -skip })}
+            aria-label={`Indietro di ${skip} secondi (j)`}
           >
-            <Icon name="back15" size={26} />
+            <Icon name="skipBack" size={26} text={String(skip)} />
           </button>
           <button
             type="button"
             className={styles.button}
-            onClick={() => run({ kind: "seek-by", seconds: skipSeconds })}
-            aria-label="Avanti di 15 secondi (l)"
+            onClick={() => run({ kind: "seek-by", seconds: skip })}
+            aria-label={`Avanti di ${skip} secondi (l)`}
           >
-            <Icon name="forward15" size={26} />
+            <Icon name="skipForward" size={26} text={String(skip)} />
           </button>
           <div ref={volumeBox} className={styles.volume}>
             <button
