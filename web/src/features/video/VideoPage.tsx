@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
 import { avatarUrl, maySharePublic } from "../../api/auth";
 import { ApiError } from "../../api/client";
@@ -32,6 +32,7 @@ import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
 import { namesList } from "../sharing/audience";
 import { CopyLink } from "../sharing/CopyLink";
+import { setWatching } from "../videos/coverMorph";
 import { VideoCard } from "../videos/VideoCard";
 import { Description } from "./Description";
 import { subtitleLabel } from "./subtitleLabel";
@@ -59,6 +60,12 @@ export function VideoPage() {
   const key = useSearchParams()[0].get("k");
   const [state, setState] = useState<State>({ kind: "loading" });
   const [theater, toggleTheater] = useTheater();
+  const cover = coverFromCard(useLocation().state, id);
+  // The way back to the card this video came from (coverMorph).
+  useEffect(() => {
+    setWatching(id);
+    return () => setWatching(null);
+  }, [id]);
   usePageWidth(theater ? "full" : "wide");
   usePageTitle(
     state.kind === "ready"
@@ -96,8 +103,12 @@ export function VideoPage() {
     case "loading":
       return (
         <div className={layoutClass(theater, false)}>
-          <div className={styles.player}>
-            <div className={styles.placeholder} aria-busy="true" />
+          <div className={styles.player} data-video-frame={id}>
+            {/* Opened from a card, its cover waits in the player's place, so
+                the cover that grows here (coverMorph) lands on itself. */}
+            <div className={styles.placeholder} aria-busy="true">
+              {cover && <img src={cover} alt="" decoding="sync" />}
+            </div>
           </div>
         </div>
       );
@@ -126,6 +137,14 @@ export function VideoPage() {
         />
       );
   }
+}
+
+// coverFromCard is the cover the card that opened this video passed
+// along, if the page was opened from a card of this same video.
+function coverFromCard(state: unknown, id: number): string | null {
+  const from = state as { cover?: unknown; video?: unknown } | null;
+  if (from?.video !== id || typeof from.cover !== "string") return null;
+  return from.cover;
 }
 
 // openLink tells the server the person opened the link of a video, so
@@ -217,7 +236,7 @@ function Watch({
 
   return (
     <div className={layoutClass(theater, video.private)}>
-      <div className={styles.player}>
+      <div className={styles.player} data-video-frame={video.id}>
         <Player
           key={`${video.id}-${copy.round}`}
           src={streamURL(video.id, video.copy && playsFileItself(video, canPlayType))}
