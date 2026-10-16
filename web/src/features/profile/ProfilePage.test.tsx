@@ -102,13 +102,32 @@ describe("profile page", () => {
     await user.click(screen.getByRole("button", { name: "Continua" }));
     await user.click(await screen.findByRole("radio", { name: "Sequenza" }));
     expect(screen.getByText(/meno sicura di una password/)).toBeInTheDocument();
-    for (const round of [1, 2]) {
-      (await screen.findByRole("button", { name: "Punto 7" })).focus();
-      await user.keyboard(" {ArrowUp} {ArrowUp} {ArrowRight} {ArrowRight} ");
+    const draw = async (keys: string) => {
+      (await screen.findByRole("button", { name: /^Punto 7/ })).focus();
+      await user.keyboard(keys);
       await user.click(screen.getByRole("button", { name: "Fatto" }));
-      if (round === 1) await screen.findByText("Disegna di nuovo la sequenza");
+    };
+    // Fewer than 5 dots: it says so and stays at step 1.
+    await draw(" {ArrowUp} {ArrowUp} ");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Unisci almeno 5 punti");
+    expect(screen.getByText("Disegna la sequenza")).toBeInTheDocument();
+    await draw(" {ArrowUp} {ArrowUp} {ArrowRight} {ArrowRight} ");
+    expect(await screen.findByText("5 punti")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continua" }));
+    expect(screen.getByText("Ridisegnala per confermare")).toBeInTheDocument();
+    // A different pattern: the error, still at step 2; Ricomincia goes back.
+    await draw(" {ArrowRight} {ArrowRight} {ArrowUp} {ArrowUp} ");
+    expect(await screen.findByRole("alert")).toHaveTextContent("non sono uguali");
+    expect(screen.getByText("Ridisegnala per confermare")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ricomincia" }));
+    expect(screen.getByText("Disegna la sequenza")).toBeInTheDocument();
+    for (const step of [1, 2]) {
+      await draw(" {ArrowUp} {ArrowUp} {ArrowRight} {ArrowRight} ");
+      if (step === 1) await user.click(await screen.findByRole("button", { name: "Continua" }));
     }
-    expect(await screen.findByText("Sequenza confermata")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Sequenza confermata", { selector: "span" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Salva" }));
     await screen.findByText(/Accesso cambiato/);
     const sent = server.requests.find((r) => r.url.endsWith("/api/me/credential"));

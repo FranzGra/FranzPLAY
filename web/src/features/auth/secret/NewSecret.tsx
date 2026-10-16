@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Method, methodNames, patternMin, pinLength, secretProblem } from "../../../api/auth";
 import authStyles from "../AuthPage.module.css";
 import { PatternGrid } from "./PatternGrid";
@@ -35,13 +35,10 @@ export function NewSecret({
   const [method, setMethod] = useState<Method>(
     initial && allowed.includes(initial) ? initial : (allowed[0] ?? "password"),
   );
-  // Passwords: two fields. PIN and pattern: first, then again to confirm.
+  // Passwords: two fields. PIN and pattern: TwoSteps, which reports the
+  // confirmed secret ("" until both steps agree).
   const [first, setFirst] = useState("");
   const [again, setAgain] = useState("");
-  const [typing, setTyping] = useState("");
-  const [confirming, setConfirming] = useState(false);
-  const [note, setNote] = useState("");
-  const [shake, setShake] = useState(0);
 
   const choice: NewChoice =
     method === "password"
@@ -56,7 +53,7 @@ export function NewSecret({
           method,
           secret: first,
           problem:
-            confirming || first === ""
+            first === ""
               ? `${method === "pin" ? "Scegli il PIN" : "Disegna la sequenza"} e ripetilo per conferma.`
               : "",
         };
@@ -67,46 +64,7 @@ export function NewSecret({
     setMethod(m);
     setFirst("");
     setAgain("");
-    setTyping("");
-    setConfirming(false);
-    setNote("");
   };
-
-  const restart = (why: string) => {
-    setFirst("");
-    setTyping("");
-    setConfirming(false);
-    setNote(why);
-    setShake((n) => n + 1);
-  };
-
-  const complete = (value: string) => {
-    if (!confirming) {
-      const problem = secretProblem(method, value);
-      if (problem) {
-        restart(problem);
-        return;
-      }
-      setFirst(value);
-      setTyping("");
-      setConfirming(true);
-      setNote("");
-      return;
-    }
-    if (value !== first) {
-      restart(
-        method === "pin"
-          ? "I due PIN non sono uguali: sceglilo di nuovo."
-          : "Le due sequenze non sono uguali: disegnala di nuovo.",
-      );
-      return;
-    }
-    setTyping("");
-    setConfirming(false);
-    setNote("");
-  };
-
-  const ready = method !== "password" && first !== "" && !confirming;
 
   return (
     <div className={styles.choose}>
@@ -157,52 +115,226 @@ export function NewSecret({
         </>
       )}
 
-      {method !== "password" && ready && (
-        <div className={styles.done} role="status">
-          <span>{method === "pin" ? "PIN confermato" : "Sequenza confermata"}</span>
-          <button type="button" className={styles.textButton} onClick={() => pick(method)}>
-            Cambia
-          </button>
-        </div>
+      {method !== "password" && (
+        <TwoSteps key={method} method={method} disabled={disabled} onConfirmed={setFirst} />
       )}
+    </div>
+  );
+}
 
-      {method !== "password" && !ready && (
+type Phase = "draw" | "review" | "confirm" | "done";
+
+const texts = {
+  pin: {
+    step1: `Scegli un PIN di ${pinLength} cifre`,
+    step2: "Ripeti il PIN per confermare",
+    label1: "Nuovo PIN",
+    label2: "Ripeti il PIN",
+    review: `PIN di ${pinLength} cifre inserito.`,
+    redo: "Riscrivi",
+    mismatch: "I due PIN non sono uguali. Riprova, o ricomincia da capo.",
+    done: "PIN confermato",
+  },
+  pattern: {
+    step1: "Disegna la sequenza",
+    step2: "Ridisegnala per confermare",
+    label1: "Nuova sequenza",
+    label2: "Ripeti la sequenza",
+    review: "",
+    redo: "Ridisegna",
+    mismatch: "Le due sequenze non sono uguali. Riprova, o ricomincia da capo.",
+    done: "Sequenza confermata",
+  },
+} as const;
+
+// TwoSteps sets a new PIN or pattern in two steps, shown by two dots:
+// first it is chosen and shown back (to redo it or go on), then typed or
+// drawn again to confirm. A wrong confirmation stays at step 2, to try
+// again or start over. onConfirmed gets the secret, or "" while not done.
+function TwoSteps({
+  method,
+  disabled,
+  onConfirmed,
+}: {
+  method: "pin" | "pattern";
+  disabled: boolean;
+  onConfirmed: (secret: string) => void;
+}) {
+  const t = texts[method];
+  const [phase, setPhase] = useState<Phase>("draw");
+  const [first, setFirst] = useState("");
+  const [typing, setTyping] = useState("");
+  const [note, setNote] = useState("");
+  const [shake, setShake] = useState(0);
+  // round remounts the pad or the grid, so it takes the focus again.
+  const [round, setRound] = useState(0);
+  const go = useRef<HTMLButtonElement>(null);
+  // clearing is the timer that empties a wrong pattern once shown in red.
+  const clearing = useRef(0);
+  useEffect(() => () => window.clearTimeout(clearing.current), []);
+  const changeButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (phase === "review") go.current?.focus();
+    if (phase === "done") changeButton.current?.focus();
+  }, [phase]);
+
+  const to = (next: Phase, why = "") => {
+    window.clearTimeout(clearing.current);
+    setPhase(next);
+    setTyping("");
+    setNote(why);
+    setRound((n) => n + 1);
+    if (next !== "done") onConfirmed("");
+  };
+  const restart = () => {
+    setFirst("");
+    to("draw");
+  };
+  // wrong shows a mistake: the pad or the grid shakes (the drawn pattern
+  // turns red for a moment), and the person tries again at the same step.
+  const wrong = (why: string) => {
+    setNote(why);
+    setShake((n) => n + 1);
+    window.clearTimeout(clearing.current);
+    if (method === "pattern") clearing.current = window.setTimeout(() => setTyping(""), 600);
+    else setTyping("");
+  };
+
+  const complete = (value: string) => {
+    if (phase === "draw") {
+      const problem = secretProblem(method, value);
+      if (problem) {
+        wrong(method === "pattern" ? `Unisci almeno ${patternMin} punti.` : problem);
+        return;
+      }
+      setFirst(value);
+      to("review");
+      return;
+    }
+    if (value !== first) {
+      wrong(t.mismatch);
+      return;
+    }
+    to("done");
+    onConfirmed(value);
+  };
+
+  const step = phase === "draw" || phase === "review" ? 1 : 2;
+  const title = step === 1 ? t.step1 : t.step2;
+  const live =
+    note ||
+    (phase === "review"
+      ? `Passo 1 completato. ${method === "pin" ? t.review : `Sequenza di ${first.length} punti.`} Puoi continuare o ${t.redo.toLowerCase()}.`
+      : phase === "done"
+        ? t.done
+        : `Passo ${step} di 2: ${title}.`);
+
+  if (phase === "done") {
+    return (
+      <div className={styles.done}>
+        <span>{t.done}</span>
+        <button ref={changeButton} type="button" className={styles.textButton} onClick={restart}>
+          Cambia
+        </button>
+        <p className="visually-hidden" aria-live="polite">
+          {live}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.steps}>
+      <ol className={styles.stepper} aria-label="Passi">
+        {[1, 2].map((n) => (
+          <li
+            key={n}
+            className={`${styles.stepDot} ${n === step ? styles.stepNow : ""} ${n < step || (n === 1 && phase === "review") ? styles.stepDone : ""}`}
+            aria-current={n === step ? "step" : undefined}
+          >
+            <span aria-hidden="true">{n < step || (n === 1 && phase === "review") ? "✓" : n}</span>
+            <span className="visually-hidden">
+              Passo {n}
+              {n < step ? ", fatto" : ""}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className={styles.stepTitle}>{title}</p>
+      <p className="visually-hidden" aria-live="polite">
+        {live}
+      </p>
+
+      {phase === "review" ? (
+        <div className={styles.review}>
+          {method === "pattern" ? (
+            <PatternGrid
+              value={first}
+              onChange={() => {}}
+              onComplete={() => {}}
+              label="La sequenza disegnata"
+              disabled
+            />
+          ) : (
+            <div className={styles.dots} aria-hidden="true">
+              {Array.from({ length: pinLength }, (_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: the dots are fixed places
+                <span key={i} className={`${styles.dot} ${styles.dotOn}`} />
+              ))}
+            </div>
+          )}
+          {method === "pin" && <p className={styles.count}>{t.review}</p>}
+          <div className={styles.stepActions}>
+            <button type="button" className={styles.secondary} onClick={restart}>
+              {t.redo}
+            </button>
+            <button ref={go} type="button" className={styles.primary} onClick={() => to("confirm")}>
+              Continua
+            </button>
+          </div>
+        </div>
+      ) : (
         <>
-          <p className={styles.stepTitle}>
-            {method === "pin"
-              ? confirming
-                ? "Ripeti il PIN"
-                : `Scegli un PIN di ${pinLength} cifre`
-              : confirming
-                ? "Disegna di nuovo la sequenza"
-                : `Disegna una sequenza di almeno ${patternMin} punti`}
-          </p>
           {method === "pin" ? (
             <PinPad
-              key={confirming ? "again" : "first"}
+              key={round}
               value={typing}
               onChange={setTyping}
               onComplete={complete}
-              label={confirming ? "Ripeti il PIN" : "Nuovo PIN"}
+              label={step === 1 ? t.label1 : t.label2}
               disabled={disabled}
               shake={shake}
               autoFocus
             />
           ) : (
             <PatternGrid
-              key={confirming ? "again" : "first"}
+              key={round}
               value={typing}
-              onChange={setTyping}
+              onChange={(v) => {
+                // A new drawing started: the red one must not wipe it.
+                window.clearTimeout(clearing.current);
+                setTyping(v);
+                if (v !== "") setNote("");
+              }}
               onComplete={complete}
-              label={confirming ? "Ripeti la sequenza" : "Nuova sequenza"}
+              label={step === 1 ? t.label1 : t.label2}
               disabled={disabled}
               shake={shake}
+              autoFocus
             />
           )}
           {note && (
             <p className={authStyles.error} role="alert">
               {note}
             </p>
+          )}
+          {phase === "confirm" && (
+            <div className={styles.stepActions}>
+              <button type="button" className={styles.secondary} onClick={restart}>
+                Ricomincia
+              </button>
+            </div>
           )}
         </>
       )}
