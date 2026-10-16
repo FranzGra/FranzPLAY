@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -25,6 +26,7 @@ const (
 	EnvTranslate    = "FRANZPLAY_TRANSLATE_URL"
 	EnvTranslateKey = "FRANZPLAY_TRANSLATE_KEY"
 	EnvSetupCode    = "FRANZPLAY_SETUP_CODE"
+	EnvProxies      = "FRANZPLAY_TRUSTED_PROXIES"
 )
 
 // Default values, used when a variable is not set.
@@ -67,6 +69,12 @@ type Config struct {
 	// the administrator. Turn it on when the site is reachable from the
 	// internet before the first setup.
 	SetupCode bool
+	// TrustedProxies are the reverse proxies in front of FranzPLAY, as
+	// addresses or ranges ("10.10.0.1", "172.18.0.0/16"), separated by
+	// commas. Only their X-Forwarded-For header is believed when deciding
+	// the address a login comes from. Empty: every request counts from the
+	// address of its own connection.
+	TrustedProxies []netip.Prefix
 }
 
 // Load builds a Config from environment variables.
@@ -99,6 +107,12 @@ func Load(getenv func(string) string) (Config, error) {
 		cfg.SetupCode = on
 	}
 
+	proxies, err := parseProxies(getenv(EnvProxies))
+	if err != nil {
+		return Config{}, fmt.Errorf("%w: %s: %w", ErrInvalidConfig, EnvProxies, err)
+	}
+	cfg.TrustedProxies = proxies
+
 	libraries, err := parseLibraries(getenv(EnvLibraries), cfg.DataDir)
 	if err != nil {
 		return Config{}, fmt.Errorf("%w: %s: %w", ErrInvalidConfig, EnvLibraries, err)
@@ -106,6 +120,27 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg.Libraries = libraries
 
 	return cfg, nil
+}
+
+// parseProxies reads a list like "10.10.0.1, 172.18.0.0/16".
+func parseProxies(value string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, entry := range strings.Split(value, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(entry); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		ip, err := netip.ParseAddr(entry)
+		if err != nil {
+			return nil, fmt.Errorf("%q is not an address or a range like 10.0.0.0/8", entry)
+		}
+		out = append(out, netip.PrefixFrom(ip.Unmap(), ip.Unmap().BitLen()))
+	}
+	return out, nil
 }
 
 // parseLibraries reads the list of video folders. Folders are separated like

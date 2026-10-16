@@ -1,11 +1,13 @@
 // The people of this FranzPLAY, as the administrator manages them.
 
-import { type Account, parseAccount, type Role } from "./auth";
+import { type Account, type Method, parseAccount, type Role } from "./auth";
 import { request } from "./client";
 
 export type NewPerson = {
   name: string;
-  password: string;
+  method: Method;
+  password: string; // the password, the PIN or the pattern
+  ownMethods: Method[]; // [] = the server's choice
   role: Role;
   canUpload: boolean;
 };
@@ -39,14 +41,25 @@ export async function createUser(person: NewPerson): Promise<Account> {
 // they may make public links.
 export async function updateUser(
   id: number,
-  change: { role: Role; canUpload: boolean; uploadQuota?: number; canSharePublic?: boolean },
+  change: {
+    role: Role;
+    canUpload: boolean;
+    uploadQuota?: number;
+    canSharePublic?: boolean;
+    ownMethods?: Method[]; // [] = the server's choice
+  },
 ): Promise<Account> {
   return parseAccount(await request(`/api/users/${id}`, { method: "PUT", body: change }));
 }
 
-// resetPassword gives a person a new password; they are logged out everywhere.
-export async function resetPassword(id: number, password: string): Promise<void> {
-  await request(`/api/users/${id}/password`, { method: "PUT", body: { password } });
+// resetPassword gives a person a new password, PIN or pattern; they are
+// logged out everywhere.
+export async function resetPassword(
+  id: number,
+  password: string,
+  method: Method = "password",
+): Promise<void> {
+  await request(`/api/users/${id}/password`, { method: "PUT", body: { method, password } });
 }
 
 export async function deleteUser(id: number): Promise<void> {

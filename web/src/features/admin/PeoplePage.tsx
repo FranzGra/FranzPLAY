@@ -1,5 +1,13 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { type Account, avatarUrl, nameProblem, passwordProblem } from "../../api/auth";
+import {
+  type Account,
+  avatarUrl,
+  fetchServerMethods,
+  type Method,
+  methodNames,
+  methods,
+  nameProblem,
+} from "../../api/auth";
 import { ApiError } from "../../api/client";
 import {
   createUser,
@@ -15,6 +23,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { Select } from "../../components/Select";
 import { formatBytes, formatSince } from "../../lib/format";
+import { type NewChoice, NewSecret } from "../auth/secret/NewSecret";
 import styles from "./Admin.module.css";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; people: Person[] };
@@ -34,9 +43,16 @@ const choicesFor = (current: number) =>
 export function PeoplePage() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [adding, setAdding] = useState(false);
+  // server: the login methods allowed on the whole server.
+  const [server, setServer] = useState<Method[]>(["password"]);
 
   useEffect(() => {
     const controller = new AbortController();
+    fetchServerMethods(controller.signal)
+      .then(setServer)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
     fetchUsers(controller.signal)
       .then((people) => setState({ kind: "ready", people }))
       .catch((error: unknown) => {
@@ -82,7 +98,7 @@ export function PeoplePage() {
       <div className={styles.top}>
         <p className={styles.lead}>
           Solo le persone che aggiungi qui possono entrare in FranzPLAY. Dai a ognuno il suo nome e
-          una password: potrà cambiarla dal suo profilo.
+          un modo di entrare (password, PIN o sequenza): potrà cambiarlo dal suo profilo.
         </p>
         {!adding && (
           <button type="button" className={styles.primary} onClick={() => setAdding(true)}>
@@ -91,11 +107,16 @@ export function PeoplePage() {
           </button>
         )}
       </div>
-      {adding && <NewPersonForm onAdded={add} onCancel={() => setAdding(false)} />}
+      {adding && <NewPersonForm server={server} onAdded={add} onCancel={() => setAdding(false)} />}
       <ul className={`stagger ${styles.list}`} aria-label="Persone">
         {state.people.map((person) => (
           <li key={person.id}>
-            <PersonRow person={person} onChanged={replace} onRemoved={() => remove(person.id)} />
+            <PersonRow
+              person={person}
+              server={server}
+              onChanged={replace}
+              onRemoved={() => remove(person.id)}
+            />
           </li>
         ))}
       </ul>
@@ -104,14 +125,17 @@ export function PeoplePage() {
 }
 
 function NewPersonForm({
+  server,
   onAdded,
   onCancel,
 }: {
+  server: Method[];
   onAdded: (person: Account) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
+  const [own, setOwn] = useState<Method[]>([]);
+  const [choice, setChoice] = useState<NewChoice | null>(null);
   const [admin, setAdmin] = useState(false);
   const [canUpload, setCanUpload] = useState(false);
   const [sending, setSending] = useState(false);
@@ -119,14 +143,21 @@ function NewPersonForm({
 
   const send = (event: FormEvent) => {
     event.preventDefault();
-    const mistake = nameProblem(name) || passwordProblem(password);
+    const mistake = nameProblem(name) || choice?.problem || "";
     if (mistake) {
       setProblem(mistake);
       return;
     }
     setSending(true);
     setProblem("");
-    createUser({ name, password, role: admin ? "admin" : "user", canUpload })
+    createUser({
+      name,
+      method: choice?.method ?? "password",
+      password: choice?.secret ?? "",
+      ownMethods: own,
+      role: admin ? "admin" : "user",
+      canUpload,
+    })
       .then(onAdded)
       .catch((error: unknown) => {
         console.error(error);
@@ -136,7 +167,7 @@ function NewPersonForm({
   };
 
   return (
-    <form className={`glass ${styles.panel}`} onSubmit={send} aria-label="Nuova persona">
+    <form className={`glass ${styles.panel}`} onSubmit={send} aria-label="Nuova persona" noValidate>
       <label className={styles.field}>
         Nome
         <input
@@ -147,15 +178,13 @@ function NewPersonForm({
           onChange={(e) => setName(e.target.value)}
         />
       </label>
-      <label className={styles.field}>
-        Password
-        <input
-          type="password"
-          value={password}
-          autoComplete="new-password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </label>
+      <MethodsChoice server={server} own={own} onChange={setOwn} />
+      <NewSecret
+        key={own.join()}
+        allowed={own.length > 0 ? own : server}
+        onChange={setChoice}
+        disabled={sending}
+      />
       <label className={styles.check}>
         <input
           type="checkbox"
@@ -189,10 +218,12 @@ type Asking = "nothing" | "password" | "delete";
 
 function PersonRow({
   person,
+  server,
   onChanged,
   onRemoved,
 }: {
   person: Person;
+  server: Method[];
   onChanged: (person: Account) => void;
   onRemoved: () => void;
 }) {
@@ -248,6 +279,13 @@ function PersonRow({
             {person.canSharePublic && person.role !== "admin" && " · crea link pubblici"}
           </p>
           <p className={styles.role}>
+            Entra con {methodNames[person.loginMethod].toLowerCase()}
+            {person.mustChooseMethod &&
+              " (non più ammesso: al prossimo accesso ne sceglierà un altro)"}
+            {person.ownMethods &&
+              ` · solo ${person.ownMethods.map((m) => methodNames[m].toLowerCase()).join(", ")}`}
+          </p>
+          <p className={styles.role}>
             {person.lastLogin
               ? `Ultimo accesso ${formatSince(person.lastLogin, new Date())}`
               : "Non è ancora entrato con nome e password"}
@@ -262,7 +300,7 @@ function PersonRow({
           onClick={() => setAsking(asking === "password" ? "nothing" : "password")}
         >
           <Icon name="lock" size={16} />
-          Nuova password
+          Nuovo accesso
         </button>
         {!itsMe && (
           <button
@@ -337,17 +375,44 @@ function PersonRow({
             {itsMe ? "Sei tu: non puoi toglierlo a te stesso" : "Vede e cambia queste pagine"}
           </p>
         </div>
+        <div className={styles.perm}>
+          <MethodsChoice
+            server={server}
+            own={person.ownMethods ?? []}
+            disabled={busy}
+            onChange={(own) =>
+              run(async () => {
+                onChanged(
+                  await updateUser(person.id, {
+                    role: person.role,
+                    canUpload: person.canUpload,
+                    ownMethods: own,
+                  }),
+                );
+                setDone(
+                  own.includes(person.loginMethod) || own.length === 0
+                    ? "Modi per entrare salvati."
+                    : `Salvato. ${person.name} entrerà ancora una volta con il suo ${methodNames[person.loginMethod].toLowerCase()}, poi dovrà sceglierne uno ammesso.`,
+                );
+              })
+            }
+          />
+        </div>
       </div>
 
       {asking === "password" && (
-        <PasswordForm
+        <ResetForm
           name={person.name}
+          allowed={person.allowedMethods}
+          busy={busy}
           onCancel={() => setAsking("nothing")}
-          onSubmit={(password) =>
+          onSubmit={(choice) =>
             run(async () => {
-              await resetPassword(person.id, password);
+              await resetPassword(person.id, choice.secret, choice.method);
               setAsking("nothing");
-              setDone(`Password cambiata. Dilla a ${person.name}: dovrà entrare di nuovo.`);
+              setDone(
+                `Accesso cambiato (${methodNames[choice.method].toLowerCase()}). Dillo a ${person.name}: dovrà entrare di nuovo.`,
+              );
             })
           }
         />
@@ -396,41 +461,86 @@ function PersonRow({
   );
 }
 
-function PasswordForm({
+// MethodsChoice narrows the login methods of one person, inside the
+// server's. No box ticked, or all of them, means "as the server".
+function MethodsChoice({
+  server,
+  own,
+  onChange,
+  disabled = false,
+}: {
+  server: Method[];
+  own: Method[];
+  onChange: (own: Method[]) => void;
+  disabled?: boolean;
+}) {
+  const shown = own.length > 0 ? own : server;
+  const toggle = (m: Method, on: boolean) => {
+    const next = methods.filter((x) => server.includes(x) && (x === m ? on : shown.includes(x)));
+    if (next.length === 0) return;
+    onChange(next.length === server.length ? [] : next);
+  };
+  return (
+    <fieldset className={styles.methods} disabled={disabled}>
+      <legend>Modi per entrare</legend>
+      {methods.map((m) => (
+        <label key={m} className={styles.toggle}>
+          {methodNames[m]}
+          <input
+            type="checkbox"
+            checked={shown.includes(m)}
+            disabled={!server.includes(m) || (shown.length === 1 && shown.includes(m))}
+            onChange={(e) => toggle(m, e.target.checked)}
+          />
+        </label>
+      ))}
+      <p className={styles.permHint}>
+        {own.length === 0 ? "Come il resto del server" : "Solo per questa persona"}
+      </p>
+    </fieldset>
+  );
+}
+
+function ResetForm({
   name,
+  allowed,
+  busy,
   onSubmit,
   onCancel,
 }: {
   name: string;
-  onSubmit: (password: string) => void;
+  allowed: Method[];
+  busy: boolean;
+  onSubmit: (choice: NewChoice) => void;
   onCancel: () => void;
 }) {
-  const [password, setPassword] = useState("");
+  const [choice, setChoice] = useState<NewChoice | null>(null);
   const [problem, setProblem] = useState("");
   const send = (event: FormEvent) => {
     event.preventDefault();
-    const mistake = passwordProblem(password);
+    const mistake = choice?.problem ?? "Scegli il nuovo accesso.";
     setProblem(mistake);
-    if (!mistake) onSubmit(password);
+    if (!mistake && choice) onSubmit(choice);
   };
   return (
-    <form className={styles.inline} onSubmit={send}>
-      <label className={styles.field}>
-        Nuova password per {name}
-        <input
-          type="password"
-          value={password}
-          autoComplete="new-password"
-          // biome-ignore lint/a11y/noAutofocus: the person just asked to type it
-          autoFocus
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </label>
+    <form
+      className={styles.inline}
+      onSubmit={send}
+      aria-label={`Nuovo accesso per ${name}`}
+      noValidate
+    >
+      <p className={styles.name}>Nuovo accesso per {name}</p>
+      <NewSecret
+        allowed={allowed}
+        onChange={setChoice}
+        disabled={busy}
+        passwordLabel="Nuova password"
+      />
       <div className={styles.buttons}>
         <button type="button" className={`glass ${styles.action}`} onClick={onCancel}>
           Annulla
         </button>
-        <button type="submit" className={styles.primary}>
+        <button type="submit" className={styles.primary} disabled={busy}>
           Salva
         </button>
       </div>
@@ -450,7 +560,11 @@ function explain(error: unknown): string {
   }
   switch (error.status) {
     case 400:
-      return "Il nome può contenere solo lettere, numeri, spazi, punti, trattini e trattini bassi.";
+      return error.message.includes("method") ||
+        error.message.includes("PIN") ||
+        error.message.includes("pattern")
+        ? "Questo modo di entrare non è ammesso per questa persona, o non è completo."
+        : "Il nome può contenere solo lettere, numeri, spazi, punti, trattini e trattini bassi.";
     case 404:
       return "Questa persona non c'è più: ricarica la pagina.";
     case 409:

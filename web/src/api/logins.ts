@@ -45,3 +45,37 @@ export async function fetchLogins(filter: LoginFilter, signal?: AbortSignal): Pr
   if (!Array.isArray(logins) || typeof more !== "boolean") throw new Error("logins: bad page");
   return { logins: logins.map(parseLogin), more };
 }
+
+// Block is a name or an address that may not try to log in until until,
+// after too many wrong tries.
+export type Block = {
+  key: string;
+  kind: "account" | "address";
+  value: string;
+  level: number; // blocks in a row: each one lasts longer
+  until: Date;
+};
+
+function parseBlock(data: unknown): Block {
+  if (typeof data !== "object" || data === null) throw new Error("block: not an object");
+  const { key, kind, value, level, until } = data as Record<string, unknown>;
+  if (typeof key !== "string" || key === "") throw new Error("block: bad key");
+  if (kind !== "account" && kind !== "address") throw new Error("block: bad kind");
+  if (typeof value !== "string") throw new Error("block: bad value");
+  if (typeof level !== "number" || !Number.isInteger(level)) throw new Error("block: bad level");
+  if (typeof until !== "string" || Number.isNaN(Date.parse(until))) {
+    throw new Error("block: bad until");
+  }
+  return { key, kind, value, level, until: new Date(until) };
+}
+
+export async function fetchBlocks(signal?: AbortSignal): Promise<Block[]> {
+  const data = await request("/api/logins/blocks", { signal });
+  if (!Array.isArray(data)) throw new Error("blocks: not a list");
+  return data.map(parseBlock);
+}
+
+// unblock lets a name or an address try again at once.
+export async function unblock(key: string): Promise<void> {
+  await request("/api/logins/unblock", { method: "POST", body: { key } });
+}

@@ -6,6 +6,7 @@ const signedOut: Routes = {
   ...emptyLibrary,
   "GET /api/me": { status: 401, body: { error: "login required" } },
   "GET /api/setup": { body: { needed: false, codeNeeded: false, openRegistration: false } },
+  "POST /api/login/method": { body: { method: "password" } },
 };
 
 const newFranzPLAY: Routes = {
@@ -26,7 +27,8 @@ describe("login", () => {
       "POST /api/login": { body: testAccount },
     });
     await user.type(await screen.findByLabelText("Nome"), "Paolo");
-    await user.type(screen.getByLabelText("Password"), "una-password");
+    await user.click(screen.getByRole("button", { name: "Avanti" }));
+    await user.type(await screen.findByLabelText("Password"), "una-password");
     await user.click(screen.getByRole("button", { name: "Entra" }));
 
     // It stays on the page that was asked for.
@@ -38,7 +40,7 @@ describe("login", () => {
   it.each([
     [401, "Nome o password sbagliati."],
     [403, "arriva da un indirizzo diverso da quello del sito"],
-    [429, "Troppe password sbagliate. Aspetta un minuto e riprova."],
+    [429, "Troppi tentativi sbagliati. Aspetta qualche minuto e riprova."],
     [500, "Qualcosa è andato storto sul server. Riprova tra poco."],
   ])("explains a %i answer", async (status, message) => {
     const { user } = renderApp("/", {
@@ -46,10 +48,83 @@ describe("login", () => {
       "POST /api/login": { status, body: { error: "refused" } },
     });
     await user.type(await screen.findByLabelText("Nome"), "Paolo");
-    await user.type(screen.getByLabelText("Password"), "sbagliata");
+    await user.click(screen.getByRole("button", { name: "Avanti" }));
+    await user.type(await screen.findByLabelText("Password"), "sbagliata");
     await user.click(screen.getByRole("button", { name: "Entra" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
     expect(screen.getByRole("button", { name: "Entra" })).toBeEnabled();
+  });
+
+  it("says how long a block lasts", async () => {
+    const { user } = renderApp("/", {
+      ...signedOut,
+      "POST /api/login": () =>
+        new Response(JSON.stringify({ error: "too many wrong tries" }), {
+          status: 429,
+          headers: { "Retry-After": "300" },
+        }),
+    });
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
+    await user.click(screen.getByRole("button", { name: "Avanti" }));
+    await user.type(await screen.findByLabelText("Password"), "sbagliata");
+    await user.click(screen.getByRole("button", { name: "Entra" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("riprova tra 5 minuti");
+  });
+
+  it("enters with a PIN on the keypad, without a button", async () => {
+    const { user, server } = renderApp("/profilo", {
+      ...signedOut,
+      "POST /api/login/method": { body: { method: "pin" } },
+      "POST /api/login": { body: testAccount },
+    });
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
+    await user.click(screen.getByRole("button", { name: "Avanti" }));
+    expect(await screen.findByText("0 cifre su 6")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Entra" })).not.toBeInTheDocument();
+    for (const digit of "48291") {
+      await user.click(screen.getByRole("button", { name: digit }));
+    }
+    // The last digit from the computer's keyboard: both work.
+    await user.keyboard("5");
+    expect(await screen.findByRole("heading", { name: "Paolo" })).toBeInTheDocument();
+    const sent = server.requests.find((r) => r.url.endsWith("/api/login"));
+    expect(await sent?.json()).toEqual({ name: "Paolo", password: "482915" });
+  });
+
+  it("explains a wrong PIN and lets me try again", async () => {
+    const { user } = renderApp("/", {
+      ...signedOut,
+      "POST /api/login/method": { body: { method: "pin" } },
+      "POST /api/login": { status: 401, body: { error: "wrong name or password" } },
+    });
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
+    await user.click(screen.getByRole("button", { name: "Avanti" }));
+    await screen.findByText("0 cifre su 6");
+    await user.keyboard("111111");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Nome o PIN sbagliati.");
+    expect(screen.getByText("0 cifre su 6")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cambia nome" }));
+    expect(screen.getByLabelText("Nome")).toHaveValue("Paolo");
+  });
+
+  it("enters with a pattern drawn from the keyboard", async () => {
+    const { user, server } = renderApp("/profilo", {
+      ...signedOut,
+      "POST /api/login/method": { body: { method: "pattern" } },
+      "POST /api/login": { body: testAccount },
+    });
+    await user.type(await screen.findByLabelText("Nome"), "Paolo");
+    await user.click(screen.getByRole("button", { name: "Avanti" }));
+    (await screen.findByRole("button", { name: "Punto 1" })).focus();
+    await user.keyboard(" ");
+    // 1 → 3 passes over 2 and 3 → 9 over 6: they join the pattern by themselves.
+    await user.keyboard("{ArrowRight}{ArrowRight} ");
+    await user.keyboard("{ArrowDown}{ArrowDown} {ArrowLeft} ");
+    expect(screen.getByText(/punt/)).toHaveTextContent("6 punti");
+    await user.click(screen.getByRole("button", { name: "Fatto" }));
+    expect(await screen.findByRole("heading", { name: "Paolo" })).toBeInTheDocument();
+    const sent = server.requests.find((r) => r.url.endsWith("/api/login"));
+    expect(await sent?.json()).toEqual({ name: "Paolo", password: "123698" });
   });
 
   it("goes back to the login when the session expires", async () => {
@@ -207,7 +282,42 @@ describe("registering without an invite", () => {
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));
     expect(await screen.findByRole("heading", { name: "Ancora nessun video" })).toBeInTheDocument();
     const sent = server.requests.find((r) => r.url.endsWith("/api/register"));
-    expect(await sent?.json()).toEqual({ name: "Giulia", password: "una-password" });
+    expect(await sent?.json()).toEqual({
+      name: "Giulia",
+      method: "password",
+      password: "una-password",
+    });
+  });
+
+  it("warns that a PIN is weaker and asks it twice", async () => {
+    const { user, server } = renderApp("/", {
+      ...open,
+      "GET /api/setup": {
+        body: {
+          needed: false,
+          codeNeeded: false,
+          openRegistration: true,
+          methods: ["password", "pin", "pattern"],
+        },
+      },
+      "POST /api/register": { status: 201, body: { ...testAccount, loginMethod: "pin" } },
+    });
+    await user.click(await screen.findByRole("button", { name: "Registrati" }));
+    await user.type(screen.getByLabelText("Nome"), "Giulia");
+    await user.click(await screen.findByRole("radio", { name: "PIN" }));
+    expect(screen.getByText(/meno sicuro di una password/)).toBeInTheDocument();
+    await user.click(screen.getByLabelText(/Nuovo PIN/));
+    await user.keyboard("123456");
+    expect(await screen.findByText("Ripeti il PIN", { selector: "p" })).toBeInTheDocument();
+    await user.keyboard("123465");
+    expect(await screen.findByRole("alert")).toHaveTextContent("I due PIN non sono uguali");
+    await user.keyboard("123456");
+    await user.keyboard("123456");
+    expect(await screen.findByText("PIN confermato")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Crea e entra" }));
+    await screen.findByRole("heading", { name: "Ancora nessun video" });
+    const sent = server.requests.find((r) => r.url.endsWith("/api/register"));
+    expect(await sent?.json()).toEqual({ name: "Giulia", method: "pin", password: "123456" });
   });
 
   it.each([

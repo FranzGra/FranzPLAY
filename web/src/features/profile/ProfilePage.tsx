@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router";
+import { methodNames } from "../../api/auth";
 import { useAccount, useAuth } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { AccentPicker } from "./AccentPicker";
+import { CredentialForm } from "./CredentialForm";
 import { DeleteAccount } from "./DeleteAccount";
 import { NameForm } from "./NameForm";
-import { PasswordForm } from "./PasswordForm";
 import styles from "./ProfilePage.module.css";
 import { ProfilePhoto } from "./ProfilePhoto";
 import { type ServerInfoState, useServerInfo } from "./useServerInfo";
@@ -107,7 +108,8 @@ export function ProfilePage() {
                 setEditing("password");
               }}
             >
-              Cambia password
+              Cambia accesso{" "}
+              <span className={styles.rowNote}>{methodNames[account.loginMethod]}</span>
               <span className={styles.chevron} aria-hidden="true">
                 ›
               </span>
@@ -136,10 +138,12 @@ export function ProfilePage() {
         />
       )}
       {editing === "password" && (
-        <PasswordForm
-          onDone={() => {
+        <CredentialForm
+          account={account}
+          onDone={(me) => {
+            signedIn(me);
             setEditing(null);
-            setDone("Password cambiata. Sugli altri dispositivi dovrai entrare di nuovo.");
+            setDone("Accesso cambiato. Sugli altri dispositivi dovrai entrare di nuovo.");
           }}
           onCancel={() => setEditing(null)}
         />

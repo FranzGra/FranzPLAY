@@ -144,3 +144,23 @@
   padding-top: 12px;
   border-top: 1px solid var(--color-border);
 }
+
+/* Whose door it is, at the second step of logging in. */
+.who {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: -6px 0 2px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.who .link {
+  font-size: 13px;
+}
+
+/* A card with a form inside, like choosing a new way to enter. */
+.wide {
+  max-width: 440px;
+}

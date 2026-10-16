@@ -30,7 +30,7 @@ describe("access log page", () => {
     expect(rows[0]).toHaveTextContent("Giulia");
     expect(rows[0]).toHaveTextContent("da 192.168.1.20");
     expect(rows[0]).toHaveTextContent("Entrato");
-    expect(rows[1]).toHaveTextContent("Password sbagliata");
+    expect(rows[1]).toHaveTextContent("Accesso sbagliato");
     expect(rows[2]).toHaveTextContent("Bloccato: troppi tentativi");
 
     await user.click(screen.getByRole("checkbox", { name: "Solo tentativi sbagliati" }));

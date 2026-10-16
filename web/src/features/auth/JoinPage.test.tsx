@@ -44,6 +44,7 @@ describe("join page", () => {
     expect(await server.requests.find((r) => r.url.endsWith("/api/join"))?.json()).toEqual({
       code: "codice-segreto",
       name: "Maria",
+      method: "password",
       password: "password-di-maria",
     });
   });

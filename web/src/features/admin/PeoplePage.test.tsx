@@ -87,18 +87,27 @@ describe("people page", () => {
     await user.click(await screen.findByRole("button", { name: /Aggiungi una persona/ }));
     const form = screen.getByRole("form", { name: "Nuova persona" });
     await user.type(within(form).getByLabelText("Nome"), "Anna");
-    await user.type(within(form).getByLabelText("Password"), "corta");
+    await user.type(
+      within(form).getByLabelText("Password", { selector: "input[type=password]" }),
+      "corta",
+    );
     await user.click(within(form).getByRole("button", { name: "Aggiungi" }));
     expect(within(form).getByRole("alert")).toHaveTextContent("da 8 a 128 caratteri");
 
-    await user.type(within(form).getByLabelText("Password"), "-ma-giusta");
+    await user.type(
+      within(form).getByLabelText("Password", { selector: "input[type=password]" }),
+      "-ma-giusta",
+    );
+    await user.type(within(form).getByLabelText("Ripeti la password"), "corta-ma-giusta");
     await user.click(within(form).getByRole("checkbox", { name: "Può caricare video" }));
     await user.click(within(form).getByRole("button", { name: "Aggiungi" }));
     expect(await rowOf("Anna")).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Nuova persona" })).not.toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({
       name: "Anna",
+      method: "password",
       password: "corta-ma-giusta",
+      ownMethods: [],
       role: "user",
       canUpload: true,
     });
@@ -112,7 +121,11 @@ describe("people page", () => {
     );
     await user.click(await screen.findByRole("button", { name: /Aggiungi una persona/ }));
     await user.type(screen.getByLabelText("Nome"), "giulia");
-    await user.type(screen.getByLabelText("Password"), "una-password");
+    await user.type(
+      screen.getByLabelText("Password", { selector: "input[type=password]" }),
+      "una-password",
+    );
+    await user.type(screen.getByLabelText("Ripeti la password"), "una-password");
     await user.click(screen.getByRole("button", { name: "Aggiungi" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "C'è già una persona con questo nome.",
@@ -181,11 +194,36 @@ describe("people page", () => {
       people({ "PUT /api/users/2/password": { status: 204 } }),
     );
     const row = await rowOf("Giulia");
-    await user.click(within(row).getByRole("button", { name: "Nuova password" }));
-    await user.type(within(row).getByLabelText("Nuova password per Giulia"), "nuova-password");
-    await user.click(within(row).getByRole("button", { name: "Salva" }));
-    expect(await within(row).findByRole("status")).toHaveTextContent("Password cambiata");
-    expect(await server.requests.at(-1)?.json()).toEqual({ password: "nuova-password" });
+    await user.click(within(row).getByRole("button", { name: "Nuovo accesso" }));
+    const form = within(row).getByRole("form", { name: "Nuovo accesso per Giulia" });
+    await user.type(within(form).getByLabelText("Nuova password"), "nuova-password");
+    await user.type(within(form).getByLabelText("Ripeti la password"), "nuova-password");
+    await user.click(within(form).getByRole("button", { name: "Salva" }));
+    expect(await within(row).findByRole("status")).toHaveTextContent("Accesso cambiato");
+    expect(await server.requests.at(-1)?.json()).toEqual({
+      method: "password",
+      password: "nuova-password",
+    });
+  });
+
+  it("narrows the login methods of one person", async () => {
+    const { user, server } = renderApp(
+      "/admin/persone",
+      people({
+        "GET /api/login-methods": { body: { methods: ["password", "pin", "pattern"] } },
+        "PUT /api/users/2": {
+          body: { ...giulia, ownMethods: ["password"], allowedMethods: ["password"] },
+        },
+      }),
+    );
+    const row = await rowOf("Giulia");
+    const pin = await within(row).findByRole("checkbox", { name: "PIN" });
+    await vi.waitFor(() => expect(pin).toBeEnabled());
+    expect(pin).toBeChecked();
+    await user.click(pin);
+    const sent = await server.requests.at(-1)?.json();
+    expect(sent.ownMethods).toEqual(["password", "pattern"]);
+    expect(await within(row).findByText(/solo password/)).toBeInTheDocument();
   });
 
   it("removes a person after asking", async () => {

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -74,14 +73,8 @@ func (g *registrations) take(addr string, now time.Time) bool {
 	return true
 }
 
-// clientAddr is the address the request comes from, without the port.
-func clientAddr(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
+// maxTracked bounds the memory used to count new accounts per address.
+const maxTracked = 10000
 
 // openRegistration says whether anyone may create an account by themselves.
 func (s store) openRegistration(ctx context.Context) (bool, error) {
@@ -112,7 +105,7 @@ func (s store) setOpenRegistration(ctx context.Context, open bool) error {
 // register creates the account of someone who signs up by themselves,
 // when the administrator allows it. They get a normal account that
 // cannot upload videos: the administrator decides that later.
-func (s *Service) register(ctx context.Context, addr, name, password string) (Account, error) {
+func (s *Service) register(ctx context.Context, addr, name string, method Method, secret string) (Account, error) {
 	open, err := s.store.openRegistration(ctx)
 	if err != nil {
 		return Account{}, err
@@ -125,13 +118,13 @@ func (s *Service) register(ctx context.Context, addr, name, password string) (Ac
 	if _, err := CleanName(name); err != nil {
 		return Account{}, err
 	}
-	if err := checkNewPassword(password); err != nil {
+	if err := s.checkFirstSecret(ctx, method, secret); err != nil {
 		return Account{}, err
 	}
 	if !s.registrations.take(addr, s.now()) {
 		return Account{}, errTooManyAccounts
 	}
-	return s.create(ctx, name, password, User, false, false)
+	return s.create(ctx, name, method, secret, User, false, false)
 }
 
 // registration is what the administrator sees and changes.
@@ -165,7 +158,8 @@ func (s *Service) handleSetRegistration(w http.ResponseWriter, r *http.Request) 
 
 type registerRequest struct {
 	Name     string `json:"name"`
-	Password string `json:"password"`
+	Method   Method `json:"method"`   // "" means password
+	Password string `json:"password"` // the password, the PIN or the pattern
 }
 
 func (s *Service) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +168,7 @@ func (s *Service) handleRegister(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r)
 		return
 	}
-	a, err := s.register(r.Context(), clientAddr(r), req.Name, req.Password)
+	a, err := s.register(r.Context(), s.clientAddr(r), req.Name, req.Method, req.Password)
 	if err != nil {
 		s.fail(w, r, err)
 		return

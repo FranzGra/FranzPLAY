@@ -197,3 +197,18 @@ func TestLoadSetupCode(t *testing.T) {
 		t.Errorf("%s=maybe error = %v, want ErrInvalidConfig", EnvSetupCode, err)
 	}
 }
+
+func TestTrustedProxies(t *testing.T) {
+	env := map[string]string{EnvProxies: " 10.10.0.1, 172.18.0.0/16 ,"}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.TrustedProxies) != 2 || cfg.TrustedProxies[0].String() != "10.10.0.1/32" || cfg.TrustedProxies[1].String() != "172.18.0.0/16" {
+		t.Fatalf("proxies = %v", cfg.TrustedProxies)
+	}
+	env[EnvProxies] = "proxy.local"
+	if _, err := Load(func(k string) string { return env[k] }); err == nil {
+		t.Fatal("a name instead of an address was accepted")
+	}
+}

@@ -48,8 +48,24 @@ describe("parseAccount", () => {
   };
 
   it("accepts a valid user", () => {
-    // An older server sends neither canSharePublic nor skipSeconds.
-    expect(parseAccount(giulia)).toEqual({ ...giulia, canSharePublic: false, skipSeconds: 15 });
+    expect(parseAccount(giulia)).toEqual({
+      ...giulia,
+      canSharePublic: false,
+      skipSeconds: 15,
+      loginMethod: "password",
+      allowedMethods: ["password"],
+      ownMethods: null,
+      mustChooseMethod: false,
+    });
+    const withPIN = parseAccount({
+      ...giulia,
+      loginMethod: "pin",
+      allowedMethods: ["password", "pin"],
+      ownMethods: ["password", "pin"],
+      mustChooseMethod: true,
+    });
+    expect(withPIN.loginMethod).toBe("pin");
+    expect(withPIN.mustChooseMethod).toBe(true);
     expect(parseAccount({ ...giulia, skipSeconds: 10 }).skipSeconds).toBe(10);
     expect(parseAccount({ ...giulia, canSharePublic: true }).canSharePublic).toBe(true);
   });
@@ -70,6 +86,7 @@ describe("parseAccount", () => {
     ["not a color", { ...giulia, accentColor: "red" }],
     ["a jump not offered", { ...giulia, skipSeconds: 7 }],
     ["text skipSeconds", { ...giulia, skipSeconds: "10" }],
+    ["unknown allowed method", { ...giulia, allowedMethods: ["face"] }],
   ])("rejects %s", (_label, data) => {
     expect(() => parseAccount(data)).toThrow();
   });

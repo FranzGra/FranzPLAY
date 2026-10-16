@@ -1,12 +1,14 @@
 import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { fetchSetup, type Method, nameProblem } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { checkInvite, join } from "../../api/invites";
 import { useAuth } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
-import { checkSetup, Field } from "./AuthPage";
+import { Field } from "./AuthPage";
 import styles from "./AuthPage.module.css";
+import { type NewChoice, NewSecret } from "./secret/NewSecret";
 
 type State = "checking" | "valid" | "invalid" | "offline";
 
@@ -68,15 +70,25 @@ function JoinForm({ code }: { code: string }) {
   const { signedIn } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [allowed, setAllowed] = useState<Method[]>(["password"]);
+  const [choice, setChoice] = useState<NewChoice | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const errorId = useId();
 
+  useEffect(() => {
+    const stop = new AbortController();
+    fetchSetup(stop.signal)
+      .then((s) => setAllowed(s.methods))
+      .catch((err: unknown) => {
+        if (!stop.signal.aborted) console.error(err);
+      });
+    return () => stop.abort();
+  }, []);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const problem = checkSetup(name, password, confirm);
+    const problem = nameProblem(name) || choice?.problem || "";
     if (problem) {
       setError(problem);
       return;
@@ -84,7 +96,7 @@ function JoinForm({ code }: { code: string }) {
     setBusy(true);
     setError("");
     try {
-      const account = await join(code, name, password);
+      const account = await join(code, name, choice?.secret ?? "", choice?.method);
       navigate("/", { replace: true });
       signedIn(account);
     } catch (err) {
@@ -102,8 +114,7 @@ function JoinForm({ code }: { code: string }) {
         </span>
         <h1 className={styles.title}>Sei stato invitato in FranzPLAY</h1>
         <p className={styles.intro}>
-          Scegli il nome con cui ti vedranno gli altri e una password. Ti serviranno per entrare le
-          prossime volte.
+          Scegli il nome con cui ti vedranno gli altri e il modo in cui entrerai le prossime volte.
         </p>
         <Field
           label="Nome"
@@ -112,22 +123,7 @@ function JoinForm({ code }: { code: string }) {
           autoComplete="username"
           describedBy={describedBy}
         />
-        <Field
-          label="Password"
-          type="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="new-password"
-          describedBy={describedBy}
-        />
-        <Field
-          label="Ripeti la password"
-          type="password"
-          value={confirm}
-          onChange={setConfirm}
-          autoComplete="new-password"
-          describedBy={describedBy}
-        />
+        <NewSecret allowed={allowed} onChange={setChoice} />
         {error && (
           <p id={errorId} className={styles.error} role="alert">
             {error}
