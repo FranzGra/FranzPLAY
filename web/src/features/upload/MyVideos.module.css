@@ -109,7 +109,8 @@
   border: 1px solid var(--color-border);
 }
 
-.action:hover:not(:disabled) {
+.action:hover:not(:disabled),
+.action[aria-expanded="true"] {
   background: var(--glass-bg-strong);
 }
 
@@ -147,13 +148,4 @@
   .cover {
     width: 88px;
   }
-}
-
-/* Who sees it opens under the whole row, so the options fit on a phone. */
-.who {
-  display: flex;
-  flex: 1 1 100%;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
 }

@@ -74,19 +74,9 @@
   cursor: pointer;
 }
 
-.action:hover {
+.action:hover,
+.action[aria-expanded="true"] {
   background: var(--glass-bg-strong);
-}
-
-/* Who sees the list opens under its name, across the page. */
-.who {
-  display: flex;
-  flex: 1 1 100%;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 640px;
-  padding: 16px;
-  border-radius: var(--radius-m);
 }
 
 .danger {

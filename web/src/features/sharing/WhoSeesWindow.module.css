@@ -1,0 +1,195 @@
+/* On a computer: a small window hanging from its button, above everything
+   on the page. Its place in the window is measured from the button (see
+   lib/anchored.ts), so the title and the rows under it never move. */
+.panel {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-l);
+  /* Solid: the videos under it must not show through the choices. */
+  background: var(--color-surface);
+  box-shadow:
+    0 24px 64px rgb(0 0 0 / 0.55),
+    0 2px 8px rgb(0 0 0 / 0.35);
+  /* It grows out of the button. */
+  transform-origin: top left;
+  animation: var(--motion-pop-in);
+}
+
+.panel[data-right] {
+  transform-origin: top right;
+}
+
+/* With little room under the button it opens above it, and grows upward. */
+.panel[data-above] {
+  transform-origin: bottom left;
+}
+
+.panel[data-above][data-right] {
+  transform-origin: bottom right;
+}
+
+/* Closing, it shrinks back into the button. */
+.panel[data-leaving] {
+  animation: var(--motion-pop-out);
+  pointer-events: none;
+}
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 10px 4px 20px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-text);
+}
+
+.form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* When the window is short, the options scroll and the rest stays. */
+.body {
+  min-height: 0;
+  padding: 8px 16px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.problem {
+  flex: none;
+  margin: 0 20px 12px;
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.foot {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.cancel,
+.save {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.cancel:hover {
+  background: var(--glass-bg-strong);
+}
+
+.save {
+  border: 0;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.save:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.save:disabled {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+/* On a phone: a window over the whole screen, in glass, rising from the
+   bottom. The title and the close button stay on top, the big Salva
+   button at the bottom, and only the options scroll between them. */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  border: 0;
+  border-radius: 0;
+  /* Thick dark glass, with the accent's soft glow at the top: thicker
+     than the Salva window's, as the options carry more words to read. */
+  background:
+    radial-gradient(40rem 24rem at 50% -10%, rgb(var(--color-accent-rgb) / 0.16), transparent 60%),
+    rgb(12 12 15 / 0.97);
+  animation: var(--motion-rise-in);
+}
+
+.sheet[data-leaving] {
+  animation: var(--motion-drop-out);
+  pointer-events: none;
+}
+
+.sheet .head {
+  min-height: 64px;
+  padding: 8px 12px 8px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sheet .title {
+  font-size: 20px;
+}
+
+.sheet .close {
+  width: var(--touch);
+  height: var(--touch);
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-text);
+}
+
+.sheet .body {
+  flex: 1;
+  padding: 16px;
+}
+
+.sheet .foot {
+  padding: 12px 20px 16px;
+}
+
+.sheet .save {
+  width: 100%;
+  height: 52px;
+  font-size: 17px;
+}

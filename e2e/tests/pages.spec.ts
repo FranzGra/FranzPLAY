@@ -211,6 +211,64 @@ test("on the computer Salva opens over everything, the videos on the right inclu
   await expect(panel).toBeHidden();
 });
 
+test("who sees a list opens over the page, without moving its title", async ({
+  page,
+  isMobile,
+}) => {
+  await logIn(page, PEOPLE[0]);
+  const all = await videos(page);
+  const made = await page.request.post("/api/playlists", {
+    data: { name: "Chi la vede" },
+    headers: { Origin: BASE },
+  });
+  const list = (await made.json()) as { id: number };
+  // The last video, and the list goes away at the end: the other checks
+  // expect the first video in no list ("Salva", not "Salvato").
+  await page.request.put(`/api/playlists/${list.id}/videos/${all[all.length - 1].id}`, {
+    headers: { Origin: BASE },
+  });
+  await page.goto(`/playlist/${list.id}`);
+  const title = page.getByRole("heading", { level: 1 });
+  const row = page.getByRole("main").getByRole("listitem").last();
+  await expect(row).toBeVisible();
+  await page.waitForTimeout(600); // the page slides in
+  const before = { title: await title.boundingBox(), row: await row.boundingBox() };
+  await page.getByRole("button", { name: "Chi la vede" }).click();
+  const panel = page.getByRole("dialog", { name: "Chi la vede" });
+  await expect(panel.getByRole("radio", { name: "Solo io" })).toBeChecked();
+  await page.waitForTimeout(500); // it grows out of the button, or rises
+  // Nothing on the page moved or stretched to make room for it.
+  expect(await title.boundingBox()).toEqual(before.title);
+  expect(await row.boundingBox()).toEqual(before.row);
+  if (isMobile) {
+    const size = page.viewportSize();
+    expect(await panel.boundingBox()).toEqual({
+      x: 0,
+      y: 0,
+      width: size?.width,
+      height: size?.height,
+    });
+  }
+  // Every corner of the window is the window itself: nothing lies on top
+  // of it, the bottom bar on a phone included. (A bit inside the corners,
+  // which are round.)
+  const covered = await panel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const points = [
+      [box.left + 20, box.top + 20],
+      [box.right - 20, box.top + 20],
+      [box.left + 20, box.bottom - 20],
+      [box.right - 20, box.bottom - 20],
+    ];
+    return points.filter(([x, y]) => !element.contains(document.elementFromPoint(x, y))).length;
+  });
+  expect(covered).toBe(0);
+  await expect(panel.getByRole("button", { name: "Salva" })).toBeInViewport();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await page.request.delete(`/api/playlists/${list.id}`, { headers: { Origin: BASE } });
+});
+
 test("on the computer the side menu stays in place while the page scrolls", async ({
   page,
   isMobile,
