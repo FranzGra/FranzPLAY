@@ -152,7 +152,7 @@ function RegistrationSettings() {
     <>
       <h2 className={styles.groupTitle}>Accesso al sito</h2>
       <ul className={`stagger ${styles.list}`} aria-label="Accesso al sito">
-        <li className={`glass ${styles.person}`}>
+        <li className={`glass ${styles.setting}`}>
           <div>
             <p className={styles.name}>Chiunque può registrarsi</p>
             <p className={styles.role}>
@@ -161,7 +161,8 @@ function RegistrationSettings() {
               Persone. Se è spento, si entra solo con un invito o se aggiungi tu la persona.
             </p>
           </div>
-          <label className={styles.check}>
+          <label className={styles.toggle}>
+            {state.open ? "Acceso" : "Spento"}
             <input
               type="checkbox"
               aria-label="Chiunque può registrarsi"
@@ -169,7 +170,6 @@ function RegistrationSettings() {
               disabled={busy}
               onChange={(e) => change(e.target.checked)}
             />
-            Acceso
           </label>
         </li>
       </ul>

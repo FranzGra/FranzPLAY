@@ -87,7 +87,8 @@ describe("videos page", () => {
         },
       },
     });
-    const row = await screen.findByRole("listitem");
+    const list = await screen.findByRole("list", { name: "Video" });
+    const row = within(list).getByRole("listitem");
     expect(within(row).getByText(/Caricato da Giulia/)).toBeInTheDocument();
     expect(within(row).getByText("Solo per chi l'ha caricato")).toBeInTheDocument();
   });
