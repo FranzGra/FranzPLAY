@@ -24,7 +24,8 @@ describe("new version notice", () => {
       "href",
       newer.url,
     );
-    expect(screen.getByRole("button", { name: "Chiudi" })).toHaveFocus();
+    // The dialog moves the focus once it has opened: wait for it.
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: "Chiudi" })).toHaveFocus());
 
     await user.keyboard("{Escape}");
     expect(dialog).not.toBeInTheDocument();
