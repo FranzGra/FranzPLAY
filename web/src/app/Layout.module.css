@@ -306,6 +306,15 @@
   }
 }
 
+/* While a video card grows into the player (data-morph, coverMorph), the
+   menu closes at once: the browser takes its picture of the new page right
+   away, and a menu still sliding out would leave the player in the wrong
+   place in it, so the cover would fly to that place and then jump. */
+:root[data-morph] .body .sidebar,
+:root[data-morph] .body .sidebar:not([data-open]) {
+  transition: none;
+}
+
 /* Bottom bar, only on phones: a floating glass capsule */
 .tabbar {
   display: none;
