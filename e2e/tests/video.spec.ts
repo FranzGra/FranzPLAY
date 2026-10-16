@@ -338,3 +338,72 @@ test("without view transitions, or with less motion, a card is a plain link", as
     await context.close();
   }
 });
+
+// The cover must start where the card is, and land where the player
+// stays: read from the browser's own keyframes of the moving box.
+for (const hover of [false, true]) {
+  test(`the cover flies from its card to the player's final place (${hover ? "with" : "without"} the mouse on it)`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(hover && isMobile, "a phone has no mouse");
+    const errors = watchErrors(page);
+    await logIn(page, PEOPLE[0]);
+    await page.goto("/");
+    await page.evaluate(() => {
+      const w = window as unknown as { keys: unknown };
+      const real = document.startViewTransition.bind(document);
+      document.startViewTransition = ((update: () => Promise<void>) => {
+        const t = real(update);
+        t.ready
+          .then(() => {
+            const group = document
+              .getAnimations()
+              .find(
+                (a) =>
+                  (a.effect as KeyframeEffect).pseudoElement ===
+                  "::view-transition-group(video-player)",
+              );
+            const k = (group?.effect as KeyframeEffect | undefined)?.getKeyframes() ?? [];
+            w.keys = k.map((f) => ({
+              m: String(f.transform),
+              w: Number.parseFloat(String(f.width)),
+              h: Number.parseFloat(String(f.height)),
+            }));
+          })
+          .catch(() => {});
+        return t;
+      }) as typeof document.startViewTransition;
+    });
+    const cover = page.locator("main [data-card-video]").nth(1);
+    await cover.scrollIntoViewIfNeeded();
+    if (hover) {
+      await cover.hover();
+      await page.waitForTimeout(1000);
+    }
+    const card = await cover.boundingBox();
+    await cover.click();
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { keys?: unknown }).keys))
+      .toBeTruthy();
+    await page.waitForTimeout(1000);
+    const frame = await page.locator("[data-video-frame]").boundingBox();
+    const keys = (await page.evaluate(
+      () => (window as unknown as { keys: { m: string; w: number; h: number }[] }).keys,
+    )) as { m: string; w: number; h: number }[];
+    const at = (m: string) =>
+      m
+        .match(/-?[\d.]+/g)
+        ?.slice(4, 6)
+        .map(Number) ?? [];
+    const [x0, y0] = at(keys[0].m);
+    const [x1, y1] = at(keys[keys.length - 1].m);
+    expect(Math.abs(x0 - (card?.x ?? 0))).toBeLessThan(4);
+    expect(Math.abs(y0 - (card?.y ?? 0))).toBeLessThan(4);
+    expect(Math.abs(keys[0].w - (card?.width ?? 0))).toBeLessThan(4);
+    expect(Math.abs(x1 - (frame?.x ?? 0))).toBeLessThan(4);
+    expect(Math.abs(y1 - (frame?.y ?? 0))).toBeLessThan(4);
+    expect(Math.abs(keys[keys.length - 1].w - (frame?.width ?? 0))).toBeLessThan(4);
+    expect(errors).toEqual([]);
+  });
+}

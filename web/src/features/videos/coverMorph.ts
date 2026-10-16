@@ -92,6 +92,21 @@ function until<T>(ready: () => T | null | undefined, ms: number): Promise<T | nu
   });
 }
 
+// settled waits, for at most ms, until find returns an element that kept
+// the same place and size for three checks in a row.
+async function settled(find: () => HTMLElement | null, ms: number): Promise<void> {
+  let last = "";
+  let same = 0;
+  await until(() => {
+    const box = find()?.getBoundingClientRect();
+    if (!box) return null;
+    const now = `${Math.round(box.x)},${Math.round(box.y)},${Math.round(box.width)},${Math.round(box.height)}`;
+    same = now === last ? same + 1 : 0;
+    last = now;
+    return same >= 2 ? true : null;
+  }, ms);
+}
+
 // frameOf is the box of the player of a video, once its page is drawn.
 function frameOf(video: number): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-video-frame="${video}"]`);
@@ -163,7 +178,10 @@ export async function openVideo(
       go();
       // A new page starts from its top.
       window.scrollTo(0, 0);
-      await until(() => frameOf(video), PAGE_WAIT_MS);
+      // Then wait until the player stays in its place: the frame around
+      // the page can still be moving (the side menu closing), and the
+      // browser's picture must show the player where it will stay.
+      await settled(() => frameOf(video), PAGE_WAIT_MS);
     },
     () => {
       cover.style.viewTransitionName = "";
