@@ -98,24 +98,31 @@ export function Layout() {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        {drawer && (
-          <button
-            type="button"
-            className={styles.menuButton}
-            aria-label="Menu"
-            aria-expanded={menu.open}
-            aria-controls="menu-principale"
-            onClick={menu.toggle}
-          >
-            <Icon name="menu" size={22} />
-          </button>
-        )}
-        <Link to="/" className={styles.logo}>
-          <span className={styles.logoMark}>
-            <Icon name="play" size={14} />
-          </span>
-          <SiteName accentClass={styles.logoAccent} />
-        </Link>
+        {/* The bar has three columns as wide on the left as on the right,
+            so the search stays in the middle of the screen whatever the
+            length of the site's name. */}
+        <div className={styles.start}>
+          {drawer && (
+            <button
+              type="button"
+              className={styles.menuButton}
+              aria-label="Menu"
+              aria-expanded={menu.open}
+              aria-controls="menu-principale"
+              onClick={menu.toggle}
+            >
+              <Icon name="menu" size={22} />
+            </button>
+          )}
+          <Link to="/" className={styles.logo}>
+            <span className={styles.logoMark}>
+              <Icon name="play" size={14} />
+            </span>
+            <span className={styles.logoName}>
+              <SiteName accentClass={styles.logoAccent} />
+            </span>
+          </Link>
+        </div>
 
         <search className={styles.search}>
           <form onSubmit={onSearch}>
