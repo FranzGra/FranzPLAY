@@ -69,6 +69,16 @@
   transform-origin: bottom left;
 }
 
+/* Near the window's right edge it ends at the button's right edge, and
+   grows from that corner. */
+.panel[data-right] {
+  transform-origin: top right;
+}
+
+.panel[data-above][data-right] {
+  transform-origin: bottom right;
+}
+
 /* Closing, it shrinks back into the button. */
 .panel[data-leaving] {
   animation: var(--motion-pop-out);

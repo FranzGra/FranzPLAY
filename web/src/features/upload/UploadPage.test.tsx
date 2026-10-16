@@ -231,9 +231,13 @@ describe("upload page", () => {
     const mine = await screen.findByRole("region", { name: "I tuoi video" });
     expect(await within(mine).findByText(/lo vedono tutti/)).toBeInTheDocument();
     await user.click(within(mine).getByRole("button", { name: "Chi lo vede" }));
-    await user.click(within(mine).getByRole("radio", { name: "Solo io" }));
-    await user.click(within(mine).getByRole("button", { name: "Salva" }));
+    // It opens in a window over the page, not inside the row.
+    const who = screen.getByRole("dialog", { name: "Chi lo vede" });
+    expect(mine).not.toContainElement(who);
+    await user.click(within(who).getByRole("radio", { name: "Solo io" }));
+    await user.click(within(who).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/solo tu lo vedi/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Chi lo vede" })).not.toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({
       private: true,
       sharedWith: [],
@@ -254,16 +258,17 @@ describe("upload page", () => {
     );
     const mine = await screen.findByRole("region", { name: "I tuoi video" });
     await user.click(await within(mine).findByRole("button", { name: "Chi lo vede" }));
-    await user.click(within(mine).getByRole("radio", { name: "Alcune persone" }));
+    const who = screen.getByRole("dialog", { name: "Chi lo vede" });
+    await user.click(within(who).getByRole("radio", { name: "Alcune persone" }));
     // Nobody chosen yet: nothing is sent.
-    await user.click(await within(mine).findByRole("checkbox", { name: "Marco" }));
-    await user.click(within(mine).getByRole("checkbox", { name: "Marco" }));
-    await user.click(within(mine).getByRole("button", { name: "Salva" }));
-    expect(within(mine).getByRole("alert")).toHaveTextContent("Scegli almeno una persona");
+    await user.click(await within(who).findByRole("checkbox", { name: "Marco" }));
+    await user.click(within(who).getByRole("checkbox", { name: "Marco" }));
+    await user.click(within(who).getByRole("button", { name: "Salva" }));
+    expect(within(who).getByRole("alert")).toHaveTextContent("Scegli almeno una persona");
     expect(server.requests.some((r) => r.method === "PUT")).toBe(false);
 
-    await user.click(within(mine).getByRole("checkbox", { name: "Marco" }));
-    await user.click(within(mine).getByRole("button", { name: "Salva" }));
+    await user.click(within(who).getByRole("checkbox", { name: "Marco" }));
+    await user.click(within(who).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/lo vedono anche Marco$/)).toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({
       private: true,
@@ -323,9 +328,10 @@ describe("upload page", () => {
     const mine = await screen.findByRole("region", { name: "I tuoi video" });
     expect(within(mine).queryByRole("button", { name: "Copia link" })).not.toBeInTheDocument();
     await user.click(await within(mine).findByRole("button", { name: "Chi lo vede" }));
-    await user.click(within(mine).getByRole("radio", { name: "Chi ha il link" }));
-    expect(within(mine).getByText(/comparirà appena salvi/)).toBeInTheDocument();
-    await user.click(within(mine).getByRole("button", { name: "Salva" }));
+    const who = screen.getByRole("dialog", { name: "Chi lo vede" });
+    await user.click(within(who).getByRole("radio", { name: "Chi ha il link" }));
+    expect(within(who).getByText(/comparirà appena salvi/)).toBeInTheDocument();
+    await user.click(within(who).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/lo vede chi ha il link$/)).toBeInTheDocument();
     expect(await server.requests.at(-1)?.json()).toEqual({
       private: true,
@@ -340,8 +346,9 @@ describe("upload page", () => {
 
     // Opened again, the choice shows the link itself.
     await user.click(within(mine).getByRole("button", { name: "Chi lo vede" }));
-    expect(within(mine).getByRole("radio", { name: "Chi ha il link" })).toBeChecked();
-    expect(within(mine).getByLabelText("Link del video")).toHaveValue(
+    const again = screen.getByRole("dialog", { name: "Chi lo vede" });
+    expect(within(again).getByRole("radio", { name: "Chi ha il link" })).toBeChecked();
+    expect(within(again).getByLabelText("Link del video")).toHaveValue(
       `${window.location.origin}${link}`,
     );
   });

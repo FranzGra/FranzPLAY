@@ -1,11 +1,11 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ApiError } from "../../api/client";
 import { changeMyVideo, deleteMyVideo, fetchMyVideos, type MyVideo } from "../../api/myVideos";
 import { formatBytes, formatDate } from "../../lib/format";
 import { type Choice, choiceOf, ready, seenBy, sharing } from "../sharing/audience";
 import { CopyLink } from "../sharing/CopyLink";
-import { WhoSees } from "../sharing/WhoSees";
+import { WhoSeesWindow } from "../sharing/WhoSeesWindow";
 import { videoHints } from "./hints";
 import styles from "./MyVideos.module.css";
 
@@ -88,6 +88,7 @@ function VideoRow({
   const [title, setTitle] = useState(video.title);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
+  const whoButton = useRef<HTMLButtonElement>(null);
 
   const run = (work: () => Promise<void>) => {
     setBusy(true);
@@ -183,8 +184,10 @@ function VideoRow({
             </div>
           </div>
         )}
-        {asking === "nothing" && video.link !== null && <CopyLink link={video.link} compact />}
-        {asking === "nothing" && (
+        {(asking === "nothing" || asking === "who") && video.link !== null && (
+          <CopyLink link={video.link} compact />
+        )}
+        {(asking === "nothing" || asking === "who") && (
           <div className={styles.buttons}>
             <button
               type="button"
@@ -194,10 +197,17 @@ function VideoRow({
               Cambia titolo
             </button>
             <button
+              ref={whoButton}
               type="button"
               className={`glass ${styles.action}`}
+              aria-expanded={asking === "who"}
               onClick={() => {
+                if (asking === "who") {
+                  setAsking("nothing");
+                  return;
+                }
                 setWho(choiceOf(video.private, video.sharedWith, video.link));
+                setProblem("");
                 setAsking("who");
               }}
             >
@@ -212,51 +222,37 @@ function VideoRow({
             </button>
           </div>
         )}
-        {problem && (
+        {problem && asking !== "who" && (
           <p role="alert" className={styles.problem}>
             {problem}
           </p>
         )}
       </div>
-      {asking === "who" && (
-        <form
-          className={styles.who}
-          aria-label="Chi lo vede"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!ready(who)) {
-              setProblem("Scegli almeno una persona che potrà vederlo.");
-              return;
-            }
-            run(async () => {
-              onChanged(await changeMyVideo(video.id, sharing(who)));
-              setAsking("nothing");
-            });
-          }}
-        >
-          <WhoSees
-            choice={who}
-            onChange={setWho}
-            hints={videoHints}
-            link={who.audience === "link" ? video.link : null}
-          />
-          <div className={styles.buttons}>
-            <button type="submit" className={styles.primary} disabled={busy}>
-              Salva
-            </button>
-            <button
-              type="button"
-              className={`glass ${styles.action}`}
-              onClick={() => {
-                setProblem("");
-                setAsking("nothing");
-              }}
-            >
-              Annulla
-            </button>
-          </div>
-        </form>
-      )}
+      <WhoSeesWindow
+        open={asking === "who"}
+        button={whoButton}
+        title="Chi lo vede"
+        choice={who}
+        onChange={setWho}
+        hints={videoHints}
+        link={who.audience === "link" ? video.link : null}
+        problem={problem}
+        busy={busy}
+        onSave={() => {
+          if (!ready(who)) {
+            setProblem("Scegli almeno una persona che potrà vederlo.");
+            return;
+          }
+          run(async () => {
+            onChanged(await changeMyVideo(video.id, sharing(who)));
+            setAsking("nothing");
+          });
+        }}
+        onClose={() => {
+          setProblem("");
+          setAsking((a) => (a === "who" ? "nothing" : a));
+        }}
+      />
     </div>
   );
 }
