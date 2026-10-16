@@ -43,6 +43,9 @@ type api struct {
 	account func(context.Context) (users.Account, bool)
 }
 
+// Load reads the look of the site, for the other parts of FranzPLAY.
+func Load(ctx context.Context, db *sql.DB) (Look, error) { return load(ctx, db) }
+
 // load reads the look; what was never saved comes from Default.
 func load(ctx context.Context, db *sql.DB) (l Look, err error) {
 	l = Default
