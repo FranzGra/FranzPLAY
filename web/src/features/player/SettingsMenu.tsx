@@ -2,7 +2,7 @@ import { type ReactNode, type Ref, useState } from "react";
 import type { AudioTrack } from "../../api/audio";
 import type { SubtitleTrack } from "../../api/videos";
 import { Icon } from "../../components/Icon";
-import { speedLabel, speeds } from "./controls";
+import { skipChoices, speedLabel, speeds } from "./controls";
 import styles from "./Player.module.css";
 import {
   optionLabel,
@@ -25,19 +25,22 @@ type SettingsMenuProps = {
   onSubtitleStyle: (style: SubtitleStyle) => void;
   repeat: boolean; // start again at the end
   onRepeat: (repeat: boolean) => void;
+  skip: number; // seconds of a jump forward or back
+  onSkip?: (seconds: number) => void; // none: the jump cannot be chosen here
   onClose: () => void;
   ref?: Ref<HTMLDivElement>; // the panel, for its closing move
   leaving?: boolean; // the panel is closing
 };
 
-type Page = "main" | "speed" | "audio" | "subtitles" | "style" | keyof SubtitleStyle;
+type Page = "main" | "speed" | "skip" | "audio" | "subtitles" | "style" | keyof SubtitleStyle;
 
 // SettingsMenu is the panel opened by the gear button. Each setting has its
 // own page, as on YouTube, so the panel stays small on phones. A deeper
 // page slides in from the right, going back slides in from the left.
 export function SettingsMenu(props: SettingsMenuProps) {
   const { speed, onSpeed, tracks, track, onTrack, audio, audioStream, onAudio } = props;
-  const { subtitleStyle, onSubtitleStyle, repeat, onRepeat, onClose, ref, leaving } = props;
+  const { subtitleStyle, onSubtitleStyle, repeat, onRepeat, skip, onSkip, onClose, ref, leaving } =
+    props;
   const [page, setPageOnly] = useState<Page>("main");
   // How the page came in; none for the first one, which opens with the panel.
   const [direction, setDirection] = useState<"forward" | "back" | undefined>(undefined);
@@ -65,6 +68,13 @@ export function SettingsMenu(props: SettingsMenuProps) {
         {page === "main" && (
           <>
             <Row label="Velocità" value={speedLabel(speed)} onClick={() => setPage("speed")} />
+            {onSkip && (
+              <Row
+                label="Salto avanti/indietro"
+                value={`${skip} s`}
+                onClick={() => setPage("skip")}
+              />
+            )}
             {audio.length > 1 && (
               <Row
                 label="Audio"
@@ -104,6 +114,23 @@ export function SettingsMenu(props: SettingsMenuProps) {
               onSpeed(Number(key));
               onClose();
             }}
+          />
+        )}
+
+        {page === "skip" && onSkip && (
+          <Choices
+            title="Salto avanti/indietro"
+            onBack={() => setPage("main")}
+            options={skipChoices.map((s) => ({
+              key: String(s),
+              label: `${s} secondi`,
+              chosen: s === skip,
+            }))}
+            onChoose={(key) => {
+              onSkip(Number(key));
+              onClose();
+            }}
+            note="Vale per i tasti, le frecce della tastiera e il doppio tocco ai lati del video."
           />
         )}
 

@@ -201,6 +201,35 @@ describe("player", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("jumps as far as the person chose, and lets them choose in the settings", async () => {
+    const onSkip = vi.fn();
+    const { user, video } = setup({ skip: 10, onSkip });
+    video.currentTime = 100;
+    await user.click(screen.getByRole("button", { name: "Avanti di 10 secondi (l)" }));
+    expect(video.currentTime).toBe(110);
+    await user.keyboard("{ArrowLeft}");
+    expect(video.currentTime).toBe(100);
+
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    const row = screen.getByRole("button", { name: /Salto avanti\/indietro/ });
+    expect(row).toHaveTextContent("10 s");
+    await user.click(row);
+    expect(screen.getByRole("button", { name: "10 secondi" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "30 secondi" }));
+    expect(onSkip).toHaveBeenCalledWith(30);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("offers no choice of jump to whoever cannot save it", async () => {
+    const { user } = setup();
+    expect(screen.getByRole("button", { name: "Avanti di 15 secondi (l)" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    expect(screen.queryByRole("button", { name: /Salto/ })).not.toBeInTheDocument();
+  });
+
   it("slides the settings pages in the way the person goes", async () => {
     const { user } = setup();
     await user.click(screen.getByRole("button", { name: "Impostazioni" }));
@@ -632,8 +661,8 @@ describe("player on a touch screen", () => {
   afterEach(() => vi.useRealTimers());
 
   // playing sets up a player whose video plays, with a picture 300 wide.
-  function playing() {
-    const { video, play, pause } = setup();
+  function playing(props: Partial<Parameters<typeof Player>[0]> = {}) {
+    const { video, play, pause } = setup(props);
     Object.defineProperty(video, "paused", { value: false, configurable: true });
     fireEvent.play(video);
     const root = document.querySelector("[data-controls]") as HTMLElement;
@@ -690,6 +719,14 @@ describe("player on a touch screen", () => {
     tap(surface, root);
     wait(doubleTapWithin);
     expect(root).toHaveAttribute("data-controls", "hidden");
+  });
+
+  it("jumps as far as the person chose on a double tap", () => {
+    const { video, root, surface } = playing({ skip: 5 });
+    video.currentTime = 100;
+    tap(surface, root, 280);
+    tap(surface, root, 280);
+    expect(video.currentTime).toBe(105);
   });
 
   it("jumps 15 seconds on a double tap on the sides, never full screen", () => {

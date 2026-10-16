@@ -770,6 +770,45 @@ func TestMyAccentColor(t *testing.T) {
 	}
 }
 
+func TestMySkipSeconds(t *testing.T) {
+	s := newSite(t)
+	b := s.setUp()
+	me := func() Account {
+		t.Helper()
+		rec := b.do("GET", "/api/me", nil)
+		expect(t, rec, http.StatusOK)
+		var a Account
+		if err := json.Unmarshal(rec.Body.Bytes(), &a); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	if got := me().SkipSeconds; got != DefaultSkip {
+		t.Fatalf("a new user jumps %d seconds, want %d", got, DefaultSkip)
+	}
+
+	rec := b.do("PUT", "/api/me/skip", map[string]int{"seconds": 10})
+	expect(t, rec, http.StatusOK)
+	if !strings.Contains(rec.Body.String(), `"skipSeconds":10`) {
+		t.Fatalf("answer %s", rec.Body)
+	}
+	if got := me().SkipSeconds; got != 10 {
+		t.Fatalf("jump %d after choosing 10", got)
+	}
+	// It comes with the login too, so every device starts with it.
+	rec = s.browser().do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"})
+	if !strings.Contains(rec.Body.String(), `"skipSeconds":10`) {
+		t.Fatalf("login answer %s", rec.Body)
+	}
+
+	for _, bad := range []int{0, 7, 60, -15} {
+		expect(t, b.do("PUT", "/api/me/skip", map[string]int{"seconds": bad}), http.StatusBadRequest)
+	}
+	if got := me().SkipSeconds; got != 10 {
+		t.Fatalf("a refused jump changed it to %d", got)
+	}
+}
+
 func TestLoginWithAPasswordFromTheOldFranzPLAY(t *testing.T) {
 	s := newSite(t)
 	s.setUp()

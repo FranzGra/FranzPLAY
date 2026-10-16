@@ -19,6 +19,7 @@ import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatDuration } from "../../lib/format";
 import { Player } from "../player/Player";
+import { useSkip } from "../player/useSkip";
 import { copyText } from "../share/copyText";
 import { fullLink } from "../sharing/audience";
 import styles from "./AdminVideo.module.css";
@@ -249,6 +250,7 @@ function Detail({
 // the player in its place. A video nobody can open shows only the cover.
 function Stage({ video, watchable }: { video: AdminVideo; watchable: boolean }) {
   const [playing, setPlaying] = useState(false);
+  const { skip, onSkip } = useSkip();
   if (playing) {
     return (
       <div className={styles.stage}>
@@ -258,6 +260,8 @@ function Stage({ video, watchable }: { video: AdminVideo; watchable: boolean }) 
           preview={video.preview}
           length={video.duration}
           autoPlay
+          skip={skip}
+          onSkip={onSkip}
         />
       </div>
     );

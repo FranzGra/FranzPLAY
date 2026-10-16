@@ -51,6 +51,7 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/me/password", s.handlePassword)
 	mux.HandleFunc("PUT /api/me/name", s.handleRename)
 	mux.HandleFunc("PUT /api/me/color", s.handleAccentColor)
+	mux.HandleFunc("PUT /api/me/skip", s.handleSkipSeconds)
 	mux.HandleFunc("PUT /api/me/avatar", s.handleSetAvatar)
 	mux.HandleFunc("DELETE /api/me/avatar", s.handleRemoveAvatar)
 	mux.HandleFunc("GET /api/users/{id}/avatar", s.handleAvatar)
@@ -84,7 +85,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errBadName), errors.Is(err, errWeakPassword), errors.Is(err, errBadNote),
-		errors.Is(err, errBadColor), errors.Is(err, errBadAvatar):
+		errors.Is(err, errBadColor), errors.Is(err, errBadAvatar), errors.Is(err, errBadSkip):
 		respond.Error(w, r, s.logger, http.StatusBadRequest, err.Error())
 	case errors.Is(err, errBadCredentials), errors.Is(err, errBadSetupCode):
 		respond.Error(w, r, s.logger, http.StatusUnauthorized, err.Error())

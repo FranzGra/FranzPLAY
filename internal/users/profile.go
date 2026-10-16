@@ -190,3 +190,26 @@ func (s *Service) handleAccentColor(w http.ResponseWriter, r *http.Request) {
 	}
 	respond.JSON(w, r, s.logger, http.StatusOK, a)
 }
+
+type skipRequest struct {
+	Seconds int `json:"seconds"`
+}
+
+func (s *Service) handleSkipSeconds(w http.ResponseWriter, r *http.Request) {
+	a, ok := FromContext(r.Context())
+	if !ok {
+		respond.Error(w, r, s.logger, http.StatusUnauthorized, "login required")
+		return
+	}
+	var req skipRequest
+	if err := readJSON(w, r, &req); err != nil {
+		s.badRequest(w, r)
+		return
+	}
+	a, err := s.setSkipSeconds(r.Context(), a, req.Seconds)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	respond.JSON(w, r, s.logger, http.StatusOK, a)
+}

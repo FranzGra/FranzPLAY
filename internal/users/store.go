@@ -26,6 +26,9 @@ type Account struct {
 	// Avatar is the version of the user's profile photo, 0 when there is
 	// none: the interface shows the initial of the name instead.
 	Avatar int64 `json:"avatar"`
+	// SkipSeconds is how far the player jumps forward or back for the
+	// user: one of SkipChoices.
+	SkipSeconds int `json:"skipSeconds"`
 }
 
 // MaySharePublic reports whether the user may make public links.
@@ -92,6 +95,7 @@ func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now tim
 	if a.UploadQuota == 0 {
 		a.UploadQuota = DefaultUploadQuota
 	}
+	a.SkipSeconds = DefaultSkip // the database default
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO users (name, password_hash, role, can_upload, upload_quota, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		a.Name, hash, string(a.Role), a.CanUpload, a.UploadQuota, now.Unix())
@@ -109,8 +113,8 @@ func (s store) credentials(ctx context.Context, name string) (Account, string, e
 	var a Account
 	var hash, role string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, password_hash FROM users WHERE name = ?`, name).
-		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &hash)
+		SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds, password_hash FROM users WHERE name = ?`, name).
+		Scan(&a.ID, &a.Name, &role, &a.CanUpload, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, "", errUserNotFound
 	}
@@ -145,7 +149,7 @@ type Person struct {
 }
 
 func (s store) list(ctx context.Context) (_ []Person, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, last_login FROM users ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, can_upload, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds, last_login FROM users ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -155,7 +159,7 @@ func (s store) list(ctx context.Context) (_ []Person, err error) {
 		var p Person
 		var role string
 		var last sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Name, &role, &p.CanUpload, &p.CanSharePublic, &p.UploadQuota, &p.AccentColor, &p.Avatar, &last); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &role, &p.CanUpload, &p.CanSharePublic, &p.UploadQuota, &p.AccentColor, &p.Avatar, &p.SkipSeconds, &last); err != nil {
 			return nil, fmt.Errorf("list users: %w", err)
 		}
 		r, ok := parseRole(role)
@@ -220,8 +224,8 @@ func (s store) updateUser(ctx context.Context, id int64, role Role, canUpload bo
 
 	a := Account{ID: id, Role: role, CanUpload: canUpload}
 	var old string
-	err = tx.QueryRowContext(ctx, `SELECT name, role, can_share_public, upload_quota, coalesce(accent_color, ''), avatar FROM users WHERE id = ?`, id).
-		Scan(&a.Name, &old, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar)
+	err = tx.QueryRowContext(ctx, `SELECT name, role, can_share_public, upload_quota, coalesce(accent_color, ''), avatar, skip_seconds FROM users WHERE id = ?`, id).
+		Scan(&a.Name, &old, &a.CanSharePublic, &a.UploadQuota, &a.AccentColor, &a.Avatar, &a.SkipSeconds)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, 0, errUserNotFound
 	}

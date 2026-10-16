@@ -13,6 +13,7 @@ export const testAccount: Account = {
   uploadQuota: 10737418240,
   accentColor: "",
   avatar: 0,
+  skipSeconds: 15,
 };
 
 // A route of the fake server: what it answers to "METHOD /path".

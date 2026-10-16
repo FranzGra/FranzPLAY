@@ -26,6 +26,7 @@ import { loadSetting, saveSetting } from "../../lib/storage";
 import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
+import { useSkip } from "../player/useSkip";
 import { SaveButton } from "../playlists/SaveButton";
 import { PublicLinkPanel } from "../public/PublicLinkPanel";
 import { useSuggestions } from "../recommend/useSuggestions";
@@ -216,6 +217,7 @@ function Watch({
   const subtitles = useSubtitles(video.id);
   const copy = useCopy(video, canPlayType);
   const audio = useAudio(video.id);
+  const { skip, onSkip } = useSkip();
   const findAudio = useCallback(
     (stream: number, at: number) => fetchAudioStart(video.id, stream, at),
     [video.id],
@@ -251,6 +253,8 @@ function Watch({
           autoPlay
           theater={theater}
           onTheater={onTheater}
+          skip={skip}
+          onSkip={onSkip}
           unsupportedHint={copyHint(video, copy.state, copy.percent)}
           onUnsupported={copy.unsupported}
         />
