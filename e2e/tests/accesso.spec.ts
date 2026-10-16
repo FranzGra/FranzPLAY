@@ -96,3 +96,46 @@ test("a PIN is blocked after 3 wrong tries, with the wait", async ({ page, brows
   await guest.keyboard.type("135790");
   await entered(guest);
 });
+
+test("setting a pattern in the profile takes two steps", async ({ page, browser }, info) => {
+  const name = `Bea ${info.project.name}`;
+  await addPerson(page, name, "password", "password-di-bea");
+  const guest = await stranger(browser);
+  await typeName(guest, name);
+  await guest.getByLabel("Password").fill("password-di-bea");
+  await guest.getByRole("button", { name: "Entra" }).click();
+  await entered(guest);
+  await guest.goto("/profilo");
+  await guest.getByRole("button", { name: /Cambia accesso/ }).click();
+  await guest.getByLabel("Password attuale").fill("password-di-bea");
+  await guest.getByRole("button", { name: "Continua" }).click();
+  await guest.getByRole("radio", { name: "Sequenza" }).click();
+
+  const draw = async (label: string, dots: number[]) => {
+    const grid = guest.getByRole("group", { name: label });
+    await grid.scrollIntoViewIfNeeded();
+    const box = await grid.boundingBox();
+    if (!box) throw new Error(`no grid ${label}`);
+    const at = (dot: number) => ({
+      x: box.x + (((dot - 1) % 3) + 0.5) * (box.width / 3),
+      y: box.y + (Math.floor((dot - 1) / 3) + 0.5) * (box.height / 3),
+    });
+    const [first, ...rest] = dots.map(at);
+    await guest.mouse.move(first?.x ?? 0, first?.y ?? 0);
+    await guest.mouse.down();
+    for (const p of rest) await guest.mouse.move(p.x, p.y, { steps: 5 });
+    await guest.mouse.up();
+  };
+  await draw("Nuova sequenza", [1, 2, 3]);
+  await expect(guest.getByRole("alert")).toContainText("Unisci almeno 5 punti");
+  await draw("Nuova sequenza", [7, 4, 1, 2, 3]);
+  await guest.getByRole("button", { name: "Continua" }).click();
+  await draw("Ripeti la sequenza", [7, 8, 9, 6, 3]);
+  await expect(guest.getByRole("alert")).toContainText("non sono uguali");
+  await expect(guest.getByText("Ridisegnala per confermare")).toBeVisible();
+  await guest.waitForTimeout(700); // the wrong pattern, red, goes away
+  await draw("Ripeti la sequenza", [7, 4, 1, 2, 3]);
+  await expect(guest.locator("span", { hasText: "Sequenza confermata" })).toBeVisible();
+  await guest.getByRole("button", { name: "Salva" }).click();
+  await expect(guest.getByText(/Accesso cambiato/)).toBeVisible();
+});

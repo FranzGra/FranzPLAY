@@ -306,14 +306,20 @@ describe("registering without an invite", () => {
     await user.type(screen.getByLabelText("Nome"), "Giulia");
     await user.click(await screen.findByRole("radio", { name: "PIN" }));
     expect(screen.getByText(/meno sicuro di una password/)).toBeInTheDocument();
-    await user.click(screen.getByLabelText(/Nuovo PIN/));
+    expect(screen.getByText("Scegli un PIN di 6 cifre")).toBeInTheDocument();
+    await user.keyboard("111111");
+    // Step 1 is shown back: the person may write it again…
+    await user.click(await screen.findByRole("button", { name: "Riscrivi" }));
     await user.keyboard("123456");
-    expect(await screen.findByText("Ripeti il PIN", { selector: "p" })).toBeInTheDocument();
+    // …or go on.
+    await user.click(await screen.findByRole("button", { name: "Continua" }));
+    expect(screen.getByText("Ripeti il PIN per confermare")).toBeInTheDocument();
     await user.keyboard("123465");
     expect(await screen.findByRole("alert")).toHaveTextContent("I due PIN non sono uguali");
+    // A wrong confirmation stays at step 2.
+    expect(screen.getByText("Ripeti il PIN per confermare")).toBeInTheDocument();
     await user.keyboard("123456");
-    await user.keyboard("123456");
-    expect(await screen.findByText("PIN confermato")).toBeInTheDocument();
+    expect(await screen.findByText("PIN confermato", { selector: "span" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Crea e entra" }));
     await screen.findByRole("heading", { name: "Ancora nessun video" });
     const sent = server.requests.find((r) => r.url.endsWith("/api/register"));
