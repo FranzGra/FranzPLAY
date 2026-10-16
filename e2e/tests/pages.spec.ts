@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ADMIN, logIn, PEOPLE, videos, watchErrors } from "./franzplay";
+import { ADMIN, BASE, logIn, PEOPLE, videos, watchErrors } from "./franzplay";
 
 // Every page opens without errors and fits the screen: nothing may make
 // the page wider than the window, or on the phone it slides sideways
@@ -241,4 +241,37 @@ test("the administration tabs stay on one line and show the open page", async ({
   expect(new Set(tops).size).toBe(1);
   // The last tab is the open page: it was brought into view.
   await expect(tabs.getByRole("link", { name: "Sito" })).toBeInViewport();
+});
+
+test("on the computer the search stays in the middle, whatever the site's name", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "the phone has a search button instead");
+  await logIn(page, ADMIN);
+  const put = (nameFirst: string, nameSecond: string) =>
+    page.request.put("/api/site", {
+      data: { nameFirst, nameSecond, color: "#2997ff" },
+      headers: { Origin: BASE },
+    });
+  try {
+    for (const [first, second] of [
+      ["Franz", "PLAY"],
+      ["W".repeat(16), "W".repeat(16)],
+    ]) {
+      expect((await put(first, second)).ok()).toBe(true);
+      for (const width of [1440, 1100]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto("/");
+        const box = await page.locator("header search label").boundingBox();
+        const logo = await page.locator("header a[href='/']").boundingBox();
+        expect(box?.width).toBeLessThanOrEqual(560);
+        expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - width / 2)).toBeLessThanOrEqual(2);
+        // A long name ends with "…" before the search.
+        expect((logo?.x ?? 0) + (logo?.width ?? 0)).toBeLessThanOrEqual(box?.x ?? 0);
+      }
+    }
+  } finally {
+    await put("Franz", "PLAY");
+  }
 });
