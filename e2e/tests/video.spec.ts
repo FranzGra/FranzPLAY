@@ -407,3 +407,116 @@ for (const hover of [false, true]) {
     expect(errors).toEqual([]);
   });
 }
+
+// watchMorph notes, from inside the page, how the next view transition
+// went: how long the cover's move lasts, and whether the browser skipped
+// it (finished rejected) or the page gave it up (skipTransition).
+async function watchMorph(page: Page) {
+  await page.evaluate(() => {
+    const m = { calls: 0, duration: -1, skipped: false, rejected: false, done: false };
+    (window as unknown as { morph: typeof m }).morph = m;
+    const real = document.startViewTransition.bind(document);
+    document.startViewTransition = ((update: () => Promise<void>) => {
+      m.calls++;
+      const t = real(update);
+      const skip = t.skipTransition.bind(t);
+      t.skipTransition = () => {
+        m.skipped = true;
+        skip();
+      };
+      t.ready
+        .then(() => {
+          const group = document
+            .getAnimations()
+            .find(
+              (a) =>
+                (a.effect as KeyframeEffect).pseudoElement ===
+                "::view-transition-group(video-player)",
+            );
+          m.duration = Number(group?.effect?.getTiming().duration ?? -1);
+        })
+        .catch(() => {
+          m.rejected = true;
+        });
+      t.finished.then(
+        () => {
+          m.done = true;
+        },
+        () => {
+          m.rejected = true;
+          m.done = true;
+        },
+      );
+      return t;
+    }) as typeof document.startViewTransition;
+  });
+}
+
+type Morph = {
+  calls: number;
+  duration: number;
+  skipped: boolean;
+  rejected: boolean;
+  done: boolean;
+};
+
+async function morphResult(page: Page): Promise<Morph> {
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { morph: Morph }).morph.done))
+    .toBe(true);
+  return page.evaluate(() => (window as unknown as { morph: Morph }).morph);
+}
+
+test("the cover moves as long from the home page as from the videos beside the player", async ({
+  page,
+}) => {
+  const errors = watchErrors(page);
+  await logIn(page, PEOPLE[0]);
+  await page.goto("/");
+  const card = page.locator("main [data-card-video]").first();
+  await card.hover();
+  await page.waitForTimeout(500);
+  await watchMorph(page);
+  await card.click();
+  const home = await morphResult(page);
+
+  const side = page.locator("[data-video-frame] ~ * [data-card-video]").first();
+  await expect(side).toBeVisible();
+  await page.waitForTimeout(500);
+  await watchMorph(page);
+  await side.click();
+  const beside = await morphResult(page);
+
+  for (const m of [home, beside]) {
+    expect(m.calls).toBe(1);
+    expect(m.skipped).toBe(false);
+    expect(m.rejected).toBe(false);
+    expect(m.duration).toBeGreaterThan(400);
+  }
+  expect(Math.abs(home.duration - beside.duration)).toBeLessThanOrEqual(20);
+  expect(errors).toEqual([]);
+});
+
+test("on the first click, before the player's code arrived, the page opens plainly", async ({
+  page,
+}) => {
+  const errors = watchErrors(page);
+  await logIn(page, PEOPLE[0]);
+  // A slow connection: the player's code takes a while.
+  await page.route(/\/assets\/(VideoPage|Player)-.*\.js$/, async (route) => {
+    await new Promise((done) => setTimeout(done, 1500));
+    await route.continue();
+  });
+  await page.goto("/");
+  const card = page.locator("main [data-card-video]").first();
+  await expect(card).toBeVisible();
+  await watchMorph(page);
+  const id = await card.getAttribute("data-card-video");
+  await card.click();
+  await expect(page).toHaveURL(`/video/${id}`);
+  await expect(page.locator(`[data-video-frame="${id}"]`)).toBeVisible();
+  const m = await page.evaluate(() => (window as unknown as { morph: Morph }).morph);
+  // No half animation (a fade without the cover): no transition at all.
+  expect(m.calls).toBe(0);
+  expect(errors).toEqual([]);
+});

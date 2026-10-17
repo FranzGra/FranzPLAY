@@ -32,7 +32,7 @@ const BACK_NAME = "video-back";
 
 // How long a click waits for the player's code before going anyway, and
 // how long the browser waits for the new page before taking its picture.
-export const CODE_WAIT_MS = 150;
+export const CODE_WAIT_MS = 300;
 const PAGE_WAIT_MS = 400;
 const BACK_WAIT_MS = 350;
 
@@ -94,10 +94,10 @@ function until<T>(ready: () => T | null | undefined, ms: number): Promise<T | nu
 
 // settled waits, for at most ms, until find returns an element that kept
 // the same place and size for three checks in a row.
-async function settled(find: () => HTMLElement | null, ms: number): Promise<void> {
+async function settled(find: () => HTMLElement | null, ms: number): Promise<boolean> {
   let last = "";
   let same = 0;
-  await until(() => {
+  const found = await until(() => {
     const box = find()?.getBoundingClientRect();
     if (!box) return null;
     const now = `${Math.round(box.x)},${Math.round(box.y)},${Math.round(box.width)},${Math.round(box.height)}`;
@@ -105,6 +105,7 @@ async function settled(find: () => HTMLElement | null, ms: number): Promise<void
     last = now;
     return same >= 2 ? true : null;
   }, ms);
+  return found === true;
 }
 
 // frameOf is the box of the player of a video, once its page is drawn.
@@ -129,6 +130,9 @@ function onScreen(element: HTMLElement): boolean {
 // run starts a view transition and makes sure that, whatever happens to
 // it (the browser can skip it), no error reaches the console and the
 // page is cleaned up. If the browser refuses it, update runs at once.
+// The transition running now, so its update can give it up.
+let current: ViewTransition | null = null;
+
 function run(update: () => Promise<void>, cleanup: () => void): void {
   const root = document.documentElement;
   root.dataset[MORPH] = "";
@@ -140,6 +144,7 @@ function run(update: () => Promise<void>, cleanup: () => void): void {
   let transition: ViewTransition;
   try {
     transition = document.startViewTransition(update);
+    current = transition;
   } catch {
     done();
     void update();
@@ -148,6 +153,10 @@ function run(update: () => Promise<void>, cleanup: () => void): void {
   transition.ready.catch(() => {});
   transition.updateCallbackDone.catch(() => {});
   transition.finished.then(done, done);
+  const forget = () => {
+    if (current === transition) current = null;
+  };
+  transition.finished.then(forget, forget);
 }
 
 // openVideo opens a video from the cover of its card. It returns false
@@ -158,9 +167,23 @@ export async function openVideo(
   go: () => void,
   loadCode: () => Promise<unknown>,
 ): Promise<void> {
-  // The player's code was usually fetched when the card was pointed at;
-  // if not, it gets a moment, then the page opens anyway.
-  await Promise.race([loadCode().catch(() => {}), wait(CODE_WAIT_MS)]);
+  // The player's code was usually fetched when the card was pointed at
+  // (or by the home page, when the browser was idle). On the very first
+  // click it may still be on its way: it gets a moment, and if it is not
+  // there by then the page opens plainly, at once. A morph whose new page
+  // is not ready would only fade the page across, with no cover moving,
+  // and look like a much faster, different animation.
+  const codeReady = await Promise.race([
+    loadCode().then(
+      () => true,
+      () => false,
+    ),
+    wait(CODE_WAIT_MS).then(() => false),
+  ]);
+  if (!codeReady) {
+    go();
+    return;
+  }
   if (!cover.isConnected) {
     go();
     return;
@@ -181,7 +204,11 @@ export async function openVideo(
       // Then wait until the player stays in its place: the frame around
       // the page can still be moving (the side menu closing), and the
       // browser's picture must show the player where it will stay.
-      await settled(() => frameOf(video), PAGE_WAIT_MS);
+      if (!(await settled(() => frameOf(video), PAGE_WAIT_MS))) {
+        // The player did not arrive in time: show the new page at once
+        // rather than a fade without the cover.
+        current?.skipTransition();
+      }
     },
     () => {
       cover.style.viewTransitionName = "";
