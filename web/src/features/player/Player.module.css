@@ -245,6 +245,17 @@
   pointer-events: none;
 }
 
+/* Moving through the controls with the keyboard (Tab) brings them back:
+   a button that has the focus is never invisible. */
+.root:has(.controls :focus-visible) .controls {
+  opacity: 1;
+  translate: 0;
+}
+
+.root:has(.controls :focus-visible) .controls * {
+  pointer-events: auto;
+}
+
 /* The area that answers the mouse or the finger is taller than the bar
    itself, so the bar is easy to hit. */
 .timeline {
