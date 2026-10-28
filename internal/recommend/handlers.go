@@ -39,7 +39,7 @@ type handlers struct {
 //
 // Each answers a list of {video, reason}, best first.
 func Routes(db *sql.DB, lookup videos, logger *slog.Logger) func(mux *http.ServeMux) {
-	return handlers{store: store{db: db}, videos: lookup, logger: logger, account: users.FromContext}.routes
+	return handlers{store: newStore(db), videos: lookup, logger: logger, account: users.FromContext}.routes
 }
 
 func (h handlers) routes(mux *http.ServeMux) {
