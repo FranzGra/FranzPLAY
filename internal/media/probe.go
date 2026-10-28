@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -170,9 +172,28 @@ func locate(ctx context.Context, db *sql.DB, videoID int64) (file, fingerprint s
 	if err != nil {
 		return "", "", fmt.Errorf("find video %d: %w", videoID, err)
 	}
+	file = filepath.Join(root, filepath.FromSlash(rel))
+	// Not a failure: if the disk comes back, so does the video. Counted
+	// as tries, a disk away for a quarter of an hour would fail its jobs
+	// for good, and nothing would start them again when it is back.
 	if missing {
-		// Not permanent: if the disk comes back, so does the video.
-		return "", "", fmt.Errorf("video %d: %w", videoID, errVideoMissing)
+		return "", "", fmt.Errorf("video %d: %w: %w", videoID, errVideoMissing, waitForDisk())
 	}
-	return filepath.Join(root, filepath.FromSlash(rel)), fingerprint, nil
+	if err := fileThere(file); errors.Is(err, fs.ErrNotExist) {
+		return "", "", fmt.Errorf("video %d: %w: %w", videoID, errVideoMissing, waitForDisk())
+	}
+	return file, fingerprint, nil
+}
+
+// missingWait is how long a job on a video whose file is away waits
+// before looking again.
+const missingWait = 15 * time.Minute
+
+func waitForDisk() *jobs.LaterError { return &jobs.LaterError{Until: time.Now().Add(missingWait)} }
+
+// fileThere checks that a video's file is on disk. Tests that use made-up
+// paths replace it.
+var fileThere = func(path string) error {
+	_, err := os.Stat(path)
+	return err
 }
