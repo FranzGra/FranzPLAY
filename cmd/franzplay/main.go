@@ -95,6 +95,16 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		return fmt.Errorf("create data folder %q: %w", cfg.DataDir, err)
 	}
 
+	// One owner (rule 4): before touching the database or any file.
+	unlock, err := database.Lock(cfg.DataDir)
+	switch {
+	case errors.Is(err, database.ErrNoLock):
+		logger.Warn("cannot lock the data folder: make sure only one FranzPLAY uses it", "error", err)
+	case err != nil:
+		return err
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
+
 	db, err := database.Open(ctx, cfg.DataDir)
 	if err != nil {
 		return err
