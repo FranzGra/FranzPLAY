@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -610,5 +611,171 @@ func TestStillCopying(t *testing.T) {
 				t.Errorf("stillCopying = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestScanRemakesTheCoverWhenAPictureChanges: a picture with the video's
+// name, put next to it after the video arrived, replaced or taken away,
+// becomes (or stops being) its cover without anyone pressing a button.
+func TestScanRemakesTheCoverWhenAPictureChanges(t *testing.T) {
+	lib := t.TempDir()
+	writeFile(t, lib, "Viaggi/mare.mp4", "sea")
+	writeFile(t, lib, "Viaggi/lago.mp4", "lake")
+	writeFile(t, lib, "Viaggi/lago.jpg", "lake picture")
+	ts := newTestScanner(t, lib)
+	woken := 0
+	ts.OnNewJobs(func() { woken++ })
+	done := func() {
+		t.Helper()
+		if _, err := ts.db.Exec(`UPDATE jobs SET state = 'done'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A new video with a picture already there gets its cover from it.
+	ts.scan(t, Report{Added: 2})
+	if got := ts.jobs(t, "cover"); got["Viaggi/lago.mp4"] != "pending" || got["Viaggi/mare.mp4"] != "" {
+		t.Fatalf("cover jobs after the first scan = %v, want only lago.mp4", got)
+	}
+	done()
+	ts.scan(t, Report{Unchanged: 2})
+	if got := ts.jobs(t, "cover"); got["Viaggi/lago.mp4"] != "done" {
+		t.Fatalf("cover jobs after a scan that changed nothing = %v", got)
+	}
+
+	// A picture put there later.
+	writeFile(t, lib, "Viaggi/Mare-Poster.PNG", "sea picture")
+	ts.scan(t, Report{Unchanged: 2})
+	if got := ts.jobs(t, "cover"); got["Viaggi/mare.mp4"] != "pending" || got["Viaggi/lago.mp4"] != "done" {
+		t.Fatalf("cover jobs after adding a picture = %v, want mare.mp4 pending", got)
+	}
+	done()
+
+	// A picture replaced.
+	writeFile(t, lib, "Viaggi/lago.jpg", "another lake picture")
+	ts.scan(t, Report{Unchanged: 2})
+	if got := ts.jobs(t, "cover"); got["Viaggi/lago.mp4"] != "pending" || got["Viaggi/mare.mp4"] != "done" {
+		t.Fatalf("cover jobs after replacing a picture = %v, want lago.mp4 pending", got)
+	}
+	done()
+
+	// A picture taken away: back to a frame of the video.
+	if err := os.Remove(filepath.Join(lib, "Viaggi", "Mare-Poster.PNG")); err != nil {
+		t.Fatal(err)
+	}
+	ts.scan(t, Report{Unchanged: 2})
+	if got := ts.jobs(t, "cover"); got["Viaggi/mare.mp4"] != "pending" {
+		t.Fatalf("cover jobs after removing a picture = %v, want mare.mp4 pending", got)
+	}
+	if woken != 4 {
+		t.Errorf("worker woken %d times, want 4", woken)
+	}
+}
+
+// TestScanKeepsCoversWhenAFolderCannotBeRead: a folder that cannot be read
+// shows no picture, and that must not take a cover away.
+func TestScanKeepsCoversWhenAFolderCannotBeRead(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs Unix permissions and a normal user")
+	}
+	lib := t.TempDir()
+	writeFile(t, lib, "mare.mp4", "sea")
+	writeFile(t, lib, "mare.jpg", "sea picture")
+	writeFile(t, lib, "Chiusa/altro.mp4", "other")
+	ts := newTestScanner(t, lib)
+	ts.scan(t, Report{Added: 2})
+	if _, err := ts.db.Exec(`UPDATE jobs SET state = 'done'`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Remove(filepath.Join(lib, "mare.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	lockDir(t, filepath.Join(lib, "Chiusa"), 0o000)
+	if _, err := ts.Scan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := ts.jobs(t, "cover"); got["mare.mp4"] != "done" {
+		t.Errorf("cover jobs with a folder unreadable = %v, want nothing asked", got)
+	}
+}
+
+// pictures returns the category pictures in the catalog: path → pending.
+func (ts *testScanner) pictures(t *testing.T) map[string]bool {
+	t.Helper()
+	rows, err := ts.db.Query(`SELECT path, pending FROM category_pictures`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	out := map[string]bool{}
+	for rows.Next() {
+		var path string
+		var pending bool
+		if err := rows.Scan(&path, &pending); err != nil {
+			t.Fatal(err)
+		}
+		out[path] = pending
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestScanFindsTheCategoryPictures: pictures like poster.jpg in the folder
+// of a category are found, their copies asked for when new or changed, and
+// forgotten when taken away.
+func TestScanFindsTheCategoryPictures(t *testing.T) {
+	lib := t.TempDir()
+	writeFile(t, lib, "Viaggi/mare.mp4", "sea")
+	writeFile(t, lib, "Viaggi/poster.jpg", "poster")
+	writeFile(t, lib, "Viaggi/2025/fanart.jpg", "not the category's folder")
+	writeFile(t, lib, "Corsi/lezione.mp4", "lesson")
+	ts := newTestScanner(t, lib)
+	asked, changed := 0, 0
+	ts.OnCategoryPictures(func(context.Context) { asked++ })
+	ts.OnChange(func() { changed++ })
+	made := func() {
+		t.Helper()
+		if _, err := ts.db.Exec(`UPDATE category_pictures SET pending = 0`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ts.scan(t, Report{Added: 2})
+	if got := ts.pictures(t); len(got) != 1 || !got["Viaggi/poster.jpg"] || asked != 1 {
+		t.Fatalf("pictures = %v, copies asked %d times; want poster.jpg waiting, asked once", got, asked)
+	}
+	made()
+	ts.scan(t, Report{Unchanged: 2})
+	if asked != 1 {
+		t.Errorf("copies asked %d times after a scan that changed nothing, want still 1", asked)
+	}
+
+	// A picture added to another category, and the poster replaced.
+	writeFile(t, lib, "Corsi/Fanart.PNG", "fanart")
+	writeFile(t, lib, "Viaggi/poster.jpg", "another poster")
+	ts.scan(t, Report{Unchanged: 2})
+	if got := ts.pictures(t); len(got) != 2 || !got["Corsi/Fanart.PNG"] || !got["Viaggi/poster.jpg"] || asked != 2 {
+		t.Fatalf("pictures = %v, asked %d; want both waiting, asked twice", got, asked)
+	}
+	made()
+
+	// The poster taken away: forgotten, and the pages are told.
+	changedBefore := changed
+	if err := os.Remove(filepath.Join(lib, "Viaggi", "poster.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	ts.scan(t, Report{Unchanged: 2})
+	if got := ts.pictures(t); len(got) != 1 || got["Corsi/Fanart.PNG"] {
+		t.Errorf("pictures = %v, want only Corsi's fanart, already made", got)
+	}
+	if changed != changedBefore+1 || asked != 2 {
+		t.Errorf("pages told %d times (want %d), copies asked %d (want 2)", changed, changedBefore+1, asked)
 	}
 }

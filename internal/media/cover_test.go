@@ -52,37 +52,61 @@ func TestCoverArgsPrefersAnImageNextToTheVideo(t *testing.T) {
 		t.Errorf("with a picture from the internet: %q", args)
 	}
 
+	// A picture next to the video comes before the internet's, cut to 16:9.
 	poster := filepath.Join(dir, "mare-poster.jpg")
-	if err := os.WriteFile(poster, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// An image next to the video comes before the internet's.
-	args = c.coverArgs(video, 300, coverChoice{downloaded: downloaded}, true, "out.jpg")
+	args = c.coverArgs(video, 300, coverChoice{beside: poster, besideVersion: "1", downloaded: downloaded}, true, "out.jpg")
 	if !slices.Contains(args, "file:"+poster) || slices.Contains(args, "file:"+video) {
 		t.Errorf("with mare-poster.jpg: %q", args)
 	}
+	if i := slices.Index(args, "-vf"); i < 0 || !strings.HasPrefix(args[i+1], "crop=") {
+		t.Errorf("the picture next to the video is not cut to 16:9: %q", args)
+	}
+}
 
-	// mare.jpg comes before mare-poster.jpg.
-	plain := filepath.Join(dir, "mare.jpg")
-	if err := os.WriteFile(plain, []byte("x"), 0o600); err != nil {
+func TestFindBesideImage(t *testing.T) {
+	dir := t.TempDir()
+	video := filepath.Join(dir, "mare.mp4")
+	write := func(name string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("mare.mp4")
+	write("monti.jpg")
+	if image, version, err := findBesideImage(video); err != nil || image != "" || version != "" {
+		t.Fatalf("no picture: %q, %q, %v", image, version, err)
+	}
+
+	write("MARE-POSTER.JPG")
+	image, version, err := findBesideImage(video)
+	if err != nil || image != filepath.Join(dir, "MARE-POSTER.JPG") || version == "" {
+		t.Fatalf("with MARE-POSTER.JPG: %q, %q, %v", image, version, err)
+	}
+
+	// mare.png comes before mare-poster.jpg; replacing it changes the version.
+	write("mare.png")
+	image, first, err := findBesideImage(video)
+	if err != nil || image != filepath.Join(dir, "mare.png") {
+		t.Fatalf("with mare.png: %q, %v", image, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mare.png"), []byte("bigger"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if args = c.coverArgs(video, 300, coverChoice{}, true, "out.jpg"); !slices.Contains(args, "file:"+plain) {
-		t.Errorf("with mare.jpg: %q", args)
+	if _, second, err := findBesideImage(video); err != nil || second == first {
+		t.Errorf("replaced mare.png: version %q, before %q, %v", second, first, err)
 	}
 }
 
 func TestCoverArgsPrefersTheAdministratorsChoice(t *testing.T) {
 	dir := t.TempDir()
 	video := filepath.Join(dir, "mare.mp4")
-	if err := os.WriteFile(filepath.Join(dir, "mare.jpg"), []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	downloaded := filepath.Join(dir, "data", "online", "7-1234.img")
 	c := &Coverer{}
 
 	// A moment chosen by the administrator beats the image next to the video.
-	choice := coverChoice{second: sql.NullInt64{Int64: 125, Valid: true}, downloaded: downloaded}
+	choice := coverChoice{second: sql.NullInt64{Int64: 125, Valid: true},
+		beside: filepath.Join(dir, "mare.jpg"), besideVersion: "1", downloaded: downloaded}
 	args := c.coverArgs(video, 300, choice, true, "out.jpg")
 	if !slices.Contains(args, "file:"+video) || !slices.Contains(args, "125") {
 		t.Errorf("with a chosen moment: %q", args)
@@ -129,6 +153,8 @@ func TestChosenCoverNameChangesWithTheChoice(t *testing.T) {
 		{second: sql.NullInt64{Int64: 20, Valid: true}},
 		{own: "/data/own-covers/7-0000000011111111.jpg"},
 		{own: "/data/own-covers/7-0000000022222222.jpg"},
+		{beside: "/videos/mare.jpg", besideVersion: "abc"},
+		{beside: "/videos/mare.jpg", besideVersion: "abd"},
 	} {
 		name := chosenCoverName(7, fp, choice)
 		if names[name] {
@@ -360,7 +386,7 @@ func TestCoverWithRealFFmpeg(t *testing.T) {
 		t.Errorf("video folder changed: %q, before %q", after, libraryBefore)
 	}
 
-	// A small image next to the video wins, and is not enlarged.
+	// A small image next to the video wins: cut to 16:9, not enlarged.
 	poster := filepath.Join(root, "Viaggi", "mare: estate.png")
 	if _, err := run(context.Background(), ffmpeg, "-v", "error",
 		"-f", "lavfi", "-i", "color=c=red:size=300x400", "-frames:v", "1", "file:"+poster); err != nil {
@@ -370,8 +396,8 @@ func TestCoverWithRealFFmpeg(t *testing.T) {
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if w, h := jpegSize(t, filepath.Join(fx.dataDir, CoversDir, fx.cover(t).String)); w != 300 || h != 400 {
-		t.Errorf("cover from the image is %dx%d, want 300x400", w, h)
+	if w, h := jpegSize(t, filepath.Join(fx.dataDir, CoversDir, fx.cover(t).String)); w != 300 || h != 170 {
+		t.Errorf("cover from the image is %dx%d, want 300x170", w, h)
 	}
 
 	if after := listDir(t, root); !slices.Equal(after, libraryBefore) {

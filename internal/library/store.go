@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
@@ -187,6 +188,125 @@ func (s store) add(ctx context.Context, added []identified, now time.Time) (err 
 		}
 	}
 	return nil
+}
+
+// syncCoverImages saves the version of the picture next to each video of
+// a library (covers, by path: listing.coverImages) and asks for a new
+// cover where it changed: a picture put there later, replaced or taken
+// away. The first time a video is looked at, a picture found also asks
+// for a new cover; no picture asks for nothing. It returns how many covers
+// were asked for. Only videos present in the library are looked at.
+func (s store) syncCoverImages(ctx context.Context, library int64, covers map[string]string, now time.Time) (int, error) {
+	type change struct {
+		id      int64
+		version string
+		redo    bool
+	}
+	var changes []change
+	err := func() (err error) {
+		rows, err := s.db.QueryContext(ctx, `
+			SELECT id, path, cover_image FROM videos WHERE library_id = ? AND missing_since IS NULL`, library)
+		if err != nil {
+			return err
+		}
+		defer func() { err = errors.Join(err, rows.Close()) }()
+		for rows.Next() {
+			var id int64
+			var p string
+			var before sql.NullString
+			if err := rows.Scan(&id, &p, &before); err != nil {
+				return err
+			}
+			version, listed := covers[p]
+			if !listed || (before.Valid && before.String == version) {
+				continue
+			}
+			changes = append(changes, change{id: id, version: version, redo: before.Valid || version != ""})
+		}
+		return rows.Err()
+	}()
+	if err != nil {
+		return 0, fmt.Errorf("read cover pictures: %w", err)
+	}
+
+	asked := 0
+	for batch := range slices.Chunk(changes, s.batchSize()) {
+		err := func() (err error) {
+			tx, err := s.db.BeginTx(ctx, nil)
+			if err != nil {
+				return fmt.Errorf("save cover pictures: begin: %w", err)
+			}
+			defer func() { err = finish(tx, err) }()
+			for _, c := range batch {
+				if _, err := tx.ExecContext(ctx, `UPDATE videos SET cover_image = ? WHERE id = ?`, c.version, c.id); err != nil {
+					return fmt.Errorf("save cover picture of video %d: %w", c.id, err)
+				}
+				if c.redo {
+					if err := jobs.Enqueue(ctx, tx, c.id, jobs.Cover, false, now); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}()
+		if err != nil {
+			return asked, err
+		}
+		for _, c := range batch {
+			if c.redo {
+				asked++
+			}
+		}
+	}
+	return asked, nil
+}
+
+// syncCategoryPictures saves the pictures of the categories found in a
+// library: new ones are added, changed ones wait for a new copy, the ones
+// gone are forgotten. It reports whether any copy is left to make, and
+// whether a picture was forgotten.
+func (s store) syncCategoryPictures(ctx context.Context, library int64, pictures []categoryPicture) (toMake, forgot bool, err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, false, fmt.Errorf("save category pictures: begin: %w", err)
+	}
+	defer func() { err = finish(tx, err) }()
+
+	if _, err := tx.ExecContext(ctx, `CREATE TEMP TABLE IF NOT EXISTS seen_pictures (path TEXT PRIMARY KEY)`); err != nil {
+		return false, false, fmt.Errorf("save category pictures: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM temp.seen_pictures`); err != nil {
+		return false, false, fmt.Errorf("save category pictures: %w", err)
+	}
+	for _, p := range pictures {
+		// A changed picture waits for a new copy; the one made before
+		// stays until then.
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO category_pictures (library_id, path, category, size, mod_time) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (library_id, path) DO UPDATE SET size = excluded.size, mod_time = excluded.mod_time, pending = 1
+			WHERE size != excluded.size OR mod_time != excluded.mod_time`,
+			library, p.path, p.category, p.size, p.modTime); err != nil {
+			return false, false, fmt.Errorf("save category picture %s: %w", p.path, err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO temp.seen_pictures (path) VALUES (?)`, p.path); err != nil {
+			return false, false, fmt.Errorf("save category pictures: %w", err)
+		}
+	}
+	res, err := tx.ExecContext(ctx, `
+		DELETE FROM category_pictures
+		WHERE library_id = ? AND path NOT IN (SELECT path FROM temp.seen_pictures)`, library)
+	if err != nil {
+		return false, false, fmt.Errorf("forget category pictures: %w", err)
+	}
+	gone, err := res.RowsAffected()
+	if err != nil {
+		return false, false, fmt.Errorf("forget category pictures: %w", err)
+	}
+	if err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM category_pictures WHERE library_id = ? AND pending = 1)`, library).Scan(&toMake); err != nil {
+		return false, false, fmt.Errorf("read category pictures: %w", err)
+	}
+	return toMake, gone > 0, nil
 }
 
 // forget deletes the videos missing since before the given time. Only the

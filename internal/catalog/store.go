@@ -130,10 +130,15 @@ type Preview struct {
 // Category is a category with how many videos it has, and the color and
 // image the administrator chose for it ("" and nil if none).
 type Category struct {
-	Name   string  `json:"name"`
-	Videos int     `json:"videos"`
-	Color  string  `json:"color"`
-	Image  *string `json:"image"` // address of the image
+	Name   string `json:"name"`
+	Videos int    `json:"videos"`
+	Color  string `json:"color"`
+	// Image is the address of its wide picture: the one the administrator
+	// chose, else a wide picture in its folder (like fanart.jpg).
+	Image *string `json:"image"`
+	// Poster is the address of a tall picture in its folder (like
+	// poster.jpg), nil if none.
+	Poster *string `json:"poster"`
 	// Cover is the cover of its newest video, for a category the
 	// administrator gave no image: its card still shows a picture.
 	Cover *string `json:"cover"`
@@ -488,7 +493,74 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list categories: %w", err)
+	}
+	if err := s.addCategoryPictures(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// addCategoryPictures adds to the categories the pictures found in their
+// folders, like poster.jpg and fanart.jpg (video.PickCategoryPictures).
+// The image the administrator chose wins over a wide one.
+func (s store) addCategoryPictures(ctx context.Context, categories []Category) (err error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT coalesce(c.label, p.category), p.path, p.file, p.width, p.height
+		FROM category_pictures p LEFT JOIN categories c ON c.name = p.category
+		WHERE p.file IS NOT NULL ORDER BY p.library_id, p.id`)
+	if err != nil {
+		return fmt.Errorf("list category pictures: %w", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	type found struct {
+		pictures []video.CategoryPicture
+		files    map[string]string // picture name → its copy
+	}
+	byCategory := map[string]*found{}
+	for rows.Next() {
+		var shown, p, file string
+		var w, h int
+		if err := rows.Scan(&shown, &p, &file, &w, &h); err != nil {
+			return fmt.Errorf("list category pictures: %w", err)
+		}
+		f := byCategory[shown]
+		if f == nil {
+			f = &found{files: map[string]string{}}
+			byCategory[shown] = f
+		}
+		name := path.Base(p)
+		if _, seen := f.files[name]; !seen { // the first folder wins
+			f.pictures = append(f.pictures, video.CategoryPicture{Name: name, Width: w, Height: h})
+			f.files[name] = file
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("list category pictures: %w", err)
+	}
+	for i := range categories {
+		c := &categories[i]
+		f := byCategory[c.Name]
+		if f == nil {
+			continue
+		}
+		poster, landscape, hasPoster, hasLandscape := video.PickCategoryPictures(f.pictures)
+		if hasPoster {
+			c.Poster = categoryPictureURL(f.files[poster.Name])
+		}
+		if hasLandscape && c.Image == nil {
+			c.Image = categoryPictureURL(f.files[landscape.Name])
+		}
+	}
+	return nil
+}
+
+// categoryPictureURL is the address of the copy of a picture found in the
+// folder of a category.
+func categoryPictureURL(file string) *string {
+	u := "/api/category-pictures/" + file
+	return &u
 }
 
 // file returns the full path of the file of a video the person may open.

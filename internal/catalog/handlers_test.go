@@ -21,6 +21,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/users"
+	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
 // site is the whole HTTP handler on a catalog prepared by the test.
@@ -1079,5 +1080,74 @@ func TestVideoByLink(t *testing.T) {
 	}
 	if rec := s.getAs(t, marco, page); rec.Code != http.StatusNotFound {
 		t.Errorf("link taken away: Marco gets status %d, want 404", rec.Code)
+	}
+}
+
+// A category shows the pictures found in its folder: the tall one as its
+// poster, the wide one as its image unless the administrator chose one.
+func TestCategoriesShowThePicturesOfTheirFolders(t *testing.T) {
+	s := newSite(t)
+	s.addVideo(t, "Viaggi/a.mp4", "a", "Viaggi", 1, false)
+	s.addVideo(t, "Corsi/b.mp4", "b", "Corsi", 1, false)
+	s.addVideo(t, "Scuola/c.mp4", "c", "Scuola", 1, false)
+	for _, p := range []struct {
+		path, category string
+		file           any
+		w, h           any
+	}{
+		{"Viaggi/poster.jpg", "Viaggi", "1-a.jpg", 600, 900},
+		{"Viaggi/fanart.jpg", "Viaggi", "2-b.jpg", 1280, 720},
+		{"Viaggi/cover.jpg", "Viaggi", "3-c.jpg", 600, 900}, // poster.jpg wins
+		{"Corsi/fanart.jpg", "Corsi", "4-d.jpg", 1280, 720},
+		{"Scuola/poster.jpg", "Scuola", nil, nil, nil}, // copy not made yet
+	} {
+		if _, err := s.db.Exec(`INSERT INTO category_pictures (library_id, path, category, size, mod_time, pending, file, width, height)
+			VALUES (1, ?, ?, 1, 1, 0, ?, ?, ?)`, p.path, p.category, p.file, p.w, p.h); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The administrator's image wins over Corsi's fanart.
+	if _, err := s.db.Exec(`INSERT INTO categories (name, image) VALUES ('Corsi', '9-own.jpg')`); err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]Category{}
+	for _, c := range decode[[]Category](t, s.get(t, "/api/categories")) {
+		got[c.Name] = c
+	}
+	address := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	for name, want := range map[string][2]string{
+		"Viaggi": {"/api/category-pictures/2-b.jpg", "/api/category-pictures/1-a.jpg"},
+		"Corsi":  {"/api/category-images/9-own.jpg", ""},
+		"Scuola": {"", ""},
+	} {
+		c := got[name]
+		if address(c.Image) != want[0] || address(c.Poster) != want[1] {
+			t.Errorf("%s: image %q poster %q, want %q and %q", name, address(c.Image), address(c.Poster), want[0], want[1])
+		}
+	}
+}
+
+func TestCategoryPictureIsServed(t *testing.T) {
+	s := newSite(t)
+	dir := filepath.Join(s.dataDir, media.CategoryPicturesDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// Named like media.CategoryPictureMaker names them.
+	name := "1-" + video.ImageVersion("Viaggi/poster.jpg", 10, 20) + ".jpg"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("jpeg"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if rec := s.get(t, "/api/category-pictures/"+name); rec.Code != http.StatusOK || rec.Body.String() != "jpeg" {
+		t.Errorf("picture: %d %q", rec.Code, rec.Body)
+	}
+	if rec := s.get(t, "/api/category-pictures/..%2Fsecret.jpg"); rec.Code != http.StatusNotFound {
+		t.Errorf("a name going out of the folder: %d, want 404", rec.Code)
 	}
 }
