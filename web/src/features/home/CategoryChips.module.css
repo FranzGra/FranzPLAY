@@ -128,8 +128,10 @@
   box-shadow:
     var(--glass-highlight),
     0 4px 16px rgb(0 0 0 / 0.4);
-  backdrop-filter: var(--glass-blur);
+  /* Prefixed first: the minifier keeps only the last of the two when the
+     value is a var(), and Chrome needs the unprefixed one. */
   -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   color: var(--color-text);
   cursor: pointer;
   animation: var(--motion-fade-in);

@@ -16,8 +16,10 @@
   padding: env(safe-area-inset-top) max(32px, env(safe-area-inset-right)) 0
     max(32px, env(safe-area-inset-left));
   background: rgb(9 9 11 / 0.6);
-  backdrop-filter: var(--glass-blur);
+  /* Prefixed first: the minifier keeps only the last of the two when the
+     value is a var(), and Chrome needs the unprefixed one. */
   -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--color-border);
 }
 

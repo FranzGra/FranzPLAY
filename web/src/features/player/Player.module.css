@@ -49,8 +49,10 @@
   border: 1px solid rgb(255 255 255 / 0.2);
   border-radius: 50%;
   background: rgb(0 0 0 / 0.45);
-  backdrop-filter: var(--glass-blur);
+  /* Prefixed first: the minifier keeps only the last of the two when the
+     value is a var(), and Chrome needs the unprefixed one. */
   -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   color: #fff;
   cursor: pointer;
   /* translate, not transform: growing (scale) then happens around the
