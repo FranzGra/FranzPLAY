@@ -164,6 +164,21 @@ func (s store) clearBlock(ctx context.Context, key string) error {
 	return nil
 }
 
+// ClearBlocks forgets every block and every wrong try, of names and
+// addresses, and returns how many it forgot. It is the way back in when
+// someone keeps the only administrator blocked: "franzplay unblock".
+func ClearBlocks(ctx context.Context, db *sql.DB) (int64, error) {
+	res, err := db.ExecContext(ctx, `DELETE FROM login_blocks`)
+	if err != nil {
+		return 0, fmt.Errorf("clear login blocks: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("clear login blocks: %w", err)
+	}
+	return n, nil
+}
+
 // checkTries refuses a try when the account or the address is blocked.
 func (s *Service) checkTries(ctx context.Context, keys ...string) error {
 	wait, err := s.store.blockWait(ctx, keys, s.now())

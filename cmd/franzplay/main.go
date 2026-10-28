@@ -70,9 +70,12 @@ func main() {
 	// Stop cleanly on Ctrl+C or when the system asks the program to stop.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	var err error
-	if len(os.Args) > 1 && os.Args[1] == importOldCommand {
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == importOldCommand:
 		err = importOld(ctx, os.Args[2:], os.Getenv, os.Stdout)
-	} else {
+	case len(os.Args) > 1 && os.Args[1] == unblockCommand:
+		err = unblock(ctx, os.Args[2:], os.Getenv, os.Stdout)
+	default:
 		err = run(ctx, os.Getenv, os.Stderr)
 	}
 	stop()
