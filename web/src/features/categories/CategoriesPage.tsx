@@ -59,21 +59,27 @@ export function CategoriesPage() {
   );
 }
 
-// CategoryTile is a big card for a category. With the administrator's
-// image, the picture under a dark shade where the name is. Without one, as
-// in the old FranzPLAY: its color fading into dark, a grainy surface and a
-// big folder in the corner that straightens up under the mouse.
+// CategoryTile is a big card for a category. With a wide image (chosen by
+// the administrator, or found in its folder), the picture under a dark
+// shade where the name is. With only a tall poster from its folder, the
+// poster stands in the corner of its colored card, like a book on a
+// shelf. Without either, as in the old FranzPLAY: its color fading into
+// dark, a grainy surface and a big folder in the corner that straightens
+// up under the mouse.
 function CategoryTile({ category }: { category: Category }) {
-  const image = category.image;
+  const { image, poster } = category;
   return (
     <Link
       to={`/categorie/${encodeURIComponent(category.name)}`}
       className={styles.tile}
       data-image={image ? "" : undefined}
+      data-poster={!image && poster ? "" : undefined}
       style={{ "--tile-color": tileColor(category) } as CSSProperties}
     >
       {image ? (
         <img className={styles.image} src={image} alt="" loading="lazy" decoding="async" />
+      ) : poster ? (
+        <img className={styles.poster} src={poster} alt="" loading="lazy" decoding="async" />
       ) : (
         <span className={styles.folder}>
           <Icon name="folder" size={160} />
