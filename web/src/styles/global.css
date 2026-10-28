@@ -387,6 +387,12 @@ input {
   animation-timing-function: var(--ease-in-out);
 }
 
+/* While the page glides, taps and clicks go to the page beneath, not to
+   the browser's picture of it: a tap on the menu is never lost. */
+::view-transition {
+  pointer-events: none;
+}
+
 /* A video card's cover growing into the player, or the player shrinking
    back into its card (coverMorph in features/videos): the cover glides
    on a soft curve, the rest of the page only fades across, quickly. */
