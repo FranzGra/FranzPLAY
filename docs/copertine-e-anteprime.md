@@ -27,7 +27,8 @@ data/
 ├── clips/        le anteprime leggere (360p)
 ├── clips-hd/     le stesse anteprime, nitide (720p)
 ├── own-clips/    i video che hai caricato tu come anteprima
-└── previews/     i fotogrammi della timeline
+├── previews/     i fotogrammi della timeline
+└── category-pictures/  le copie leggere delle immagini delle categorie
 ```
 
 Il nome di ogni file cambia quando cambia il video, così il browser non mostra mai quello vecchio.
@@ -51,26 +52,67 @@ ingrandita): leggera da scaricare e nitida sul telefono e nella griglia del comp
 
 ### Usare un'immagine tua accanto al video
 
-Metti nella cartella del video un'immagine con **lo stesso nome del video**. Per `mare.mp4`
-FranzPLAY cerca, in quest'ordine:
+Metti nella cartella del video un'immagine con **lo stesso nome del video**: FranzPLAY usa quella
+come copertina e **non prende nessun fotogramma** dal video. Per `mare.mp4` cerca, in
+quest'ordine:
 
 ```
-mare.jpg   mare.jpeg   mare.png   mare.webp
-mare-poster.jpg   mare-poster.png   mare-thumb.jpg   mare-thumb.png
+mare.jpg          mare.jpeg          mare.png          mare.webp
+mare-poster.jpg   mare-poster.jpeg   mare-poster.png   mare-poster.webp
+mare-thumb.jpg    mare-thumb.jpeg    mare-thumb.png    mare-thumb.webp
+mare-cover.jpg    mare-cover.jpeg    mare-cover.png    mare-cover.webp
 ```
 
-È lo stesso modo in cui **yt-dlp** salva le copertine con `--write-thumbnail`, quindi i video
-scaricati così hanno già la loro copertina. L'immagine viene **solo letta**: FranzPLAY non la
-sposta, non la rinomina e non la cambia.
+- **Maiuscole e minuscole non contano**: va bene anche `MARE.JPG`.
+- Sono gli stessi nomi che usano **Jellyfin** e **Kodi**, e il modo in cui **yt-dlp** salva le
+  copertine con `--write-thumbnail`: i video scaricati così hanno già la loro copertina.
+- L'immagine viene **solo letta**: FranzPLAY non la sposta, non la rinomina e non la cambia. Ne fa
+  una copia leggera (JPEG largo 640 pixel, tagliato in 16:9 al centro come tutte le copertine)
+  nella cartella dati.
+- **Puoi metterla quando vuoi**, anche dopo che il video è già su FranzPLAY: al controllo successivo
+  delle cartelle (entro un minuto, oppure subito con **Amministrazione › Cartelle ›
+  Controlla adesso**) la copertina cambia da sola. Lo stesso se **sostituisci** l'immagine con un'altra
+  o la **togli**: senza immagine si torna al fotogramma del video.
+- Se in **Amministrazione › Video › Copertina** hai scelto tu una copertina, vince sempre la tua
+  scelta. Per tornare all'immagine nella cartella premi **Torna a quella automatica**.
 
-**Attenzione:** l'immagine viene cercata quando la copertina viene creata, cioè quando il video
-arriva o cambia. Se la metti **dopo**, il video tiene la copertina che aveva. Per fargliela
-prendere:
+## L'immagine delle categorie
 
-- se la copertina era una scelta tua: in **Amministrazione › Video › Copertina** premi
-  **Torna a quella automatica**;
-- se era automatica: premi **Scegli un momento**, poi **Usa il momento** (uno qualsiasi), poi
-  **Torna a quella automatica**. La copertina viene rifatta e trova l'immagine.
+Ogni sottocartella della cartella video è una **categoria** (i video in `Viaggi/` sono nella
+categoria Viaggi). Se dentro quella cartella metti un'immagine con uno di questi nomi, diventa
+l'immagine della categoria al posto della card colorata con la cartellina:
+
+| Forma | Nomi (in ordine: vince il primo) |
+|---|---|
+| **verticale** (poster) | `poster` · `cover` · `folder` · `categoria` · `category` · `copertina` |
+| **orizzontale** | `landscape` · `backdrop` · `fanart` · `thumb` · `sfondo` · `background` |
+
+Con estensione `.jpg`, `.jpeg`, `.png` o `.webp`; maiuscole e minuscole non contano. Sono i nomi
+di **Jellyfin** e **Kodi**, quindi una cartella preparata per loro funziona già.
+
+```
+Viaggi/
+├── poster.jpg      verticale: il "libro" nella card e accanto al nome
+├── fanart.jpg      orizzontale: lo sfondo della card e della pagina
+├── Sardegna.mp4
+└── Roma.mp4
+```
+
+- **Conta la forma vera dell'immagine**, non il nome: un `poster.jpg` più largo che alto viene
+  usato come immagine orizzontale. Il nome serve solo a scegliere quando ce ne sono più di una.
+- Va messa **direttamente** nella cartella della categoria (non in una sottocartella).
+- Puoi metterle **entrambe**, solo una, o nessuna:
+  - **orizzontale**: riempie la card nella pagina **Categorie** e fa da sfondo alla fascia in cima
+    alla pagina della categoria;
+  - **solo verticale**: la card resta del suo colore e il poster sta nell'angolo, un po' inclinato
+    (si raddrizza passandoci sopra col mouse); nella pagina della categoria il poster sta accanto
+    al nome, e lo stesso poster sfocato fa da sfondo;
+  - **nessuna**: tutto resta com'era, con la card colorata e la cartellina.
+- Se in **Amministrazione › Categorie** hai caricato tu un'immagine, vince la tua al posto di
+  quella orizzontale.
+- Come per le copertine, l'immagine viene **solo letta**: FranzPLAY ne fa una copia leggera (lato
+  più lungo al massimo 1280 pixel) nella cartella dati. Se la aggiungi, la cambi o la togli, la
+  pagina si aggiorna da sola entro un minuto.
 
 ## L'anteprima sulla copertina
 
