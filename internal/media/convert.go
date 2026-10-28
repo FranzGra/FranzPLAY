@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -218,7 +219,7 @@ func (c *Converter) convert(ctx context.Context, videoID int64, file string, pla
 	if info.Size() == 0 {
 		return fmt.Errorf("convert video %d: ffmpeg wrote nothing", videoID)
 	}
-	if err := os.Rename(tmpName, filepath.Join(dir, name)); err != nil {
+	if err := safefile.Rename(tmpName, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("convert video %d: %w", videoID, err)
 	}
 	return nil

@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 )
 
 // SaveOwnFile writes a file chosen by the administrator (an uploaded
@@ -41,7 +43,7 @@ func SaveOwnFile(dir string, id int64, ext string, body io.Reader) (name string,
 	if err := tmp.Close(); err != nil {
 		return "", fmt.Errorf("save uploaded file: %w", err)
 	}
-	if err := os.Rename(tmp.Name(), filepath.Join(dir, name)); err != nil {
+	if err := safefile.Rename(tmp.Name(), filepath.Join(dir, name)); err != nil {
 		return "", fmt.Errorf("save uploaded file: %w", err)
 	}
 	return name, nil

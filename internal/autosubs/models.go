@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 )
 
 // Model is a whisper model FranzPLAY can download by itself, so nobody
@@ -201,7 +202,7 @@ func (d *Downloader) download(parent context.Context, m Model) (err error) {
 	if got := hex.EncodeToString(sum.Sum(nil)); got != m.sha1 {
 		return fmt.Errorf("the file is not the right one (checksum %s)", got)
 	}
-	return os.Rename(tmp.Name(), media.ModelFile(d.dataDir, m.Name))
+	return safefile.Rename(tmp.Name(), media.ModelFile(d.dataDir, m.Name))
 }
 
 // failure says to people why a download stopped. Without internet it

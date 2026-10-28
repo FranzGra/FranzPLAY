@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -112,7 +113,7 @@ func (t *Tracker) copySubtitles(ctx context.Context, videoID int64, file, finger
 	}
 	for _, sub := range subs {
 		name := subtitleName(videoID, fingerprint, sub.Stream)
-		if err := os.Rename(filepath.Join(work, strconv.Itoa(sub.Stream)+".vtt"), filepath.Join(dir, name)); err != nil {
+		if err := safefile.Rename(filepath.Join(work, strconv.Itoa(sub.Stream)+".vtt"), filepath.Join(dir, name)); err != nil {
 			return nil, errors.Join(fmt.Errorf("subtitles of video %d: %w", videoID, err), removeAll(dir, made))
 		}
 		made = append(made, name)

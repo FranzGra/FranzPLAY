@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -115,10 +116,10 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 	}
 
 	// The sharp clip first: until the database names it, nobody asks for it.
-	if err := os.Rename(tmpHD, filepath.Join(dirHD, name)); err != nil {
+	if err := safefile.Rename(tmpHD, filepath.Join(dirHD, name)); err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
 	}
-	if err := os.Rename(tmp, filepath.Join(dir, name)); err != nil {
+	if err := safefile.Rename(tmp, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
 	}
 	res, err := c.db.ExecContext(ctx, `UPDATE videos SET clip = ?, clip_hd = ? WHERE id = ? AND fingerprint = ?`,
