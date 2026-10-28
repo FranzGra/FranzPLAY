@@ -23,7 +23,27 @@ func New(version string, logger *slog.Logger, ui http.Handler, features ...Route
 	// Unknown API addresses must answer 404, not the web interface.
 	mux.HandleFunc("/api/", handleAPINotFound(logger))
 	mux.Handle("/", ui)
-	return mux
+	return secureHeaders(mux)
+}
+
+// contentPolicy lets pages run only FranzPLAY's own scripts and stops other
+// sites from showing FranzPLAY inside a frame of theirs (clickjacking).
+// Images and media stay unrestricted: online covers come from other sites.
+const contentPolicy = "script-src 'self'; object-src 'none'; base-uri 'self'; " +
+	"form-action 'self'; frame-ancestors 'self'"
+
+// secureHeaders adds the browser protections every answer should carry.
+// A handler can still replace one of them, as the public link pages do
+// with Referrer-Policy.
+func secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy", contentPolicy)
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "SAMEORIGIN")
+		h.Set("Referrer-Policy", "same-origin")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // handleMethodNotAllowed answers a known API address called with the wrong method.
