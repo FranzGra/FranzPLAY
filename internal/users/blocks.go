@@ -280,6 +280,39 @@ func (s *Service) clientAddr(r *http.Request) string {
 	return realAddr(r, trusted)
 }
 
+// limitsAddress says whether wrong logins from this request may block its
+// address. Not when the request comes through a reverse proxy at home (a
+// private address) that is not among the trusted ones: then every person seems to come from the
+// proxy's address, and twenty wrong tries by a stranger would lock the
+// whole family out. The names stay protected by their own blocks.
+func (s *Service) limitsAddress(r *http.Request) bool {
+	if r.Header.Get("X-Forwarded-For") == "" {
+		return true
+	}
+	s.mu.Lock()
+	trusted := s.trusted
+	s.mu.Unlock()
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil || isTrusted(peer, trusted) {
+		return true
+	}
+	// A proxy sits at home or in the same computer: a public address that
+	// writes X-Forwarded-For is someone trying to escape the blocks.
+	if peer = peer.Unmap(); !peer.IsPrivate() && !peer.IsLoopback() && !peer.IsLinkLocalUnicast() {
+		return true
+	}
+	s.proxyWarned.Do(func() {
+		s.logger.WarnContext(r.Context(), "a reverse proxy that is not trusted sends X-Forwarded-For: "+
+			"wrong logins block only names, not addresses; add the proxy to FRANZPLAY_TRUSTED_PROXIES",
+			"proxy", host)
+	})
+	return false
+}
+
 func realAddr(r *http.Request, trusted []netip.Prefix) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -380,4 +382,57 @@ func TestDeleteAccountWithPattern(t *testing.T) {
 	expect(t, login(b, "Luca", "15963"), http.StatusOK)
 	expect(t, b.do("DELETE", "/api/me", map[string]string{"password": "36951"}), http.StatusForbidden)
 	expect(t, b.do("DELETE", "/api/me", map[string]string{"password": "15963"}), http.StatusNoContent)
+}
+
+// Behind a reverse proxy at home that nobody named in
+// FRANZPLAY_TRUSTED_PROXIES, everybody seems to come from the proxy: a
+// stranger's wrong tries must not lock the family out. The names stay
+// protected, and a public address that writes the header is still blocked.
+func TestStrangerBehindUntrustedProxyCannotLockEverybodyOut(t *testing.T) {
+	s := newSite(t)
+	s.setUp()
+	b := s.browser()
+	try := func(name, password, from string) *httptest.ResponseRecorder {
+		return b.do("POST", "/api/login", map[string]string{"name": name, "password": password},
+			"RemoteAddr", from, "X-Forwarded-For", "203.0.113.50")
+	}
+	proxy := "172.18.0.2:40000"
+	for i := range addressPolicy.threshold + 2 {
+		try("nome"+string(rune('a'+i)), "123456", proxy)
+	}
+	expect(t, try("Admin", "admin-password", proxy), http.StatusOK)
+
+	public := "198.51.100.7:5000"
+	for i := range addressPolicy.threshold {
+		try("altro"+string(rune('a'+i)), "123456", public)
+	}
+	expect(t, try("Admin", "admin-password", public), http.StatusTooManyRequests)
+}
+
+// Guesses sent all at once wait for each other: no more of them are
+// checked than the block allows.
+func TestGuessesAtOnceDoNotEscapeTheBlock(t *testing.T) {
+	s := newSite(t)
+	admin := s.setUp()
+	expect(t, admin.do("POST", "/api/users", map[string]any{
+		"name": "Nonna", "method": "pin", "password": "482915", "role": "user",
+	}), http.StatusCreated)
+
+	var wg sync.WaitGroup
+	for i := range 40 {
+		wg.Go(func() {
+			s.browser().do("POST", "/api/login",
+				map[string]string{"name": "Nonna", "password": fmt.Sprintf("%06d", i)},
+				"RemoteAddr", fmt.Sprintf("198.51.100.%d:5000", i+1))
+		})
+	}
+	wg.Wait()
+	// Every guess really checked is written in the access log as wrong.
+	var checked int
+	if err := s.db.QueryRow(`SELECT count(*) FROM logins WHERE outcome = ?`, string(WrongPassword)).Scan(&checked); err != nil {
+		t.Fatal(err)
+	}
+	if checked > secretPolicy.threshold {
+		t.Errorf("%d guesses were checked, want at most %d", checked, secretPolicy.threshold)
+	}
 }
