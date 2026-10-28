@@ -39,3 +39,6 @@ node_modules/
 /web/dist/
 .DS_Store
 /internal/webui/dist/app/
+
+# Browser snapshots left by local test tools
+.playwright-cli/
