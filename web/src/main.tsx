@@ -7,6 +7,7 @@ import { App } from "./app/App";
 import { installBackMorph } from "./features/videos/coverMorph";
 import { weakDevice } from "./lib/richMotion";
 import { installScrollMemory, scrollToSaved } from "./lib/scrollMemory";
+import { installSingleClickLinks } from "./lib/singleClickLinks";
 
 const root = document.getElementById("root");
 if (!root) {
@@ -15,6 +16,8 @@ if (!root) {
 
 // Weak devices get lighter glass (styles/global.css).
 if (weakDevice()) document.documentElement.dataset.weak = "";
+
+installSingleClickLinks();
 
 // Before the router: both listen to the back button first.
 installScrollMemory();
