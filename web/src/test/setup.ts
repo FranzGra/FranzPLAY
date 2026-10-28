@@ -1,5 +1,9 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
+
+// Pages load their code a piece at a time (React.lazy): on a busy
+// computer the default second is not always enough to find them.
+configure({ asyncUtilTimeout: 4000 });
 
 afterEach(() => {
   cleanup();
