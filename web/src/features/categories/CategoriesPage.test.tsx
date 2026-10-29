@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 import { tileColor } from "./color";
@@ -67,6 +67,50 @@ describe("categories", () => {
     );
   });
 
+  it("stands the poster found in the folder in the corner of the card", async () => {
+    renderApp("/categorie", {
+      ...signedIn(),
+      "GET /api/categories": {
+        body: [
+          {
+            name: "Viaggi",
+            videos: 4,
+            color: "",
+            image: null,
+            poster: "/api/category-pictures/1-7fq2.jpg",
+          },
+        ],
+      },
+    });
+    const link = await screen.findByRole("link", { name: /Viaggi/ });
+    expect(link).toHaveAttribute("data-poster");
+    expect(link).not.toHaveAttribute("data-image");
+    expect(link.querySelector("img")).toHaveAttribute("src", "/api/category-pictures/1-7fq2.jpg");
+    // No folder drawn: the poster takes its place.
+    expect(link.querySelector("svg")).toBeNull();
+  });
+
+  it("prefers the wide picture to the poster on the card", async () => {
+    renderApp("/categorie", {
+      ...signedIn(),
+      "GET /api/categories": {
+        body: [
+          {
+            name: "Viaggi",
+            videos: 4,
+            color: "",
+            image: "/api/category-pictures/2-3k9x.jpg",
+            poster: "/api/category-pictures/1-7fq2.jpg",
+          },
+        ],
+      },
+    });
+    const link = await screen.findByRole("link", { name: /Viaggi/ });
+    expect(link).toHaveAttribute("data-image");
+    expect(link.querySelectorAll("img")).toHaveLength(1);
+    expect(link.querySelector("img")).toHaveAttribute("src", "/api/category-pictures/2-3k9x.jpg");
+  });
+
   it("explains where categories come from when there are none", async () => {
     renderApp("/categorie");
     expect(
@@ -99,5 +143,59 @@ describe("categories", () => {
     expect(await screen.findByRole("list", { name: "Video di Gite & mare" })).toBeInTheDocument();
     const url = new URL(server.requests.find((r) => r.url.includes("/api/videos"))?.url ?? "");
     expect(url.searchParams.get("category")).toBe("Gite & mare");
+  });
+
+  it("opens a category with pictures with a band: picture behind, poster beside the name", async () => {
+    renderApp("/categorie/Viaggi", {
+      ...signedIn(),
+      "GET /api/videos": { body: { videos: [], total: 0 } },
+      "GET /api/categories": {
+        body: [
+          {
+            name: "Viaggi",
+            videos: 4,
+            color: "",
+            image: "/api/category-pictures/2-3k9x.jpg",
+            poster: "/api/category-pictures/1-7fq2.jpg",
+          },
+        ],
+      },
+    });
+    // The plain title first, then the band when the pictures arrive.
+    const band = await waitFor(() => {
+      const found = screen.getByRole("heading", { level: 1, name: "Viaggi" }).closest("header");
+      expect(found).not.toBeNull();
+      return found;
+    });
+    const sources = [...(band?.querySelectorAll("img") ?? [])].map((i) => i.getAttribute("src"));
+    expect(sources).toEqual([
+      "/api/category-pictures/2-3k9x.jpg",
+      "/api/category-pictures/1-7fq2.jpg",
+    ]);
+    expect(band).not.toHaveAttribute("data-blur");
+    expect(screen.getByText("4 video")).toBeInTheDocument();
+  });
+
+  it("blurs the poster behind the band when there is no wide picture", async () => {
+    renderApp("/categorie/Viaggi", {
+      ...signedIn(),
+      "GET /api/videos": { body: { videos: [], total: 0 } },
+      "GET /api/categories": {
+        body: [
+          {
+            name: "Viaggi",
+            videos: 4,
+            color: "",
+            image: null,
+            poster: "/api/category-pictures/1-7fq2.jpg",
+          },
+        ],
+      },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Viaggi" }).closest("header"),
+      ).toHaveAttribute("data-blur"),
+    );
   });
 });

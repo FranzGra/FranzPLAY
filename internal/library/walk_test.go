@@ -1,13 +1,17 @@
 package library
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
 func paths(files []found) []string {
@@ -114,4 +118,62 @@ func lockDir(t *testing.T, dir string, mode os.FileMode) {
 			t.Error(err)
 		}
 	})
+}
+
+func TestListCoverImages(t *testing.T) {
+	mod := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	fsys := fstest.MapFS{
+		"mare.mp4":                   {Data: []byte("x")},
+		"mare.jpg":                   {Data: []byte("x"), ModTime: mod},
+		"Viaggi/montagna.mkv":        {Data: []byte("x")},
+		"Viaggi/MONTAGNA-POSTER.PNG": {Data: []byte("xy"), ModTime: mod},
+		"Viaggi/lago.mp4":            {Data: []byte("x")},
+		"Viaggi/poster.jpg":          {Data: []byte("x")},
+		"Altro/mare.mp4":             {Data: []byte("x")}, // mare.jpg is in another folder
+		".nascosta/mare.jpg":         {Data: []byte("x")},
+	}
+
+	covers := list(fsys, 1).coverImages()
+
+	want := map[string]string{
+		"mare.mp4":            video.ImageVersion("mare.jpg", 1, mod.UnixNano()),
+		"Viaggi/montagna.mkv": video.ImageVersion("MONTAGNA-POSTER.PNG", 2, mod.UnixNano()),
+		"Viaggi/lago.mp4":     "",
+		"Altro/mare.mp4":      "",
+	}
+	if !maps.Equal(covers, want) {
+		t.Errorf("coverImages = %q, want %q", covers, want)
+	}
+}
+
+func TestListCategoryPictures(t *testing.T) {
+	mod := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	fsys := fstest.MapFS{
+		"poster.jpg":             {Data: []byte("x")}, // the library itself is no category
+		"Viaggi/mare.mp4":        {Data: []byte("x")},
+		"Viaggi/Poster.JPG":      {Data: []byte("xy"), ModTime: mod},
+		"Viaggi/fanart.webp":     {Data: []byte("x")},
+		"Viaggi/mare.jpg":        {Data: []byte("x")},
+		"Viaggi/2025/poster.jpg": {Data: []byte("x")}, // a sub-folder is no category
+		"Corsi/lezione.webm":     {Data: []byte("x")},
+		"Corsi/._poster.jpg":     {Data: []byte("x")},
+		".nascosta/poster.jpg":   {Data: []byte("x")},
+	}
+
+	got := list(fsys, 1).categoryPictures()
+	slices.SortFunc(got, func(a, b categoryPicture) int { return strings.Compare(a.path, b.path) })
+
+	want := []categoryPicture{
+		{path: "Viaggi/Poster.JPG", category: "Viaggi", size: 2, modTime: mod.UnixNano()},
+		{path: "Viaggi/fanart.webp", category: "Viaggi", size: 1},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("categoryPictures = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i].path != want[i].path || got[i].category != want[i].category || got[i].size != want[i].size ||
+			(want[i].modTime != 0 && got[i].modTime != want[i].modTime) {
+			t.Errorf("picture %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
 }

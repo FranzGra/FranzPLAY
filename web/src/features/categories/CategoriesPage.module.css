@@ -131,6 +131,34 @@
   }
 }
 
+/* A tall poster from the category's folder, standing in the corner like a
+   book, a little tilted and half out of the card: under the mouse it
+   straightens up and comes in, like the folder of the cards without one. */
+.poster {
+  position: absolute;
+  right: 7%;
+  bottom: -14%;
+  z-index: -1;
+  height: 86%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-s);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 14px 30px rgb(0 0 0 / 0.5);
+  rotate: 6deg;
+  transition:
+    rotate 500ms var(--ease-out),
+    translate 500ms var(--ease-out);
+}
+
+@media (hover: hover) {
+  .tile:hover .poster {
+    rotate: 0deg;
+    translate: 0 -12%;
+  }
+}
+
 /* A long name stops at two lines, with "…". */
 .name {
   display: -webkit-box;
@@ -144,6 +172,11 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+}
+
+/* The name stays clear of the poster. */
+.tile[data-poster] .name {
+  max-width: 58%;
 }
 
 .count {
@@ -203,4 +236,101 @@
 
 .back a:hover {
   background: var(--glass-bg-strong);
+}
+
+/* The band at the top of a category with pictures: the wide picture
+   behind (or the poster, blurred), a shade that keeps the words readable,
+   the poster and the name at the bottom left. */
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  min-height: 240px;
+  margin: 0 0 28px;
+  padding: 28px;
+  border-radius: var(--radius-l);
+  background: color-mix(in srgb, var(--tile-color) 30%, #000);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 12px 32px rgb(0 0 0 / 0.35);
+  color: #fff;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.85), rgb(0 0 0 / 0.35) 55%, rgb(0 0 0 / 0.1));
+  pointer-events: none;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Only a poster: blown up and blurred, it gives the band its colors. */
+.hero[data-blur] .backdrop {
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  filter: blur(36px) saturate(1.3);
+  opacity: 0.8;
+}
+
+.heroPoster {
+  flex: none;
+  width: 140px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-s);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.16),
+    0 16px 36px rgb(0 0 0 / 0.55);
+}
+
+.heroText {
+  min-width: 0;
+}
+
+.heroName {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.4);
+}
+
+.heroCount {
+  margin: 8px 0 0;
+  color: rgb(255 255 255 / 0.8);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 599px) {
+  .hero {
+    gap: 16px;
+    min-height: 180px;
+    padding: 18px;
+  }
+
+  .heroPoster {
+    width: 96px;
+    border-radius: var(--radius-xs);
+  }
+
+  .heroName {
+    font-size: 26px;
+  }
 }

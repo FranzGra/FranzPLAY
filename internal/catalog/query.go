@@ -188,6 +188,8 @@ func validMadeName(name, ext string) bool {
 		return len(tag) <= 5
 	case 'o': // an uploaded file
 		return isHex(tag[1:]) && len(tag) <= 9
+	case 'i': // a picture next to the video (video.ImageVersion)
+		return isHex(tag[1:]) && len(tag) == 9
 	default:
 		return false
 	}

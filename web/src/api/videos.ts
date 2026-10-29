@@ -93,7 +93,12 @@ export type Category = {
   name: string;
   videos: number;
   color: string; // chosen by the administrator, like "#2997ff"; "" = none
-  image: string | null; // address of its image; null = none
+  // image is the address of its wide picture: the one the administrator
+  // chose, else one in its folder (like fanart.jpg); null = none.
+  image: string | null;
+  // poster is the address of a tall picture in its folder (like
+  // poster.jpg); null = none.
+  poster: string | null;
   // cover is the cover of its newest video, for a card without an image.
   cover: string | null;
 };
@@ -250,6 +255,16 @@ export function parseVideoList(data: unknown): VideoList {
   return { videos: l.videos.map(parseVideo), total: count(l.total, "video list total") };
 }
 
+// isCategoryPicture says whether an address is one of the server's
+// pictures of a category: chosen by the administrator, or found in its
+// folder.
+function isCategoryPicture(address: unknown): address is string {
+  return (
+    typeof address === "string" &&
+    (address.startsWith("/api/category-images/") || address.startsWith("/api/category-pictures/"))
+  );
+}
+
 export function parseCategories(data: unknown): Category[] {
   if (!Array.isArray(data)) {
     throw new Error("categories: not a list");
@@ -262,11 +277,12 @@ export function parseCategories(data: unknown): Category[] {
     if (typeof c.color !== "string" || (c.color !== "" && !/^#[0-9a-f]{6}$/.test(c.color))) {
       throw new Error("category color: not a color");
     }
-    if (
-      c.image !== null &&
-      (typeof c.image !== "string" || !c.image.startsWith("/api/category-images/"))
-    ) {
+    if (c.image !== null && !isCategoryPicture(c.image)) {
       throw new Error("category image: not an image address");
+    }
+    const poster = c.poster ?? null;
+    if (poster !== null && !isCategoryPicture(poster)) {
+      throw new Error("category poster: not an image address");
     }
     const cover = c.cover ?? null;
     if (cover !== null && (typeof cover !== "string" || !cover.startsWith("/api/covers/"))) {
@@ -277,6 +293,7 @@ export function parseCategories(data: unknown): Category[] {
       videos: count(c.videos, "category videos"),
       color: c.color,
       image: c.image,
+      poster,
       cover,
     };
   });

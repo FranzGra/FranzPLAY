@@ -142,9 +142,23 @@ describe("parseCategories", () => {
       videos: 1,
       color: "",
       image: null,
+      poster: null,
       cover: "/api/covers/4-0a1b.jpg",
     };
-    expect(parseCategories([vacanze, corsi])).toEqual([{ ...vacanze, cover: null }, corsi]);
+    // Pictures found in the folder of the category.
+    const viaggi = {
+      name: "Viaggi",
+      videos: 2,
+      color: "",
+      image: "/api/category-pictures/2-3k9x.jpg",
+      poster: "/api/category-pictures/1-7fq2.jpg",
+      cover: null,
+    };
+    expect(parseCategories([vacanze, corsi, viaggi])).toEqual([
+      { ...vacanze, poster: null, cover: null },
+      corsi,
+      viaggi,
+    ]);
   });
 
   it.each([
@@ -157,6 +171,10 @@ describe("parseCategories", () => {
     ],
     ["a bad color", [{ name: "Vacanze", videos: 3, color: "red", image: null }]],
     ["a foreign image", [{ name: "Vacanze", videos: 3, color: "", image: "https://x/y.jpg" }]],
+    [
+      "a foreign poster",
+      [{ name: "Vacanze", videos: 3, color: "", image: null, poster: "https://x/y.jpg" }],
+    ],
   ])("rejects %s", (_label, data) => {
     expect(() => parseCategories(data)).toThrow();
   });

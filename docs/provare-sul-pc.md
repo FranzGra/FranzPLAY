@@ -151,8 +151,9 @@ dopo arriva anche la sua copertina. Il server avvisa il browser quando la librer
 pagina chiede di nuovo l'elenco.
 
 **Copertina tua.** Se accanto a un video c'è un'immagine con lo stesso nome (per esempio
-`mare.jpg` accanto a `mare.mp4`, oppure `mare-poster.jpg`), FranzPLAY usa quella. Altrimenti prende
-un fotogramma a un decimo del video (al massimo al primo minuto), così evita gli inizi neri.
+`mare.jpg` accanto a `mare.mp4`, oppure `mare-poster.jpg`), FranzPLAY usa quella, anche se la metti
+dopo. Altrimenti prende un fotogramma a un decimo del video (al massimo al primo minuto), così evita
+gli inizi neri. Tutti i nomi in [Copertine e anteprime](copertine-e-anteprime.md).
 
 ### Il primo accesso
 

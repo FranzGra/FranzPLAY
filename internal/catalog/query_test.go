@@ -93,6 +93,12 @@ func TestValidMadeName(t *testing.T) {
 		"12-0a1b2c3d-s30-s30.jpg":      false,
 		"12-0a1b2c3d-s30/../../x.jpg":  false,
 		"12-0a1b2c3d-s12345678901.jpg": false,
+		// A picture next to the video, by its version.
+		"12-0a1b2c3d-i89abcdef.jpg":  true,
+		"12-0a1b2c3d-i89abcde.jpg":   false,
+		"12-0a1b2c3d-i89abcdefg.jpg": false,
+		// The light copy of a picture of a category.
+		"3-89abcdef.jpg": true,
 		// Previews, with the width of their frames.
 		"12-0a1b2c3d-w480.jpg":   true,
 		"12-0a1b2c3d-w.jpg":      false,

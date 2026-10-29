@@ -14,6 +14,7 @@ import (
 
 	"github.com/FranzGra/FranzPLAY/internal/online"
 	"github.com/FranzGra/FranzPLAY/internal/safefile"
+	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
 // CoversDir is the folder, inside the data folder, that holds the covers.
@@ -27,15 +28,6 @@ const OwnCoversDir = "own-covers"
 // coverWidth is the width of every cover. 640 pixels look sharp on a phone
 // and in the grid on a computer, and weigh about 30-60 KB.
 const coverWidth = 640
-
-// sidecarImages are the images, next to a video and with its name, that
-// are used as its cover instead of a frame of the video. For "mare.mp4"
-// that is "mare.jpg", "mare-poster.jpg" and so on, in this order. yt-dlp
-// saves covers this way with --write-thumbnail.
-var sidecarImages = []string{
-	".jpg", ".jpeg", ".png", ".webp",
-	"-poster.jpg", "-poster.png", "-thumb.jpg", "-thumb.png",
-}
 
 // coverSecond picks the moment of the video used as cover: one tenth in,
 // so it is past black openings and titles, but at most one minute in.
@@ -56,20 +48,25 @@ func coverName(videoID int64, fingerprint string) string {
 
 // coverChoice is where a cover comes from, besides the video itself.
 type coverChoice struct {
-	own        string        // image uploaded by the administrator (full path), "" if none
-	second     sql.NullInt64 // moment of the video chosen by the administrator
-	downloaded string        // picture found on the internet (full path), "" if none
+	own           string        // image uploaded by the administrator (full path), "" if none
+	second        sql.NullInt64 // moment of the video chosen by the administrator
+	beside        string        // picture next to the video, with its name (full path), "" if none
+	besideVersion string        // changes when that picture is replaced
+	downloaded    string        // picture found on the internet (full path), "" if none
 }
 
-// tag tells apart the covers the administrator chose, so the name of the
-// cover changes with the choice and browsers never show the old one.
-// It is "" for the cover FranzPLAY picks by itself.
+// tag tells apart the covers the administrator chose, and the ones made
+// from a picture next to the video, so the name of the cover changes with
+// them and browsers never show the old one. It is "" for the cover
+// FranzPLAY picks by itself.
 func (c coverChoice) tag() string {
 	switch {
 	case c.own != "":
 		return "o" + ownTag(c.own)
 	case c.second.Valid:
 		return "s" + strconv.FormatInt(c.second.Int64, 10)
+	case c.beside != "":
+		return "i" + c.besideVersion
 	default:
 		return ""
 	}
@@ -137,6 +134,9 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 	if ownImage.Valid {
 		choice.own = filepath.Join(c.dataDir, OwnCoversDir, filepath.Base(ownImage.String))
 	}
+	if choice.beside, choice.besideVersion, err = findBesideImage(file); err != nil {
+		return fmt.Errorf("cover of video %d: %w", videoID, err)
+	}
 	if onlineImage.Valid {
 		choice.downloaded = filepath.Join(c.dataDir, online.Dir, filepath.Base(onlineImage.String))
 	}
@@ -186,9 +186,9 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 }
 
 // coverArgs builds the ffmpeg command. The administrator's choice comes
-// first: an image they uploaded, cut to 16:9 like the covers of the grid,
-// or a moment of the video. Then an image next to the video if there is
-// one, the picture found on the internet, and last a frame of the video
+// first: an image they uploaded, or a moment of the video. Then a picture
+// next to the video if there is one, the picture found on the internet,
+// and last a frame of the video
 // picked by FranzPLAY. All end as a JPEG coverWidth wide (or smaller, never
 // enlarged). Going through ffmpeg also means a file that is not really a
 // picture never becomes a cover.
@@ -201,16 +201,19 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 func (c *Coverer) coverArgs(video string, duration int64, choice coverChoice, keyOnly bool, out string) []string {
 	args := []string{"-v", "error", "-y"}
 	scale := "scale='min(" + strconv.Itoa(coverWidth) + ",iw)':-2"
-	switch image, found := findSidecar(video); {
+	// A picture is cut to the largest 16:9 rectangle in its middle, like
+	// the covers of the grid: a tall poster shows its middle, as on a card.
+	const crop = "crop='min(iw,ih*16/9)':'min(ih,iw*9/16)',"
+	switch {
 	case choice.own != "":
 		args = append(args, "-i", "file:"+choice.own)
-		// The largest 16:9 rectangle in the middle of the image.
-		scale = "crop='min(iw,ih*16/9)':'min(ih,iw*9/16)'," + scale
+		scale = crop + scale
 	case choice.second.Valid:
 		// -ss before -i jumps straight to the moment instead of decoding up to it.
 		args = append(args, "-ss", strconv.FormatInt(choice.second.Int64, 10), "-i", "file:"+video)
-	case found:
-		args = append(args, "-i", "file:"+image)
+	case choice.beside != "":
+		args = append(args, "-i", "file:"+choice.beside)
+		scale = crop + scale
 	case choice.downloaded != "":
 		args = append(args, "-i", "file:"+choice.downloaded)
 	default:
@@ -226,17 +229,37 @@ func (c *Coverer) coverArgs(video string, duration int64, choice coverChoice, ke
 		"-f", "image2", "file:"+out)
 }
 
-// findSidecar looks for an image next to the video, with the same name.
-// It only checks whether files exist: nothing is written there.
-func findSidecar(video string) (string, bool) {
-	base := strings.TrimSuffix(video, filepath.Ext(video))
-	for _, suffix := range sidecarImages {
-		candidate := base + suffix
-		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
-			return candidate, true
+// findBesideImage looks for a picture next to the video, with its name
+// (video.CoverImage says which), and returns its full path and version,
+// or "" when there is none. It only reads the folder: nothing is written
+// there (rule 1).
+func findBesideImage(file string) (image, version string, err error) {
+	entries, err := os.ReadDir(filepath.Dir(file))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", "", nil // the video is gone too: making its cover fails next
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("look for a picture next to the video: %w", err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Type().IsRegular() {
+			names = append(names, e.Name())
 		}
 	}
-	return "", false
+	name, ok := video.CoverImage(filepath.Base(file), names)
+	if !ok {
+		return "", "", nil
+	}
+	image = filepath.Join(filepath.Dir(file), name)
+	info, err := os.Stat(image)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", "", nil // gone while we looked
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("look for a picture next to the video: %w", err)
+	}
+	return image, video.ImageVersion(name, info.Size(), info.ModTime().UnixNano()), nil
 }
 
 // removeFile deletes a file of the data folder, like a cover. A file

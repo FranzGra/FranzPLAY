@@ -42,8 +42,11 @@ type Scanner struct {
 	open      func(dir string) fs.FS
 	newJobs   func()
 	changed   func()
-	scanning  func(bool)
-	asked     chan struct{} // a scan asked for by the administrator
+	// categoryPictures makes the light copies of the pictures of the
+	// categories that are new or changed.
+	categoryPictures func(context.Context)
+	scanning         func(bool)
+	asked            chan struct{} // a scan asked for by the administrator
 
 	mu     sync.Mutex
 	status Status
@@ -74,22 +77,28 @@ const retryUnreadable = time.Hour
 // NewScanner returns a scanner for the given video folders.
 func NewScanner(db *sql.DB, libraries []string, logger *slog.Logger) *Scanner {
 	return &Scanner{
-		store:     store{db: db},
-		libraries: libraries,
-		logger:    logger,
-		now:       time.Now,
-		open:      os.DirFS, // read-only view of the folder
-		newJobs:   func() {},
-		changed:   func() {},
-		scanning:  func(bool) {},
-		asked:     make(chan struct{}, 1),
-		status:    Status{Folders: map[string]FolderState{}},
+		store:            store{db: db},
+		libraries:        libraries,
+		logger:           logger,
+		now:              time.Now,
+		open:             os.DirFS, // read-only view of the folder
+		newJobs:          func() {},
+		changed:          func() {},
+		categoryPictures: func(context.Context) {},
+		scanning:         func(bool) {},
+		asked:            make(chan struct{}, 1),
+		status:           Status{Folders: map[string]FolderState{}},
 	}
 }
 
 // OnNewJobs sets what to call when a scan adds work to the job queue,
 // usually waking the job worker.
 func (s *Scanner) OnNewJobs(f func()) { s.newJobs = f }
+
+// OnCategoryPictures sets what to call when a scan finds pictures of the
+// categories that are new or changed: it makes their light copies, and
+// the scan waits for it. A few pictures take well under a second.
+func (s *Scanner) OnCategoryPictures(f func(context.Context)) { s.categoryPictures = f }
 
 // OnChange sets what to call when a scan changes the list of videos,
 // usually telling the open pages.
@@ -196,6 +205,10 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	folders := make(map[int64]fs.FS, len(ids))
 	trusted := make(map[int64]bool, len(ids))
 	var files []found
+	// The pictures next to the videos, of the libraries read completely:
+	// a folder that could not be read must not take a cover away.
+	covers := make(map[int64]map[string]string, len(ids))
+	categoryPictures := make(map[int64][]categoryPicture, len(ids))
 	for _, dir := range s.libraries {
 		id := ids[dir]
 		folders[id] = s.open(dir)
@@ -217,6 +230,10 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 		}
 		folderStates[dir] = state
 		files = append(files, l.files...)
+		if l.complete() {
+			covers[id] = l.coverImages()
+			categoryPictures[id] = l.categoryPictures()
+		}
 	}
 
 	// 2. Read the fingerprint of the files that are new or changed.
@@ -280,7 +297,30 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	if err := s.store.apply(ctx, ch, now); err != nil {
 		return report, err
 	}
-	if len(ch.added) > 0 || len(ch.updates) > 0 {
+	newCovers := 0
+	for id, c := range covers {
+		n, err := s.store.syncCoverImages(ctx, id, c, now)
+		if err != nil {
+			return report, err
+		}
+		newCovers += n
+	}
+	if newCovers > 0 {
+		s.logger.InfoContext(ctx, "pictures next to videos changed: covers made again", "videos", newCovers)
+	}
+	picturesToMake, picturesGone := false, false
+	for id, pictures := range categoryPictures {
+		toMake, forgot, err := s.store.syncCategoryPictures(ctx, id, pictures)
+		if err != nil {
+			return report, err
+		}
+		picturesToMake = picturesToMake || toMake
+		picturesGone = picturesGone || forgot
+	}
+	if picturesToMake {
+		s.categoryPictures(ctx)
+	}
+	if len(ch.added) > 0 || len(ch.updates) > 0 || newCovers > 0 {
 		s.newJobs()
 	}
 	forgotten, err := s.store.forget(ctx, now.Add(-ForgetAfter))
@@ -312,7 +352,7 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 			report.Updated++
 		}
 	}
-	if report.Changed() {
+	if report.Changed() || picturesGone {
 		s.changed()
 	}
 	return report, nil

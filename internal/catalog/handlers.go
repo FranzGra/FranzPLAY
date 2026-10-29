@@ -24,6 +24,7 @@ import (
 //	GET /api/videos/{id}/subtitles/{key}  one subtitle, as WebVTT
 //	GET /api/categories                   categories with their number of videos, color and image
 //	GET /api/category-images/{name}       the image of a category
+//	GET /api/category-pictures/{name}     a picture found in the folder of a category
 //	GET /api/covers/{name}                a cover image
 //	GET /api/previews/{name}              the frames shown over the timeline
 //	GET /api/clips/{name}                 the seconds that play on a video's card
@@ -40,6 +41,7 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 		mux.HandleFunc("GET /api/videos/{id}/subtitles/{key}", h.subtitle)
 		mux.HandleFunc("GET /api/categories", h.categories)
 		mux.HandleFunc("GET /api/category-images/{name}", h.image(filepath.Join(dataDir, CategoryImagesDir)))
+		mux.HandleFunc("GET /api/category-pictures/{name}", h.image(filepath.Join(dataDir, media.CategoryPicturesDir)))
 		mux.HandleFunc("GET /api/covers/{name}", h.image(filepath.Join(dataDir, media.CoversDir)))
 		mux.HandleFunc("GET /api/previews/{name}", h.image(filepath.Join(dataDir, media.PreviewsDir)))
 		mux.HandleFunc("GET /api/clips/{name}", h.made(filepath.Join(dataDir, media.ClipsDir), ".mp4", "video/mp4"))

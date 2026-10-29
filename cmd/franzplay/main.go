@@ -141,7 +141,8 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		// Asks the internet only when the administrator turned a source on.
 		jobs.Online: tell(online.NewFetcher(db, cfg.DataDir).Handle),
 	}
-	var remux catalog.Remuxer // stays nil without ffmpeg and ffprobe
+	var remux catalog.Remuxer                        // stays nil without ffmpeg and ffprobe
+	var categoryPictures *media.CategoryPictureMaker // stays nil without ffmpeg
 	// The whisper models can be downloaded from the administration.
 	downloader := autosubs.NewDownloader(cfg.DataDir, autosubs.ModelsURL, func() { hub.Publish(events.Jobs) }, logger)
 	subtitles := autosubs.Options{DataDir: cfg.DataDir, Downloader: downloader}
@@ -160,6 +161,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 			"setting", config.EnvFFmpeg, "error", err)
 	} else {
 		handlers[jobs.Cover] = tell(media.NewCoverer(db, ffmpeg, cfg.DataDir).Handle)
+		categoryPictures = media.NewCategoryPictureMaker(db, ffmpeg, cfg.DataDir)
 		handlers[jobs.Preview] = media.NewPreviewer(db, ffmpeg, cfg.DataDir).Handle
 		// A ready clip plays on the video's card: the pages hear about it.
 		handlers[jobs.Clip] = tell(media.NewClipper(db, ffmpeg, cfg.DataDir).Handle)
@@ -198,6 +200,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		logger.Error("remove unused uploaded clips", "error", err)
 	} else if n > 0 {
 		logger.Info("removed unused uploaded clips", "count", n)
+	}
+	if n, err := media.RemoveOrphanCategoryPictures(ctx, db, cfg.DataDir); err != nil {
+		logger.Error("remove unused category pictures", "error", err)
+	} else if n > 0 {
+		logger.Info("removed unused category pictures", "count", n)
 	}
 	if n, err := catalog.RemoveOrphanCategoryImages(ctx, db, cfg.DataDir); err != nil {
 		logger.Error("remove unused category images", "error", err)
@@ -254,6 +261,17 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	scanner.OnNewJobs(worker.Wake)
 	scanner.OnChange(func() { hub.Publish(events.Library) })
 	scanner.OnScanning(func(bool) { hub.Publish(events.Scan) })
+	if categoryPictures != nil {
+		scanner.OnCategoryPictures(func(ctx context.Context) {
+			n, err := categoryPictures.Make(ctx)
+			if err != nil && ctx.Err() == nil {
+				logger.WarnContext(ctx, "pictures of the categories", "error", err)
+			}
+			if n > 0 {
+				hub.Publish(events.Library)
+			}
+		})
+	}
 	uploader.OnChange(func() { worker.Wake(); hub.Publish(events.Library) })
 
 	updater := updates.New(db, release, version, logger)
