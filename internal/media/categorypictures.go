@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -138,7 +139,7 @@ func (m *CategoryPictureMaker) makeCopy(ctx context.Context, dir string, p pendi
 	}
 	// The name changes with the picture, so a browser never shows the old one.
 	name = strconv.FormatInt(p.id, 10) + "-" + video.ImageVersion(p.path, p.size, p.modTime) + ".jpg"
-	if err := os.Rename(tmpName, filepath.Join(dir, name)); err != nil {
+	if err := safefile.Rename(tmpName, filepath.Join(dir, name)); err != nil {
 		return "", 0, 0, fmt.Errorf("picture of category %q: %w", p.category, err)
 	}
 	return name, w, h, nil
