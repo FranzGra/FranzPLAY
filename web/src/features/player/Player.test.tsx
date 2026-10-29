@@ -692,6 +692,9 @@ describe("player on a touch screen", () => {
     wait(hideAfter);
     expect(root).toHaveAttribute("data-controls", "hidden");
     tap(surface, root);
+    // Not at once: it could be the first half of a double tap.
+    expect(root).toHaveAttribute("data-controls", "hidden");
+    wait(doubleTapWithin);
     expect(root).toHaveAttribute("data-controls", "visible");
     wait(hideAfter - 100);
     expect(root).toHaveAttribute("data-controls", "visible");
@@ -699,11 +702,25 @@ describe("player on a touch screen", () => {
     expect(root).toHaveAttribute("data-controls", "hidden");
   });
 
+  it("shows only the jump icon on a double tap, never the controls", () => {
+    const { video, root, surface } = playing();
+    video.currentTime = 100;
+    wait(hideAfter);
+    tap(surface, root, 280);
+    wait(doubleTapWithin / 2);
+    expect(root).toHaveAttribute("data-controls", "hidden");
+    tap(surface, root, 280);
+    expect(video.currentTime).toBe(115);
+    expect(document.querySelector("[class*='flash']")).not.toBeNull();
+    wait(doubleTapWithin * 2);
+    expect(root).toHaveAttribute("data-controls", "hidden");
+  });
+
   it("keeps the controls up while a finger uses them", () => {
     const { root, surface } = playing();
     wait(hideAfter);
     tap(surface, root);
-    wait(hideAfter - 100);
+    wait(doubleTapWithin + hideAfter - 100);
     const forward = screen.getByRole("button", { name: "Avanti di 15 secondi (l)" });
     fireEvent.pointerDown(forward, { pointerType: "touch" });
     wait(hideAfter - 100);
@@ -743,7 +760,7 @@ describe("player on a touch screen", () => {
     fireEvent.doubleClick(surface);
     expect(video.currentTime).toBe(100);
     expect(fullscreen).not.toHaveBeenCalled();
-    expect(root).toHaveAttribute("data-controls", "visible");
+    expect(root).toHaveAttribute("data-controls", "hidden");
   });
 
   it("goes full screen on a double tap in the middle", () => {

@@ -142,6 +142,21 @@ test("on a phone a tap shows the controls and a double tap jumps", async ({ page
     .poll(() => player.evaluate((v: HTMLVideoElement) => v.currentTime))
     .toBeGreaterThan(before + 10);
   expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+
+  // With the controls away, a double tap shows only the jump icon: the
+  // controls never come up, not even between the two taps.
+  await expect(root).toHaveAttribute("data-controls", "hidden", { timeout: 10_000 });
+  await root.evaluate((el) => {
+    const seen = new MutationObserver(() => {
+      if (el.getAttribute("data-controls") === "visible") el.setAttribute("data-seen", "visible");
+    });
+    seen.observe(el, { attributes: true, attributeFilter: ["data-controls"] });
+  });
+  await page.touchscreen.tap(box.x + box.width * 0.15, y);
+  await page.touchscreen.tap(box.x + box.width * 0.15, y);
+  await page.waitForTimeout(800);
+  await expect(root).toHaveAttribute("data-controls", "hidden");
+  await expect(root).not.toHaveAttribute("data-seen", "visible");
 });
 
 // countGlides counts the browser's smooth page changes (view transitions) from
