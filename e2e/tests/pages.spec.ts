@@ -346,3 +346,30 @@ test("on the computer the search stays in the middle, whatever the site's name",
     await put("Franz", "PLAY");
   }
 });
+
+test("glass panels blur what is behind them, and weak devices skip the blur", async ({
+  browser,
+}) => {
+  // The production build once kept only -webkit-backdrop-filter, which
+  // Chrome ignores: the glass looked flat everywhere but Safari.
+  const topBarBlur = async (cores: number) => {
+    const context = await browser.newContext({ baseURL: BASE });
+    try {
+      await context.addInitScript((n) => {
+        Object.defineProperty(navigator, "hardwareConcurrency", { get: () => n });
+      }, cores);
+      const page = await context.newPage();
+      await logIn(page, ADMIN);
+      await page.goto("/");
+      await expect(page.locator("main")).toBeVisible();
+      return await page.evaluate(
+        () => getComputedStyle(document.querySelector("header") as HTMLElement).backdropFilter,
+      );
+    } finally {
+      await context.close();
+    }
+  };
+
+  expect(await topBarBlur(8)).toContain("blur");
+  expect(await topBarBlur(2)).toBe("none");
+});

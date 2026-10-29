@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/FranzGra/FranzPLAY/internal/online"
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 )
 
 // CoversDir is the folder, inside the data folder, that holds the covers.
@@ -160,7 +161,7 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 	}
 
 	name := chosenCoverName(videoID, fingerprint, choice)
-	if err := os.Rename(tmpName, filepath.Join(dir, name)); err != nil {
+	if err := safefile.Rename(tmpName, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("cover of video %d: %w", videoID, err)
 	}
 

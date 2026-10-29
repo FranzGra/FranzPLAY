@@ -1,4 +1,4 @@
-import { canMorphPages, isRich, richMotion } from "./richMotion";
+import { canMorphPages, isRich, isWeak, richMotion } from "./richMotion";
 
 const strong = { reducedMotion: false, saveData: false, cores: 8, memory: 8 };
 
@@ -21,6 +21,17 @@ describe("isRich", () => {
     ["zero cores means not known", { ...strong, cores: 0 }, true],
   ])("%s", (_, device, want) => {
     expect(isRich(device)).toBe(want);
+  });
+});
+
+describe("isWeak", () => {
+  it.each([
+    ["a strong computer", { cores: 8, memory: 8 }, false],
+    ["the browser does not say", {}, false],
+    ["two cores", { cores: 2, memory: 8 }, true],
+    ["2 GB of memory", { cores: 8, memory: 2 }, true],
+  ])("%s", (_, device, want) => {
+    expect(isWeak(device)).toBe(want);
   });
 });
 

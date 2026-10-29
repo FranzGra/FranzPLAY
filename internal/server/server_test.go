@@ -78,3 +78,37 @@ func TestOtherAddressesGoToTheInterface(t *testing.T) {
 		})
 	}
 }
+
+func TestEveryAnswerCarriesSecurityHeaders(t *testing.T) {
+	want := map[string]string{
+		"Content-Security-Policy": contentPolicy,
+		"X-Content-Type-Options":  "nosniff",
+		"X-Frame-Options":         "SAMEORIGIN",
+		"Referrer-Policy":         "same-origin",
+	}
+	for _, target := range []string{"/", "/video/1", "/api/health", "/api/nothing-here"} {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			newTestHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+
+			for name, value := range want {
+				if got := rec.Header().Get(name); got != value {
+					t.Errorf("%s = %q, want %q", name, got, value)
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerCanReplaceASecurityHeader(t *testing.T) {
+	ui := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Referrer-Policy", "no-referrer")
+	})
+	rec := httptest.NewRecorder()
+	New("v", slog.New(slog.NewTextHandler(io.Discard, nil)), ui).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/abc", nil))
+
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Errorf("Referrer-Policy = %q, want the handler's no-referrer", got)
+	}
+}

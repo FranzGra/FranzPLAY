@@ -5,16 +5,54 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 )
 
 // store reads what the rules need. It never writes.
 type store struct {
-	db *sql.DB
+	db    *sql.DB
+	cache *library
 }
 
-// videos returns every visible video. Only the few columns the rules use
-// are read: even ten thousand videos take little memory.
-func (s store) videos(ctx context.Context) (_ []Video, err error) {
+func newStore(db *sql.DB) store { return store{db: db, cache: &library{}} }
+
+// library is the copy of the visible videos kept between requests: every
+// Home and every video page needs all of them, and reading ten thousand
+// rows each time was most of the server's work. It is read again only
+// when videos_version says the videos changed.
+type library struct {
+	mu      sync.Mutex
+	loaded  bool
+	version int64
+	videos  []Video
+}
+
+// videos returns every visible video, with titles in small letters (the
+// rules only compare words). The list is shared: callers must not change it.
+func (s store) videos(ctx context.Context) ([]Video, error) {
+	s.cache.mu.Lock()
+	defer s.cache.mu.Unlock()
+	// The number first: a change that lands between the two reads makes
+	// the next request read again, never keeps an old list.
+	var version int64
+	if err := s.db.QueryRowContext(ctx, `SELECT n FROM videos_version WHERE id = 1`).Scan(&version); err != nil {
+		return nil, fmt.Errorf("read videos version: %w", err)
+	}
+	if s.cache.loaded && s.cache.version == version {
+		return s.cache.videos, nil
+	}
+	all, err := s.readVideos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.cache.loaded, s.cache.version, s.cache.videos = true, version, all
+	return all, nil
+}
+
+// readVideos reads every visible video. Only the few columns the rules
+// use are read: even ten thousand videos take little memory.
+func (s store) readVideos(ctx context.Context) (_ []Video, err error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, shown_title, category, added_at FROM videos WHERE visible`)
 	if err != nil {
 		return nil, fmt.Errorf("read videos: %w", err)
@@ -26,6 +64,7 @@ func (s store) videos(ctx context.Context) (_ []Video, err error) {
 		if err := rows.Scan(&v.ID, &v.Title, &v.Category, &v.AddedAt); err != nil {
 			return nil, fmt.Errorf("read videos: %w", err)
 		}
+		v.Title = strings.ToLower(v.Title)
 		out = append(out, v)
 	}
 	if err := rows.Err(); err != nil {

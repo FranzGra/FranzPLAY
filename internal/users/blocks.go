@@ -164,6 +164,21 @@ func (s store) clearBlock(ctx context.Context, key string) error {
 	return nil
 }
 
+// ClearBlocks forgets every block and every wrong try, of names and
+// addresses, and returns how many it forgot. It is the way back in when
+// someone keeps the only administrator blocked: "franzplay unblock".
+func ClearBlocks(ctx context.Context, db *sql.DB) (int64, error) {
+	res, err := db.ExecContext(ctx, `DELETE FROM login_blocks`)
+	if err != nil {
+		return 0, fmt.Errorf("clear login blocks: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("clear login blocks: %w", err)
+	}
+	return n, nil
+}
+
 // checkTries refuses a try when the account or the address is blocked.
 func (s *Service) checkTries(ctx context.Context, keys ...string) error {
 	wait, err := s.store.blockWait(ctx, keys, s.now())
@@ -278,6 +293,39 @@ func (s *Service) clientAddr(r *http.Request) string {
 	trusted := s.trusted
 	s.mu.Unlock()
 	return realAddr(r, trusted)
+}
+
+// limitsAddress says whether wrong logins from this request may block its
+// address. Not when the request comes through a reverse proxy at home (a
+// private address) that is not among the trusted ones: then every person seems to come from the
+// proxy's address, and twenty wrong tries by a stranger would lock the
+// whole family out. The names stay protected by their own blocks.
+func (s *Service) limitsAddress(r *http.Request) bool {
+	if r.Header.Get("X-Forwarded-For") == "" {
+		return true
+	}
+	s.mu.Lock()
+	trusted := s.trusted
+	s.mu.Unlock()
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil || isTrusted(peer, trusted) {
+		return true
+	}
+	// A proxy sits at home or in the same computer: a public address that
+	// writes X-Forwarded-For is someone trying to escape the blocks.
+	if peer = peer.Unmap(); !peer.IsPrivate() && !peer.IsLoopback() && !peer.IsLinkLocalUnicast() {
+		return true
+	}
+	s.proxyWarned.Do(func() {
+		s.logger.WarnContext(r.Context(), "a reverse proxy that is not trusted sends X-Forwarded-For: "+
+			"wrong logins block only names, not addresses; add the proxy to FRANZPLAY_TRUSTED_PROXIES",
+			"proxy", host)
+	})
+	return false
 }
 
 func realAddr(r *http.Request, trusted []netip.Prefix) string {

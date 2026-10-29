@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/translate"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -535,7 +536,7 @@ func writeAtomic(dir, name string, data []byte) (err error) {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, name))
+	return safefile.Rename(tmp.Name(), filepath.Join(dir, name))
 }
 
 // RemoveOrphanAutoSubtitles deletes the files in the autosubtitles folder

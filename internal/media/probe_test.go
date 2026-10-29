@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
@@ -230,5 +231,40 @@ func TestProberWithRealFFprobe(t *testing.T) {
 	}
 	if !after.ModTime().Equal(before.ModTime()) || after.Size() != before.Size() {
 		t.Error("reading the video changed the file")
+	}
+}
+
+// A video whose file is away (a disk unplugged) waits for it, without
+// using up its tries; once the file is back the job runs.
+func TestMissingFileWaits(t *testing.T) {
+	dir := t.TempDir()
+	db, id := catalog(t, dir, "a.mp4")
+	saved := fileThere
+	t.Cleanup(func() { fileThere = saved })
+	fileThere = func(path string) error {
+		_, err := os.Stat(path)
+		return err
+	}
+	var args []string
+	p := NewProber(db, "ffprobe")
+	p.run = fakeRun(`{"format":{"duration":"10"},"streams":[{"codec_type":"video","codec_name":"h264","width":640,"height":360}]}`, nil, &args)
+
+	err := p.Handle(context.Background(), id)
+	var later *jobs.LaterError
+	if !errors.As(err, &later) || errors.Is(err, jobs.ErrPermanent) {
+		t.Fatalf("file away: error = %v, want a job that waits", err)
+	}
+	if wait := time.Until(later.Until); wait < missingWait-time.Minute || wait > missingWait {
+		t.Errorf("waits %s, want about %s", wait, missingWait)
+	}
+	if args != nil {
+		t.Error("ffprobe ran for a file that is not there")
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "a.mp4"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Handle(context.Background(), id); err != nil {
+		t.Fatalf("file back: %v", err)
 	}
 }

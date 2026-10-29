@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -88,7 +89,7 @@ func (p *Previewer) Handle(ctx context.Context, videoID int64) (err error) {
 	}
 
 	name := previewName(videoID, fingerprint)
-	if err := os.Rename(sprite, filepath.Join(dir, name)); err != nil {
+	if err := safefile.Rename(sprite, filepath.Join(dir, name)); err != nil {
 		return fmt.Errorf("previews of video %d: %w", videoID, err)
 	}
 	res, err := p.db.ExecContext(ctx, `UPDATE videos

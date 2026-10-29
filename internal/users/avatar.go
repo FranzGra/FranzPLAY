@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/respond"
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 )
 
 // avatarDir is the folder of profile photos, inside the data folder.
@@ -141,7 +142,7 @@ func writeAtomically(dir, name string, data []byte) (err error) {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, name))
+	return safefile.Rename(tmp.Name(), filepath.Join(dir, name))
 }
 
 func (s *Service) handleSetAvatar(w http.ResponseWriter, r *http.Request) {

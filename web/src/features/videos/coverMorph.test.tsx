@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { parseVideo } from "../../api/videos";
 import { videoJSON } from "../../test/fixtures";
-import { forgetForTests, plainClick } from "./coverMorph";
+import { forgetForTests, openVideo, plainClick } from "./coverMorph";
 import { VideoCard } from "./VideoCard";
 
 vi.mock("../../app/lazyPages", () => ({
@@ -84,6 +84,30 @@ describe("opening a video from its card", () => {
     fireEvent.click(link);
     expect(start).not.toHaveBeenCalled();
     expect(screen.getByText("Pagina del video")).toBeInTheDocument();
+  });
+});
+
+describe("a click elsewhere while the player's code arrives", () => {
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("wins over the video clicked before", async () => {
+    fakeTransition();
+    const cover = document.createElement("div");
+    document.body.append(cover);
+    const go = vi.fn();
+    let arrive = () => {};
+    const code = new Promise<void>((resolve) => {
+      arrive = resolve;
+    });
+
+    const opening = openVideo(cover, 7, go, () => code);
+    // The person taps "Categorie" before the player's code is there.
+    window.history.pushState(null, "", "/categorie");
+    arrive();
+    await opening;
+
+    expect(go).not.toHaveBeenCalled();
+    cover.remove();
   });
 });
 

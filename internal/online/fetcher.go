@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
+	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -347,7 +348,7 @@ func writeAtomically(dir, name string, data []byte) (err error) {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, name))
+	return safefile.Rename(tmp.Name(), filepath.Join(dir, name))
 }
 
 // removeFile deletes a file of the data folder; a file already gone is fine.

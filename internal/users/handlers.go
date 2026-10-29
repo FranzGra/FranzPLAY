@@ -198,7 +198,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r)
 		return
 	}
-	a, token, err := s.login(r.Context(), s.clientAddr(r), req.Name, req.Password)
+	a, token, err := s.login(r.Context(), s.clientAddr(r), s.limitsAddress(r), req.Name, req.Password)
 	if err != nil {
 		s.fail(w, r, err)
 		return

@@ -212,6 +212,11 @@ docker/smoke-test.sh smoke
 - **I video non compaiono**: in Amministrazione › Cartelle FranzPLAY dice se non riesce a leggere
   la cartella. Controlla il percorso in `.env` e che il tuo utente possa leggere i file.
 - **Windows**: nei percorsi usa le barre `/`, per esempio `C:/Users/Nome/Videos`.
+- **Nessuno riesce più a entrare** («troppi tentativi sbagliati»), neanche l'amministratore:
+  qualcuno ha sbagliato apposta molte volte. Togli tutti i blocchi con
+  `docker compose exec franzplay franzplay unblock` (senza Docker: `franzplay unblock`), poi
+  riprova. Se FranzPLAY sta dietro un proxy (Caddy, Nginx…), scrivi il suo indirizzo in
+  `FRANZPLAY_TRUSTED_PROXIES` nel file `.env`.
 - **Sistema a 32 bit** (vecchi Raspberry Pi): l'immagine non c'è. Usa il programma da solo,
   come spiegato in [provare-sul-pc.md](provare-sul-pc.md).
 

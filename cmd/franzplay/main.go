@@ -70,9 +70,12 @@ func main() {
 	// Stop cleanly on Ctrl+C or when the system asks the program to stop.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	var err error
-	if len(os.Args) > 1 && os.Args[1] == importOldCommand {
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == importOldCommand:
 		err = importOld(ctx, os.Args[2:], os.Getenv, os.Stdout)
-	} else {
+	case len(os.Args) > 1 && os.Args[1] == unblockCommand:
+		err = unblock(ctx, os.Args[2:], os.Getenv, os.Stdout)
+	default:
 		err = run(ctx, os.Getenv, os.Stderr)
 	}
 	stop()
@@ -94,6 +97,16 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("create data folder %q: %w", cfg.DataDir, err)
 	}
+
+	// One owner (rule 4): before touching the database or any file.
+	unlock, err := database.Lock(cfg.DataDir)
+	switch {
+	case errors.Is(err, database.ErrNoLock):
+		logger.Warn("cannot lock the data folder: make sure only one FranzPLAY uses it", "error", err)
+	case err != nil:
+		return err
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
 
 	db, err := database.Open(ctx, cfg.DataDir)
 	if err != nil {

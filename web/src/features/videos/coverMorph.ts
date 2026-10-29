@@ -173,6 +173,9 @@ export async function openVideo(
   // there by then the page opens plainly, at once. A morph whose new page
   // is not ready would only fade the page across, with no cover moving,
   // and look like a much faster, different animation.
+  // Where the person was when they clicked: if they go somewhere else
+  // while the code arrives, that newer choice wins.
+  const from = window.location.href;
   const codeReady = await Promise.race([
     loadCode().then(
       () => true,
@@ -180,6 +183,7 @@ export async function openVideo(
     ),
     wait(CODE_WAIT_MS).then(() => false),
   ]);
+  if (window.location.href !== from) return;
   if (!codeReady) {
     go();
     return;

@@ -50,7 +50,7 @@ func newSite(t *testing.T) *site {
 	}
 	s := &site{db: db, mux: http.NewServeMux()}
 	handlers{
-		store:  store{db: db},
+		store:  newStore(db),
 		videos: catalog.NewLookup(db),
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		account: func(ctx context.Context) (users.Account, bool) {

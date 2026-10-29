@@ -17,16 +17,23 @@ export type Device = {
 // weakLimit is the most cores, or gigabytes of memory, of a weak device.
 export const weakLimit = 2;
 
+// isWeak says whether the device has little power or memory, on what
+// the browser said about itself.
+export function isWeak(device: Pick<Device, "cores" | "memory">): boolean {
+  const low = (n?: number) => typeof n === "number" && n > 0 && n <= weakLimit;
+  return low(device.cores) || low(device.memory);
+}
+
 // isRich is richMotion's decision, on what the browser said.
 export function isRich(device: Device): boolean {
   if (device.reducedMotion || device.saveData) return false;
-  if (typeof device.cores === "number" && device.cores > 0 && device.cores <= weakLimit) {
-    return false;
-  }
-  if (typeof device.memory === "number" && device.memory > 0 && device.memory <= weakLimit) {
-    return false;
-  }
-  return true;
+  return !isWeak(device);
+}
+
+// weakDevice says whether this phone or computer is a weak one.
+export function weakDevice(): boolean {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  return isWeak({ cores: nav.hardwareConcurrency, memory: nav.deviceMemory });
 }
 
 export function richMotion(): boolean {

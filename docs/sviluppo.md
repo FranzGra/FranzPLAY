@@ -58,6 +58,7 @@ internal/jobs/      coda dei lavori pesanti nel database, eseguiti uno alla volt
 internal/media/     lancia ffprobe e ffmpeg (solo da qui)
 internal/server/    le rotte HTTP dell'API
 internal/respond/   risposte dell'API, tutte in JSON e tutte uguali
+internal/safefile/  mette un file finito al suo posto in modo che resista a un blackout (regola 6)
 internal/catalog/   l'API dei video: elenco, un video, categorie, copertine, streaming
 internal/users/     utenti, accesso e sessioni; protegge tutta l'API
 internal/channels/  il canale di ogni persona: nome e playlist pubbliche

@@ -98,7 +98,8 @@ export default async function globalSetup() {
 
   // Covers, previews and clips are made in the background: wait for them,
   // so every page shows what people really see.
-  const deadline = Date.now() + 120_000;
+  // Generous: a busy machine can take minutes to convert the test videos.
+  const deadline = Date.now() + 600_000;
   for (;;) {
     const res = await fetch(`${BASE}/api/jobs`, {
       headers: { Cookie: cookie },

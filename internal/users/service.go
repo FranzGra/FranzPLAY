@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net/netip"
 	"slices"
@@ -52,6 +53,15 @@ type Service struct {
 	methodKey []byte
 	// trusted are the reverse proxies whose X-Forwarded-For is believed.
 	trusted []netip.Prefix
+	// proxyWarned is set once the log has said that a reverse proxy is
+	// in front of FranzPLAY without being among the trusted ones.
+	proxyWarned sync.Once
+
+	// nameLocks makes the tries for one name wait for each other, so that
+	// many guesses sent at once cannot all pass before the first wrong
+	// one is counted. A fixed number of locks, shared by names that fall
+	// on the same one, keeps memory the same whatever names are tried.
+	nameLocks [64]sync.Mutex
 
 	// dummyHash is checked when a name does not exist, so that answering
 	// "wrong name" takes as long as "wrong password" and does not reveal
@@ -241,6 +251,15 @@ func (s *Service) acquire(ctx context.Context) error {
 
 func (s *Service) release() { <-s.hashing }
 
+// lockName takes the lock of a name's tries and returns how to let it go.
+func (s *Service) lockName(key string) (unlock func()) {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key)) // a hash.Hash never fails to write
+	m := &s.nameLocks[h.Sum32()%uint32(len(s.nameLocks))]
+	m.Lock()
+	return m.Unlock
+}
+
 // login checks name and password (or PIN, or pattern) and opens a
 // session. It returns the cookie token. Every try is written in the access
 // log, with the address it came from.
@@ -248,11 +267,21 @@ func (s *Service) release() { <-s.hashing }
 // Wrong tries block the name and the address for a while (see blocks.go).
 // A name that does not exist is treated like one that does, with the
 // decoy method shown at login, so the answers never tell them apart.
-func (s *Service) login(ctx context.Context, address, name, secret string) (Account, string, error) {
+//
+// With limitAddress false the address is only written in the log: it is
+// the address of a reverse proxy that everybody shares (see
+// limitsAddress), and blocking it would lock everybody out.
+func (s *Service) login(ctx context.Context, address string, limitAddress bool, name, secret string) (Account, string, error) {
 	name = strings.TrimSpace(name)
-	now := s.now()
 	key := blockKey(name)
-	if err := s.checkTries(ctx, key, addressKey(address)); err != nil {
+	unlock := s.lockName(key)
+	defer unlock()
+	now := s.now()
+	keys, blockAddress := []string{key}, ""
+	if limitAddress {
+		keys, blockAddress = append(keys, addressKey(address)), address
+	}
+	if err := s.checkTries(ctx, keys...); err != nil {
 		if errors.Is(err, errTooManyTries) {
 			if rerr := s.store.recordLogin(ctx, now, name, 0, address, Locked); rerr != nil {
 				return Account{}, "", rerr
@@ -283,7 +312,7 @@ func (s *Service) login(ctx context.Context, address, name, secret string) (Acco
 		if err := s.store.recordLogin(ctx, now, name, stored.ID, address, WrongPassword); err != nil {
 			return Account{}, "", err
 		}
-		return Account{}, "", s.wrongTry(ctx, key, m, address)
+		return Account{}, "", s.wrongTry(ctx, key, m, blockAddress)
 	}
 	if err := s.store.clearBlock(ctx, key); err != nil {
 		return Account{}, "", err
