@@ -120,10 +120,14 @@ func (h handlers) subtitles(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, a := range auto {
 		key := autoPrefix + a.lang
+		kind := " (automatici)"
+		if a.from != "" {
+			kind = " (tradotti)"
+		}
 		tracks = append(tracks, subtitleTrack{
 			Key:   key,
 			Lang:  a.lang,
-			Label: video.SubtitleLabel(a.lang) + " (automatici)",
+			Label: video.SubtitleLabel(a.lang) + kind,
 			Src:   base + "/subtitles/" + key,
 		})
 	}

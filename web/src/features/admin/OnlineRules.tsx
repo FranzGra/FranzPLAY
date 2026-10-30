@@ -1,7 +1,9 @@
 import { type FormEvent, useState } from "react";
 import { type OnlineRules, type OnlineStatus, type SourceName, saveRules } from "../../api/online";
+import { Icon } from "../../components/Icon";
 import { Select } from "../../components/Select";
-import styles from "./Admin.module.css";
+import pages from "./Pages.module.css";
+import { ui } from "./ui";
 
 const names: Record<SourceName, string> = {
   youtube: "YouTube",
@@ -53,48 +55,56 @@ export function OnlineRulesForm({
   };
 
   return (
-    <form className={`glass ${styles.rules}`} onSubmit={send} aria-label="Regole">
-      <h2 className={styles.name}>Regole</h2>
-      <p className={styles.role}>
+    <form className={`${ui.card} ${pages.editor}`} onSubmit={send} aria-label="Regole">
+      <h2 className={ui.cardTitle}>
+        <span className={ui.cardIcon} aria-hidden="true">
+          <Icon name="sliders" size={18} />
+        </span>
+        Regole
+      </h2>
+      <p className={ui.cardText}>
         Oggi FranzPLAY ha chiesto informazioni su {status.askedToday} video.
       </p>
 
-      <label className={styles.check}>
-        <input
-          type="checkbox"
-          checked={!anyTime}
-          onChange={(e) =>
-            setRules({ ...rules, from: e.target.checked ? 2 : 0, to: e.target.checked ? 6 : 0 })
-          }
-        />
-        Chiedi solo in certe ore
-      </label>
-      {!anyTime && (
-        <div className={styles.momentControls}>
-          <label className={styles.field}>
-            Dalle
-            <Select
-              aria-label="Dalle"
-              value={rules.from}
-              options={hourOptions}
-              onChange={(from) => setRules({ ...rules, from })}
-            />
-          </label>
-          <label className={styles.field}>
-            Alle
-            <Select
-              aria-label="Alle"
-              value={rules.to}
-              options={hourOptions}
-              onChange={(to) => setRules({ ...rules, to })}
-            />
-          </label>
-        </div>
-      )}
+      <div className={pages.block}>
+        <label className={pages.check}>
+          <input
+            type="checkbox"
+            checked={!anyTime}
+            onChange={(e) =>
+              setRules({ ...rules, from: e.target.checked ? 2 : 0, to: e.target.checked ? 6 : 0 })
+            }
+          />
+          Chiedi solo in certe ore
+        </label>
+        {!anyTime && (
+          <div className={pages.hours}>
+            <div className={ui.field}>
+              <span className={ui.label}>Dalle</span>
+              <Select
+                aria-label="Dalle"
+                value={rules.from}
+                options={hourOptions}
+                onChange={(from) => setRules({ ...rules, from })}
+              />
+            </div>
+            <div className={ui.field}>
+              <span className={ui.label}>Alle</span>
+              <Select
+                aria-label="Alle"
+                value={rules.to}
+                options={hourOptions}
+                onChange={(to) => setRules({ ...rules, to })}
+              />
+            </div>
+          </div>
+        )}
+      </div>
 
-      <label className={styles.field}>
-        Al massimo quanti video al giorno (0 = senza limite)
+      <label className={ui.field}>
+        <span className={ui.label}>Al massimo quanti video al giorno (0 = senza limite)</span>
         <input
+          className={`${ui.input} ${pages.narrow}`}
           type="number"
           min={0}
           max={100000}
@@ -109,21 +119,22 @@ export function OnlineRulesForm({
         />
       </label>
 
-      <div>
-        <p className={styles.role}>
-          Ordine delle fonti: FranzPLAY chiede prima alla prima che può riconoscere il video. Se non
-          lo trova, prova la successiva.
+      <div className={pages.block}>
+        <p className={ui.label}>Ordine delle fonti</p>
+        <p className={ui.hint}>
+          FranzPLAY chiede prima alla prima che può riconoscere il video. Se non lo trova, prova la
+          successiva.
         </p>
-        <ol className={styles.order} aria-label="Ordine delle fonti">
+        <ol className={pages.order} aria-label="Ordine delle fonti">
           {rules.order.map((source, i) => (
             <li key={source}>
               <span>
                 {i + 1}. {names[source]}
               </span>
-              <span className={styles.buttons}>
+              <span className={ui.chips}>
                 <button
                   type="button"
-                  className={`glass ${styles.action}`}
+                  className={`${ui.btn} ${ui.small} ${ui.iconBtn}`}
                   aria-label={`Sposta ${names[source]} su`}
                   disabled={i === 0}
                   onClick={() => move(i, -1)}
@@ -132,7 +143,7 @@ export function OnlineRulesForm({
                 </button>
                 <button
                   type="button"
-                  className={`glass ${styles.action}`}
+                  className={`${ui.btn} ${ui.small} ${ui.iconBtn}`}
                   aria-label={`Sposta ${names[source]} giù`}
                   disabled={i === rules.order.length - 1}
                   onClick={() => move(i, 1)}
@@ -145,27 +156,32 @@ export function OnlineRulesForm({
         </ol>
       </div>
 
-      <label className={styles.check}>
-        <input
-          type="checkbox"
-          checked={rules.confirm}
-          onChange={(e) => setRules({ ...rules, confirm: e.target.checked })}
-        />
-        Chiedi conferma prima di usare quello che trova
-      </label>
-      <p className={styles.role}>
-        Con la conferma, copertina e titolo trovati aspettano qui sotto finché scegli «Usa» o
-        «Scarta». Le fonti rispondono solo quando riconoscono proprio quel video (stesso codice,
-        stesso titolo e anno, o stessa impronta del file), quindi non c'è un punteggio da regolare.
-      </p>
+      <div className={pages.block}>
+        <label className={pages.check}>
+          <input
+            type="checkbox"
+            checked={rules.confirm}
+            onChange={(e) => setRules({ ...rules, confirm: e.target.checked })}
+          />
+          Chiedi conferma prima di usare quello che trova
+        </label>
+        <p className={ui.hint}>
+          Con la conferma, copertina e titolo trovati aspettano in «Da confermare» finché scegli
+          «Usa» o «Scarta». Le fonti rispondono solo quando riconoscono proprio quel video (stesso
+          codice, stesso titolo e anno, o stessa impronta del file), quindi non c'è un punteggio da
+          regolare.
+        </p>
+      </div>
 
-      <div className={styles.buttons}>
-        <button type="submit" className={styles.primary} disabled={sending}>
+      <div className={pages.formFoot}>
+        <span />
+        <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={sending}>
+          <Icon name="check" size={16} />
           Salva le regole
         </button>
       </div>
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}

@@ -153,8 +153,9 @@ describe("folders page", () => {
       },
     });
     const form = await screen.findByRole("form", { name: "Video troppo corti" });
-    const save = within(form).getByRole("button", { name: "Salva" });
-    expect(save).toBeDisabled();
+    // Nothing changed yet: no grey button, a word that all is saved.
+    expect(within(form).queryByRole("button", { name: "Salva" })).toBeNull();
+    expect(form).toHaveTextContent("Nessuna modifica da salvare");
     expect(within(form).queryByRole("spinbutton")).not.toBeInTheDocument();
 
     await user.click(within(form).getByRole("checkbox", { name: "Escludi i video più corti di" }));
@@ -162,7 +163,7 @@ describe("folders page", () => {
     expect(seconds).toHaveValue(10);
     await user.clear(seconds);
     await user.type(seconds, "20");
-    await user.click(save);
+    await user.click(within(form).getByRole("button", { name: "Salva" }));
 
     const put = server.requests.find((r) => r.method === "PUT");
     expect(await put?.json()).toEqual({ seconds: 20 });

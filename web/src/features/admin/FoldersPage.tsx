@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { onServerEvent } from "../../api/events";
 import {
   fetchLibrary,
@@ -7,10 +7,12 @@ import {
   type LibraryOverview,
   scanLibrary,
 } from "../../api/library";
-import { EmptyState } from "../../components/EmptyState";
+import { Icon } from "../../components/Icon";
+import { BusyRing } from "../../components/ProgressBar";
 import { formatSince } from "../../lib/format";
-import styles from "./Admin.module.css";
+import pages from "./Pages.module.css";
 import { ShortVideosForm } from "./ShortVideosForm";
+import { Card, Chip, Empty, Loading, PageHeader, Unavailable, ui } from "./ui";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; library: LibraryOverview };
 
@@ -46,12 +48,30 @@ export function FoldersPage() {
     };
   }, [load]);
 
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
+  const head = (actions?: ReactNode, description?: string) => (
+    <PageHeader
+      title="Cartelle"
+      description={
+        description ??
+        "FranzPLAY legge queste cartelle e non le modifica mai. Per aggiungerne o toglierne una, cambia l'impostazione FRANZPLAY_LIBRARIES e riavvia FranzPLAY."
+      }
+      actions={actions}
+    />
+  );
+  if (state.kind === "loading") {
+    return (
+      <div className={ui.ui}>
+        {head()}
+        <Loading />
+      </div>
+    );
+  }
   if (state.kind === "error") {
     return (
-      <EmptyState title="Cartelle non disponibili">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
+      <div className={ui.ui}>
+        {head()}
+        <Unavailable title="Cartelle non disponibili" />
+      </div>
     );
   }
   const { library } = state;
@@ -70,49 +90,65 @@ export function FoldersPage() {
 
   if (library.folders.length === 0) {
     return (
-      <EmptyState title="Nessuna cartella video">
-        Scrivi le cartelle dei tuoi video nell'impostazione FRANZPLAY_LIBRARIES e riavvia FranzPLAY:
-        compariranno qui.
-      </EmptyState>
+      <div className={ui.ui}>
+        {head()}
+        <Empty icon="folder" title="Nessuna cartella video">
+          Scrivi le cartelle dei tuoi video nell'impostazione FRANZPLAY_LIBRARIES e riavvia
+          FranzPLAY: compariranno qui.
+        </Empty>
+      </div>
     );
   }
 
   const busy = library.scanning || asked;
+  const videos = library.folders.reduce((sum, f) => sum + f.videos, 0);
   return (
-    <>
-      <div className={styles.top}>
-        <p className={styles.lead}>
-          FranzPLAY legge queste cartelle e non le modifica mai. Le controlla da solo{" "}
-          {every(library.interval)}. Per aggiungerne o toglierne una, cambia l'impostazione
-          FRANZPLAY_LIBRARIES e riavvia FranzPLAY.
-        </p>
-        <button type="button" className={styles.primary} disabled={busy} onClick={scanNow}>
+    <div className={ui.ui}>
+      {head(
+        <button
+          type="button"
+          className={`${ui.btn} ${ui.primary}`}
+          disabled={busy}
+          onClick={scanNow}
+        >
+          {busy ? <BusyRing size={16} /> : <Icon name="refresh" size={16} />}
           {busy ? "Controllo in corso…" : "Controlla adesso"}
-        </button>
-      </div>
+        </button>,
+        `FranzPLAY legge queste cartelle e non le modifica mai. Le controlla da solo ${every(library.interval)}. Per aggiungerne o toglierne una, cambia l'impostazione FRANZPLAY_LIBRARIES e riavvia FranzPLAY.`,
+      )}
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
 
-      <ul className={`stagger ${styles.list}`} aria-label="Cartelle video">
-        {library.folders.map((folder) => (
-          <li key={folder.path}>
-            <Folder folder={folder} />
-          </li>
-        ))}
-      </ul>
-
-      {library.lastScan && <LastCheck scan={library.lastScan} />}
-
-      <ShortVideosForm
-        key={library.minDuration}
-        minDuration={library.minDuration}
-        tooShort={library.tooShort}
-        onSaved={() => load()}
-      />
-    </>
+      <div className={ui.grid}>
+        <div className={`${ui.span8} ${ui.stack}`}>
+          <Card
+            title="Cartelle video"
+            icon="folder"
+            sub={`${library.folders.length} ${library.folders.length === 1 ? "cartella" : "cartelle"} · ${videos.toLocaleString("it-IT")} video`}
+          >
+            <ul className={ui.rows} aria-label="Cartelle video">
+              {library.folders.map((folder) => (
+                <li key={folder.path}>
+                  <Folder folder={folder} />
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+        <div className={`${ui.span4} ${ui.stack}`}>
+          {library.lastScan && <LastCheck scan={library.lastScan} />}
+          <ShortVideosForm
+            key={library.minDuration}
+            minDuration={library.minDuration}
+            tooShort={library.tooShort}
+            onSaved={() => load()}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -123,40 +159,52 @@ function every(seconds: number): string {
 }
 
 function Folder({ folder }: { folder: LibraryFolder }) {
+  const fine = !folder.problem && !folder.looksUnplugged;
   return (
-    <div className={`glass ${styles.person}`}>
-      <div className={styles.failed}>
-        <p className={`${styles.name} ${styles.path}`}>{folder.path}</p>
-        <p className={styles.role}>
+    <div className={`${ui.row} ${pages.folder}`}>
+      <span className={pages.rowIcon} data-tone={fine ? "ok" : "bad"} aria-hidden="true">
+        <Icon name={fine ? "folder" : "alert"} size={18} />
+      </span>
+      <div className={ui.rowMain}>
+        <b className={ui.mono}>{folder.path}</b>
+        <span>
           {folder.videos.toLocaleString("it-IT")} video
           {folder.missing > 0 &&
             ` · ${folder.missing.toLocaleString("it-IT")} ${folder.missing === 1 ? "non trovato" : "non trovati"}`}
-        </p>
+        </span>
         {folder.problem && (
           <>
-            <p className={styles.bad}>
+            <p className={ui.problem}>
               Non riesco a leggere tutta la cartella: finché non si risolve, nessun suo video viene
               segnato come mancante.
             </p>
-            <p className={styles.error}>{folder.problem}</p>
+            <p className={pages.errorText}>{folder.problem}</p>
           </>
         )}
         {folder.looksUnplugged && (
-          <p className={styles.bad}>
+          <p className={ui.problem}>
             La cartella è vuota ma aveva dei video: il disco è collegato? Intanto nessun video viene
             segnato come mancante.
           </p>
         )}
-        {folder.missing > 0 && !folder.problem && !folder.looksUnplugged && (
-          <p className={styles.role}>
+        {folder.missing > 0 && fine && (
+          <p className={ui.hint}>
             I video non trovati restano nel catalogo, con i loro mi piace e commenti, per 30 giorni:
             se tornano, si ritrova tutto.
           </p>
         )}
       </div>
-      {!folder.problem && !folder.looksUnplugged && (
-        <span className={styles.good}>Tutto a posto</span>
-      )}
+      <div className={ui.rowSide}>
+        {fine ? (
+          <Chip tone="ok" icon="check">
+            Tutto a posto
+          </Chip>
+        ) : (
+          <Chip tone="bad" icon="alert">
+            Da controllare
+          </Chip>
+        )}
+      </div>
     </div>
   );
 }
@@ -192,15 +240,15 @@ export function took(seconds: number): string {
 
 function LastCheck({ scan }: { scan: LastScan }) {
   return (
-    <section className={`glass ${styles.stat} ${styles.lastCheck}`} aria-label="Ultimo controllo">
-      <p className={styles.role}>
-        Ultimo controllo {formatSince(scan.at, new Date())}, {took(scan.seconds)}
+    <Card title="Ultimo controllo" icon="clock">
+      <p className={ui.cardText}>
+        {formatSince(scan.at, new Date())}, {took(scan.seconds)}
       </p>
       {scan.error ? (
-        <p className={styles.bad}>Il controllo non è riuscito: {scan.error}</p>
+        <p className={ui.problem}>Il controllo non è riuscito: {scan.error}</p>
       ) : (
-        <p className={styles.name}>{describeChanges(scan)}</p>
+        <p className={pages.bigLine}>{describeChanges(scan)}</p>
       )}
-    </section>
+    </Card>
   );
 }

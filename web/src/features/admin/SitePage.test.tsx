@@ -12,8 +12,9 @@ describe("site name and color", () => {
       "PUT /api/site": { body: saved },
     });
     const form = await screen.findByRole("form", { name: "Nome e colore del sito" });
-    const save = within(form).getByRole("button", { name: "Salva nome e colore" });
-    expect(save).toBeDisabled(); // nothing changed yet
+    // Nothing changed yet: no grey button, a word that all is saved.
+    expect(within(form).queryByRole("button", { name: "Salva nome e colore" })).toBeNull();
+    expect(form).toHaveTextContent("Nessuna modifica da salvare");
 
     const first = within(form).getByLabelText("Prima parte del nome");
     await user.clear(first);
@@ -30,7 +31,7 @@ describe("site name and color", () => {
       "CasaRossi",
     );
 
-    await user.click(save);
+    await user.click(within(form).getByRole("button", { name: "Salva nome e colore" }));
     expect(await within(form).findByRole("status")).toHaveTextContent("Salvato");
     expect(await server.requests.at(-1)?.json()).toEqual(saved);
     // The logo at the top and the color of the page follow.
@@ -73,7 +74,7 @@ describe("site settings page", () => {
         return new Response(JSON.stringify({ open }));
       },
     });
-    const box = await screen.findByRole("checkbox", { name: "Chiunque può registrarsi" });
+    const box = await screen.findByRole("switch", { name: "Chiunque può registrarsi" });
     expect(box).not.toBeChecked();
 
     await user.click(box);
@@ -93,8 +94,8 @@ describe("site settings page", () => {
       "GET /api/registration": { body: { open: false } },
       "PUT /api/registration": { status: 500, body: { error: "boom" } },
     });
-    await user.click(await screen.findByRole("checkbox", { name: "Chiunque può registrarsi" }));
+    await user.click(await screen.findByRole("switch", { name: "Chiunque può registrarsi" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Non si è riusciti a salvare");
-    expect(screen.getByRole("checkbox", { name: "Chiunque può registrarsi" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "Chiunque può registrarsi" })).not.toBeChecked();
   });
 });

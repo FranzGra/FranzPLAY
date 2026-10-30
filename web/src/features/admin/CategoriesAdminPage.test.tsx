@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, signedIn } from "../../test/render";
+import { tileColor } from "../categories/color";
 import { renderCover } from "./coverImage";
 
 // jsdom has no real images or canvas: the two browser-only steps are faked.
@@ -28,36 +29,105 @@ function page(extra: Record<string, unknown> = {}) {
 }
 
 describe("categories in the administration", () => {
-  it("lists each category with what people see", async () => {
-    renderApp("/admin/categorie", page());
-    const lezioni = await screen.findByRole("form", { name: "Categoria Corsi" });
-    expect(lezioni).toHaveTextContent("Lezioni");
-    expect(lezioni).toHaveTextContent("Cartella: Corsi");
+  it("lists the categories once, and opens one at a time on the right", async () => {
+    const { user } = renderApp("/admin/categorie", page());
+    const list = await screen.findByRole("list", { name: "Categorie" });
+    const [first, second] = within(list).getAllByRole("button");
+    expect(first).toHaveTextContent("Lezioni");
+    expect(first).toHaveTextContent("Cartella: Corsi");
+    expect(first).toHaveAttribute("aria-current", "true");
+    expect(second).toHaveTextContent("Viaggi");
+    // One editor only: the colors are not repeated for every category.
+    expect(screen.getAllByRole("button", { name: "Rosso" })).toHaveLength(1);
+
+    const lezioni = screen.getByRole("form", { name: "Categoria Corsi" });
     expect(within(lezioni).getByRole("button", { name: "Rosso" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(within(lezioni).getByRole("button", { name: "Togli l'immagine" })).toBeInTheDocument();
+
+    await user.click(second as HTMLElement);
     const plain = screen.getByRole("form", { name: "Categoria Viaggi" });
     expect(within(plain).getByRole("button", { name: "Nessun colore" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
+    expect(screen.queryByRole("form", { name: "Categoria Corsi" })).not.toBeInTheDocument();
   });
 
-  it("renames and colors a category", async () => {
+  it("previews the pictures found in the folder, as on the public card", async () => {
+    const poster = "/api/category-pictures/1-7fq2.jpg";
+    const wide = "/api/category-pictures/2-3k9x.jpg";
+    const { user } = renderApp(
+      "/admin/categorie",
+      page({
+        "GET /api/admin/categories": {
+          body: [
+            corsi,
+            { ...viaggi, folderImage: wide, poster },
+            { ...viaggi, name: "Zoo", poster },
+          ],
+        },
+      }),
+    );
+    const list = await screen.findByRole("list", { name: "Categorie" });
+    const [own, both, tall] = within(list).getAllByRole("button");
+    const card = () => screen.getByRole("img", { name: "Come la vedono tutti" });
+
+    // The image the administrator chose wins, and is the only one to take away.
+    await user.click(own as HTMLElement);
+    expect(card().querySelector("img")).toHaveAttribute("src", corsi.image);
+
+    await user.click(both as HTMLElement);
+    expect(card().querySelector("img")).toHaveAttribute("src", wide);
+    expect(screen.queryByRole("button", { name: "Togli l'immagine" })).not.toBeInTheDocument();
+
+    await user.click(tall as HTMLElement);
+    expect(card().firstElementChild).toHaveAttribute("data-poster");
+    expect(card().querySelector("img")).toHaveAttribute("src", poster);
+  });
+
+  it("previews a category without an image as the real card, in the public color", async () => {
+    const { user } = renderApp("/admin/categorie", page());
+    const list = await screen.findByRole("list", { name: "Categorie" });
+    await user.click(within(list).getAllByRole("button")[1] as HTMLElement);
+    const form = screen.getByRole("form", { name: "Categoria Viaggi" });
+    const card = within(form).getByRole("img", { name: "Come la vedono tutti" });
+    const tile = card.firstElementChild as HTMLElement;
+    // The same color the public page gives this name, and the folder, not a placeholder.
+    expect(tile.style.getPropertyValue("--tile-color")).toBe(
+      tileColor({ name: "Viaggi", color: "" }),
+    );
+    expect(tile.querySelector("svg")).not.toBeNull();
+    expect(tile).toHaveTextContent("Viaggi");
+    expect(tile).toHaveTextContent("3 video");
+    expect(card).not.toHaveTextContent("Nessuna immagine");
+
+    // Typing a name or choosing a color changes the card at once.
+    await user.type(within(form).getByRole("textbox"), "Gite");
+    expect(tile).toHaveTextContent("Gite");
+    await user.click(within(form).getByRole("button", { name: "Rosso" }));
+    expect(tile.style.getPropertyValue("--tile-color")).toBe("#dc2626");
+  });
+
+  it("renames and colors a category, with a clear button to save", async () => {
     const { user, server } = renderApp(
       "/admin/categorie",
       page({ "PUT /api/admin/categories/Viaggi": { status: 204 } }),
     );
-    const form = await screen.findByRole("form", { name: "Categoria Viaggi" });
-    const save = within(form).getByRole("button", { name: "Salva nome e colore" });
-    expect(save).toBeDisabled();
+    await user.click(await screen.findByRole("button", { name: /Viaggi/ }));
+    const form = screen.getByRole("form", { name: "Categoria Viaggi" });
+    // Nothing changed: no grey button, a word that all is saved.
+    expect(within(form).queryByRole("button", { name: "Salva nome e colore" })).toBeNull();
+    expect(form).toHaveTextContent("Nessuna modifica da salvare");
     await user.type(
-      within(form).getByRole("textbox", { name: "Nome che vedono tutti" }),
+      within(form).getByRole("textbox", { name: /Nome che vedono tutti/ }),
       "Vacanze",
     );
     await user.click(within(form).getByRole("button", { name: "Viola" }));
+    const save = within(form).getByRole("button", { name: "Salva nome e colore" });
+    expect(save).toBeEnabled();
     await user.click(save);
     expect(await within(form).findByRole("status")).toHaveTextContent("Salvato.");
     const sent = server.requests.find((r) => r.method === "PUT");
@@ -72,7 +142,12 @@ describe("categories in the administration", () => {
         "DELETE /api/admin/categories/Corsi/image": { status: 204 },
       }),
     );
-    const form = await screen.findByRole("form", { name: "Categoria Viaggi" });
+    const lezioni = await screen.findByRole("form", { name: "Categoria Corsi" });
+    await user.click(within(lezioni).getByRole("button", { name: "Togli l'immagine" }));
+    await waitFor(() => expect(server.requests.some((r) => r.method === "DELETE")).toBe(true));
+
+    await user.click(screen.getByRole("button", { name: /Viaggi/ }));
+    const form = screen.getByRole("form", { name: "Categoria Viaggi" });
     fireEvent.change(within(form).getByLabelText("Aggiungi un'immagine"), {
       target: { files: [new File(["x"], "mare.jpg", { type: "image/jpeg" })] },
     });
@@ -82,10 +157,13 @@ describe("categories in the administration", () => {
     expect(vi.mocked(renderCover)).toHaveBeenCalled();
     const sent = server.requests.find((r) => r.url.endsWith("/Viaggi/image"));
     expect(sent?.headers.get("Content-Type")).toBe("image/jpeg");
+  });
 
-    const lezioni = screen.getByRole("form", { name: "Categoria Corsi" });
-    await user.click(within(lezioni).getByRole("button", { name: "Togli l'immagine" }));
-    await waitFor(() => expect(server.requests.some((r) => r.method === "DELETE")).toBe(true));
+  it("says how a category is born when there is none", async () => {
+    renderApp("/admin/categorie", page({ "GET /api/admin/categories": { body: [] } }));
+    expect(
+      await screen.findByRole("heading", { name: "Ancora nessuna categoria" }),
+    ).toBeInTheDocument();
   });
 
   it("is in the administration's sections", async () => {

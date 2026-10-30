@@ -25,7 +25,7 @@ export type PublicVideo = {
   author: string;
   publishedOn: string | null;
   description: string | null;
-  owner: string; // "" = nobody yet
+  owner: string; // who uploaded it; "" = the site's own video, from a folder
   stream: string;
   // videoId is there only for a logged-in person who may open the video
   // anyway: the interface then shows its usual page.

@@ -129,8 +129,14 @@ E infine `docker compose up -d`. Il `:ro` alla fine è importante: vuol dire sol
 **Amministrazione › Sottotitoli** scegli e scarica un modello (finisce nella cartella dati) e
 FranzPLAY è pronto.
 
-Per **tradurre** i sottotitoli serve **LibreTranslate**, un traduttore che gira a casa tua. In
-`.env` togli il `#` a queste due righe:
+Anche il **traduttore** è già dentro l'immagine: non c'è niente da impostare e non serve un altro
+container. Quando chiedi una traduzione, il modello di quelle due lingue si scarica da solo nella
+cartella dati, circa 36 MB per direzione. Lavora su un solo core e vuole circa 200 MB di memoria,
+solo mentre traduce. Conosce inglese, italiano, spagnolo, francese e tedesco; tra due lingue
+diverse dall'inglese passa dall'inglese.
+
+Se preferisci **LibreTranslate**, un altro traduttore che gira a casa tua, in `.env` togli il `#` a
+queste due righe:
 
 ```sh
 COMPOSE_PROFILES=traduzioni
@@ -166,6 +172,9 @@ Usano internet solo queste cose, e solo se le accendi tu:
   docker compose cp ggml-small.bin franzplay:/data/whisper/ggml-small.bin
   docker compose restart
   ```
+
+- **I modelli per tradurre**: si scaricano la prima volta che servono, quindi senza internet si
+  traduce solo tra le lingue già scaricate.
 
 - **LibreTranslate**, se lo accendi: la prima volta scarica le lingue. Poi a ogni avvio cerca
   aggiornamenti; senza internet lo scrive nel suo log e parte lo stesso con le lingue che ha.

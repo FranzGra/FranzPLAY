@@ -1,0 +1,21 @@
+/* The site's logo in place of a profile photo: a rounded square, like
+   the logo in the top bar, not a circle, so it does not pass for a person. */
+.mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--avatar-size, 40px);
+  height: var(--avatar-size, 40px);
+  border-radius: calc(var(--avatar-size, 40px) * 0.3);
+  background: linear-gradient(180deg, var(--color-accent-light), var(--color-accent));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 4px 14px rgb(var(--color-accent-rgb) / 0.35);
+  color: var(--color-on-accent);
+}
+
+/* The second part of the site's name, in the site's color. */
+.accent {
+  color: var(--color-accent);
+}

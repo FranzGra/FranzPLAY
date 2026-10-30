@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { type Category, fetchCategories } from "../../api/videos";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
@@ -13,7 +13,7 @@ import { VideoGrid } from "../videos/VideoGrid";
 import { CategoryChips } from "./CategoryChips";
 import styles from "./HomePage.module.css";
 import { LookPanel } from "./LookPanel";
-import { lookStyle, SectionsContext, useWide } from "./look";
+import { cardsPerLine, lookStyle, SectionsContext, useWide } from "./look";
 import { useHomeLayout } from "./useHomeLayout";
 
 // HomePage looks like the old FranzPLAY's: a title, the categories to see
@@ -21,7 +21,8 @@ import { useHomeLayout } from "./useHomeLayout";
 // suggested) and all the videos in a mixed order. Each section can be
 // closed by its title, and stays closed for the person on every device.
 // On a computer or tablet the person also chooses how many cards in a line,
-// how big, and how much of each section to show.
+// how big, and how much of each section to show, in a panel on the right
+// that keeps the Home in sight (LookPanel).
 export function HomePage() {
   usePageTitle("");
   const [category, setCategory] = useState("");
@@ -29,6 +30,10 @@ export function HomePage() {
   const layout = useHomeLayout();
   const wide = useWide();
   const [choosing, setChoosing] = useState(false);
+  const closeChoosing = useCallback(() => setChoosing(false), []);
+  const opener = useRef<HTMLButtonElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const width = useWidth(root, wide && choosing);
   // A new order at every visit of the Home, the same while it is open.
   const [seed] = useState(() => 1 + Math.floor(Math.random() * 2 ** 31));
   // "Tutti i video" are mixed, as in the old FranzPLAY: the newest have
@@ -36,7 +41,7 @@ export function HomePage() {
   const { state, loadMore } = useVideoList(category ? { category } : { seed });
 
   return (
-    <div style={lookStyle(layout.look)}>
+    <div ref={root} style={lookStyle(layout.look)}>
       <header className={styles.header}>
         <span className={styles.headerIcon}>
           <Icon name="sparkles" size={24} />
@@ -49,9 +54,11 @@ export function HomePage() {
         </div>
         {wide && layout.ready && (
           <button
+            ref={opener}
             type="button"
             className={`glass ${styles.customize}`}
             aria-expanded={choosing}
+            aria-controls="personalizza-home"
             onClick={() => setChoosing((c) => !c)}
           >
             <Icon name="sliders" size={18} />
@@ -59,7 +66,6 @@ export function HomePage() {
           </button>
         )}
       </header>
-      {wide && choosing && <LookPanel look={layout.look} onChange={layout.setLook} />}
       {categories.length > 0 && (
         <CategoryChips categories={categories} chosen={category} onChoose={setCategory} />
       )}
@@ -90,8 +96,33 @@ export function HomePage() {
           text: "Quando colleghi una cartella video, i tuoi video compariranno qui, con i nuovi arrivi e quelli da continuare a guardare.",
         }}
       />
+      {wide && layout.ready && (
+        <LookPanel
+          id="personalizza-home"
+          look={layout.look}
+          onChange={layout.setLook}
+          open={choosing}
+          onClose={closeChoosing}
+          opener={opener}
+          perLine={width === null ? null : cardsPerLine(width, layout.look.size)}
+        />
+      )}
     </div>
   );
+}
+
+// useWidth follows the width of the Home while the panel is open, to say
+// how many cards are in a line now. Without ResizeObserver it says null.
+function useWidth(ref: RefObject<HTMLElement | null>, follow: boolean): number | null {
+  const [width, setWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!follow || !element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setWidth(element.clientWidth));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref, follow]);
+  return width;
 }
 
 // useCategories loads the categories for the chips. If they do not load,

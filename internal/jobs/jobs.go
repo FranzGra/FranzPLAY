@@ -24,8 +24,11 @@ const (
 	Clip    Kind = "clip"    // make the few seconds that play on the video's card
 	Tracks  Kind = "tracks"  // list the languages inside the file, copy its subtitles
 	Convert Kind = "convert" // make a copy every browser plays, when the file itself does not
-	// Transcribe writes subtitles from the sound with whisper and translates
-	// them, only when the administrator asks.
+	// Translate translates subtitles already written, without listening to
+	// anything again, only when the administrator asks.
+	Translate Kind = "translate"
+	// Transcribe writes subtitles from the sound with whisper, only when the
+	// administrator asks.
 	Transcribe Kind = "transcribe"
 )
 
@@ -36,12 +39,12 @@ const defaultTimeout = 10 * time.Minute
 
 // longTimeout is the time allowed to a conversion or a transcription:
 // encoding a long film again, or listening to it, takes hours on a
-// Raspberry Pi.
+// Raspberry Pi. Translating a film in several languages can take long too.
 const longTimeout = 24 * time.Hour
 
 // timeout is how long a job of this kind may run.
 func (k Kind) timeout() time.Duration {
-	if k == Convert || k == Transcribe {
+	if k == Convert || k == Transcribe || k == Translate {
 		return longTimeout
 	}
 	return defaultTimeout
@@ -51,9 +54,12 @@ func (k Kind) timeout() time.Duration {
 // arrives, to start again later from the beginning. Conversions do: they
 // run only when the machine has nothing else to do, so a new video gets
 // its cover in seconds, not after a film has been encoded. Transcriptions
-// do too, for the same reason.
+// do too, for the same reason. Translations do as well: a job that gives way
+// never stops another that does, so a translation waits for whisper instead
+// of throwing away hours of listening, and it loses little when it stops,
+// since each language is saved when ready.
 func (k Kind) givesWay() bool {
-	return k == Convert || k == Transcribe
+	return k == Convert || k == Transcribe || k == Translate
 }
 
 // state is where a job is in its life. It is stored as text in the database.

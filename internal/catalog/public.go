@@ -85,7 +85,7 @@ type PublicVideo struct {
 	Author      string   `json:"author"`
 	PublishedOn *string  `json:"publishedOn"`
 	Description *string  `json:"description,omitempty"`
-	Owner       string   `json:"owner"`  // the name of whose video it is; "" = nobody yet
+	Owner       string   `json:"owner"`  // the name of who uploaded it; "" = the site's own video
 	Stream      string   `json:"stream"` // the address of the video file
 	// VideoID is the id of the video only for a logged-in person who could
 	// open it anyway: the interface then shows its usual page. Guests and

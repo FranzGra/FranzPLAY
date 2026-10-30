@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import { avatarUrl } from "../../api/auth";
 import { deleteComment, fetchRecentComments, type RecentComment } from "../../api/comments";
-import { EmptyState } from "../../components/EmptyState";
+import { Avatar } from "../../components/Avatar";
 import { Icon } from "../../components/Icon";
 import { formatSince } from "../../lib/format";
-import styles from "./Admin.module.css";
+import pages from "./Pages.module.css";
+import { Card, Chip, Empty, Loading, PageHeader, Unavailable, ui } from "./ui";
 
 const pageSize = 50;
 const maxShown = 200;
@@ -37,19 +39,36 @@ export function CommentsPage() {
     return () => controller.abort();
   }, [load]);
 
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
+  const header = (
+    <PageHeader
+      title="Commenti"
+      description="Tutti i commenti, dai più nuovi. Puoi eliminare quelli che non vanno bene: chi li ha scritti non riceve avvisi."
+    />
+  );
+  if (state.kind === "loading") {
+    return (
+      <div className={ui.ui}>
+        {header}
+        <Loading />
+      </div>
+    );
+  }
   if (state.kind === "error") {
     return (
-      <EmptyState title="Commenti non disponibili">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
+      <div className={ui.ui}>
+        {header}
+        <Unavailable title="Commenti non disponibili" />
+      </div>
     );
   }
   if (state.comments.length === 0) {
     return (
-      <EmptyState title="Ancora nessun commento">
-        Quando qualcuno scrive sotto un video, il commento compare qui.
-      </EmptyState>
+      <div className={ui.ui}>
+        {header}
+        <Empty icon="comment" title="Ancora nessun commento">
+          Quando qualcuno scrive sotto un video, il commento compare qui.
+        </Empty>
+      </div>
     );
   }
 
@@ -66,27 +85,29 @@ export function CommentsPage() {
   };
 
   return (
-    <>
-      <p className={styles.lead}>
-        Tutti i commenti, dai più nuovi. Puoi eliminare quelli che non vanno bene: chi li ha scritti
-        non riceve avvisi.
-      </p>
-      <p className={styles.count}>
-        {state.total.toLocaleString("it-IT")} {state.total === 1 ? "commento" : "commenti"}
-      </p>
-      <ul className={`stagger ${styles.list}`} aria-label="Commenti">
-        {state.comments.map((c) => (
-          <li key={c.id}>
-            <CommentRow comment={c} onRemoved={() => removed(c)} />
-          </li>
-        ))}
-      </ul>
-      {state.comments.length < state.total && state.comments.length < maxShown && (
-        <button type="button" className={`glass ${styles.action} ${styles.more}`} onClick={more}>
-          Mostra altri
-        </button>
-      )}
-    </>
+    <div className={ui.ui}>
+      {header}
+      <Card
+        title="Dai più nuovi"
+        icon="comment"
+        sub={`${state.total.toLocaleString("it-IT")} ${state.total === 1 ? "commento" : "commenti"}`}
+      >
+        <ul className={pages.comments} aria-label="Commenti">
+          {state.comments.map((c) => (
+            <li key={c.id}>
+              <CommentRow comment={c} onRemoved={() => removed(c)} />
+            </li>
+          ))}
+        </ul>
+        {state.comments.length < state.total && state.comments.length < maxShown && (
+          <div className={pages.more}>
+            <button type="button" className={ui.btn} onClick={more}>
+              Mostra altri
+            </button>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }
 
@@ -108,47 +129,60 @@ function CommentRow({ comment, onRemoved }: { comment: RecentComment; onRemoved:
   };
 
   return (
-    <div className={`glass ${styles.person}`}>
-      <div className={styles.failed}>
-        <p className={styles.role}>
-          <strong className={styles.author}>{comment.author.name}</strong>
+    <article className={pages.comment} data-asking={asking || undefined}>
+      <Avatar
+        name={comment.author.name}
+        size={40}
+        photo={avatarUrl(comment.author.id, comment.author.avatar)}
+      />
+      <div className={pages.commentMain}>
+        <p className={pages.commentHead}>
+          <strong>{comment.author.name}</strong>
           {comment.reply ? " ha risposto sotto " : " ha scritto sotto "}
           {comment.video.visible ? (
-            <Link to={`/video/${comment.video.id}`}>{comment.video.title}</Link>
+            <Link className={ui.link} to={`/video/${comment.video.id}`}>
+              {comment.video.title}
+            </Link>
           ) : (
             <span>{comment.video.title} (nascosto o non trovato)</span>
           )}{" "}
           · {formatSince(comment.createdAt, new Date())}
         </p>
-        <p className={styles.body}>{comment.body}</p>
+        <p className={pages.commentBody}>{comment.body}</p>
+        {comment.replies > 0 && (
+          <Chip icon="comment">
+            {comment.replies === 1 ? "1 risposta" : `${comment.replies} risposte`}
+          </Chip>
+        )}
         {asking && (
-          <div className={styles.confirm}>
+          <div className={pages.confirm}>
             <p>
               Eliminare questo commento?
               {comment.replies > 0 &&
                 ` Spariscono anche ${comment.replies === 1 ? "la sua risposta" : `le sue ${comment.replies} risposte`}.`}
             </p>
-            <div className={styles.buttons}>
+            <div className={ui.chips}>
               <button
                 type="button"
-                className={`glass ${styles.action}`}
+                className={`${ui.btn} ${ui.ghost}`}
                 onClick={() => setAsking(false)}
               >
                 Annulla
               </button>
               <button
                 type="button"
-                className={`${styles.action} ${styles.danger}`}
+                className={`${ui.btn} ${ui.dangerBtn}`}
                 disabled={busy}
                 onClick={remove}
               >
+                <Icon name="trash" size={16} />
                 Sì, elimina
               </button>
             </div>
           </div>
         )}
         {problem && (
-          <p role="alert" className={styles.problem}>
+          <p role="alert" className={ui.problem}>
             {problem}
           </p>
         )}
@@ -156,13 +190,13 @@ function CommentRow({ comment, onRemoved }: { comment: RecentComment; onRemoved:
       {!asking && (
         <button
           type="button"
-          className={`glass ${styles.action} ${styles.danger}`}
+          className={`${ui.btn} ${ui.small} ${ui.dangerBtn}`}
           onClick={() => setAsking(true)}
         >
           <Icon name="trash" size={16} />
           Elimina
         </button>
       )}
-    </div>
+    </article>
   );
 }

@@ -7,7 +7,9 @@ import {
   proposalPictureURL,
   type SourceName,
 } from "../../api/online";
-import styles from "./Admin.module.css";
+import { Icon } from "../../components/Icon";
+import pages from "./Pages.module.css";
+import { Card, Loading, ui } from "./ui";
 
 const names: Record<SourceName, string> = {
   youtube: "YouTube",
@@ -54,68 +56,74 @@ export function OnlineProposals({ onChange }: { onChange: (left: number) => void
   };
 
   return (
-    <section className={`glass ${styles.rules}`} aria-label="Da confermare">
-      <h2 className={styles.name}>Da confermare</h2>
-      {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
+    <Card
+      title="Da confermare"
+      icon="check"
+      sub={state.kind === "ready" && state.list.length > 0 ? `${state.list.length}` : undefined}
+    >
+      {state.kind === "loading" && <Loading />}
       {state.kind === "error" && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           Il server non ha risposto. Ricarica la pagina tra poco.
         </p>
       )}
       {state.kind === "ready" && state.list.length === 0 && (
-        <p className={styles.role}>
+        <p className={ui.cardText}>
           Niente da confermare. Quando una fonte trova copertina e titolo di un video, compaiono
           qui.
         </p>
       )}
       {state.kind === "ready" && state.list.length > 0 && (
-        <ul className={`stagger ${styles.list}`} aria-label="Proposte">
+        <ul className={pages.proposals} aria-label="Proposte">
           {state.list.map((p) => (
-            <li key={p.videoId} className={`glass ${styles.proposal}`}>
-              <div className={styles.thumb}>
+            <li key={p.videoId} className={pages.proposal}>
+              <div className={ui.thumb}>
                 {p.picture ? (
                   <img src={proposalPictureURL(p.videoId)} alt="" loading="lazy" />
                 ) : (
-                  <span>Nessuna immagine</span>
+                  <span className={pages.noPicture}>
+                    <Icon name="image" size={20} />
+                    Nessuna immagine
+                  </span>
                 )}
               </div>
-              <div>
-                <p className={styles.name}>{p.title || p.video}</p>
-                <p className={styles.role}>
+              <div className={ui.rowMain}>
+                <b>{p.title || p.video}</b>
+                <span>
                   Per «{p.video}», da {names[p.source]}
                   {p.author && ` · ${p.author}`}
                   {p.date && ` · ${p.date}`}
-                </p>
+                </span>
+                <span className={ui.chips}>
+                  <button
+                    type="button"
+                    className={`${ui.btn} ${ui.small} ${ui.primary}`}
+                    disabled={busy !== 0}
+                    aria-label={`Usa la proposta per ${p.video}`}
+                    onClick={() => decide(p, true)}
+                  >
+                    Usa
+                  </button>
+                  <button
+                    type="button"
+                    className={`${ui.btn} ${ui.small} ${ui.ghost}`}
+                    disabled={busy !== 0}
+                    aria-label={`Scarta la proposta per ${p.video}`}
+                    onClick={() => decide(p, false)}
+                  >
+                    Scarta
+                  </button>
+                </span>
               </div>
-              <span className={styles.buttons}>
-                <button
-                  type="button"
-                  className={styles.primary}
-                  disabled={busy !== 0}
-                  aria-label={`Usa la proposta per ${p.video}`}
-                  onClick={() => decide(p, true)}
-                >
-                  Usa
-                </button>
-                <button
-                  type="button"
-                  className={`glass ${styles.action}`}
-                  disabled={busy !== 0}
-                  aria-label={`Scarta la proposta per ${p.video}`}
-                  onClick={() => decide(p, false)}
-                >
-                  Scarta
-                </button>
-              </span>
             </li>
           ))}
         </ul>
       )}
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
-    </section>
+    </Card>
   );
 }

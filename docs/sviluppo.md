@@ -66,6 +66,7 @@ internal/uploads/   video caricati dal browser, a pezzi, nella cartella dati
 internal/sharing/   condividere un video o una playlist solo con alcune persone
 internal/online/    fonti su internet (YouTube, TMDB, ThePornDB) per copertine e titoli, spente se l'admin non le accende
 internal/recommend/ i video consigliati: regole semplici a punti, ognuna col suo perché
+internal/bergamot/  traduce i sottotitoli con translator-cli e scarica i suoi modelli
 internal/translate/ traduce i sottotitoli con un server LibreTranslate, se l'admin ne indica uno
 internal/oldimport/ porta i dati del vecchio FranzPLAY da una copia .sql del suo database (`franzplay import-old`)
 internal/video/     tipi e decisioni sui video (nucleo puro, senza disco né database)
@@ -154,7 +155,8 @@ Impostazioni:
 | `FRANZPLAY_FFPROBE` | `ffprobe` | Programma ffprobe (nome nel PATH o percorso completo) |
 | `FRANZPLAY_FFMPEG` | `ffmpeg` | Programma ffmpeg (nome nel PATH o percorso completo) |
 | `FRANZPLAY_WHISPER` | `whisper-cli` | Programma di whisper.cpp per i sottotitoli automatici; se manca, la funzione è spenta |
-| `FRANZPLAY_TRANSLATE_URL` | nessuno | Indirizzo di un server LibreTranslate per tradurre i sottotitoli (es. `http://localhost:5000`) |
+| `FRANZPLAY_TRANSLATOR` | `translator-cli` | Programma Bergamot che traduce i sottotitoli |
+| `FRANZPLAY_TRANSLATE_URL` | nessuno | Facoltativo: server LibreTranslate da usare al posto del programma (es. `http://localhost:5000`) |
 | `FRANZPLAY_TRANSLATE_KEY` | nessuna | Chiave di LibreTranslate, se il server la chiede |
 | `FRANZPLAY_SETUP_CODE` | `false` | `true` chiede un codice scritto nel log per creare il primo amministratore |
 

@@ -167,6 +167,20 @@ describe("navigation", () => {
       );
     });
 
+    it("inside the administration only fades the page, nothing moves", async () => {
+      const { user } = renderApp("/admin/riepilogo");
+      const menu = await screen.findByRole("navigation", {
+        name: "Sezioni dell'amministrazione",
+      });
+      expect(animate).not.toHaveBeenCalled();
+      await user.click(within(menu).getByRole("link", { name: /Persone/ }));
+      await waitFor(() => expect(animate).toHaveBeenCalledTimes(1));
+      expect(animate).toHaveBeenCalledWith(
+        [{ opacity: 0 }, { opacity: 1 }],
+        expect.objectContaining({ duration: 160 }),
+      );
+    });
+
     it("moves nothing for whoever asked for less motion", async () => {
       vi.stubGlobal("matchMedia", (query: string) => ({
         matches: query === "(prefers-reduced-motion: reduce)",

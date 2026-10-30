@@ -3,7 +3,9 @@
 package respond
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 )
@@ -30,6 +32,11 @@ func Error(w http.ResponseWriter, r *http.Request, logger *slog.Logger, status i
 // InternalError logs what went wrong and sends a generic 500: details of
 // the server's inside stay in the log, not in the browser.
 func InternalError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
-	logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "error", err)
+	if errors.Is(r.Context().Err(), context.Canceled) {
+		// The page went away or stopped asking: nothing is wrong here.
+		logger.DebugContext(r.Context(), "request canceled", "path", r.URL.Path, "error", err)
+	} else {
+		logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "error", err)
+	}
 	Error(w, r, logger, http.StatusInternalServerError, "internal error")
 }

@@ -1,0 +1,144 @@
+/* A bar of progress: a soft track and a fill in the accent. */
+.bar {
+  --bar-height: 10px;
+  --bar-color: var(--color-accent);
+  position: relative;
+  height: var(--bar-height);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.08);
+  overflow: hidden;
+}
+
+.bar[data-size="small"] {
+  --bar-height: 6px;
+}
+
+.bar[data-size="big"] {
+  --bar-height: 14px;
+}
+
+.bar[data-tone="warning"] {
+  --bar-color: var(--color-warning);
+}
+
+.bar[data-tone="danger"] {
+  --bar-color: #ef4444;
+}
+
+.bar[data-tone="success"] {
+  --bar-color: #22c55e;
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background-color: var(--bar-color);
+  /* The server tells how far the work is about once a second: a linear
+     slide of the same length joins one number to the next, so the bar
+     moves on smoothly instead of jumping. */
+  transition: width 1s linear;
+}
+
+/* While the work goes on, light stripes slide along the fill. */
+.bar[data-working] .fill {
+  background-image: linear-gradient(
+    45deg,
+    rgb(255 255 255 / 0.22) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgb(255 255 255 / 0.22) 50%,
+    rgb(255 255 255 / 0.22) 75%,
+    transparent 75%
+  );
+  background-size: 22px 22px;
+  animation: stripes 0.9s linear infinite;
+}
+
+.bar[data-size="small"][data-working] .fill {
+  background-size: 14px 14px;
+}
+
+/* Without a percentage, a piece of the bar slides from side to side. */
+.bar[data-indeterminate] .fill {
+  width: 38%;
+  animation:
+    stripes 0.9s linear infinite,
+    slide 1.5s var(--ease-in-out) infinite;
+}
+
+@keyframes stripes {
+  to {
+    background-position: 22px 0;
+  }
+}
+
+@keyframes slide {
+  from {
+    left: -38%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+/* A small ring that turns beside a title. */
+.ringBox {
+  display: inline-flex;
+}
+
+.ring {
+  display: inline-block;
+  flex: none;
+  border: 2.5px solid rgb(255 255 255 / 0.18);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* A dot that pulses beside what runs now. */
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 0 rgb(var(--color-accent-rgb) / 0.6);
+  animation: pulse 1.6s infinite;
+}
+
+@keyframes pulse {
+  70% {
+    box-shadow: 0 0 0 8px rgb(var(--color-accent-rgb) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(var(--color-accent-rgb) / 0);
+  }
+}
+
+/* Less motion: nothing slides or turns. An unknown amount shows as the
+   whole bar, half lit, so it still says "working". */
+@media (prefers-reduced-motion: reduce) {
+  .fill,
+  .bar[data-working] .fill,
+  .bar[data-indeterminate] .fill,
+  .ring,
+  .dot {
+    animation: none;
+    transition: none;
+  }
+
+  .bar[data-indeterminate] .fill {
+    left: 0;
+    width: 100%;
+    opacity: 0.5;
+  }
+}

@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -82,6 +83,10 @@ export function Layout() {
   // the videos beside it get the room. The ☰ button brings it back in its
   // usual place, and the page makes room for it.
   const drawer = pathname.startsWith("/video/");
+  // The administration is a console with its own menus: on a computer the
+  // app's top bar and side menu step aside and the console takes the
+  // whole window. On a phone the app's bars stay.
+  const inConsole = account.role === "admin" && underAdmin(pathname);
   const menu = useDrawer(pathname);
   const [width, setWidth] = useState<PageWidth>("normal");
   const newVersion = useNewVersion(account.role === "admin");
@@ -96,7 +101,7 @@ export function Layout() {
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-console={inConsole || undefined}>
       <header className={styles.header}>
         {/* The bar has three columns as wide on the left as on the right,
             so the search stays in the middle of the screen whatever the
@@ -238,19 +243,33 @@ function PlaylistLink({ list }: { list: Playlist }) {
   );
 }
 
+// underAdmin says whether an address is a page of the administration.
+function underAdmin(pathname: string): boolean {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
 // useEnterOnNavigate makes each new page rise softly into place. It moves
 // the page with the browser's own animations instead of drawing it again,
 // so what the page already loaded stays as it is. It is the light entrance
 // for every browser; when a video card grows into the player (coverMorph)
 // that move is the entrance, and this one stays still. Nothing moves for
 // whoever asked their device for less motion or less data, or on a weak
-// device (richMotion).
+// device (richMotion). Inside the administration nothing rises: its menus
+// stay where they are from page to page and they would move with the page,
+// so the console only fades its open page in (AdminPage).
 function useEnterOnNavigate(page: RefObject<HTMLDivElement | null>) {
   const { pathname } = useLocation();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the animation runs on every new address
+  const last = useRef(pathname);
   useEffect(() => {
+    const from = last.current;
+    last.current = pathname;
     const element = page.current;
-    if (!element?.animate || morphing() || !richMotion()) {
+    if (
+      !element?.animate ||
+      morphing() ||
+      !richMotion() ||
+      (underAdmin(from) && underAdmin(pathname))
+    ) {
       return;
     }
     const move = element.animate(
@@ -267,12 +286,14 @@ function useEnterOnNavigate(page: RefObject<HTMLDivElement | null>) {
 // useScrollPlaces opens a new page at its top, and brings a page reached
 // with the back or forward button to where it was left (scrollMemory).
 // Changing only the part after "?" (a filter, a search) keeps the place.
+// It runs before the browser paints, or the new page would show for one
+// frame at the place of the old one, and then jump.
 function useScrollPlaces() {
   const { pathname, key } = useLocation();
   const type = useNavigationType();
   const last = useRef(pathname);
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every new entry
-  useEffect(() => {
+  useLayoutEffect(() => {
     const moved = last.current !== pathname;
     last.current = pathname;
     if (type === "POP") restorePlace();

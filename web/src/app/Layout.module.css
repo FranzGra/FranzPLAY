@@ -194,7 +194,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 248px;
+  width: var(--sidebar-width);
   max-height: calc(100dvh - var(--header-height));
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -268,6 +268,26 @@
   flex: 1;
   min-width: 0;
   padding: var(--page-top) var(--page-side) 64px;
+}
+
+/* A page can open a panel on the right (data-side-panel="open", the
+   Personalizza of the Home). On a wide computer the page narrows to make
+   room for it, so what the panel changes stays in sight; on a smaller
+   screen the panel lies over the page instead. */
+@media (min-width: 1280px) {
+  .main {
+    transition: padding-right var(--duration-slow) var(--ease-out);
+  }
+
+  .body:has([data-side-panel="open"]) .main {
+    padding-right: calc(var(--page-side) + var(--sidebar-width));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main {
+    transition: none;
+  }
 }
 
 /* Keeps every page in a centered column, so it does not stick to the side menu */
@@ -457,5 +477,30 @@
   .tabbar {
     position: static;
     margin-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+/* The administration is a console with its own menus (see the admin's
+   Console.module.css): on a computer the app's top bar and side menu step
+   aside and the page takes the whole window, edge to edge. On a phone the
+   app's bars stay and the page takes the whole width. */
+.shell[data-console] .page {
+  max-width: none;
+}
+
+/* A short page and a long page keep the same width: where the scrollbar
+   goes stays reserved, so going from one to the other moves nothing. */
+html:has(.shell[data-console]) {
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 900px) {
+  .shell[data-console] .header,
+  .shell[data-console] .sidebar {
+    display: none;
+  }
+
+  .shell[data-console] .main {
+    padding: 0;
   }
 }

@@ -48,10 +48,11 @@ type Video struct {
 	// link", like "/video/12?k=…": only for its uploader, on the video.
 	Link     *string `json:"link,omitempty"`
 	Uploader *Person `json:"uploader"` // who uploaded it from the browser; null = from a video folder
-	// Owner is whose video it is, shown under the title: its uploader, or
-	// for a video from a folder the main administrator. Only for one video;
-	// null if FranzPLAY has nobody yet.
-	Owner *Owner `json:"owner,omitempty"`
+	// Owner is whose video it is, shown under the title and on its card:
+	// the person who uploaded it from the browser, with their photo. null =
+	// the video is the site's own: it came from a video folder, or its
+	// uploader left. The interface then shows the site's logo and name.
+	Owner *Owner `json:"owner"`
 	// SharedWith are the people a private video is shared with: only for
 	// one video, and only when its uploader asks.
 	SharedWith []sharing.Person `json:"sharedWith,omitempty"`
@@ -195,6 +196,7 @@ const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.
 	v.shown_author, v.shown_published_on, v.clip, v.clip_hd, v.private, v.link_key,
 	EXISTS (SELECT 1 FROM video_shares s WHERE s.video_id = v.id),
 	v.uploaded_by, (SELECT u.name FROM users u WHERE u.id = v.uploaded_by),
+	(SELECT u.avatar FROM users u WHERE u.id = v.uploaded_by),
 	(SELECT count(*) FROM likes l WHERE l.video_id = v.id),
 	(SELECT p.token FROM public_links p WHERE p.video_id = v.id)`
 
@@ -217,11 +219,12 @@ func scanVideo(row rowScanner) (Video, error) {
 	var addedAt int64
 	var relPath string
 	var uploaderID sql.NullInt64
+	var uploaderAvatar sql.NullInt64
 	var uploaderName, linkKey, publicKey sql.NullString
 	var shared bool
 	if err := row.Scan(&v.ID, &v.Title, &v.Category, &duration, &width, &height, &cover, &addedAt,
 		&relPath, &videoCodec, &audioCodec, &pixels, &preview, &previewGap, &previewCount, &previewWidth, &previewHeight, &converted,
-		&author, &published, &clip, &clipHD, &v.Private, &linkKey, &shared, &uploaderID, &uploaderName, &v.Likes, &publicKey); err != nil {
+		&author, &published, &clip, &clipHD, &v.Private, &linkKey, &shared, &uploaderID, &uploaderName, &uploaderAvatar, &v.Likes, &publicKey); err != nil {
 		return Video{}, err
 	}
 	if linkKey.Valid {
@@ -260,6 +263,7 @@ func scanVideo(row rowScanner) (Video, error) {
 	}
 	if uploaderID.Valid && uploaderName.Valid {
 		v.Uploader = &Person{ID: uploaderID.Int64, Name: uploaderName.String}
+		v.Owner = &Owner{ID: uploaderID.Int64, Name: uploaderName.String, Avatar: uploaderAvatar.Int64}
 	}
 	v.AddedAt = time.Unix(addedAt, 0).UTC()
 	v.Format = fileFormat(relPath)
@@ -381,9 +385,6 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 	if description.Valid {
 		v.Description = &description.String
 	}
-	if v.Owner, err = s.owner(ctx, v.Uploader); err != nil {
-		return Video{}, fmt.Errorf("read video %d: %w", id, err)
-	}
 	v.forUploader(viewer(ctx), true)
 	v.forManager(ctx)
 	if v.Private && v.Uploader != nil && v.Uploader.ID == viewer(ctx) {
@@ -396,28 +397,6 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 		v.SharedWith = people[id]
 	}
 	return v, nil
-}
-
-// owner returns whose a video is: the person who uploaded it, or for a
-// video from a folder (or whose uploader left) the main administrator, the
-// first administrator created, who installed FranzPLAY. nil if there is
-// nobody yet.
-func (s store) owner(ctx context.Context, uploader *Person) (*Owner, error) {
-	var uploaderID any // NULL: the video came from a folder
-	if uploader != nil {
-		uploaderID = uploader.ID
-	}
-	var o Owner
-	err := s.db.QueryRowContext(ctx, `SELECT u.id, u.name, u.avatar FROM users u WHERE u.id = coalesce(?,
-		(SELECT a.id FROM users a WHERE a.role = 'admin' ORDER BY a.created_at, a.id LIMIT 1))`, uploaderID).
-		Scan(&o.ID, &o.Name, &o.Avatar)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read owner: %w", err)
-	}
-	return &o, nil
 }
 
 // byIDs returns the visible videos among ids, in the order of ids.
@@ -496,22 +475,37 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
-	if err := s.addCategoryPictures(ctx, out); err != nil {
+	found, err := s.categoryPictures(ctx)
+	if err != nil {
 		return nil, err
+	}
+	for i := range out {
+		c := &out[i]
+		pictures := found[c.Name]
+		c.Poster = pictures.poster
+		if c.Image == nil { // the image the administrator chose wins over a wide one
+			c.Image = pictures.wide
+		}
 	}
 	return out, nil
 }
 
-// addCategoryPictures adds to the categories the pictures found in their
-// folders, like poster.jpg and fanart.jpg (video.PickCategoryPictures).
-// The image the administrator chose wins over a wide one.
-func (s store) addCategoryPictures(ctx context.Context, categories []Category) (err error) {
+// folderPictures are the pictures found in the folder of a category, as
+// addresses: nil = none.
+type folderPictures struct {
+	wide, poster *string
+}
+
+// categoryPictures returns the pictures found in the folders of the
+// categories, like poster.jpg and fanart.jpg (video.PickCategoryPictures),
+// by the name people see.
+func (s store) categoryPictures(ctx context.Context) (_ map[string]folderPictures, err error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT coalesce(c.label, p.category), p.path, p.file, p.width, p.height
 		FROM category_pictures p LEFT JOIN categories c ON c.name = p.category
 		WHERE p.file IS NOT NULL ORDER BY p.library_id, p.id`)
 	if err != nil {
-		return fmt.Errorf("list category pictures: %w", err)
+		return nil, fmt.Errorf("list category pictures: %w", err)
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	type found struct {
@@ -523,7 +517,7 @@ func (s store) addCategoryPictures(ctx context.Context, categories []Category) (
 		var shown, p, file string
 		var w, h int
 		if err := rows.Scan(&shown, &p, &file, &w, &h); err != nil {
-			return fmt.Errorf("list category pictures: %w", err)
+			return nil, fmt.Errorf("list category pictures: %w", err)
 		}
 		f := byCategory[shown]
 		if f == nil {
@@ -537,23 +531,21 @@ func (s store) addCategoryPictures(ctx context.Context, categories []Category) (
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("list category pictures: %w", err)
+		return nil, fmt.Errorf("list category pictures: %w", err)
 	}
-	for i := range categories {
-		c := &categories[i]
-		f := byCategory[c.Name]
-		if f == nil {
-			continue
-		}
+	out := make(map[string]folderPictures, len(byCategory))
+	for shown, f := range byCategory {
+		var pictures folderPictures
 		poster, landscape, hasPoster, hasLandscape := video.PickCategoryPictures(f.pictures)
 		if hasPoster {
-			c.Poster = categoryPictureURL(f.files[poster.Name])
+			pictures.poster = categoryPictureURL(f.files[poster.Name])
 		}
-		if hasLandscape && c.Image == nil {
-			c.Image = categoryPictureURL(f.files[landscape.Name])
+		if hasLandscape {
+			pictures.wide = categoryPictureURL(f.files[landscape.Name])
 		}
+		out[shown] = pictures
 	}
-	return nil
+	return out, nil
 }
 
 // categoryPictureURL is the address of the copy of a picture found in the
@@ -645,13 +637,14 @@ func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, 
 // autoSubtitle is a subtitle written by whisper, or its translation.
 type autoSubtitle struct {
 	lang string // "it"
+	from string // for a translation, the language it was translated from
 	file string // in the data folder's autosubtitles/
 }
 
 // auto returns the automatic subtitles made from the video's current
 // content, by language.
 func (s store) auto(ctx context.Context, id int64) (subs []autoSubtitle, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT a.lang, a.file FROM auto_subtitles a JOIN videos v ON v.id = a.video_id
+	rows, err := s.db.QueryContext(ctx, `SELECT a.lang, a.translated_from, a.file FROM auto_subtitles a JOIN videos v ON v.id = a.video_id
 		WHERE a.video_id = ? AND a.fingerprint = v.fingerprint ORDER BY a.lang`, id)
 	if err != nil {
 		return nil, fmt.Errorf("read automatic subtitles of video %d: %w", id, err)
@@ -659,7 +652,7 @@ func (s store) auto(ctx context.Context, id int64) (subs []autoSubtitle, err err
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
 		var a autoSubtitle
-		if err := rows.Scan(&a.lang, &a.file); err != nil {
+		if err := rows.Scan(&a.lang, &a.from, &a.file); err != nil {
 			return nil, fmt.Errorf("read automatic subtitles of video %d: %w", id, err)
 		}
 		subs = append(subs, a)

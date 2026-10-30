@@ -409,20 +409,121 @@ describe("subtitles", () => {
     expect(screen.getByText(/mare\.it\.srt/)).toBeInTheDocument();
   });
 
-  it("changes and remembers the subtitle style", async () => {
-    const { user } = setup();
+  async function openStyle(user: ReturnType<typeof setup>["user"]) {
     await user.click(screen.getByRole("button", { name: "Impostazioni" }));
     await user.click(screen.getByRole("button", { name: /Stile dei sottotitoli/ }));
-    await user.click(screen.getByRole("button", { name: /Colore/ }));
-    await user.click(screen.getByRole("button", { name: "Giallo" }));
-    await user.click(screen.getByRole("button", { name: /Dimensione/ }));
-    await user.click(screen.getByRole("button", { name: "Molto grande" }));
-    expect(screen.getByRole("button", { name: /Colore/ })).toHaveTextContent("Giallo");
-    expect(screen.getByText("Così appariranno i sottotitoli")).toHaveStyle({ color: "#ffe14d" });
-    expect(JSON.parse(window.localStorage.getItem("franzplay.subtitleStyle") ?? "")).toMatchObject({
+  }
+
+  it("changes and remembers the subtitle style, each with one click on one page", async () => {
+    const { user } = setup();
+    await openStyle(user);
+    const preview = screen.getByText("Così appariranno i sottotitoli");
+
+    await user.click(screen.getByRole("radio", { name: "Giallo" }));
+    await user.click(screen.getByRole("radio", { name: "Molto grande" }));
+    await user.click(screen.getByRole("radio", { name: "Nero" }));
+    await user.click(screen.getByRole("radio", { name: "In alto" }));
+
+    // Still the same page: the preview never left, and follows every choice.
+    expect(screen.getByText("Così appariranno i sottotitoli")).toBe(preview);
+    expect(screen.getByRole("button", { name: "Stile dei sottotitoli" })).toBeInTheDocument();
+    expect(preview).toHaveStyle({ color: "#ffe14d", backgroundColor: "#000000" });
+    expect(preview.style.fontSize).toContain("6.5cqh");
+    expect(preview.parentElement).toHaveAttribute("data-position", "top");
+    expect(screen.getByRole("radio", { name: "Giallo" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Bianco" })).toHaveAttribute("aria-checked", "false");
+    expect(JSON.parse(window.localStorage.getItem("franzplay.subtitleStyle") ?? "")).toEqual({
       color: "yellow",
       size: "huge",
+      background: "black",
+      position: "top",
     });
+  });
+
+  it("offers every setting as a named group, all at once", async () => {
+    const { user } = setup();
+    await openStyle(user);
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(4);
+    for (const [name, choices] of [
+      ["Dimensione", 4],
+      ["Colore", 4],
+      ["Sfondo", 4],
+      ["Posizione", 2],
+    ] as const) {
+      const group = screen.getByRole("radiogroup", { name });
+      expect(within(group).getAllByRole("radio")).toHaveLength(choices);
+    }
+  });
+
+  it("moves through a setting with the arrows, one stop for the tab key", async () => {
+    const { user } = setup();
+    await openStyle(user);
+    // The keyboard is already on the first setting.
+    const normal = screen.getByRole("radio", { name: "Normale" });
+    expect(normal).toHaveFocus();
+
+    await user.keyboard("{ArrowRight}");
+    const large = screen.getByRole("radio", { name: "Grande" });
+    expect(large).toHaveFocus();
+    expect(large).toHaveAttribute("aria-checked", "true");
+    expect(large).toHaveAttribute("tabindex", "0");
+    expect(normal).toHaveAttribute("tabindex", "-1");
+
+    await user.keyboard("{ArrowDown}{ArrowRight}"); // past the last, back to the first
+    expect(screen.getByRole("radio", { name: "Piccola" })).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("radio", { name: "Molto grande" })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("radio", { name: "Bianco" })).toHaveFocus();
+    expect(JSON.parse(window.localStorage.getItem("franzplay.subtitleStyle") ?? "")).toMatchObject({
+      size: "huge",
+    });
+  });
+
+  it("keeps the player's keys asleep while choosing the style", async () => {
+    const { user, video, play } = setup();
+    await openStyle(user);
+    video.currentTime = 60;
+    video.volume = 0.5;
+    play.mockClear();
+
+    await user.keyboard("{ArrowRight}{ArrowLeft}{ArrowUp}{ArrowDown} kjlmf0");
+    expect(video.currentTime).toBe(60);
+    expect(video.volume).toBe(0.5);
+    expect(play).not.toHaveBeenCalled();
+
+    // Nor when the click landed on a name, which is not a control.
+    await user.click(screen.getByText("Colore"));
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: " " });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "ArrowRight" });
+    expect(video.currentTime).toBe(60);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("goes back to the main menu with the keyboard on the row, and Esc closes", async () => {
+    const { user } = setup();
+    await openStyle(user);
+    await user.click(screen.getByRole("button", { name: "Stile dei sottotitoli" }));
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stile dei sottotitoli" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /Velocità/ })).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(4);
+    await user.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Impostazioni del video" })).toBeNull(),
+    );
+  });
+
+  it("still lets the player's keys work on the other pages of the menu", async () => {
+    const { user, video } = setup();
+    await user.click(screen.getByRole("button", { name: "Impostazioni" }));
+    await user.click(screen.getByRole("button", { name: /Velocità/ }));
+    video.currentTime = 60;
+    fireEvent.keyDown(screen.getByRole("button", { name: /^2/ }), { key: "ArrowRight" });
+    expect(video.currentTime).toBeGreaterThan(60);
   });
 });
 

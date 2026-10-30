@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
+	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -33,7 +34,8 @@ const (
 type Subtitle struct {
 	Lang   string `json:"lang"` // "it"; "" when the file does not say
 	Source Source `json:"source"`
-	From   string `json:"from"` // for a translation, the language it was translated from
+	From   string `json:"from"`  // for a translation, the language it was translated from
+	Model  string `json:"model"` // for whisper's, the model that wrote them
 }
 
 // Request is what the administrator asked for a video, and how it goes.
@@ -45,6 +47,13 @@ type Request struct {
 	State     string    `json:"state"` // the job: "pending", "running", "done", "failed"
 	Error     string    `json:"error"` // why it failed
 	At        time.Time `json:"at"`    // when it was asked
+	// While the job runs: when it started, and while whisper listens how
+	// far it is, from 0 to 100, with the seconds of sound heard and in
+	// all. null when not running, or not known (yet).
+	StartedAt    *time.Time `json:"startedAt"`
+	Progress     *float64   `json:"progress"`
+	HeardSeconds *float64   `json:"heardSeconds"`
+	TotalSeconds *float64   `json:"totalSeconds"`
 }
 
 // Item is one video on the page.
@@ -54,6 +63,11 @@ type Item struct {
 	Cover     *string    `json:"cover"`
 	Subtitles []Subtitle `json:"subtitles"`
 	Request   *Request   `json:"request"` // nil: nothing asked
+	// Translation is the translation asked and not finished; nil: none.
+	Translation *Translation `json:"translation"`
+	// AudioLangs are the languages of the sound tracks, as the file says,
+	// the main one first: a hint of the language spoken, not a certainty.
+	AudioLangs []string `json:"audioLangs"`
 }
 
 // listQuery is what GET /api/admin/subtitles asks.
@@ -135,17 +149,31 @@ func (p page) list(ctx context.Context, q listQuery) ([]Item, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	translations, err := p.translations(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	audio, err := p.audioLangs(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
 	for i := range all {
 		all[i].Subtitles = append(slices.Clone(inside[all[i].ID]), auto[all[i].ID]...)
 		all[i].Request = requests[all[i].ID]
+		all[i].Translation = translations[all[i].ID]
+		all[i].AudioLangs = audio[all[i].ID]
+		if all[i].AudioLangs == nil {
+			all[i].AudioLangs = []string{}
+		}
 	}
 	slices.SortStableFunc(all, func(a, b candidate) int {
+		at, bt := a.askedAt(), b.askedAt()
 		switch {
-		case a.Request != nil && b.Request != nil:
-			return b.Request.At.Compare(a.Request.At)
-		case a.Request != nil:
+		case !at.IsZero() && !bt.IsZero():
+			return bt.Compare(at)
+		case !at.IsZero():
 			return -1
-		case b.Request != nil:
+		case !bt.IsZero():
 			return 1
 		}
 		return 0
@@ -174,6 +202,18 @@ func (p page) list(ctx context.Context, q listQuery) ([]Item, int, error) {
 		items[i] = page[i].Item
 	}
 	return items, total, nil
+}
+
+// askedAt is when something was last asked for a video; zero: nothing.
+func (c candidate) askedAt() time.Time {
+	var at time.Time
+	if c.Request != nil {
+		at = c.Request.At
+	}
+	if c.Translation != nil && c.Translation.At.After(at) {
+		at = c.Translation.At
+	}
+	return at
 }
 
 // keeps reports whether a video with these subtitles matches the filters.
@@ -255,24 +295,24 @@ func (p page) videos(ctx context.Context, q string) (_ []candidate, err error) {
 // inside the files, and the ones whisper made from the current content.
 func (p page) known(ctx context.Context) (inside, auto map[int64][]Subtitle, err error) {
 	inside, auto = map[int64][]Subtitle{}, map[int64][]Subtitle{}
-	err = p.each(ctx, `SELECT video_id, lang, '' FROM video_subtitles ORDER BY video_id, stream`,
-		func(id int64, lang, _ string) {
+	err = p.each(ctx, `SELECT video_id, lang, '', '' FROM video_subtitles ORDER BY video_id, stream`,
+		func(id int64, lang, _, _ string) {
 			inside[id] = append(inside[id], Subtitle{Lang: video.LangCode(lang), Source: FromInside})
 		})
 	if err != nil {
 		return nil, nil, err
 	}
-	err = p.each(ctx, `SELECT a.video_id, a.lang, a.translated_from FROM auto_subtitles a
+	err = p.each(ctx, `SELECT a.video_id, a.lang, a.translated_from, a.model FROM auto_subtitles a
 		JOIN videos v ON v.id = a.video_id AND v.fingerprint = a.fingerprint
 		ORDER BY a.video_id, a.translated_from != '', a.lang`,
-		func(id int64, lang, from string) {
-			auto[id] = append(auto[id], Subtitle{Lang: lang, Source: FromAuto, From: from})
+		func(id int64, lang, from, model string) {
+			auto[id] = append(auto[id], Subtitle{Lang: lang, Source: FromAuto, From: from, Model: model})
 		})
 	return inside, auto, err
 }
 
-// each runs a query of three columns, an id and two texts.
-func (p page) each(ctx context.Context, query string, f func(id int64, a, b string)) (err error) {
+// each runs a query of four columns, an id and three texts.
+func (p page) each(ctx context.Context, query string, f func(id int64, a, b, c string)) (err error) {
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("list subtitles: %w", err)
@@ -280,11 +320,11 @@ func (p page) each(ctx context.Context, query string, f func(id int64, a, b stri
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
 		var id int64
-		var a, b string
-		if err := rows.Scan(&id, &a, &b); err != nil {
+		var a, b, c string
+		if err := rows.Scan(&id, &a, &b, &c); err != nil {
 			return fmt.Errorf("list subtitles: %w", err)
 		}
-		f(id, a, b)
+		f(id, a, b, c)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("list subtitles: %w", err)
@@ -310,6 +350,9 @@ func (p page) requests(ctx context.Context) (_ map[int64]*Request, err error) {
 			return nil, fmt.Errorf("list subtitle requests: %w", err)
 		}
 		r.At = time.Unix(at, 0).UTC()
+		if r.State == "running" {
+			p.addProgress(id, &r)
+		}
 		r.Translate = []string{}
 		if langs != "" {
 			r.Translate = strings.Split(langs, ",")
@@ -320,6 +363,28 @@ func (p page) requests(ctx context.Context) (_ map[int64]*Request, err error) {
 		return nil, fmt.Errorf("list subtitle requests: %w", err)
 	}
 	return out, nil
+}
+
+// addProgress adds how far the running transcription of a video is, as
+// the job worker knows it.
+func (p page) addProgress(videoID int64, r *Request) {
+	if p.opts.Running == nil {
+		return
+	}
+	for _, j := range p.opts.Running() {
+		if j.Kind != jobs.Transcribe || j.VideoID != videoID {
+			continue
+		}
+		r.StartedAt = new(j.StartedAt.UTC())
+		if j.Known && j.Progress.Stage == string(media.StageTranscribe) {
+			if j.Progress.Percent >= 0 {
+				r.Progress = new(j.Progress.Percent)
+			}
+			if j.Progress.Total > 0 {
+				r.HeardSeconds, r.TotalSeconds = new(j.Progress.Done), new(j.Progress.Total)
+			}
+		}
+	}
 }
 
 // likeEscapes protects the characters LIKE reads as patterns.

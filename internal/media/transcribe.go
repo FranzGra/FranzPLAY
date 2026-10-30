@@ -16,7 +16,6 @@ import (
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/safefile"
-	"github.com/FranzGra/FranzPLAY/internal/translate"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -54,9 +53,22 @@ func Models(dataDir string) ([]string, error) {
 	return names, nil
 }
 
-// Translator translates the text of subtitles; *translate.Client is one.
+// Translator translates the text of subtitles, keeping the times. It says
+// ErrRefused when trying again cannot help. It knows nothing of the queue:
+// any engine that does this can be plugged in.
 type Translator interface {
 	Cues(ctx context.Context, cues []video.Cue, from, to string) ([]video.Cue, error)
+}
+
+// Preparer is a translator with something to get ready before translating,
+// like a model to download. It runs inside the job, which can be stopped.
+type Preparer interface {
+	Prepare(ctx context.Context, from, to string) error
+}
+
+// Batcher is a translator that says how many sentences it wants at a time.
+type Batcher interface {
+	BatchSize() int
 }
 
 // Stage is what a transcription is doing, for the administrator's page.
@@ -67,12 +79,13 @@ const (
 	StageNone       Stage = ""
 	StageAudio      Stage = "audio"      // ffmpeg takes the sound out of the video
 	StageTranscribe Stage = "transcribe" // whisper listens
-	StageTranslate  Stage = "translate"  // the translator works
+	StageTranslate  Stage = "translate"  // the translator works, in a job of its own
 )
 
 // Transcriber writes subtitles from the sound of a video with whisper.cpp,
-// then has them translated, as the administrator asked in the video's
-// subtitle_requests row. The video file is only read (rule 1).
+// as the administrator asked in the video's subtitle_requests row, and has
+// subtitles translated, as asked in its translation_requests row: two jobs.
+// The video file is only read (rule 1).
 type Transcriber struct {
 	db         *sql.DB
 	ffmpeg     string // programs to run
@@ -81,6 +94,7 @@ type Transcriber struct {
 	translator Translator // nil: no translations
 	threads    int        // how many processor cores whisper may use
 	run        runFunc
+	stream     streamFunc // runs whisper, reading how far it is as it goes
 	now        func() time.Time
 	changed    func()
 }
@@ -91,7 +105,8 @@ type Transcriber struct {
 // gives way to any other, so it only runs when nothing else needs doing.
 func NewTranscriber(db *sql.DB, ffmpeg, whisper, dataDir string, translator Translator) *Transcriber {
 	return &Transcriber{db: db, ffmpeg: ffmpeg, whisper: whisper, dataDir: dataDir, translator: translator,
-		threads: max(1, runtime.NumCPU()-1), run: runInBackground, now: time.Now, changed: func() {}}
+		threads: max(1, runtime.NumCPU()-1), run: runInBackground, stream: streamInBackground, now: time.Now,
+		changed: func() {}}
 }
 
 // OnStage sets a function called when a transcription moves to another
@@ -110,10 +125,16 @@ type subtitleRequest struct {
 // autoSubtitle is a subtitle already made for a video.
 type autoSubtitle struct {
 	lang, translatedFrom, model, file string
+	madeAt                            time.Time
 }
 
+// ErrRefused means the translator will not translate, whatever we try
+// again: a wrong key, or a language it does not have. A translator wraps it
+// in its error, and the job does not try again.
+var ErrRefused = errors.New("translation refused")
+
 // errNoTranslator means a translation was asked but no translator is set.
-var errNoTranslator = errors.New("no translator set (FRANZPLAY_TRANSLATE_URL)")
+var errNoTranslator = errors.New("the translator is off")
 
 // errTakenBack means the administrator took the request back while the
 // job ran: what was made is thrown away, and the job is not a failure.
@@ -123,8 +144,8 @@ var errTakenBack = errors.New("request taken back")
 var errVideoChanged = errors.New("the video file changed meanwhile: ask again")
 
 // Handle is the job handler for jobs.Transcribe. What is already made for
-// the current content is kept: asking for one more language only
-// translates that one.
+// the current content is kept: asking for one more language only asks to
+// translate that one. The translations are another job, queued at the end.
 func (t *Transcriber) Handle(ctx context.Context, videoID int64) error {
 	err := t.handle(ctx, videoID)
 	if errors.Is(err, errTakenBack) {
@@ -148,57 +169,38 @@ func (t *Transcriber) handle(ctx context.Context, videoID int64) (err error) {
 		return err
 	}
 
-	heard, cues, redone, err := t.transcript(ctx, videoID, file, fingerprint, req, made)
+	heard, redone, err := t.transcript(ctx, videoID, file, fingerprint, req, made)
 	if err != nil {
 		return err
 	}
-	for _, lang := range req.langs {
-		if lang == heard {
-			continue // whisper's own subtitles
-		}
-		if s, ok := made[lang]; ok && !redone && s.translatedFrom == heard {
-			continue
-		}
-		if err := t.translateTo(ctx, videoID, fingerprint, req.model, heard, lang, cues); err != nil {
-			return err
-		}
-	}
-	return nil
+	return t.queueTranslations(ctx, videoID, heard, req, made, redone)
 }
 
-// transcript returns whisper's subtitles of the current content, making
-// them unless they are already there as asked. redone reports that they
-// were made now: the translations of the old ones are gone.
+// transcript makes whisper's subtitles of the current content, unless they
+// are already there as asked, and says their language. redone reports that
+// they were made now: the translations of the old ones are gone.
 func (t *Transcriber) transcript(ctx context.Context, videoID int64, file, fingerprint string,
 	req subtitleRequest, made map[string]autoSubtitle,
-) (heard string, cues []video.Cue, redone bool, err error) {
+) (heard string, redone bool, err error) {
 	for _, s := range made {
 		if s.translatedFrom != "" || s.model != req.model || req.spoken != "" && s.lang != req.spoken {
 			continue
 		}
-		data, err := readSmall(filepath.Join(t.dataDir, AutoSubtitlesDir, s.file))
-		if err != nil {
-			return "", nil, false, fmt.Errorf("subtitles of video %d: %w", videoID, err)
-		}
-		cues, err := video.ParseWebVTT(string(data))
-		if err != nil {
-			return "", nil, false, fmt.Errorf("subtitles of video %d: %w", videoID, err)
-		}
-		return s.lang, cues, false, nil
+		return s.lang, false, nil
 	}
 
 	modelFile := ModelFile(t.dataDir, req.model)
 	if _, err := os.Stat(modelFile); err != nil {
-		return "", nil, false, fmt.Errorf("whisper model %q: %w: %w", req.model, err, jobs.ErrPermanent)
+		return "", false, fmt.Errorf("whisper model %q: %w: %w", req.model, err, jobs.ErrPermanent)
 	}
-	heard, cues, err = t.listen(ctx, videoID, file, modelFile, req.spoken)
+	heard, cues, err := t.listen(ctx, videoID, file, modelFile, req.spoken)
 	if err != nil {
-		return "", nil, false, err
+		return "", false, err
 	}
 	if err := t.saveTranscript(ctx, videoID, fingerprint, req.model, heard, cues); err != nil {
-		return "", nil, false, err
+		return "", false, err
 	}
-	return heard, cues, true, nil
+	return heard, true, nil
 }
 
 // listen takes the sound out of the video with ffmpeg and has whisper
@@ -236,7 +238,14 @@ func (t *Transcriber) listen(ctx context.Context, videoID int64, file, modelFile
 		return "", nil, err
 	}
 	out := filepath.Join(work, "heard")
-	if _, err := t.run(ctx, t.whisper, whisperArgs(modelFile, sound, spoken, t.threads, out)...); err != nil {
+	heardSoFar := whisperProgress{total: wavSeconds(sound), percent: -1}
+	jobs.Report(ctx, heardSoFar.progress())
+	err = t.stream(ctx, t.whisper, func(line string) {
+		if heardSoFar.read(line) {
+			jobs.Report(ctx, heardSoFar.progress())
+		}
+	}, whisperArgs(modelFile, sound, spoken, t.threads, out)...)
+	if err != nil {
 		return "", nil, fmt.Errorf("whisper on video %d: %w", videoID, err)
 	}
 	data, err := readSmall(out + ".json")
@@ -290,26 +299,6 @@ func (t *Transcriber) soundStream(ctx context.Context, videoID int64, spoken str
 	return stream, nil
 }
 
-// translateTo translates whisper's subtitles to one language and saves them.
-func (t *Transcriber) translateTo(ctx context.Context, videoID int64, fingerprint, model, from, to string,
-	cues []video.Cue,
-) error {
-	if t.translator == nil {
-		return fmt.Errorf("subtitles of video %d in %s: %w: %w", videoID, to, errNoTranslator, jobs.ErrPermanent)
-	}
-	if err := t.setStage(ctx, videoID, StageTranslate); err != nil {
-		return err
-	}
-	translated, err := t.translator.Cues(ctx, cues, from, to)
-	if errors.Is(err, translate.ErrRefused) {
-		return fmt.Errorf("subtitles of video %d: %w: %w", videoID, err, jobs.ErrPermanent)
-	}
-	if err != nil {
-		return fmt.Errorf("subtitles of video %d: %w", videoID, err)
-	}
-	return t.saveTranslation(ctx, videoID, fingerprint, model, from, to, translated)
-}
-
 // request reads what the administrator asked for a video.
 func (t *Transcriber) request(ctx context.Context, videoID int64) (subtitleRequest, bool, error) {
 	var r subtitleRequest
@@ -333,7 +322,7 @@ func (t *Transcriber) request(ctx context.Context, videoID int64) (subtitleReque
 
 // made returns the subtitles already made from the video's current content.
 func (t *Transcriber) made(ctx context.Context, videoID int64, fingerprint string) (_ map[string]autoSubtitle, err error) {
-	rows, err := t.db.QueryContext(ctx, `SELECT lang, translated_from, model, file FROM auto_subtitles
+	rows, err := t.db.QueryContext(ctx, `SELECT lang, translated_from, model, file, made_at FROM auto_subtitles
 		WHERE video_id = ? AND fingerprint = ?`, videoID, fingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("subtitles of video %d: %w", videoID, err)
@@ -342,9 +331,11 @@ func (t *Transcriber) made(ctx context.Context, videoID int64, fingerprint strin
 	made := map[string]autoSubtitle{}
 	for rows.Next() {
 		var s autoSubtitle
-		if err := rows.Scan(&s.lang, &s.translatedFrom, &s.model, &s.file); err != nil {
+		var at int64
+		if err := rows.Scan(&s.lang, &s.translatedFrom, &s.model, &s.file, &at); err != nil {
 			return nil, fmt.Errorf("subtitles of video %d: %w", videoID, err)
 		}
+		s.madeAt = time.Unix(at, 0)
 		made[s.lang] = s
 	}
 	if err := rows.Err(); err != nil {
@@ -362,7 +353,7 @@ func (t *Transcriber) saveTranscript(ctx context.Context, videoID int64, fingerp
 	return t.save(ctx, videoID, fingerprint, model, lang, "", cues, true)
 }
 
-// saveTranslation saves one translation of whisper's subtitles.
+// saveTranslation saves one translation of some subtitles.
 func (t *Transcriber) saveTranslation(ctx context.Context, videoID int64, fingerprint, model, from, lang string,
 	cues []video.Cue,
 ) error {
@@ -397,7 +388,7 @@ func (t *Transcriber) save(ctx context.Context, videoID int64, fingerprint, mode
 // record saves one subtitle's row and returns the files of the rows it
 // replaced. saved is false when the video's content is not fingerprint
 // any more; nothing is saved either, with errTakenBack, when the request
-// is gone.
+// is gone: whisper's or, for a translation, its own.
 func (t *Transcriber) record(ctx context.Context, videoID int64, fingerprint, model, lang, from, name string,
 	replaceAll bool,
 ) (old []string, saved bool, err error) {
@@ -407,9 +398,13 @@ func (t *Transcriber) record(ctx context.Context, videoID int64, fingerprint, mo
 	}
 	defer func() { err = finish(tx, err) }()
 
+	requests := "translation_requests"
+	if replaceAll {
+		requests = "subtitle_requests"
+	}
 	var same, asked bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM videos WHERE id = ? AND fingerprint = ?),
-		EXISTS (SELECT 1 FROM subtitle_requests WHERE video_id = ?)`,
+		EXISTS (SELECT 1 FROM `+requests+` WHERE video_id = ?)`,
 		videoID, fingerprint, videoID).Scan(&same, &asked); err != nil {
 		return nil, false, fmt.Errorf("save subtitles of video %d: %w", videoID, err)
 	}
@@ -451,6 +446,7 @@ func (t *Transcriber) record(ctx context.Context, videoID int64, fingerprint, mo
 
 // setStage tells the administrator's page what the transcription does.
 func (t *Transcriber) setStage(ctx context.Context, videoID int64, stage Stage) error {
+	jobs.Report(ctx, jobs.Progress{Stage: string(stage), Percent: -1})
 	if _, err := t.db.ExecContext(ctx, `UPDATE subtitle_requests SET stage = ? WHERE video_id = ?`,
 		string(stage), videoID); err != nil {
 		return fmt.Errorf("subtitles of video %d: %w", videoID, err)
@@ -472,13 +468,93 @@ func soundArgs(file string, stream int, out string) []string {
 
 // whisperArgs builds the whisper.cpp command that writes what is said in
 // the sound as JSON to out.json. spoken "" lets whisper guess the language.
+// -np keeps whisper's long report on the machine out; what it heard still
+// comes out, one line a sentence, and -pp adds how far it is, every 5%
+// (see whisperProgress).
 func whisperArgs(model, sound, spoken string, threads int, out string) []string {
 	lang := spoken
 	if lang == "" {
 		lang = "auto"
 	}
 	return []string{"-m", model, "-f", sound, "-l", lang, "-t", strconv.Itoa(threads),
-		"-oj", "-of", out, "-np"}
+		"-oj", "-of", out, "-np", "-pp"}
+}
+
+// whisperProgress follows how far whisper is from what it prints, as
+// whisper.cpp 1.9 prints it:
+//
+//	whisper_print_progress_callback: progress =  38%
+//	[00:01:01.280 --> 00:01:08.480]   Domani pioverà al nord.
+//
+// The first comes every 5% of the work, but whisper counts in pieces of
+// 30 seconds, so on a short video it jumps; the second, the end of the
+// last sentence heard, moves with every sentence. The progress is the
+// further of the two.
+type whisperProgress struct {
+	total   float64 // seconds of sound; 0 = not known
+	heard   float64 // seconds heard so far
+	percent float64 // what whisper said, -1 = nothing yet
+}
+
+// read reads one line of whisper's and reports whether it moved on.
+func (w *whisperProgress) read(line string) bool {
+	if _, after, ok := strings.Cut(line, "progress ="); ok {
+		n, err := strconv.Atoi(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(after), "%")))
+		if err != nil || n < 0 || n > 100 || float64(n) <= w.percent {
+			return false
+		}
+		w.percent = float64(n)
+		return true
+	}
+	start := strings.Index(line, "[")
+	arrow := strings.Index(line, "-->")
+	end := strings.Index(line, "]")
+	if start < 0 || arrow < start || end < arrow {
+		return false
+	}
+	seconds, ok := clockSeconds(strings.TrimSpace(line[arrow+3 : end]))
+	if !ok || seconds <= w.heard {
+		return false
+	}
+	w.heard = seconds
+	if w.total > 0 {
+		w.heard = min(w.heard, w.total)
+	}
+	return true
+}
+
+// progress is how far whisper is, for the queue's page.
+func (w *whisperProgress) progress() jobs.Progress {
+	p := jobs.Progress{Stage: string(StageTranscribe), Percent: w.percent, Done: w.heard, Total: w.total}
+	if w.total > 0 {
+		p.Percent = max(p.Percent, w.heard*100/w.total)
+	}
+	return p
+}
+
+// clockSeconds reads "01:02:03.500", as whisper writes times, in seconds.
+func clockSeconds(s string) (float64, bool) {
+	parts := strings.Split(s, ":")
+	if len(parts) != 3 {
+		return 0, false
+	}
+	h, errH := strconv.Atoi(parts[0])
+	m, errM := strconv.Atoi(parts[1])
+	sec, errS := strconv.ParseFloat(parts[2], 64)
+	if errH != nil || errM != nil || errS != nil || h < 0 || m < 0 || m > 59 || sec < 0 || sec >= 60 {
+		return 0, false
+	}
+	return float64(h*3600+m*60) + sec, true
+}
+
+// wavSeconds is how long the sound soundArgs wrote lasts: 16000 samples
+// of 2 bytes a second, after a header of 44 bytes. 0 if it cannot tell.
+func wavSeconds(name string) float64 {
+	info, err := os.Stat(name)
+	if err != nil || info.Size() <= 44 {
+		return 0
+	}
+	return float64(info.Size()-44) / (16000 * 2)
 }
 
 // autoSubtitleName is the file of a subtitle made for a video at a time.

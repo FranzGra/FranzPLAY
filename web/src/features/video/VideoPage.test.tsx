@@ -245,6 +245,25 @@ describe("video page", () => {
     expect(owner).toHaveTextContent("Aanna");
   });
 
+  it("shows a video from a folder as the site's own, with its logo and name", async () => {
+    renderApp("/video/7", {
+      ...signedIn(),
+      "GET /api/site": { body: { nameFirst: "Casa", nameSecond: "Rossi", color: "#2997ff" } },
+      "GET /api/videos/7": { body: videoJSON({ uploader: null, owner: null }) },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    // The top bar has the logo too: look under the title.
+    const mark = await waitFor(() => {
+      const found = screen.getByRole("main").querySelector("[data-site-mark]");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    const owner = mark.parentElement as HTMLElement;
+    expect(owner).toHaveTextContent(/^CasaRossi$/);
+    expect(owner.closest("a")).toBeNull();
+    expect(screen.queryByText("Libreria")).not.toBeInTheDocument();
+  });
+
   it("switches to theater mode with its button or the t key, and remembers it", async () => {
     const { user, unmount } = renderApp("/video/7", {
       ...signedIn(),

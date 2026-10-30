@@ -1,0 +1,4 @@
+/* The card, no wider than in the editor; the card itself is the real one. */
+.preview {
+  max-width: 420px;
+}

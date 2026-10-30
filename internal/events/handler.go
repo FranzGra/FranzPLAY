@@ -3,6 +3,7 @@ package events
 import (
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/respond"
@@ -13,9 +14,14 @@ const (
 	// keepAlive is how often an empty comment is sent when nothing
 	// happens, so routers and proxies do not close a silent connection.
 	keepAlive = 30 * time.Second
-	// calm is the least time between two events on a stream: while many
-	// covers are being made, a page reloads its list at most this often.
+	// calm is the least time between two events of the same kind on a
+	// stream: while many covers are being made, a page reloads its list at
+	// most this often.
 	calm = 2 * time.Second
+	// jobsCalm is calm for the queue of work: its bars of progress move
+	// smoothly, and a page asks for the queue (one small answer) at most
+	// twice a second.
+	jobsCalm = 500 * time.Millisecond
 	// retry tells the browser how long to wait before connecting again
 	// after the connection drops, in milliseconds.
 	retry = "5000"
@@ -57,6 +63,35 @@ func (h *Hub) serve(w http.ResponseWriter, r *http.Request, logger *slog.Logger)
 
 	ping := time.NewTicker(h.keepAlive)
 	defer ping.Stop()
+
+	// Each kind keeps its own pause: a change waits in pending until the
+	// last event of its kind is calm old, then goes out.
+	last := map[Kind]time.Time{}
+	pending := map[Kind]bool{}
+	var wake <-chan time.Time
+	flush := func() bool {
+		now := time.Now()
+		var soonest time.Duration
+		for _, k := range sortedKinds(pending) {
+			wait := h.calmFor(k) - now.Sub(last[k])
+			if _, told := last[k]; !told || wait <= 0 {
+				if !send("event: " + string(k) + "\ndata: {}\n\n") {
+					return false
+				}
+				last[k] = now
+				delete(pending, k)
+				continue
+			}
+			if soonest == 0 || wait < soonest {
+				soonest = wait
+			}
+		}
+		wake = nil
+		if soonest > 0 {
+			wake = time.After(soonest)
+		}
+		return true
+	}
 	for {
 		select {
 		case <-r.Context().Done():
@@ -68,24 +103,34 @@ func (h *Hub) serve(w http.ResponseWriter, r *http.Request, logger *slog.Logger)
 				return
 			}
 		case <-l.ready:
-			kinds := h.take(l)
-			if len(kinds) == 0 {
-				continue // already sent with an earlier signal
+			for _, k := range h.take(l) {
+				pending[k] = true
 			}
-			for _, k := range kinds {
-				if !send("event: " + string(k) + "\ndata: {}\n\n") {
-					return
-				}
+			if !flush() {
+				return
 			}
-			// Let the page breathe: further events wait (one per kind)
-			// and go out together after the pause.
-			select {
-			case <-r.Context().Done():
+		case <-wake:
+			if !flush() {
 				return
-			case <-h.done:
-				return
-			case <-time.After(h.calm):
 			}
 		}
 	}
+}
+
+// calmFor is the least time between two events of kind k on a stream.
+func (h *Hub) calmFor(k Kind) time.Duration {
+	if k == Jobs {
+		return h.jobsCalm
+	}
+	return h.calm
+}
+
+// sortedKinds returns the kinds in set, in a fixed order.
+func sortedKinds(set map[Kind]bool) []Kind {
+	kinds := make([]Kind, 0, len(set))
+	for k := range set {
+		kinds = append(kinds, k)
+	}
+	slices.Sort(kinds)
+	return kinds
 }

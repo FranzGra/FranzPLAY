@@ -1,83 +1,35 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { ApiError } from "../../api/client";
-import { onServerEvent } from "../../api/events";
 import {
-  fetchJobs,
   type Job,
   type JobKind,
   type JobsOverview,
   retryFailedJobs,
   retryJob,
 } from "../../api/jobs";
-import { EmptyState } from "../../components/EmptyState";
-import { formatSince } from "../../lib/format";
-import styles from "./Admin.module.css";
+import { Icon } from "../../components/Icon";
+import { LiveDot } from "../../components/ProgressBar";
+import { formatDuration, formatSince } from "../../lib/format";
+import { runningJobs, useActivity } from "./activity";
+import { kindNames, kindShort, missingTool, useJobVideo } from "./jobText";
+import { DownloadBox, NowJob } from "./NowJob";
+import screens from "./Screens.module.css";
+import { Card, Chip, Empty, Loading, Notice, n, PageHeader, Unavailable, ui, useToast } from "./ui";
 
-type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; jobs: JobsOverview };
-
-// kindNames say what each kind of job does, in words for people.
-export const kindNames: Record<JobKind, string> = {
-  probe: "Lettura del video",
-  details: "Informazioni dal file accanto",
-  online: "Informazioni da internet",
-  cover: "Copertina",
-  preview: "Anteprime sulla barra",
-  clip: "Anteprima sulla copertina",
-  tracks: "Lingue e sottotitoli",
-  transcribe: "Sottotitoli automatici",
-  convert: "Copia per i browser",
-};
-
-// missingTool says which program a kind of job needs.
-const missingTool: Record<JobKind, string> = {
-  probe: "ffprobe",
-  details: "", // needs no other program: it is always available
-  online: "", // the same
-  cover: "ffmpeg",
-  preview: "ffmpeg",
-  clip: "ffmpeg",
-  tracks: "ffmpeg", // and ffprobe, which "probe" already names
-  transcribe: "", // optional: the Sottotitoli page explains how to turn it on
-  convert: "ffmpeg",
-};
+export { kindNames } from "./jobText";
 
 // JobsPage shows the heavy work FranzPLAY does by itself: what runs now,
-// how much waits, and what failed, with a button to try again. It follows
-// the queue as it moves.
+// with its bar, what waits in the order it will run, what ended in the
+// last day and what failed, with a button to try again. It follows the
+// queue as it moves, and can show one kind of work only.
 export function JobsPage() {
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const { jobs, download, working, overviewFailed, refresh } = useActivity();
+  const [toast, say] = useToast();
+  const [kind, setKind] = useState<JobKind | "">("");
 
-  const load = useCallback((signal?: AbortSignal) => {
-    fetchJobs(signal)
-      .then((jobs) => setState({ kind: "ready", jobs }))
-      .catch((error: unknown) => {
-        if (signal?.aborted) return;
-        console.error(error);
-        // A page already shown stays as it was.
-        setState((s) => (s.kind === "ready" ? s : { kind: "error" }));
-      });
-  }, []);
+  if (!jobs) return overviewFailed ? <Unavailable title="Lavori non disponibili" /> : <Loading />;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    const stop = onServerEvent("jobs", () => load(controller.signal));
-    return () => {
-      stop();
-      controller.abort();
-    };
-  }, [load]);
-
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
-  if (state.kind === "error") {
-    return (
-      <EmptyState title="Lavori non disponibili">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
-    );
-  }
-  const { jobs } = state;
   const missing = [
     ...new Set(
       jobs.kinds
@@ -86,140 +38,408 @@ export function JobsPage() {
         .filter((tool) => tool !== ""),
     ),
   ];
+  const mine = (job: Job) => kind === "" || job.kind === kind;
+  const running = runningJobs(jobs).filter(mine);
+  const queue = jobs.queue.filter(mine);
+  const recent = jobs.recent.filter(mine);
+  const counted = jobs.counts.find((c) => c.kind === kind);
+  const waiting = kind === "" ? jobs.waiting : (counted?.waiting ?? 0);
+  const retrying = kind === "" ? jobs.retrying : (counted?.retrying ?? 0);
+  const recentTotal = kind === "" ? jobs.recentTotal : (counted?.recent ?? 0);
 
   return (
     <>
-      <p className={styles.lead}>
-        Qui FranzPLAY mostra il lavoro che fa da solo per ogni video: leggerne durata e formato,
-        prepararne la copertina e le anteprime. Ne fa uno alla volta, per non rallentare chi guarda.
-      </p>
+      <PageHeader
+        title="Lavori"
+        description="Tutto quello che FranzPLAY fa da solo per ogni video: leggere il file, preparare copertina e anteprime, copie per i browser, sottotitoli. Ne fa uno alla volta, per non rallentare chi guarda."
+      />
+
       {missing.length > 0 && (
-        <p className={`${styles.warning}`} role="alert">
-          FranzPLAY non trova {missing.join(" e ")} su questo computer: i lavori che ne hanno
-          bisogno aspettano finché non lo installi e riavvii FranzPLAY.
-        </p>
+        <div className={screens.missingBox} role="alert">
+          <Notice tone="bad" title={`Manca ${missing.join(" e ")}`}>
+            FranzPLAY non lo trova su questo computer: i lavori che ne hanno bisogno aspettano
+            finché non lo installi e riavvii FranzPLAY.
+          </Notice>
+        </div>
       )}
 
-      <dl className={styles.stats}>
-        <div className={`glass ${styles.stat}`}>
-          <dt>Adesso</dt>
-          <dd>
-            {jobs.running ? (
-              <>
-                {kindNames[jobs.running.kind]} di{" "}
-                <Link to={`/video/${jobs.running.videoId}`}>{jobs.running.title}</Link>
-              </>
-            ) : (
-              "Niente, riposa"
-            )}
-          </dd>
+      <dl className={screens.jobStats}>
+        <div className={screens.jobStat} data-tone={working > 0 ? "live" : undefined}>
+          <dt>
+            {working > 0 ? <LiveDot /> : <Icon name="check" size={16} />}
+            In corso
+          </dt>
+          <dd>{n(working)}</dd>
         </div>
-        <div className={`glass ${styles.stat}`}>
-          <dt>In attesa</dt>
-          <dd>
-            <span className={styles.number}>{jobs.waiting.toLocaleString("it-IT")}</span>
-            {jobs.retrying > 0 && (
-              <span className={styles.note}> ({jobs.retrying} da riprovare)</span>
-            )}
-          </dd>
+        <div className={screens.jobStat}>
+          <dt>
+            <Icon name="history" size={16} />
+            In coda
+          </dt>
+          <dd>{n(jobs.waiting)}</dd>
         </div>
-        <div className={`glass ${styles.stat}`}>
-          <dt>Fatti</dt>
-          <dd>
-            <span className={styles.number}>{jobs.done.toLocaleString("it-IT")}</span>
-          </dd>
+        <div className={screens.jobStat}>
+          <dt>
+            <Icon name="check" size={16} />
+            Fatti
+          </dt>
+          <dd>{n(jobs.done)}</dd>
         </div>
-        <div className={`glass ${styles.stat}`}>
-          <dt>Falliti</dt>
-          <dd>
-            <span className={styles.number}>{jobs.failedTotal.toLocaleString("it-IT")}</span>
-          </dd>
+        <div className={screens.jobStat} data-tone={jobs.failedTotal > 0 ? "bad" : undefined}>
+          <dt>
+            <Icon name="alert" size={16} />
+            Non riusciti
+          </dt>
+          <dd>{n(jobs.failedTotal)}</dd>
         </div>
       </dl>
 
-      <Failed jobs={jobs} onRetried={() => load()} />
+      {jobs.counts.length > 0 && <KindFilter jobs={jobs} kind={kind} onKind={setKind} />}
+
+      <div className={ui.grid}>
+        <div className={`${ui.stack} ${ui.span7}`}>
+          <Card title="Al lavoro ora" icon="layers" tone={running.length > 0 ? "busy" : undefined}>
+            {running.length > 0 ? (
+              <div className={screens.nowList}>
+                {running.map((job, i) => (
+                  <NowJob key={job.id} job={job} waiting={i === running.length - 1 ? waiting : 0} />
+                ))}
+              </div>
+            ) : (
+              <p className={screens.quiet}>
+                <Icon name="check" size={22} />
+                <span>
+                  <b>{kind === "" ? "Niente in corso" : `${kindNames[kind]}: niente in corso`}</b>
+                  {waiting > 0
+                    ? "Il prossimo lavoro parte tra un attimo."
+                    : kind === ""
+                      ? "FranzPLAY riposa: tutti i video sono pronti."
+                      : "Nessun lavoro di questo tipo aspetta."}
+                </span>
+              </p>
+            )}
+          </Card>
+
+          {download && kind === "" && (
+            <Card title="Download" icon="download" sub="Gira accanto ai lavori" tone="busy">
+              <DownloadBox download={download} />
+            </Card>
+          )}
+
+          {jobs.live && <Recent jobs={recent} total={recentTotal} />}
+
+          <Card title="Cosa sa fare" icon="settings" sub="I programmi che servono a ogni lavoro">
+            <ul className={screens.kinds}>
+              {jobs.kinds.map((k) => (
+                <li key={k.kind}>
+                  {kindNames[k.kind]}
+                  {k.available ? (
+                    <span className={ui.chip} data-tone="ok">
+                      Pronto
+                    </span>
+                  ) : (
+                    <span className={ui.chip} data-tone="bad">
+                      Manca {missingTool[k.kind] || "un programma"}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+
+        <div className={`${ui.stack} ${ui.span5}`}>
+          <Card
+            title="In coda"
+            icon="history"
+            sub={waiting > 0 ? "Nell'ordine in cui partiranno" : undefined}
+          >
+            {waiting === 0 ? (
+              <p className={ui.cardText}>Nessun lavoro in coda.</p>
+            ) : (
+              <>
+                <p className={screens.queueCount}>
+                  <b>{n(waiting)}</b>
+                  {waiting === 1 ? "lavoro aspetta il suo turno" : "lavori aspettano il loro turno"}
+                  {retrying > 0 && (
+                    <span>
+                      {retrying === 1
+                        ? "1 sta per essere riprovato"
+                        : `${n(retrying)} stanno per essere riprovati`}
+                    </span>
+                  )}
+                </p>
+                {queue.length > 0 && (
+                  <ol className={screens.jobList} aria-label="Lavori in coda">
+                    {queue.map((job, i) => (
+                      <li key={job.id}>
+                        <QueuedJob job={job} place={i + 1} />
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {queue.length > 0 && waiting > queue.length && (
+                  <p className={ui.cardText}>
+                    Ne mostro i primi {n(queue.length)} su {n(waiting)}.
+                  </p>
+                )}
+              </>
+            )}
+          </Card>
+
+          <Failed
+            jobs={jobs}
+            kind={kind}
+            onDone={(text, problem) => {
+              say(text, problem);
+              refresh();
+            }}
+          />
+        </div>
+      </div>
+      {toast}
     </>
   );
 }
 
-function Failed({ jobs, onRetried }: { jobs: JobsOverview; onRetried: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState("");
+// KindFilter shows one kind of work only: "Tutti", "Copertina 3"… with how
+// many jobs of each kind wait, run or ended in the last day.
+function KindFilter({
+  jobs,
+  kind,
+  onKind,
+}: {
+  jobs: JobsOverview;
+  kind: JobKind | "";
+  onKind: (kind: JobKind | "") => void;
+}) {
+  const total = (c: JobsOverview["counts"][number]) => c.waiting + c.running + c.recent + c.failed;
+  const shown = jobs.counts.filter((c) => total(c) > 0 || c.kind === kind);
+  if (shown.length === 0) return null;
+  return (
+    <fieldset className={ui.filters}>
+      <legend className="visually-hidden">Quali lavori</legend>
+      <button
+        type="button"
+        className={ui.filter}
+        aria-pressed={kind === ""}
+        onClick={() => onKind("")}
+      >
+        Tutti
+      </button>
+      {shown.map((c) => (
+        <button
+          key={c.kind}
+          type="button"
+          className={ui.filter}
+          aria-pressed={kind === c.kind}
+          onClick={() => onKind(c.kind)}
+        >
+          {kindShort[c.kind]} <b>{n(total(c))}</b>
+        </button>
+      ))}
+    </fieldset>
+  );
+}
 
-  const run = (work: () => Promise<unknown>) => {
+// JobThumb is the small picture of a job's video. A newer server sends the
+// cover with the job; for an older one the video is asked.
+function JobThumb({ job, size }: { job: Job; size: number }) {
+  const video = useJobVideo(job.state === "" ? job.videoId : null);
+  const cover = job.cover ?? video?.cover ?? null;
+  const duration = job.duration ?? video?.duration ?? null;
+  return (
+    <Link to={`/admin/video/${job.videoId}`} className={ui.thumb} tabIndex={-1} aria-hidden="true">
+      {cover ? (
+        <img src={cover} alt="" loading="lazy" decoding="async" />
+      ) : (
+        <Icon name="film" size={size} />
+      )}
+      {duration ? <span className={ui.duration}>{formatDuration(duration)}</span> : null}
+    </Link>
+  );
+}
+
+// QueuedJob is a job waiting its turn, with its place in the queue.
+function QueuedJob({ job, place }: { job: Job; place: number }) {
+  const later = job.runAfter && job.runAfter.getTime() > Date.now() ? job.runAfter : null;
+  return (
+    <div className={screens.jobRow}>
+      <span className={screens.jobPlace}>{place}</span>
+      <JobThumb job={job} size={18} />
+      <div className={screens.jobText}>
+        <b>
+          <Link to={`/admin/video/${job.videoId}`}>{job.title}</Link>
+        </b>
+        <span>
+          {kindNames[job.kind]}
+          {later &&
+            ` · riprova alle ${later.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`}
+        </span>
+      </div>
+      {job.urgent && <Chip tone="info">Prima</Chip>}
+    </div>
+  );
+}
+
+// tookText says how long a job took: "in 12 s", "in 4:05".
+function tookText(seconds: number | null): string {
+  if (seconds === null) return "";
+  if (seconds < 1) return "in meno di un secondo";
+  if (seconds < 60) return `in ${Math.round(seconds)} s`;
+  return `in ${formatDuration(seconds)}`;
+}
+
+// Recent lists the jobs ended in the last day, the newest first: done or
+// not, and how long each took.
+function Recent({ jobs, total }: { jobs: Job[]; total: number }) {
+  return (
+    <Card title="Finiti di recente" icon="check" sub="Nelle ultime 24 ore">
+      {jobs.length === 0 ? (
+        <p className={ui.cardText}>Nessun lavoro finito nelle ultime 24 ore.</p>
+      ) : (
+        <ul className={screens.jobList} aria-label="Lavori finiti di recente">
+          {jobs.map((job) => (
+            <li key={job.id}>
+              <div className={screens.jobRow} data-done>
+                <JobThumb job={job} size={18} />
+                <div className={screens.jobText}>
+                  <b>
+                    <Link to={`/admin/video/${job.videoId}`}>{job.title}</Link>
+                  </b>
+                  <span>
+                    {kindNames[job.kind]}
+                    {job.seconds !== null && ` · ${tookText(job.seconds)}`}
+                    {` · ${formatSince(job.endedAt ?? job.at, new Date())}`}
+                  </span>
+                  {job.state === "failed" && job.error && (
+                    <span className={screens.failError}>{job.error}</span>
+                  )}
+                </div>
+                {job.state === "failed" ? (
+                  <Chip tone="bad">Non riuscito</Chip>
+                ) : (
+                  <Chip tone="ok" icon="check">
+                    Fatto
+                  </Chip>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {total > jobs.length && (
+        <p className={ui.cardText}>
+          Ne mostro {n(jobs.length)} su {n(total)}.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function Failed({
+  jobs,
+  kind,
+  onDone,
+}: {
+  jobs: JobsOverview;
+  kind: JobKind | "";
+  onDone: (text: string, problem?: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const failed = jobs.failed.filter((job) => kind === "" || job.kind === kind);
+
+  const run = (work: () => Promise<unknown>, ok: (r: unknown) => string) => {
     setBusy(true);
-    setProblem("");
     work()
-      .then(onRetried)
+      .then((r) => onDone(ok(r)))
       .catch((error: unknown) => {
         console.error(error);
-        setProblem(
+        onDone(
           error instanceof ApiError && error.status === 409
             ? "Questo lavoro è già ripartito."
             : "Non sono riuscito a rimetterlo in coda. Riprova tra poco.",
+          true,
         );
-        if (error instanceof ApiError) onRetried();
       })
       .finally(() => setBusy(false));
   };
 
   return (
-    <section aria-labelledby="failed-heading">
-      <div className={styles.top}>
-        <h2 id="failed-heading" className={styles.subheading}>
-          Lavori falliti
-        </h2>
-        {jobs.failedTotal > 1 && (
+    <Card
+      title="Non riusciti"
+      icon="alert"
+      actions={
+        jobs.failedTotal > 1 && (
           <button
             type="button"
-            className={`glass ${styles.action}`}
+            className={`${ui.btn} ${ui.small} ${ui.primary}`}
             disabled={busy}
-            onClick={() => run(retryFailedJobs)}
+            onClick={() =>
+              run(retryFailedJobs, (r) =>
+                r === 1 ? "1 lavoro rimesso in coda." : `${n(Number(r))} lavori rimessi in coda.`,
+              )
+            }
           >
+            <Icon name="refresh" size={16} />
             Riprova tutti
           </button>
-        )}
-      </div>
-      {problem && (
-        <p role="alert" className={styles.problem}>
-          {problem}
-        </p>
-      )}
-      {jobs.failed.length === 0 ? (
-        <p className={styles.lead}>Nessun lavoro fallito. Tutto bene.</p>
+        )
+      }
+    >
+      {failed.length === 0 ? (
+        <Empty icon="check" title="Nessun lavoro non riuscito" headingLevel={3}>
+          {kind === "" ? "Tutto bene." : "Nessuno di questo tipo."}
+        </Empty>
       ) : (
-        <ul className={`stagger ${styles.list}`} aria-label="Lavori falliti">
-          {jobs.failed.map((job) => (
+        <ul className={screens.failList} aria-label="Lavori non riusciti">
+          {failed.map((job) => (
             <li key={job.id}>
-              <FailedJob job={job} busy={busy} onRetry={() => run(() => retryJob(job.id))} />
+              <FailedJob
+                job={job}
+                busy={busy}
+                onRetry={() =>
+                  run(
+                    () => retryJob(job.id),
+                    () => "Lavoro rimesso in coda.",
+                  )
+                }
+              />
             </li>
           ))}
         </ul>
       )}
-      {jobs.failedTotal > jobs.failed.length && (
-        <p className={styles.lead}>
-          Ne mostro {jobs.failed.length} su {jobs.failedTotal.toLocaleString("it-IT")}: con «Riprova
-          tutti» ripartono tutti.
+      {kind === "" && jobs.failedTotal > jobs.failed.length && (
+        <p className={ui.cardText}>
+          Ne mostro {jobs.failed.length} su {n(jobs.failedTotal)}: con «Riprova tutti» ripartono
+          tutti.
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 
 function FailedJob({ job, busy, onRetry }: { job: Job; busy: boolean; onRetry: () => void }) {
   return (
-    <div className={`glass ${styles.person}`}>
-      <div className={styles.failed}>
-        <p className={styles.name}>
-          <Link to={`/video/${job.videoId}`}>{job.title}</Link>
-        </p>
-        <p className={styles.role}>
+    <div className={screens.failRow}>
+      <JobThumb job={job} size={20} />
+      <div className={screens.failText}>
+        <b>
+          <Link to={`/admin/video/${job.videoId}`}>{job.title}</Link>
+        </b>
+        <span>
           {kindNames[job.kind]} · {job.attempts === 1 ? "1 tentativo" : `${job.attempts} tentativi`}{" "}
-          · {formatSince(job.at, new Date())}
-        </p>
-        <p className={styles.error}>{job.error}</p>
+          · {formatSince(job.endedAt ?? job.at, new Date())}
+        </span>
+        <span className={screens.failError}>{job.error}</span>
       </div>
-      <button type="button" className={`glass ${styles.action}`} disabled={busy} onClick={onRetry}>
+      <button
+        type="button"
+        className={`${ui.btn} ${ui.small}`}
+        disabled={busy}
+        onClick={onRetry}
+        aria-label={`Riprova ${kindNames[job.kind]} di ${job.title}`}
+      >
         Riprova
       </button>
     </div>

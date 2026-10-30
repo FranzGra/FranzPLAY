@@ -34,7 +34,8 @@ services:
       # Le cartelle dei video DENTRO il contenitore. Per aggiungerne una,
       # vedi "volumes" qui sotto e scrivila anche qui: /videos:/videos2
       FRANZPLAY_LIBRARIES: /videos
-      # Traduzione dei sottotitoli (facoltativa): vedi .env.example.
+      # Traduzione dei sottotitoli: FranzPLAY traduce da solo. Queste due servono
+      # solo a chi preferisce LibreTranslate: vedi .env.example.
       FRANZPLAY_TRANSLATE_URL: ${FRANZPLAY_TRANSLATE_URL:-}
       FRANZPLAY_TRANSLATE_KEY: ${FRANZPLAY_TRANSLATE_KEY:-}
       # Codice dal log per creare il primo amministratore: vedi .env.example.
@@ -78,9 +79,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Traduzione dei sottotitoli con LibreTranslate. È spenta: si accende con
-  # COMPOSE_PROFILES=traduzioni nel file .env. Attenzione: vuole circa 1-2 GB
-  # di memoria, troppa per un Raspberry Pi da 2 GB.
+  # LibreTranslate, facoltativo: FranzPLAY traduce già da solo, senza questo
+  # container. È spento: si accende con COMPOSE_PROFILES=traduzioni nel file
+  # .env. Attenzione: vuole circa 1-2 GB di memoria, troppa per un Raspberry Pi
+  # da 2 GB.
   libretranslate:
     profiles: [traduzioni]
     image: libretranslate/libretranslate:v1.9.6

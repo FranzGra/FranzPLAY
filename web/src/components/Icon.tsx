@@ -253,6 +253,68 @@ const paths = {
       <path d="M3 17l9 5 9-5" />
     </>
   ),
+  // For the administration: kinds of things and of work.
+  image: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <circle cx="9" cy="10" r="1.8" />
+      <path d="M21 16l-5-5-9 9" />
+    </>
+  ),
+  film: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" />
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M12 3.5l9.5 16.5h-19z" />
+      <path d="M12 10v4.5" />
+      <path d="M12 17.5h.01" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v11" />
+      <path d="M7 10.5l5 5 5-5" />
+      <path d="M5 20h14" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" />
+      <path d="M4 3.5V8h4.5" />
+      <path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" />
+      <path d="M20 20.5V16h-4.5" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M6 3h8l5 5v13H6z" />
+      <path d="M14 3v5h5" />
+    </>
+  ),
+  disk: (
+    <>
+      <rect x="3" y="13" width="18" height="7" rx="2" />
+      <path d="M5.5 13L8 5h8l2.5 8" />
+      <path d="M17 16.5h.01" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 7.5h.01" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof paths;

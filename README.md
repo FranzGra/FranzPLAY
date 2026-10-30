@@ -18,7 +18,7 @@ The full vision (in Italian) is in [`docs/visione.md`](docs/visione.md).
 
 ## Install it with Docker
 
-The image has everything inside (FFmpeg and whisper.cpp included) and runs on amd64 and arm64
+The image has everything inside (FFmpeg, whisper.cpp and a subtitle translator included) and runs on amd64 and arm64
 (Raspberry Pi 4/5, ZimaBlade):
 
 ```sh
@@ -93,7 +93,8 @@ Full guide (in Italian): [`docs/copertine-e-anteprime.md`](docs/copertine-e-ante
 | `FRANZPLAY_FFPROBE` | `ffprobe` | ffprobe program (a name in PATH or a full path) |
 | `FRANZPLAY_FFMPEG` | `ffmpeg` | ffmpeg program (a name in PATH or a full path) |
 | `FRANZPLAY_WHISPER` | `whisper-cli` | whisper.cpp program for automatic subtitles; when missing, they are off |
-| `FRANZPLAY_TRANSLATE_URL` | none | Address of a LibreTranslate server that translates subtitles, like `http://localhost:5000` |
+| `FRANZPLAY_TRANSLATOR` | `translator-cli` | Bergamot program that translates subtitles here; its language models download by themselves, the first time each is needed |
+| `FRANZPLAY_TRANSLATE_URL` | none | Optional: address of a LibreTranslate server to use instead of the program above, like `http://localhost:5000` |
 | `FRANZPLAY_TRANSLATE_KEY` | none | LibreTranslate key, when the server asks for one |
 | `FRANZPLAY_SETUP_CODE` | `false` | `true` asks for a one-time code from the log to create the first administrator |
 

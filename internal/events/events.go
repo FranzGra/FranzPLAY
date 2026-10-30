@@ -47,7 +47,7 @@ type Hub struct {
 	closed    bool
 	done      chan struct{} // closed when FranzPLAY stops
 
-	keepAlive, calm time.Duration // see handler.go; shorter in tests
+	keepAlive, calm, jobsCalm time.Duration // see handler.go; shorter in tests
 }
 
 // NewHub returns a hub with nobody listening.
@@ -57,6 +57,7 @@ func NewHub() *Hub {
 		done:      make(chan struct{}),
 		keepAlive: keepAlive,
 		calm:      calm,
+		jobsCalm:  jobsCalm,
 	}
 }
 

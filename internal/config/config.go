@@ -23,6 +23,7 @@ const (
 	EnvFFprobe      = "FRANZPLAY_FFPROBE"
 	EnvFFmpeg       = "FRANZPLAY_FFMPEG"
 	EnvWhisper      = "FRANZPLAY_WHISPER"
+	EnvTranslator   = "FRANZPLAY_TRANSLATOR"
 	EnvTranslate    = "FRANZPLAY_TRANSLATE_URL"
 	EnvTranslateKey = "FRANZPLAY_TRANSLATE_KEY"
 	EnvSetupCode    = "FRANZPLAY_SETUP_CODE"
@@ -36,6 +37,8 @@ const (
 	DefaultFFprobe = "ffprobe"     // found through PATH
 	DefaultFFmpeg  = "ffmpeg"      // found through PATH
 	DefaultWhisper = "whisper-cli" // the program of whisper.cpp, found through PATH
+	// DefaultTranslator is the program that translates subtitles, found through PATH.
+	DefaultTranslator = "translator-cli"
 )
 
 // ErrInvalidConfig is returned when a setting has a value FranzPLAY cannot use.
@@ -59,6 +62,9 @@ type Config struct {
 	// sound of a video: a name looked up in PATH, or a full path. When it
 	// is missing, automatic subtitles are off.
 	Whisper string
+	// Translator is the program that translates subtitles here, used unless
+	// TranslateURL names a translation server.
+	Translator string
 	// TranslateURL is the address of a LibreTranslate server, like
 	// "http://localhost:5000". Empty means subtitles are not translated.
 	TranslateURL string
@@ -81,11 +87,12 @@ type Config struct {
 // getenv is usually os.Getenv; tests pass a fake one.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		Addr:    valueOr(getenv(EnvAddr), DefaultAddr),
-		DataDir: valueOr(getenv(EnvDataDir), DefaultDataDir),
-		FFprobe: valueOr(getenv(EnvFFprobe), DefaultFFprobe),
-		FFmpeg:  valueOr(getenv(EnvFFmpeg), DefaultFFmpeg),
-		Whisper: valueOr(getenv(EnvWhisper), DefaultWhisper),
+		Addr:       valueOr(getenv(EnvAddr), DefaultAddr),
+		DataDir:    valueOr(getenv(EnvDataDir), DefaultDataDir),
+		FFprobe:    valueOr(getenv(EnvFFprobe), DefaultFFprobe),
+		FFmpeg:     valueOr(getenv(EnvFFmpeg), DefaultFFmpeg),
+		Whisper:    valueOr(getenv(EnvWhisper), DefaultWhisper),
+		Translator: valueOr(getenv(EnvTranslator), DefaultTranslator),
 
 		TranslateURL: strings.TrimSuffix(strings.TrimSpace(getenv(EnvTranslate)), "/"),
 		TranslateKey: strings.TrimSpace(getenv(EnvTranslateKey)),

@@ -85,7 +85,7 @@ func TestOverview(t *testing.T) {
 	if f.Title != "Mare" || f.Error != "broken file" || f.Attempts != 3 || !f.At.Equal(fx.clock) {
 		t.Errorf("failed job = %+v", f)
 	}
-	want := []KindState{{Probe, true}, {Details, false}, {Online, false}, {Cover, true}, {Preview, false}, {Clip, false}, {Tracks, false}, {Transcribe, false}, {Convert, false}}
+	want := []KindState{{Probe, true}, {Details, false}, {Online, false}, {Cover, true}, {Preview, false}, {Clip, false}, {Tracks, false}, {Translate, false}, {Transcribe, false}, {Convert, false}}
 	if !slices.Equal(o.Kinds, want) {
 		t.Errorf("kinds = %+v, want %+v", o.Kinds, want)
 	}

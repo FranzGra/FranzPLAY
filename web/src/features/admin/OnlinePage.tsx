@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { ApiError } from "../../api/client";
 import {
   fetchSources,
@@ -8,10 +8,11 @@ import {
   saveKey,
   saveSources,
 } from "../../api/online";
-import { EmptyState } from "../../components/EmptyState";
-import styles from "./Admin.module.css";
+import { Icon } from "../../components/Icon";
 import { OnlineProposals } from "./OnlineProposals";
 import { OnlineRulesForm } from "./OnlineRules";
+import pages from "./Pages.module.css";
+import { Chip, Loading, PageHeader, Unavailable, ui } from "./ui";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; status: OnlineStatus };
 
@@ -36,12 +37,26 @@ export function OnlinePage() {
     return () => controller.abort();
   }, []);
 
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
+  const header = (
+    <PageHeader
+      title="Internet"
+      description="FranzPLAY funziona anche senza internet. Se accendi una fonte, chiede copertine e informazioni dei video che riconosce. Manda solo quello che serve a trovarli (il codice del video, titolo e anno del film, o un'impronta del file), niente su di te o su chi usa FranzPLAY. Quello che c'è nei file accanto ai video conta sempre di più."
+    />
+  );
+  if (state.kind === "loading") {
+    return (
+      <div className={ui.ui}>
+        {header}
+        <Loading />
+      </div>
+    );
+  }
   if (state.kind === "error") {
     return (
-      <EmptyState title="Impostazioni non disponibili">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
+      <div className={ui.ui}>
+        {header}
+        <Unavailable title="Impostazioni non disponibili" />
+      </div>
     );
   }
   const before = state.status;
@@ -81,124 +96,185 @@ export function OnlinePage() {
   };
 
   return (
-    <>
-      <div className={styles.top}>
-        <p className={styles.lead}>
-          FranzPLAY funziona anche senza internet. Se accendi una fonte, chiede copertine e
-          informazioni dei video che riconosce. Manda solo quello che serve a trovarli (il codice
-          del video, titolo e anno del film, o un'impronta del file), niente su di te o su chi usa
-          FranzPLAY. Quello che c'è nei file accanto ai video conta sempre di più.
-        </p>
-      </div>
-      <ul className={`stagger ${styles.list}`} aria-label="Fonti su internet">
-        <li className={`glass ${styles.setting}`}>
-          <div>
-            <p className={styles.name}>YouTube</p>
-            <p className={styles.role}>
-              Per i video scaricati da YouTube, con il codice nel nome del file, come li salva
-              yt-dlp: <code>Gita in montagna [dQw4w9WgXcQ].mp4</code>. Dà copertina, titolo e
-              canale. Non serve nessuna chiave.
-            </p>
-          </div>
-          <label className={styles.toggle}>
-            {before.youtube ? "Accesa" : "Spenta"}
-            <input
-              type="checkbox"
-              aria-label="YouTube accesa"
-              checked={before.youtube}
-              disabled={busy}
-              onChange={(e) => change({ ...before, youtube: e.target.checked })}
-            />
-          </label>
-        </li>
-        <li className={`glass ${styles.setting}`}>
-          <div>
-            <p className={styles.name}>TMDB (film)</p>
-            <p className={styles.role}>
-              Per i film con titolo e anno nel nome del file: <code>Il sorpasso (1962).mkv</code>{" "}
-              oppure <code>The.Matrix.1999.1080p.mkv</code>. Dà immagine, titolo, trama, regista e
-              data di uscita. Si usa solo un film con lo stesso titolo e lo stesso anno, così un
-              video di famiglia non diventa un film a caso.
-            </p>
-            <p className={styles.role}>
-              Serve una chiave gratuita: crea un account su{" "}
-              <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer">
-                themoviedb.org
-              </a>{" "}
-              e copia la «Chiave API» o il «Token di accesso in lettura».{" "}
-              {before.tmdbKey ? "La chiave è salvata." : "Nessuna chiave salvata."}
-            </p>
-            <p className={styles.role}>
-              Questo prodotto usa l'API di TMDB ma non è approvato né certificato da TMDB.
-            </p>
-          </div>
-          <label className={styles.toggle}>
-            {before.tmdb ? "Accesa" : "Spenta"}
-            <input
-              type="checkbox"
-              aria-label="TMDB accesa"
-              checked={before.tmdb}
-              disabled={busy || !before.tmdbKey}
-              onChange={(e) => change({ ...before, tmdb: e.target.checked })}
-            />
-          </label>
-          <KeyForm source="tmdb" name="TMDB" hasKey={before.tmdbKey} onSaved={keySaved} />
-        </li>
-        <li className={`glass ${styles.setting}`}>
-          <div>
-            <p className={styles.name}>ThePornDB</p>
-            <p className={styles.role}>
-              Per qualsiasi video, di solito quelli né da YouTube né film. FranzPLAY calcola
-              un'impronta del file (un numero che dipende solo dal suo contenuto) e manda solo
-              quella. Si usa una scena solo se ThePornDB conosce proprio quel file. Dà immagine,
-              titolo, descrizione, studio e data.
-            </p>
-            <p className={styles.role}>
-              Serve una chiave gratuita: crea un account su{" "}
-              <a href="https://theporndb.net/user/api-tokens" target="_blank" rel="noreferrer">
-                theporndb.net
-              </a>{" "}
-              e crea un «API token».{" "}
-              {before.tpdbKey ? "La chiave è salvata." : "Nessuna chiave salvata."}
-            </p>
-          </div>
-          <label className={styles.toggle}>
-            {before.tpdb ? "Accesa" : "Spenta"}
-            <input
-              type="checkbox"
-              aria-label="ThePornDB accesa"
-              checked={before.tpdb}
-              disabled={busy || !before.tpdbKey}
-              onChange={(e) => change({ ...before, tpdb: e.target.checked })}
-            />
-          </label>
-          <KeyForm source="tpdb" name="ThePornDB" hasKey={before.tpdbKey} onSaved={keySaved} />
-        </li>
-      </ul>
-      <OnlineRulesForm
-        status={before}
-        onSaved={(status) => {
-          setState({ kind: "ready", status });
-          setProblem("");
-          setDone("Regole salvate.");
-        }}
-      />
-      {(before.rules.confirm || before.proposals > 0) && (
-        <OnlineProposals
-          onChange={(left) => setState({ kind: "ready", status: { ...before, proposals: left } })}
-        />
-      )}
+    <div className={ui.ui}>
+      {header}
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={`${ui.problem} ${pages.pageMessage}`}>
           {problem}
         </p>
       )}
       {done && (
-        <p role="status" className={styles.done}>
+        <p role="status" className={`${ui.okText} ${pages.pageMessage}`}>
           {done}
         </p>
       )}
-    </>
+      <div className={ui.grid}>
+        <div className={ui.span7}>
+          <ul className={pages.sources} aria-label="Fonti su internet">
+            <Source
+              name="YouTube"
+              icon="play"
+              on={before.youtube}
+              disabled={busy}
+              onChange={(on) => change({ ...before, youtube: on })}
+            >
+              <p>
+                Per i video scaricati da YouTube, con il codice nel nome del file, come li salva
+                yt-dlp: <code>Gita in montagna [dQw4w9WgXcQ].mp4</code>. Dà copertina, titolo e
+                canale. Non serve nessuna chiave.
+              </p>
+            </Source>
+            <Source
+              name="TMDB"
+              label="TMDB (film)"
+              icon="film"
+              on={before.tmdb}
+              hasKey={before.tmdbKey}
+              disabled={busy || !before.tmdbKey}
+              onChange={(on) => change({ ...before, tmdb: on })}
+              keyForm={
+                <KeyForm source="tmdb" name="TMDB" hasKey={before.tmdbKey} onSaved={keySaved} />
+              }
+            >
+              <p>
+                Per i film con titolo e anno nel nome del file: <code>Il sorpasso (1962).mkv</code>{" "}
+                oppure <code>The.Matrix.1999.1080p.mkv</code>. Dà immagine, titolo, trama, regista e
+                data di uscita. Si usa solo un film con lo stesso titolo e lo stesso anno, così un
+                video di famiglia non diventa un film a caso.
+              </p>
+              <p>
+                Serve una chiave gratuita: crea un account su{" "}
+                <a
+                  className={ui.link}
+                  href="https://www.themoviedb.org/settings/api"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  themoviedb.org
+                </a>{" "}
+                e copia la «Chiave API» o il «Token di accesso in lettura».
+              </p>
+              <p className={pages.fine}>
+                Questo prodotto usa l'API di TMDB ma non è approvato né certificato da TMDB.
+              </p>
+            </Source>
+            <Source
+              name="ThePornDB"
+              icon="eye"
+              on={before.tpdb}
+              hasKey={before.tpdbKey}
+              disabled={busy || !before.tpdbKey}
+              onChange={(on) => change({ ...before, tpdb: on })}
+              keyForm={
+                <KeyForm
+                  source="tpdb"
+                  name="ThePornDB"
+                  hasKey={before.tpdbKey}
+                  onSaved={keySaved}
+                />
+              }
+            >
+              <p>
+                Per qualsiasi video, di solito quelli né da YouTube né film. FranzPLAY calcola
+                un'impronta del file (un numero che dipende solo dal suo contenuto) e manda solo
+                quella. Si usa una scena solo se ThePornDB conosce proprio quel file. Dà immagine,
+                titolo, descrizione, studio e data.
+              </p>
+              <p>
+                Serve una chiave gratuita: crea un account su{" "}
+                <a
+                  className={ui.link}
+                  href="https://theporndb.net/user/api-tokens"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  theporndb.net
+                </a>{" "}
+                e crea un «API token».
+              </p>
+            </Source>
+          </ul>
+        </div>
+        <div className={`${ui.span5} ${ui.stack}`}>
+          <OnlineRulesForm
+            status={before}
+            onSaved={(status) => {
+              setState({ kind: "ready", status });
+              setProblem("");
+              setDone("Regole salvate.");
+            }}
+          />
+          {(before.rules.confirm || before.proposals > 0) && (
+            <OnlineProposals
+              onChange={(left) =>
+                setState({ kind: "ready", status: { ...before, proposals: left } })
+              }
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Source is one source on the internet: its name and state with the
+// switch right beside them, what it does, and the form of its key.
+function Source({
+  name,
+  label = name,
+  icon,
+  on,
+  hasKey,
+  disabled,
+  onChange,
+  keyForm,
+  children,
+}: {
+  name: string;
+  label?: string;
+  icon: "play" | "film" | "eye";
+  on: boolean;
+  hasKey?: boolean; // undefined: it needs no key
+  disabled: boolean;
+  onChange: (on: boolean) => void;
+  keyForm?: ReactNode;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <li className={`${ui.card} ${pages.source}`} data-on={on || undefined}>
+      <div className={pages.sourceHead}>
+        <span className={ui.cardIcon} aria-hidden="true">
+          <Icon name={icon} size={18} />
+        </span>
+        <h2 className={pages.sourceName} id={id}>
+          {label}
+        </h2>
+        {hasKey === false ? (
+          <Chip tone="warn" icon="key">
+            Nessuna chiave salvata
+          </Chip>
+        ) : hasKey ? (
+          <Chip icon="key">La chiave è salvata</Chip>
+        ) : null}
+        <label className={pages.sourceSwitch}>
+          <span aria-hidden="true">{on ? "Accesa" : "Spenta"}</span>
+          <input
+            type="checkbox"
+            role="switch"
+            className={ui.switch}
+            aria-label={`${name} accesa`}
+            aria-describedby={id}
+            checked={on}
+            aria-checked={on}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+        </label>
+      </div>
+      <div className={pages.sourceText}>{children}</div>
+      {keyForm}
+    </li>
   );
 }
 
@@ -236,10 +312,11 @@ function KeyForm({
   };
 
   return (
-    <form className={styles.inline} onSubmit={send} aria-label={`Salva la chiave di ${name}`}>
-      <label className={styles.field}>
-        {hasKey ? `Nuova chiave di ${name}` : `Chiave di ${name}`}
+    <form className={pages.keyForm} onSubmit={send} aria-label={`Salva la chiave di ${name}`}>
+      <label className={ui.field}>
+        <span className={ui.label}>{hasKey ? `Nuova chiave di ${name}` : `Chiave di ${name}`}</span>
         <input
+          className={`${ui.input} ${ui.mono}`}
           type="password"
           value={key}
           autoComplete="off"
@@ -247,11 +324,16 @@ function KeyForm({
           onChange={(e) => setKey(e.target.value)}
         />
       </label>
-      <button type="submit" className={styles.primary} disabled={sending || key.trim() === ""}>
+      <button
+        type="submit"
+        className={`${ui.btn} ${ui.primary}`}
+        disabled={sending || key.trim() === ""}
+      >
+        <Icon name="key" size={16} />
         Prova e salva
       </button>
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}

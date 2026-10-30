@@ -60,13 +60,6 @@ export const subtitleOptions: {
 
 export const styleKeys = ["size", "color", "background", "position"] as const;
 
-export function optionLabel<K extends keyof SubtitleStyle>(
-  key: K,
-  value: SubtitleStyle[K],
-): string {
-  return subtitleOptions[key].options.find((o) => o.value === value)?.label ?? "";
-}
-
 // parseSubtitleStyle checks a style remembered by the browser: anything
 // unknown goes back to the default.
 export function parseSubtitleStyle(data: unknown): SubtitleStyle {
@@ -86,13 +79,13 @@ export function parseSubtitleStyle(data: unknown): SubtitleStyle {
 // Sizes are a share of the player's height (cqh), so subtitles grow with
 // the player and stay readable in full screen.
 const sizes: Record<SubtitleStyle["size"], string> = {
-  small: "4cqh",
-  normal: "5.5cqh",
-  large: "7cqh",
-  huge: "9cqh",
+  small: "3cqh",
+  normal: "4cqh",
+  large: "5cqh",
+  huge: "6.5cqh",
 };
 
-const colors: Record<SubtitleStyle["color"], string> = {
+export const subtitleColors: Record<SubtitleStyle["color"], string> = {
   white: "#ffffff",
   yellow: "#ffe14d",
   cyan: "#5ce1ff",
@@ -106,14 +99,30 @@ const backgrounds: Record<SubtitleStyle["background"], string> = {
   black: "#000000",
 };
 
+// At the largest size the preview shows 28px, what its box has room for.
+const previewPxPerShare = 28 / 6.5;
+
 // subtitleCSS turns a style into the look of a subtitle line.
 export function subtitleCSS(style: SubtitleStyle): CSSProperties {
   return {
     fontSize: `max(14px, ${sizes[style.size]})`,
-    color: colors[style.color],
+    color: subtitleColors[style.color],
     backgroundColor: backgrounds[style.background],
     textShadow:
       style.background === "shadow" ? "0 0 4px #000, 0 0 2px #000, 0 2px 4px #000" : "none",
+  };
+}
+
+// subtitlePreviewCSS is the same look for the preview in the settings. On a
+// small player the sizes are the real ones, even when the smallest size
+// allowed makes them equal; on a large one they would not fit in the preview,
+// so they shrink together and keep their proportions. cqh is the player's
+// height here too, so the preview must not be a size container itself.
+export function subtitlePreviewCSS(style: SubtitleStyle): CSSProperties {
+  const share = Number.parseFloat(sizes[style.size]);
+  return {
+    ...subtitleCSS(style),
+    fontSize: `max(14px, min(${share}cqh, ${(share * previewPxPerShare).toFixed(1)}px))`,
   };
 }
 

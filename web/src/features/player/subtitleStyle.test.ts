@@ -2,9 +2,9 @@ import {
   cueLines,
   defaultSubtitleStyle,
   linesAt,
-  optionLabel,
   parseSubtitleStyle,
   subtitleCSS,
+  subtitlePreviewCSS,
 } from "./subtitleStyle";
 
 describe("parseSubtitleStyle", () => {
@@ -31,7 +31,7 @@ describe("subtitleCSS", () => {
       background: "shadow",
       position: "top",
     });
-    expect(css.fontSize).toBe("max(14px, 7cqh)");
+    expect(css.fontSize).toBe("max(14px, 5cqh)");
     expect(css.color).toBe("#ffe14d");
     expect(css.backgroundColor).toBe("transparent");
     expect(css.textShadow).not.toBe("none");
@@ -42,10 +42,19 @@ describe("subtitleCSS", () => {
   });
 });
 
-describe("optionLabel", () => {
-  it("names the choices in Italian", () => {
-    expect(optionLabel("size", "huge")).toBe("Molto grande");
-    expect(optionLabel("position", "top")).toBe("In alto");
+describe("subtitlePreviewCSS", () => {
+  it("looks like the subtitles, in a size that fits the preview", () => {
+    const style = { ...defaultSubtitleStyle, size: "huge", color: "yellow" } as const;
+    const css = subtitlePreviewCSS(style);
+    expect(css.color).toBe(subtitleCSS(style).color);
+    expect(css.fontSize).toBe("max(14px, min(6.5cqh, 28.0px))");
+  });
+
+  it("keeps the proportions between the sizes", () => {
+    const size = (size: "small" | "large") =>
+      subtitlePreviewCSS({ ...defaultSubtitleStyle, size }).fontSize;
+    expect(size("small")).toBe("max(14px, min(3cqh, 12.9px))");
+    expect(size("large")).toBe("max(14px, min(5cqh, 21.5px))");
   });
 });
 

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
-	"github.com/FranzGra/FranzPLAY/internal/translate"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -24,12 +23,16 @@ const heardItalian = `{"result": {"language": "it"}, "transcription": [
 
 // fakeTranslator writes the text in upper case, or fails with err.
 type fakeTranslator struct {
-	calls []string // "it>en"
-	err   error
+	calls  []string // "it>en"
+	err    error
+	during func() // runs while it translates
 }
 
 func (f *fakeTranslator) Cues(_ context.Context, cues []video.Cue, from, to string) ([]video.Cue, error) {
 	f.calls = append(f.calls, from+">"+to)
+	if f.during != nil {
+		f.during()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -49,8 +52,9 @@ type transcribeFixture struct {
 	heard   string     // what whisper writes
 	whisper [][]string // the arguments of each whisper run
 	ffmpeg  [][]string
-	during  func() // runs while whisper works
-	fail    string // the program that fails
+	during  func()   // runs while whisper works
+	fail    string   // the program that fails
+	printed []string // what whisper prints while it works
 }
 
 func newTranscribeFixture(t *testing.T) *transcribeFixture {
@@ -76,6 +80,14 @@ func newTranscribeFixture(t *testing.T) *transcribeFixture {
 			return nil, os.WriteFile(out+".json", []byte(fx.heard), 0o600)
 		}
 		return nil, errors.New("unknown program " + program)
+	}
+	// whisper is streamed: the fake prints its lines, then works as run.
+	fx.tr.stream = func(ctx context.Context, program string, line func(string), args ...string) error {
+		for _, l := range fx.printed {
+			line(l)
+		}
+		_, err := fx.tr.run(ctx, program, args...)
+		return err
 	}
 	fx.model(t, "small")
 	return fx
@@ -155,6 +167,17 @@ func (fx *transcribeFixture) stage(t *testing.T) string {
 	return stage
 }
 
+// listenAndTranslate runs the two jobs one after the other, as the queue does.
+func (fx *transcribeFixture) listenAndTranslate(t *testing.T) {
+	t.Helper()
+	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.tr.HandleTranslation(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTranscribeAndTranslate(t *testing.T) {
 	fx := newTranscribeFixture(t)
 	fx.ask(t, "", "small", "it,en")
@@ -162,6 +185,20 @@ func TestTranscribeAndTranslate(t *testing.T) {
 	fx.tr.OnStage(func() { stages = append(stages, fx.stage(t)) })
 	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
+	}
+	// Listening is finished and safe: the translation is a job in the queue.
+	if got, _ := fx.made(t); !reflect.DeepEqual(got, []string{"it<-"}) {
+		t.Errorf("after listening: %v", got)
+	}
+	var state string
+	if err := fx.db.QueryRow(`SELECT state FROM jobs WHERE video_id = ? AND kind = ?`, fx.id, string(jobs.Translate)).Scan(&state); err != nil || state != "pending" {
+		t.Errorf("translate job: %q, %v", state, err)
+	}
+	if err := fx.tr.HandleTranslation(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.whisper) != 1 {
+		t.Errorf("whisper ran %d times, want once", len(fx.whisper))
 	}
 	got, files := fx.made(t)
 	if want := []string{"en<-it", "it<-"}; !reflect.DeepEqual(got, want) {
@@ -176,7 +213,7 @@ func TestTranscribeAndTranslate(t *testing.T) {
 	if len(fx.files(t)) != 2 {
 		t.Errorf("files %v: the sound should be gone", fx.files(t))
 	}
-	if want := []string{"audio", "transcribe", "translate", ""}; !reflect.DeepEqual(stages, want) {
+	if want := []string{"audio", "transcribe", ""}; !reflect.DeepEqual(stages, want) {
 		t.Errorf("stages %v, want %v", stages, want)
 	}
 	if args := fx.whisper[0]; args[slices.Index(args, "-l")+1] != "auto" || args[slices.Index(args, "-m")+1] != ModelFile(fx.dataDir, "small") {
@@ -190,13 +227,9 @@ func TestTranscribeAndTranslate(t *testing.T) {
 func TestTranscribeOneMoreLanguage(t *testing.T) {
 	fx := newTranscribeFixture(t)
 	fx.ask(t, "", "small", "en")
-	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
-		t.Fatal(err)
-	}
+	fx.listenAndTranslate(t)
 	fx.ask(t, "", "small", "en,de")
-	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
-		t.Fatal(err)
-	}
+	fx.listenAndTranslate(t)
 	if len(fx.whisper) != 1 {
 		t.Errorf("whisper ran %d times, want once", len(fx.whisper))
 	}
@@ -212,16 +245,12 @@ func TestTranscribeAgainWithAnotherModel(t *testing.T) {
 	fx := newTranscribeFixture(t)
 	fx.model(t, "medium")
 	fx.ask(t, "", "small", "it,en")
-	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
-		t.Fatal(err)
-	}
+	fx.listenAndTranslate(t)
 	_, before := fx.made(t)
 	fx.ask(t, "it", "medium", "it,en")
 	fx.heard = strings.ReplaceAll(heardItalian, "mare", "lago")
 	fx.tr.now = func() time.Time { return time.Unix(1_800_000_100, 0) }
-	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
-		t.Fatal(err)
-	}
+	fx.listenAndTranslate(t)
 	got, after := fx.made(t)
 	if !reflect.DeepEqual(got, []string{"en<-it", "it<-"}) || after["en"] == before["en"] || !strings.Contains(after["en"], "lago") {
 		t.Errorf("made %v: %q", got, after["en"])
@@ -262,13 +291,6 @@ func TestTranscribeFailures(t *testing.T) {
 		permanent bool
 		made      []string // what stays saved
 	}{
-		{"no translator", func(_ *testing.T, fx *transcribeFixture) { fx.tr.translator = nil }, true, []string{"it<-"}},
-		{"translator refuses", func(_ *testing.T, fx *transcribeFixture) {
-			fx.tl.err = translate.ErrRefused
-		}, true, []string{"it<-"}},
-		{"translator busy", func(_ *testing.T, fx *transcribeFixture) {
-			fx.tl.err = errors.New("answered 500")
-		}, false, []string{"it<-"}},
 		{"model missing", func(_ *testing.T, fx *transcribeFixture) { fx.ask(t, "", "medium", "it,en") }, true, nil},
 		{"ffmpeg fails", func(_ *testing.T, fx *transcribeFixture) { fx.fail = "ffmpeg" }, false, nil},
 		{"whisper fails", func(_ *testing.T, fx *transcribeFixture) { fx.fail = "whisper-cli" }, false, nil},

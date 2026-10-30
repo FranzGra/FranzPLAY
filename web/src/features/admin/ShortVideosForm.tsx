@@ -1,6 +1,8 @@
 import { type FormEvent, useState } from "react";
 import { maxMinDuration, saveMinDuration } from "../../api/library";
-import styles from "./Admin.module.css";
+import { Icon } from "../../components/Icon";
+import pages from "./Pages.module.css";
+import { Chip, ui } from "./ui";
 
 // The minimum offered when the administrator turns the option on.
 const defaultSeconds = 10;
@@ -42,51 +44,67 @@ export function ShortVideosForm({
   const unchanged = on ? seconds === minDuration : minDuration === 0;
   return (
     <form
-      className={`glass ${styles.rules}`}
+      className={`${ui.card} ${pages.editor}`}
       onSubmit={send}
       aria-label="Video troppo corti"
       noValidate
     >
-      <h2 className={styles.name}>Video troppo corti</h2>
-      <p className={styles.role}>
+      <h2 className={ui.cardTitle}>
+        <span className={ui.cardIcon} aria-hidden="true">
+          <Icon name="clock" size={18} />
+        </span>
+        Video troppo corti
+      </h2>
+      <p className={ui.cardText}>
         Se nelle cartelle ci sono video brevissimi che non vuoi vedere, come vecchie anteprime,
         FranzPLAY può lasciarli fuori. Restano nella cartella e non vengono mai cancellati: se
         spegni l'opzione, tornano tutti. I video caricati dal browser si vedono sempre.
       </p>
 
-      <label className={styles.check}>
-        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
-        Escludi i video più corti di
-      </label>
-      {on && (
-        <label className={`${styles.field} ${styles.seconds}`}>
-          Secondi
-          <input
-            type="number"
-            min={1}
-            max={maxMinDuration}
-            step={1}
-            value={seconds}
-            onChange={(e) => setSeconds(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-          />
+      <div className={pages.checks}>
+        <label className={pages.check}>
+          <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
+          Escludi i video più corti di
         </label>
-      )}
+        {on && (
+          <label className={pages.seconds}>
+            <input
+              className={ui.input}
+              type="number"
+              min={1}
+              max={maxMinDuration}
+              step={1}
+              value={seconds}
+              onChange={(e) => setSeconds(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+            />
+            Secondi
+          </label>
+        )}
+      </div>
 
       {minDuration > 0 && (
-        <p role="status" className={styles.done}>
+        <p role="status" className={ui.okText}>
           {tooShort === 0
             ? `Nessun video dura meno di ${minDuration} secondi.`
             : `${tooShort.toLocaleString("it-IT")} ${tooShort === 1 ? "video non si vede perché dura" : "video non si vedono perché durano"} meno di ${minDuration} secondi. Li trovi in Video › Troppo corti.`}
         </p>
       )}
 
-      <div className={styles.buttons}>
-        <button type="submit" className={styles.primary} disabled={sending || unchanged}>
-          Salva
-        </button>
+      <div className={pages.formFoot}>
+        <span />
+        {unchanged ? (
+          <Chip tone="ok" icon="check">
+            Nessuna modifica da salvare
+          </Chip>
+        ) : (
+          <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={sending}>
+            <Icon name="check" size={16} />
+            Salva
+          </button>
+        )}
       </div>
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}

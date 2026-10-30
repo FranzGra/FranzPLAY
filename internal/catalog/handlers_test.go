@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/FranzGra/FranzPLAY/internal/database"
@@ -597,7 +598,7 @@ func TestSubtitlesMadeByWhisper(t *testing.T) {
 
 	tracks := decode[[]subtitleTrack](t, s.get(t, "/api/videos/1/subtitles"))
 	want := []subtitleTrack{
-		{Key: "auto-en", Lang: "en", Label: "Inglese (automatici)", Src: "/api/videos/1/subtitles/auto-en"},
+		{Key: "auto-en", Lang: "en", Label: "Inglese (tradotti)", Src: "/api/videos/1/subtitles/auto-en"},
 		{Key: "auto-it", Lang: "it", Label: "Italiano (automatici)", Src: "/api/videos/1/subtitles/auto-it"},
 	}
 	if !reflect.DeepEqual(tracks, want) {
@@ -847,38 +848,50 @@ func TestVideoSaysWhoseItIs(t *testing.T) {
 		return decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(id, 10))).Owner
 	}
 
-	// Before anyone exists, a video belongs to nobody.
-	if o := owner(folder); o != nil {
-		t.Errorf("owner with nobody = %+v, want none", o)
-	}
-
-	// Anna is the first administrator, who installed FranzPLAY; Bruno
-	// became one later, Giulia uploads videos.
+	// Anna is the administrator, who installed FranzPLAY; Giulia uploads
+	// videos. Anna is a person like any other: a video from a folder is
+	// the site's own, not hers.
 	if _, err := s.db.Exec(`INSERT INTO users (id, name, password_hash, role, created_at, avatar) VALUES
-		(1, 'Bruno', 'x', 'admin', 20, 0), (2, 'Anna', 'x', 'admin', 10, 77), (3, 'Giulia', 'x', 'user', 5, 0)`); err != nil {
+		(2, 'Anna', 'x', 'admin', 10, 77), (3, 'Giulia', 'x', 'user', 5, 9)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = 3 WHERE id = ?`, uploaded); err != nil {
 		t.Fatal(err)
 	}
-	if o := owner(folder); o == nil || *o != (Owner{ID: 2, Name: "Anna", Avatar: 77}) {
-		t.Errorf("owner of a folder video = %+v, want Anna, the first administrator", o)
+	if o := owner(folder); o != nil {
+		t.Errorf("owner of a folder video = %+v, want none: the site's own", o)
 	}
-	if o := owner(uploaded); o == nil || *o != (Owner{ID: 3, Name: "Giulia"}) {
+	if o := owner(uploaded); o == nil || *o != (Owner{ID: 3, Name: "Giulia", Avatar: 9}) {
 		t.Errorf("owner of an uploaded video = %+v, want Giulia", o)
 	}
 
-	// Lists do not carry it: only the video page shows it.
-	if list := decode[listResponse](t, s.get(t, "/api/videos")); list.Videos[0].Owner != nil {
-		t.Errorf("list owner = %+v, want none", list.Videos[0].Owner)
+	// The JSON says it plainly: "owner": null.
+	body := s.get(t, "/api/videos/"+strconv.FormatInt(folder, 10)).Body.String()
+	if !strings.Contains(body, `"owner":null`) {
+		t.Errorf("folder video JSON = %s, want \"owner\":null", body)
 	}
 
-	// When Giulia goes away, her video goes to the main administrator.
+	// Lists carry it too, for the cards.
+	list := decode[listResponse](t, s.get(t, "/api/videos"))
+	for _, v := range list.Videos {
+		switch v.ID {
+		case folder:
+			if v.Owner != nil {
+				t.Errorf("list owner of the folder video = %+v, want none", v.Owner)
+			}
+		case uploaded:
+			if v.Owner == nil || v.Owner.Name != "Giulia" || v.Owner.Avatar != 9 {
+				t.Errorf("list owner of the uploaded video = %+v, want Giulia", v.Owner)
+			}
+		}
+	}
+
+	// When Giulia goes away, her video becomes the site's.
 	if _, err := s.db.Exec(`DELETE FROM users WHERE id = 3`); err != nil {
 		t.Fatal(err)
 	}
-	if o := owner(uploaded); o == nil || o.ID != 2 {
-		t.Errorf("owner after the uploader left = %+v, want Anna", o)
+	if o := owner(uploaded); o != nil {
+		t.Errorf("owner after the uploader left = %+v, want none", o)
 	}
 }
 
@@ -1086,7 +1099,7 @@ func TestVideoByLink(t *testing.T) {
 // A category shows the pictures found in its folder: the tall one as its
 // poster, the wide one as its image unless the administrator chose one.
 func TestCategoriesShowThePicturesOfTheirFolders(t *testing.T) {
-	s := newSite(t)
+	s := newAdminSite(t)
 	s.addVideo(t, "Viaggi/a.mp4", "a", "Viaggi", 1, false)
 	s.addVideo(t, "Corsi/b.mp4", "b", "Corsi", 1, false)
 	s.addVideo(t, "Scuola/c.mp4", "c", "Scuola", 1, false)
@@ -1129,6 +1142,24 @@ func TestCategoriesShowThePicturesOfTheirFolders(t *testing.T) {
 		c := got[name]
 		if address(c.Image) != want[0] || address(c.Poster) != want[1] {
 			t.Errorf("%s: image %q poster %q, want %q and %q", name, address(c.Image), address(c.Poster), want[0], want[1])
+		}
+	}
+
+	// The administrator sees them apart from the image they chose, for the
+	// preview of the card.
+	admin := map[string]AdminCategory{}
+	for _, c := range decode[[]AdminCategory](t, s.do(t, "GET", "/api/admin/categories", "", http.StatusOK)) {
+		admin[c.Name] = c
+	}
+	for name, want := range map[string][3]string{
+		"Viaggi": {"", "/api/category-pictures/2-b.jpg", "/api/category-pictures/1-a.jpg"},
+		"Corsi":  {"/api/category-images/9-own.jpg", "/api/category-pictures/4-d.jpg", ""},
+		"Scuola": {"", "", ""},
+	} {
+		c := admin[name]
+		if address(c.Image) != want[0] || address(c.FolderImage) != want[1] || address(c.Poster) != want[2] {
+			t.Errorf("admin %s: image %q folder image %q poster %q, want %q", name,
+				address(c.Image), address(c.FolderImage), address(c.Poster), want)
 		}
 	}
 }

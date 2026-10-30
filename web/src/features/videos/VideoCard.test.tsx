@@ -42,6 +42,23 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("whose the video is, on the card", () => {
+  it("names the person who uploaded it, with their photo", () => {
+    show(
+      video({ uploader: { id: 5, name: "Giulia" }, owner: { id: 5, name: "Giulia", avatar: 42 } }),
+    );
+    expect(card()).toHaveTextContent("Giulia");
+    expect(card().querySelector("img[src='/api/users/5/avatar?v=42']")).not.toBeNull();
+  });
+
+  it("shows the site's logo and name for a video from a folder", () => {
+    show(video({ uploader: null, owner: null }));
+    expect(card()).toHaveTextContent("FranzPLAY");
+    expect(card().querySelector("[data-site-mark]")).not.toBeNull();
+    expect(card()).not.toHaveTextContent("Libreria");
+  });
+});
+
 describe("clip on the video card", () => {
   it("plays while the mouse rests on the card", () => {
     show(video());

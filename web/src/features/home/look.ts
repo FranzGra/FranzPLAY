@@ -13,6 +13,13 @@ export function cardWidth(size: number): number {
   return cardWidths[Math.min(Math.max(Math.round(size), 1), 5) - 1] ?? cardWidths[2];
 }
 
+// cardsPerLine is how many cards of the given size fit in a line of the
+// given width, when the size decides (columns "Auto"): never fewer than
+// one. It counts as the grid does, with its gap between the cards.
+export function cardsPerLine(width: number, size: number): number {
+  return Math.max(1, Math.floor((width + gap) / (cardWidth(size) + gap)));
+}
+
 // lookStyle turns the look into the CSS variables the grids and the rows
 // of the Home read. They count only on a computer or tablet: on a phone
 // the CSS keeps big cards, one under the other.

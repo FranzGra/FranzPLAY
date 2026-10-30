@@ -1,0 +1,631 @@
+/* The console of the administration: a narrow bar of the app's icons, the
+   administration's own menu, and the open page at full width with a bar on
+   top that says where you are and what FranzPLAY is doing. Every page of
+   the administration is built from the pieces below. */
+
+.console {
+  --rail: 68px;
+  --nav: 264px;
+  --gutter: clamp(20px, 2.4vw, 48px);
+  --faint: #8b8b94;
+  --border-strong: rgb(255 255 255 / 0.14);
+  --info: #93c5fd;
+  --info-bg: rgb(59 130 246 / 0.14);
+  display: grid;
+  grid-template-columns: var(--rail) var(--nav) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+@media (max-width: 1279px) {
+  .console {
+    --nav: 228px;
+  }
+}
+
+/* ---------- The bar of the app's icons ---------- */
+
+.rail {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100dvh;
+  padding: 16px 0;
+  border-right: 1px solid var(--color-border);
+  background: #0b0b0e;
+}
+
+.railLogo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--color-accent-light), var(--color-accent));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 4px 14px rgb(var(--color-accent-rgb) / 0.35);
+  color: var(--color-on-accent);
+}
+
+.railLink {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.railLink:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--color-text);
+}
+
+.railLink[data-here] {
+  background: rgb(var(--color-accent-rgb) / 0.16);
+  color: var(--color-text);
+}
+
+/* The name of an icon appears beside it under the mouse. */
+.railTip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 30;
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #18181b;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  translate: -4px -50%;
+  transition:
+    opacity var(--duration-fast),
+    translate var(--duration-fast) var(--ease-out);
+}
+
+.railLink:hover .railTip,
+.railLink:focus-visible .railTip {
+  opacity: 1;
+  translate: 0 -50%;
+}
+
+.railSpacer {
+  flex: 1;
+}
+
+.railAvatar {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--color-text);
+}
+
+/* ---------- The administration's menu ---------- */
+
+.nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: 18px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  border-right: 1px solid var(--color-border);
+  background: rgb(255 255 255 / 0.015);
+}
+
+.navSite {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 10px 16px;
+  min-width: 0;
+}
+
+.navSiteName {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navSiteAccent {
+  color: var(--color-accent);
+}
+
+.navSiteSub {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.goto {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin: 0 0 8px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.goto:hover {
+  border-color: rgb(255 255 255 / 0.22);
+  color: var(--color-text);
+}
+
+.kbd {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  font-size: 13px;
+}
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navTitle {
+  margin: 18px 0 6px 12px;
+  color: var(--faint);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-s);
+  color: #d4d4d8;
+  font-size: 15px;
+  font-weight: 500;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.navLink svg {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.navLink:hover {
+  background: rgb(255 255 255 / 0.05);
+  color: var(--color-text);
+}
+
+.navLink[aria-current="page"] {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-text);
+}
+
+.navLink[aria-current="page"] svg {
+  color: var(--color-accent);
+}
+
+.navCount {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.navLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.navFoot {
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+/* ---------- "Al lavoro": what runs now, at the foot of the menu ---------- */
+
+.actCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: rgb(255 255 255 / 0.025);
+  font-size: 13px;
+}
+
+.actCard[data-busy] {
+  border-color: rgb(var(--color-accent-rgb) / 0.35);
+  background: rgb(var(--color-accent-rgb) / 0.07);
+}
+
+.actTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.actRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.actRowHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-text);
+}
+
+.actRowHead span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actRowHead b {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.actFoot {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.actFoot a {
+  font-weight: 550;
+}
+
+.actQuiet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.actQuiet svg {
+  color: var(--color-success);
+}
+
+/* ---------- The open page ---------- */
+
+.main {
+  min-width: 0;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 64px;
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--color-border);
+  background: rgb(9 9 11 / 0.85);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 15px;
+  white-space: nowrap;
+  list-style: none;
+}
+
+.crumb li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.crumb li + li::before {
+  content: "/";
+  color: var(--faint);
+}
+
+.crumb a {
+  color: var(--color-text-muted);
+}
+
+.crumb a:hover {
+  color: var(--color-text);
+}
+
+.crumb [aria-current] {
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin-left: auto;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.03);
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.pill:hover {
+  color: var(--color-text);
+}
+
+.pill[data-busy] {
+  border-color: rgb(var(--color-accent-rgb) / 0.45);
+  background: rgb(var(--color-accent-rgb) / 0.1);
+  color: var(--color-text);
+}
+
+.pill b {
+  font-weight: 650;
+}
+
+.pillPercent {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pillBar {
+  width: 64px;
+}
+
+.pill svg {
+  color: var(--color-success);
+}
+
+.work {
+  padding: 28px var(--gutter) 80px;
+}
+
+/* ---------- Phones and small tablets: one column ---------- */
+
+.phoneBar {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .console {
+    display: block;
+    min-height: 0;
+  }
+
+  .rail,
+  .nav,
+  .topbar {
+    display: none;
+  }
+
+  /* The sections as a strip of chips that scrolls sideways, and the work
+     in progress just under it. */
+  .phoneBar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0 calc(-1 * var(--page-side, 16px)) 4px;
+  }
+
+  .chips {
+    display: flex;
+    gap: 8px;
+    margin: 0;
+    padding: 0 var(--page-side, 16px) 2px;
+    overflow-x: auto;
+    list-style: none;
+    scrollbar-width: none;
+  }
+
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    color: #d4d4d8;
+    font-size: 14px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+
+  .chip[aria-current="page"] {
+    border-color: var(--color-text);
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+
+  .chip[aria-current="page"] svg {
+    color: var(--color-accent);
+  }
+
+  .phoneStatus {
+    display: flex;
+    padding: 0 var(--page-side, 16px);
+  }
+
+  .phoneStatus .pill {
+    margin-left: 0;
+  }
+
+  .work {
+    padding: 16px 0 24px;
+  }
+}
+
+/* ---------- "Vai a…": a window to jump to a section ---------- */
+
+.goDialog {
+  width: min(560px, calc(100vw - 32px));
+  margin: 12vh auto auto;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-l);
+  background: #141417;
+  color: var(--color-text);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 0.6);
+}
+
+.goDialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.goField {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.goField input {
+  flex: 1;
+  min-width: 0;
+  height: 58px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 17px;
+  outline: none;
+}
+
+.goList {
+  max-height: 50vh;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.goItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.goItem[aria-selected="true"],
+.goItem:hover {
+  background: rgb(255 255 255 / 0.07);
+}
+
+.goItem svg {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.goItem[aria-selected="true"] svg {
+  color: var(--color-accent);
+}
+
+.goText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.goText b {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.goText span {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.goGroup {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.goNone {
+  padding: 18px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}

@@ -110,3 +110,11 @@ func TestIsAutoLanguage(t *testing.T) {
 		t.Error("wrong answer")
 	}
 }
+
+func TestWebVTTKeepsItalicsAndBold(t *testing.T) {
+	got := WebVTT([]Cue{{End: ms(1000), Text: "<i>Ciao</i> <b>a</b> <font>tutti</font>"}})
+	want := "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<i>Ciao</i> <b>a</b> &lt;font&gt;tutti&lt;/font&gt;\n"
+	if got != want {
+		t.Errorf("WebVTT = %q", got)
+	}
+}

@@ -7,12 +7,23 @@ export type AdminCategory = {
   name: string; // as the videos have it: the folder's name, or the one given to a video
   label: string; // the name people see; "" = name itself
   color: string; // like "#2997ff"; "" = none
-  image: string | null; // address of its image; null = none
+  image: string | null; // address of the image the administrator chose; null = none
+  // The pictures found in its folder, which the card people see also shows.
+  folderImage: string | null;
+  poster: string | null;
   videos: number;
 };
 
 // The longest name the server accepts.
 export const maxLabel = 100;
+
+function folderPicture(address: unknown): string | null {
+  if (address === undefined || address === null) return null;
+  if (typeof address !== "string" || !address.startsWith("/api/category-pictures/")) {
+    throw new Error("admin category: bad folder picture");
+  }
+  return address;
+}
 
 export function parseAdminCategories(data: unknown): AdminCategory[] {
   if (!Array.isArray(data)) {
@@ -38,7 +49,15 @@ export function parseAdminCategories(data: unknown): AdminCategory[] {
     if (typeof c.videos !== "number" || !Number.isSafeInteger(c.videos) || c.videos < 0) {
       throw new Error("admin category: bad videos");
     }
-    return { name: c.name, label: c.label, color: c.color, image: c.image, videos: c.videos };
+    return {
+      name: c.name,
+      label: c.label,
+      color: c.color,
+      image: c.image,
+      folderImage: folderPicture(c.folderImage),
+      poster: folderPicture(c.poster),
+      videos: c.videos,
+    };
   });
 }
 

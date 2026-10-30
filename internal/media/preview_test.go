@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"image/color"
+	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -60,45 +63,47 @@ func (fx *previewFixture) files(t *testing.T) []string {
 	return names
 }
 
-// fakeFFmpegFrames pretends to be ffmpeg: asked for single frames it
-// writes keyFrames of them, or allFrames when told to read every frame;
-// asked to join them it writes the image. A step named in fail fails.
+// fakeFFmpegFrames pretends to be ffmpeg on a video of length seconds:
+// asked for the frame at a second (-ss) it writes it if the video lasts
+// that long; asked to join the frames it writes the image. A step named
+// in fail fails: "frames" the first frame, "join" the join.
 type fakeFFmpegFrames struct {
-	keyFrames, allFrames int
-	fail                 string // "frames", "all frames" or "join"
-	calls                []string
+	length  int64
+	fail    string
+	calls   []string
+	seconds []int64 // the seconds asked, in order
 }
 
 func (f *fakeFFmpegFrames) run(_ context.Context, _ string, args ...string) ([]byte, error) {
 	out := strings.TrimPrefix(args[len(args)-1], "file:")
-	step, n := "join", 0
-	if strings.HasSuffix(out, frameName) {
-		step, n = "all frames", f.allFrames
-		if slices.Contains(args, "-skip_frame") {
-			step, n = "frames", f.keyFrames
+	i := slices.Index(args, "-ss")
+	if i < 0 {
+		f.calls = append(f.calls, "join")
+		if f.fail == "join" {
+			return nil, errors.New("exit status 1")
 		}
+		return nil, os.WriteFile(out, []byte("jpeg"), 0o600)
 	}
-	f.calls = append(f.calls, step)
-	if step == "join" {
-		if err := os.WriteFile(out, []byte("jpeg"), 0o600); err != nil {
-			return nil, err
-		}
+	f.calls = append(f.calls, "frame")
+	second, err := strconv.ParseInt(args[i+1], 10, 64)
+	if err != nil {
+		return nil, err
 	}
-	for i := 1; i <= n; i++ {
-		if err := os.WriteFile(filepath.Join(filepath.Dir(out), fmt.Sprintf("%03d.jpg", i)), []byte("f"), 0o600); err != nil {
-			return nil, err
-		}
-	}
-	if step == f.fail {
+	f.seconds = append(f.seconds, second)
+	if f.fail == "frames" {
 		return nil, errors.New("exit status 1")
 	}
-	return nil, nil
+	if second >= f.length {
+		// Like ffmpeg 7: nothing to encode is a failure.
+		return nil, errors.New("exit status 234: Nothing was written into output file")
+	}
+	return nil, os.WriteFile(out, []byte("f"), 0o600)
 }
 
 func TestPreviewsSaved(t *testing.T) {
-	fx := newPreviewFixture(t, "/videos", "a.mp4", 600)
+	fx := newPreviewFixture(t, "/videos", "a.mp4", 252)
 	var joined []string
-	fake := &fakeFFmpegFrames{keyFrames: 42}
+	fake := &fakeFFmpegFrames{length: 252}
 	fx.p.run = func(ctx context.Context, program string, args ...string) ([]byte, error) {
 		joined = args
 		return fake.run(ctx, program, args...)
@@ -107,18 +112,64 @@ func TestPreviewsSaved(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := fx.saved(t)
-	if s.name.String != "1-fp-w480.jpg" || s.gap.Int64 != 6 || s.count.Int64 != 42 ||
+	if s.name.String != "1-fp-w480t.jpg" || s.gap.Int64 != 3 || s.count.Int64 != 84 ||
 		s.width.Int64 != 480 || s.height.Int64 != 270 {
-		t.Errorf("saved %+v, want 42 frames of 480x270 every 6 seconds", s)
+		t.Errorf("saved %+v, want 84 frames of 480x270 every 3 seconds", s)
 	}
-	if !slices.Contains(joined, "tile=10x5") {
-		t.Errorf("join command %q, want a 10x5 grid", joined)
+	if !slices.Contains(joined, "tile=10x9") {
+		t.Errorf("join command %q, want a 10x9 grid", joined)
 	}
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480.jpg"}) {
+	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480t.jpg"}) {
 		t.Errorf("previews folder = %q", files)
 	}
-	if !slices.Equal(fake.calls, []string{"frames", "join"}) {
-		t.Errorf("ffmpeg ran for %q, want only key frames then join", fake.calls)
+	if n := len(fake.calls); n != 85 || fake.calls[n-1] != "join" {
+		t.Errorf("ffmpeg ran %d times (%q…), want 84 frames then join", n, fake.calls[:min(n, 3)])
+	}
+}
+
+// TestPreviewFramesAtTheirSeconds: frame i is the picture at second
+// i*gap, from the start to the end of the video, each asked once.
+func TestPreviewFramesAtTheirSeconds(t *testing.T) {
+	tests := []struct {
+		name             string
+		duration, length int64 // stated, and how long the file really lasts
+		want             []int64
+	}{
+		{"18 seconds", 18, 18, []int64{0, 2, 4, 6, 8, 10, 12, 14, 16}},
+		{"odd length", 9, 9, []int64{0, 2, 4, 6, 8}},
+		// The file ends before its stated duration: the second with no
+		// picture ends the list.
+		{"ends early", 18, 13, []int64{0, 2, 4, 6, 8, 10, 12, 14}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fx := newPreviewFixture(t, "/videos", "a.mp4", tt.duration)
+			fake := &fakeFFmpegFrames{length: tt.length}
+			fx.p.run = fake.run
+			if err := fx.p.Handle(context.Background(), fx.id); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(fake.seconds, tt.want) {
+				t.Errorf("seconds asked %v, want %v", fake.seconds, tt.want)
+			}
+			wantCount := int64(len(tt.want))
+			if tt.length < tt.duration {
+				wantCount-- // the last one asked had no picture
+			}
+			if s := fx.saved(t); s.count.Int64 != wantCount || s.gap.Int64 != 2 {
+				t.Errorf("saved %+v, want %d frames every 2 seconds", s, wantCount)
+			}
+		})
+	}
+}
+
+func TestFrameCount(t *testing.T) {
+	for _, tt := range []struct{ duration, gap, want int64 }{
+		{18, 2, 9}, {17, 2, 9}, {16, 2, 8}, {600, 6, 100}, {7200, 72, 100}, {7201, 73, 99}, {0, 2, 0}, {10, 0, 0},
+	} {
+		if got := frameCount(tt.duration, tt.gap); int64(got) != tt.want {
+			t.Errorf("frameCount(%d, %d) = %d, want %d", tt.duration, tt.gap, got, tt.want)
+		}
 	}
 }
 
@@ -131,37 +182,26 @@ func TestPreviewsMadeAgainReplaceTheOldImage(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "1-fp.jpg"), []byte("old"), 0o600); err != nil {
+	for _, old := range []string{"1-fp.jpg", "1-fp-w480.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, old), []byte("old"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := fx.db.Exec(`UPDATE videos SET preview = '1-fp-w480.jpg', preview_gap = 6, preview_count = 100,
+		preview_width = 480, preview_height = 270 WHERE id = ?`, fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fx.db.Exec(`UPDATE videos SET preview = '1-fp.jpg', preview_gap = 6, preview_count = 100,
-		preview_width = 160, preview_height = 90 WHERE id = ?`, fx.id); err != nil {
-		t.Fatal(err)
-	}
-	fx.p.run = (&fakeFFmpegFrames{keyFrames: 100}).run
+	fx.p.run = (&fakeFFmpegFrames{length: 600}).run
 	if err := fx.p.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if s := fx.saved(t); s.name.String != "1-fp-w480.jpg" || s.width.Int64 != 480 || s.height.Int64 != 270 {
+	if s := fx.saved(t); s.name.String != "1-fp-w480t.jpg" || s.width.Int64 != 480 || s.height.Int64 != 270 {
 		t.Errorf("saved %+v, want the new image with 480x270 frames", s)
 	}
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480.jpg"}) {
-		t.Errorf("previews folder = %q, want only the new image", files)
-	}
-}
-
-func TestPreviewsOfAVideoWithOneKeyFrame(t *testing.T) {
-	fx := newPreviewFixture(t, "/videos", "a.mp4", 7)
-	fake := &fakeFFmpegFrames{keyFrames: 0, allFrames: 4}
-	fx.p.run = fake.run
-	if err := fx.p.Handle(context.Background(), fx.id); err != nil {
-		t.Fatal(err)
-	}
-	if s := fx.saved(t); s.count.Int64 != 4 {
-		t.Errorf("saved %+v, want the 4 frames read one by one", s)
-	}
-	if !slices.Equal(fake.calls, []string{"frames", "all frames", "join"}) {
-		t.Errorf("ffmpeg ran for %q", fake.calls)
+	// The image of an even older version is not anybody's any more: the
+	// cleaning at start removes it (TestRemoveOrphanPreviews).
+	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480t.jpg", "1-fp.jpg"}) {
+		t.Errorf("previews folder = %q, want the new image instead of the one it replaces", files)
 	}
 }
 
@@ -184,10 +224,9 @@ func TestPreviewFailuresLeaveNothingBehind(t *testing.T) {
 		name string
 		run  runFunc
 	}{
-		{"frames fail", (&fakeFFmpegFrames{keyFrames: 3, fail: "frames"}).run},
+		{"frames fail", (&fakeFFmpegFrames{length: 60, fail: "frames"}).run},
 		{"no frames at all", (&fakeFFmpegFrames{}).run},
-		{"reading every frame fails", (&fakeFFmpegFrames{allFrames: 3, fail: "all frames"}).run},
-		{"joining fails", (&fakeFFmpegFrames{keyFrames: 3, fail: "join"}).run},
+		{"joining fails", (&fakeFFmpegFrames{length: 60, fail: "join"}).run},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -208,7 +247,7 @@ func TestPreviewFailuresLeaveNothingBehind(t *testing.T) {
 
 func TestPreviewsOfContentThatChangedMeanwhileAreDropped(t *testing.T) {
 	fx := newPreviewFixture(t, "/videos", "a.mp4", 60)
-	fake := &fakeFFmpegFrames{keyFrames: 30}
+	fake := &fakeFFmpegFrames{length: 60}
 	fx.p.run = func(ctx context.Context, program string, args ...string) ([]byte, error) {
 		if _, err := fx.db.Exec(`UPDATE videos SET fingerprint = 'v1:other' WHERE id = ?`, fx.id); err != nil {
 			t.Fatal(err)
@@ -225,7 +264,7 @@ func TestPreviewsOfContentThatChangedMeanwhileAreDropped(t *testing.T) {
 
 func TestRemoveOrphanPreviews(t *testing.T) {
 	fx := newPreviewFixture(t, "/videos", "a.mp4", 60)
-	fx.p.run = (&fakeFFmpegFrames{keyFrames: 30}).run
+	fx.p.run = (&fakeFFmpegFrames{length: 60}).run
 	if err := fx.p.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
@@ -259,13 +298,12 @@ func TestPreviewsWithRealFFmpeg(t *testing.T) {
 		t.Skip("ffmpeg not installed")
 	}
 	tests := []struct {
-		name               string
-		seconds, keyEvery  int64 // keyEvery in frames, at 10 per second
-		gap                int64
-		minCount, maxCount int64
+		name              string
+		seconds, keyEvery int64 // keyEvery in frames, at 10 per second
+		gap, count        int64
 	}{
-		{"key frame every second", 30, 10, 2, 14, 15},
-		{"one key frame", 7, 1000, 2, 3, 4},
+		{"key frame every second", 30, 10, 2, 15},
+		{"one key frame", 7, 1000, 2, 4},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -284,8 +322,8 @@ func TestPreviewsWithRealFFmpeg(t *testing.T) {
 				t.Fatal(err)
 			}
 			s := fx.saved(t)
-			if s.gap.Int64 != tt.gap || s.count.Int64 < tt.minCount || s.count.Int64 > tt.maxCount {
-				t.Errorf("saved %+v, want %d-%d frames every %d seconds", s, tt.minCount, tt.maxCount, tt.gap)
+			if s.gap.Int64 != tt.gap || s.count.Int64 != tt.count {
+				t.Errorf("saved %+v, want %d frames every %d seconds", s, tt.count, tt.gap)
 			}
 			columns := min(s.count.Int64, 10)
 			rows := (s.count.Int64 + columns - 1) / columns
@@ -300,15 +338,88 @@ func TestPreviewsWithRealFFmpeg(t *testing.T) {
 	}
 }
 
-// TestFramesArgsKeyFramesUseOneThread: reading key frames only, ffmpeg
-// decodes with one thread, which saves memory and no time; reading every
-// frame it keeps all its threads.
-func TestFramesArgsKeyFramesUseOneThread(t *testing.T) {
-	args := framesArgs("a.mp4", 6, "work", true)
-	if i := slices.Index(args, "-threads"); i < 0 || args[i+1] != "1" || i > slices.Index(args, "-i") {
-		t.Errorf("key frames: %q, want -threads 1 before the input", args)
+// TestPreviewFramesAreTheRealOnesWithRealFFmpeg makes an 18 second video
+// whose brightness is 10 times the second, with a key frame only every
+// 8.3 seconds, and checks each frame is the picture of its own second,
+// the end of the video included. Read from key frames only, as before,
+// most frames were the one at 0 or 8.3 seconds and the last ones missed.
+func TestPreviewFramesAreTheRealOnesWithRealFFmpeg(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
 	}
-	if args := framesArgs("a.mp4", 6, "work", false); slices.Contains(args, "-threads") {
-		t.Errorf("every frame: %q, want ffmpeg's own threads", args)
+	root := t.TempDir()
+	name := filepath.Join(root, "luce.mp4")
+	if _, err := run(context.Background(), ffmpeg, "-v", "error",
+		"-f", "lavfi", "-i", "nullsrc=s=320x240:r=12:d=18,geq=lum='10*T':cb=128:cr=128",
+		"-c:v", "libx264", "-g", "100", "-keyint_min", "100", "-sc_threshold", "0",
+		"-pix_fmt", "yuv420p", "file:"+name); err != nil {
+		t.Fatal(err)
+	}
+	fx := newPreviewFixture(t, root, "luce.mp4", 18)
+	fx.p.ffmpeg = ffmpeg
+	work := t.TempDir()
+	count, err := fx.p.frames(context.Background(), name, 18, 2, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 9 {
+		t.Fatalf("%d frames, want 9 (seconds 0 to 16)", count)
+	}
+	luma := make([]float64, count)
+	for i := range count {
+		luma[i] = centerLuma(t, filepath.Join(work, fmt.Sprintf(frameName, i+1)))
+	}
+	// Two seconds apart, the brightness grows by 20, a little more after
+	// the move from video levels to full ones (16-235 to 0-255) and a
+	// little off after JPEG. At second 0 it is below black: cut to 0.
+	if luma[1] <= luma[0] {
+		t.Errorf("frame 1 (%.0f) not brighter than frame 0 (%.0f)", luma[1], luma[0])
+	}
+	for i := 2; i < count; i++ {
+		if d := luma[i] - luma[i-1]; d < 15 || d > 30 {
+			t.Errorf("frames %d and %d (seconds %d and %d): brightness %.0f then %.0f, want about 20-23 more",
+				i-1, i, (i-1)*2, i*2, luma[i-1], luma[i])
+		}
+	}
+}
+
+// centerLuma is the brightness of the middle of a JPEG, from 0 to 255.
+func centerLuma(t *testing.T, name string) float64 {
+	t.Helper()
+	f, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	img, err := jpeg.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := img.Bounds()
+	y, _, _ := color.RGBToYCbCr(rgb8(img.At(b.Dx()/2, b.Dy()/2)))
+	return float64(y)
+}
+
+func rgb8(c color.Color) (uint8, uint8, uint8) {
+	r, g, b, _ := c.RGBA()
+	return uint8(r >> 8), uint8(g >> 8), uint8(b >> 8)
+}
+
+// TestFrameArgsJumpToTheSecond: -ss comes before the input, so ffmpeg
+// jumps near the second instead of decoding the video up to it, and it
+// writes a single image.
+func TestFrameArgsJumpToTheSecond(t *testing.T) {
+	args := frameArgs("a.mp4", 42, "work/001.jpg")
+	ss, in := slices.Index(args, "-ss"), slices.Index(args, "-i")
+	if ss < 0 || args[ss+1] != "42" || ss > in || args[in+1] != "file:a.mp4" {
+		t.Errorf("args %q, want -ss 42 before -i", args)
+	}
+	if i := slices.Index(args, "-frames:v"); i < 0 || args[i+1] != "1" || slices.Contains(args, "-skip_frame") {
+		t.Errorf("args %q, want one frame, every frame decoded", args)
 	}
 }

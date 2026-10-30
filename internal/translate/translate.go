@@ -1,7 +1,7 @@
-// Package translate asks a LibreTranslate server to translate subtitles.
+// Package translate asks a LibreTranslate server to translate subtitles, for
+// who prefers one to the translator inside the image (package bergamot).
 // LibreTranslate is free and runs at home, like FranzPLAY: nothing is sent
-// to the internet unless the administrator points FranzPLAY at a server
-// there. Without a server, subtitles are simply not translated.
+// to the internet unless the administrator points FranzPLAY at a server there.
 package translate
 
 import (
@@ -12,11 +12,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
+
+// markup is the tags in a sentence: this server would translate them as words.
+var markup = regexp.MustCompile(`</?[a-zA-Z][^>]*>`)
+
+// Help is what the administrator needs to know of this translator, shown on
+// the subtitles page when it does not answer.
+var Help = struct{ Off, Down, Setup, After string }{
+	Down: "LibreTranslate è impostato ma non risponde. All'accensione può metterci qualche minuto, " +
+		"soprattutto la prima volta, quando scarica le lingue. Se dura, controlla che il suo container sia acceso " +
+		"e che FRANZPLAY_TRANSLATE_URL abbia l'indirizzo giusto. Se togli quell'impostazione, " +
+		"FranzPLAY traduce da solo.",
+}
 
 // batchSize is how many cues go in one request. LibreTranslate translates
 // one text after the other on the processor: a whole film in one request
@@ -31,7 +45,7 @@ const maxAnswer = 4 << 20
 
 // ErrRefused means the server will not translate, whatever we try again:
 // a wrong key, or a language it does not have. Trying later does not help.
-var ErrRefused = errors.New("translation refused")
+var ErrRefused = media.ErrRefused
 
 // Client talks to one LibreTranslate server.
 type Client struct {
@@ -53,7 +67,7 @@ func (c *Client) Cues(ctx context.Context, cues []video.Cue, from, to string) ([
 		batch := cues[start:min(start+batchSize, len(cues))]
 		texts := make([]string, len(batch))
 		for i, cue := range batch {
-			texts[i] = cue.Text
+			texts[i] = markup.ReplaceAllString(cue.Text, "")
 		}
 		translated, err := c.texts(ctx, texts, from, to)
 		if err != nil {

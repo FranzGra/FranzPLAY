@@ -1,7 +1,7 @@
 // Package autosubs is the administrator's page for the subtitles that
-// whisper writes: which videos have subtitles, asking whisper for new
-// ones and their translations, following the work, deleting what was
-// made. The work itself is the 'transcribe' job, in package media.
+// whisper writes: which videos have subtitles, asking whisper for new ones,
+// asking for translations, following the work, deleting what was made. The
+// work itself is the 'transcribe' and 'translate' jobs, in package media.
 package autosubs
 
 import (
@@ -27,10 +27,32 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
-// Languages tells which languages a translator knows; *translate.Client
-// is one.
+// Languages tells which languages a translator knows. The page needs only
+// this of the translator, whatever engine it is.
 type Languages interface {
 	Languages(ctx context.Context) ([]string, error)
+}
+
+// ModelInfo is what a translator with models of its own says of them.
+type ModelInfo struct {
+	Have  []string `json:"have"`  // the models here, like "en-it"
+	Name  string   `json:"name"`  // the one downloading; "" when none
+	Done  int64    `json:"done"`  // bytes
+	Total int64    `json:"total"` // bytes
+}
+
+// TranslatorModels is a translator that downloads models by itself.
+type TranslatorModels interface {
+	ModelInfo() ModelInfo
+}
+
+// TranslatorHelp is what the translator's engine says of itself, for the
+// administrator: the page shows these words and knows nothing of the engine.
+type TranslatorHelp struct {
+	Off   string `json:"off"`   // no translator set: what it takes to have one
+	Down  string `json:"down"`  // it is set but does not answer: what to look at
+	Setup string `json:"setup"` // lines to copy to turn it on; "" when there are none
+	After string `json:"after"` // what happens then, and what it costs
 }
 
 // Options are the parts of the machine the page depends on.
@@ -39,6 +61,13 @@ type Options struct {
 	Whisper    bool        // whisper.cpp and ffmpeg were found: subtitles can be made
 	Translator Languages   // nil: no translator set, nothing is translated
 	Downloader *Downloader // downloads the models; nil: none can be downloaded
+	// TranslatorHelp is shown when the translator is off or does not answer.
+	TranslatorHelp TranslatorHelp
+	// TranslatorModels says which models it has; nil: it needs none here.
+	TranslatorModels TranslatorModels
+	// Running is the job worker's list of running jobs, to tell how far a
+	// transcription is; nil: not known.
+	Running func() []jobs.Running
 }
 
 // Routes adds the API of the page to mux, for administrators only:
@@ -46,8 +75,11 @@ type Options struct {
 //	GET    /api/admin/subtitles                     the videos and their subtitles (?q=&have=with|without&lang=&limit=&offset=)
 //	GET    /api/admin/subtitles/setup               what this machine can do: whisper, models, translator
 //	POST   /api/admin/subtitles/models/{name}       download a whisper model
-//	PUT    /api/admin/subtitles/{id}                ask for subtitles {spoken, model, translate}
+//	DELETE /api/admin/subtitles/download            stop the model download going on
+//	PUT    /api/admin/subtitles/{id}                ask whisper for subtitles {spoken, model, translate}
 //	DELETE /api/admin/subtitles/{id}/request        take the request back
+//	PUT    /api/admin/subtitles/{id}/translation    ask for translations {source, from, to, redo}
+//	DELETE /api/admin/subtitles/{id}/translation    take the translations asked back
 //	DELETE /api/admin/subtitles/{id}/made/{lang}    delete subtitles whisper made
 //
 // queued tells the job worker and the open pages that there is new work.
@@ -60,8 +92,11 @@ func (p page) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/subtitles", p.only(p.handleList))
 	mux.HandleFunc("GET /api/admin/subtitles/setup", p.only(p.handleSetup))
 	mux.HandleFunc("POST /api/admin/subtitles/models/{name}", p.only(p.handleDownload))
+	mux.HandleFunc("DELETE /api/admin/subtitles/download", p.only(p.handleCancelDownload))
 	mux.HandleFunc("PUT /api/admin/subtitles/{id}", p.only(p.handleAsk))
 	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/request", p.only(p.handleTakeBack))
+	mux.HandleFunc("PUT /api/admin/subtitles/{id}/translation", p.only(p.handleTranslate))
+	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/translation", p.only(p.handleTakeBackTranslation))
 	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/made/{lang}", p.only(p.handleDelete))
 }
 
@@ -99,8 +134,14 @@ type Setup struct {
 	Translator          bool     `json:"translator"`
 	TranslatorError     string   `json:"translatorError"`
 	TranslatorLanguages []string `json:"translatorLanguages"`
-	Languages           []string `json:"languages"`    // what can be asked: "it", "en"…
-	ModelsFolder        string   `json:"modelsFolder"` // where the models go
+	// TranslatorHelp is what to do when it is off or does not answer, in the
+	// words of its engine.
+	TranslatorHelp TranslatorHelp `json:"translatorHelp"`
+	// TranslatorModels are the models it downloads by itself; null when it
+	// has none of its own.
+	TranslatorModels *ModelInfo `json:"translatorModels"`
+	Languages        []string   `json:"languages"`    // what can be asked: "it", "en"…
+	ModelsFolder     string     `json:"modelsFolder"` // where the models go
 	// Downloadable are the models FranzPLAY can download by itself, and
 	// Download how the last download goes; null if none.
 	Downloadable []Model   `json:"downloadable"`
@@ -122,7 +163,8 @@ func (p page) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := Setup{Whisper: p.opts.Whisper, Models: models, Translator: p.opts.Translator != nil,
-		TranslatorLanguages: []string{}, Languages: video.AutoLanguages, ModelsFolder: folder}
+		TranslatorLanguages: []string{}, TranslatorHelp: p.opts.TranslatorHelp, Languages: video.AutoLanguages,
+		ModelsFolder: folder}
 	if s.Models == nil {
 		s.Models = []string{}
 	}
@@ -131,13 +173,16 @@ func (p page) handleSetup(w http.ResponseWriter, r *http.Request) {
 		s.Downloadable = Models
 		s.Download = p.opts.Downloader.Status()
 	}
+	if p.opts.TranslatorModels != nil {
+		s.TranslatorModels = new(p.opts.TranslatorModels.ModelInfo())
+	}
 	if p.opts.Translator != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), translatorTimeout)
 		known, err := p.opts.Translator.Languages(ctx)
 		cancel()
 		if err != nil {
 			p.logger.WarnContext(r.Context(), "translator does not answer", "error", err)
-			s.TranslatorError = "Il traduttore non risponde: controlla che LibreTranslate sia acceso."
+			s.TranslatorError = "Il traduttore non risponde."
 		} else {
 			s.TranslatorLanguages = known
 		}
@@ -165,12 +210,35 @@ func (p page) handleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p page) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
+	if p.opts.Downloader == nil {
+		respond.Error(w, r, p.logger, http.StatusNotFound, "no downloads here")
+		return
+	}
+	switch err := p.opts.Downloader.Cancel(); {
+	case errors.Is(err, errNotDownloading):
+		respond.Error(w, r, p.logger, http.StatusConflict, err.Error())
+	case err != nil:
+		respond.InternalError(w, r, p.logger, err)
+	default:
+		who, _ := p.account(r.Context())
+		p.logger.InfoContext(r.Context(), "whisper model download canceled by the administrator", "by", who.Name)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // askBody is the body of PUT /api/admin/subtitles/{id}.
 type askBody struct {
-	Spoken    string   `json:"spoken"`    // "" = whisper guesses
+	Spoken    string   `json:"spoken"`    // the language spoken, or spokenUnknown
 	Model     string   `json:"model"`     // one of Setup.Models
 	Translate []string `json:"translate"` // the other languages wanted
 }
+
+// spokenUnknown is the administrator saying they do not know the language
+// spoken, so whisper must guess. It has to be said: leaving the language out
+// is refused, so nobody has a film listened to in the wrong one by mistake.
+// A request saved before this rule, with "", still runs as it was asked.
+const spokenUnknown = "auto"
 
 // errBadRequest is a request the page should never send.
 var errBadRequest = errors.New("bad request")
@@ -180,7 +248,10 @@ func (p page) check(b askBody) error {
 	if !p.opts.Whisper {
 		return fmt.Errorf("%w: whisper is not installed", errBadRequest)
 	}
-	if b.Spoken != "" && !video.IsAutoLanguage(b.Spoken) {
+	if b.Spoken == "" {
+		return fmt.Errorf("%w: say the language spoken in the video, or %q", errBadRequest, spokenUnknown)
+	}
+	if b.Spoken != spokenUnknown && !video.IsAutoLanguage(b.Spoken) {
 		return fmt.Errorf("%w: unknown spoken language %q", errBadRequest, b.Spoken)
 	}
 	models, err := media.Models(p.opts.DataDir)
@@ -194,7 +265,7 @@ func (p page) check(b askBody) error {
 		return fmt.Errorf("%w: no translator set", errBadRequest)
 	}
 	for i, lang := range b.Translate {
-		if !video.IsAutoLanguage(lang) || slices.Contains(b.Translate[:i], lang) {
+		if !video.IsAutoLanguage(lang) || lang == b.Spoken || slices.Contains(b.Translate[:i], lang) {
 			return fmt.Errorf("%w: bad language %q", errBadRequest, lang)
 		}
 	}
@@ -211,7 +282,7 @@ func (p page) handleAsk(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&b); err != nil {
-		respond.Error(w, r, p.logger, http.StatusBadRequest, `the body must be {"spoken": "", "model": "small", "translate": ["en"]}`)
+		respond.Error(w, r, p.logger, http.StatusBadRequest, `the body must be {"spoken": "en", "model": "small", "translate": ["it"]}`)
 		return
 	}
 	if err := p.check(b); errors.Is(err, errBadRequest) {
@@ -221,10 +292,13 @@ func (p page) handleAsk(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, p.logger, err)
 		return
 	}
+	if b.Spoken == spokenUnknown {
+		b.Spoken = ""
+	}
 	switch err := p.ask(r.Context(), id, b); {
 	case errors.Is(err, errNotFound):
 		respond.Error(w, r, p.logger, http.StatusNotFound, "video not found")
-	case errors.Is(err, errMissing):
+	case errors.Is(err, errMissing), errors.Is(err, errPresent):
 		respond.Error(w, r, p.logger, http.StatusConflict, err.Error())
 	case err != nil:
 		respond.InternalError(w, r, p.logger, err)
@@ -245,6 +319,10 @@ var errMissing = errors.New("the video file is not in its folder")
 
 // ask saves a request and puts the job in the queue.
 func (p page) ask(ctx context.Context, id int64, b askBody) (err error) {
+	subs, err := p.subtitlesOf(ctx, id)
+	if err != nil {
+		return err
+	}
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("ask subtitles of video %d: %w", id, err)
@@ -267,12 +345,23 @@ func (p page) ask(ctx context.Context, id int64, b askBody) (err error) {
 	if missing {
 		return errMissing
 	}
+	for _, lang := range b.Translate {
+		if slices.ContainsFunc(subs, func(s Subtitle) bool {
+			return s.Source != FromAuto && video.MainLang(s.Lang) == lang
+		}) {
+			return fmt.Errorf("%w: %s", errPresent, lang)
+		}
+	}
 	now := p.now()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO subtitle_requests (video_id, spoken, model, langs, requested_at)
 		VALUES (?, ?, ?, ?, ?) ON CONFLICT (video_id) DO UPDATE
 		SET spoken = excluded.spoken, model = excluded.model, langs = excluded.langs,
 		    stage = '', requested_at = excluded.requested_at`,
 		id, b.Spoken, b.Model, strings.Join(b.Translate, ","), now.Unix()); err != nil {
+		return fmt.Errorf("ask subtitles of video %d: %w", id, err)
+	}
+	// Listening again replaces what the translations start from.
+	if err := forgetTranslation(ctx, tx, id); err != nil {
 		return fmt.Errorf("ask subtitles of video %d: %w", id, err)
 	}
 	return jobs.Enqueue(ctx, tx, id, jobs.Transcribe, false, now)

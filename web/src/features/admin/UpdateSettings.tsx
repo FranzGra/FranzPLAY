@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchUpdates, saveUpdateCheck, type Updates } from "../../api/updates";
-import { EmptyState } from "../../components/EmptyState";
-import styles from "./Admin.module.css";
+import pages from "./Pages.module.css";
+import { Card, Chip, Loading, SettingSwitch, Unavailable, ui } from "./ui";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; updates: Updates };
 
@@ -36,19 +36,13 @@ export function UpdateSettings() {
     return () => controller.abort();
   }, []);
 
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
-  if (state.kind === "error") {
-    return (
-      <EmptyState title="Versione non disponibile">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
-    );
-  }
+  if (state.kind === "loading") return <Loading />;
+  if (state.kind === "error") return <Unavailable title="Versione non disponibile" />;
 
   const change = (enabled: boolean) => {
     setBusy(true);
     setProblem("");
-    saveUpdateCheck(enabled)
+    return saveUpdateCheck(enabled)
       .then((updates) => setState({ kind: "ready", updates }))
       .catch((error: unknown) => {
         console.error(error);
@@ -58,76 +52,61 @@ export function UpdateSettings() {
   };
 
   const u = state.updates;
+  const latest = u.latest || (u.checkedAt ? "nessuna pubblicata" : "non ancora controllata");
   return (
-    <>
-      <h2 className={styles.groupTitle}>Aggiornamenti</h2>
-      <ul className={`stagger ${styles.list}`} aria-label="Aggiornamenti">
-        <li className={`glass ${styles.setting}`}>
-          <div>
-            <p className={styles.name}>Controlla automaticamente le nuove versioni (ogni 24 ore)</p>
-            <p className={styles.role}>
-              Una volta al giorno FranzPLAY chiede a GitHub qual è l'ultima versione ufficiale. A
-              GitHub arriva solo la richiesta, nessun dato dei tuoi video o delle persone. FranzPLAY
-              non si aggiorna da solo: ti avvisa e ti dice come fare. Se è spento, GitHub non viene
-              mai contattato.
-            </p>
-          </div>
-          <label className={styles.toggle}>
-            {u.enabled ? "Acceso" : "Spento"}
-            <input
-              type="checkbox"
-              aria-label="Controlla automaticamente le nuove versioni"
-              checked={u.enabled}
-              disabled={busy}
-              onChange={(e) => change(e.target.checked)}
-            />
-          </label>
-        </li>
-        <li className={`glass ${styles.setting}`}>
-          <div>
-            <p className={styles.role}>
-              Versione installata: <strong>{installedText(u)}</strong>
-            </p>
-            {u.enabled && (
-              <>
-                <p className={styles.role}>
-                  Ultima versione ufficiale:{" "}
-                  <strong>
-                    {u.latest || (u.checkedAt ? "nessuna pubblicata" : "non ancora controllata")}
-                  </strong>
-                  {u.latest && u.url && (
-                    <>
-                      {" · "}
-                      <a href={u.url} target="_blank" rel="noreferrer">
-                        note di rilascio
-                      </a>
-                    </>
-                  )}
-                </p>
-                <p className={styles.role}>
-                  Ultimo controllo: {u.checkedAt ? formatWhen(u.checkedAt) : "non ancora fatto"}
-                </p>
-                {u.newer && (
-                  <p className={styles.name} role="status">
-                    È disponibile la versione {u.latest}.
-                  </p>
-                )}
-                {u.development && u.latest && (
-                  <p className={styles.role}>
-                    Questa è una versione di sviluppo: non si può confrontare con le versioni
-                    ufficiali, quindi FranzPLAY non propone aggiornamenti.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </li>
-      </ul>
+    <Card
+      title="Aggiornamenti"
+      icon="refresh"
+      sub={u.newer ? <Chip tone="info">Nuova versione</Chip> : undefined}
+    >
+      <SettingSwitch
+        label="Controlla automaticamente le nuove versioni"
+        hint="Una volta al giorno FranzPLAY chiede a GitHub qual è l'ultima versione ufficiale. A GitHub arriva solo la richiesta, nessun dato dei tuoi video o delle persone. FranzPLAY non si aggiorna da solo: ti avvisa e ti dice come fare."
+        checked={u.enabled}
+        disabled={busy}
+        onChange={change}
+      />
+      <dl className={`${ui.kv} ${pages.block}`}>
+        <dt>Versione installata</dt>
+        <dd>
+          <strong>{installedText(u)}</strong>
+        </dd>
+        {u.enabled && (
+          <>
+            <dt>Ultima ufficiale</dt>
+            <dd>
+              <strong>{latest}</strong>
+              {u.latest && u.url && (
+                <>
+                  {" · "}
+                  <a className={ui.link} href={u.url} target="_blank" rel="noreferrer">
+                    note di rilascio
+                  </a>
+                </>
+              )}
+            </dd>
+            <dt>Ultimo controllo</dt>
+            <dd>{u.checkedAt ? formatWhen(u.checkedAt) : "non ancora fatto"}</dd>
+          </>
+        )}
+      </dl>
+      {u.enabled && u.newer && (
+        <p className={ui.okText} role="status">
+          È disponibile la versione {u.latest}.
+        </p>
+      )}
+      {u.enabled && u.development && u.latest && (
+        <p className={ui.hint}>
+          Questa è una versione di sviluppo: non si può confrontare con le versioni ufficiali,
+          quindi FranzPLAY non propone aggiornamenti.
+        </p>
+      )}
+      {!u.enabled && <p className={ui.hint}>Spento: GitHub non viene mai contattato.</p>}
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
-    </>
+    </Card>
   );
 }

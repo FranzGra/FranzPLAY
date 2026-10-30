@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn, testAccount } from "../../test/render";
 
@@ -171,5 +171,44 @@ describe("channel page", () => {
       `${window.location.origin}/p/abcdefghijklmnopqrstuv`,
     );
     expect(screen.getByRole("button", { name: "Copia link" })).toBeInTheDocument();
+  });
+
+  it("makes, renews and turns off the public link of my video", async () => {
+    const key = "abcdefghijklmnopqrstuv";
+    let made = 0;
+    const { user, server } = renderApp("/canale/1", {
+      ...signedIn({ ...testAccount, role: "user", canSharePublic: true }),
+      "GET /api/channels/1": { body: channel({ id: 1, name: "Paolo" }) },
+      "GET /api/videos": {
+        body: {
+          videos: [videoJSON({ id: 1, title: "Al mare", uploader: { id: 1, name: "Paolo" } })],
+          total: 1,
+        },
+      },
+      "POST /api/videos/1/public-link": () => {
+        made++;
+        const link = made === 1 ? `/p/${key}` : "/p/ZYXWVUTSRQPONMLKJIHGFE";
+        return Response.json({ link, createdAt: "2026-10-15T10:00:00Z" });
+      },
+      "DELETE /api/videos/1/public-link": { status: 204 },
+    });
+    await screen.findByRole("heading", { name: "Al mare" });
+    await user.click(screen.getByRole("button", { name: "Link pubblico di Al mare" }));
+    const panel = screen.getByRole("region", { name: "Link pubblico" });
+    await user.click(within(panel).getByRole("button", { name: "Crea link pubblico" }));
+    expect(await within(panel).findByRole("textbox", { name: "Link del video" })).toHaveValue(
+      `${window.location.origin}/p/${key}`,
+    );
+    await user.click(within(panel).getByRole("button", { name: "Rinnova link" }));
+    await waitFor(() =>
+      expect(within(panel).getByRole("textbox", { name: "Link del video" })).toHaveValue(
+        `${window.location.origin}/p/ZYXWVUTSRQPONMLKJIHGFE`,
+      ),
+    );
+    await user.click(within(panel).getByRole("button", { name: "Disattiva link" }));
+    expect(
+      await within(panel).findByRole("button", { name: "Crea link pubblico" }),
+    ).toBeInTheDocument();
+    expect(server.requests.filter((r) => r.method === "DELETE")).toHaveLength(1);
   });
 });

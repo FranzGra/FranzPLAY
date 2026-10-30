@@ -13,7 +13,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -209,7 +211,10 @@ func (c *Converter) convert(ctx context.Context, videoID int64, file string, pla
 			err = errors.Join(err, rmErr)
 		}
 	}()
-	if _, err := c.run(ctx, c.ffmpeg, convertArgs(file, plan, sounds, c.threads, progress, tmpName)...); err != nil {
+	stopFollowing := c.follow(ctx, videoID)
+	_, err = c.run(ctx, c.ffmpeg, convertArgs(file, plan, sounds, c.threads, progress, tmpName)...)
+	stopFollowing()
+	if err != nil {
 		return fmt.Errorf("convert video %d: %w", videoID, err)
 	}
 	info, err := os.Stat(tmpName)
@@ -223,6 +228,45 @@ func (c *Converter) convert(ctx context.Context, videoID int64, file string, pla
 		return fmt.Errorf("convert video %d: %w", videoID, err)
 	}
 	return nil
+}
+
+// followEvery is how often a conversion tells the queue how far it is:
+// ffmpeg writes it every 5 seconds (-stats_period).
+const followEvery = 5 * time.Second
+
+// follow tells the job queue how far ffmpeg is, from what it writes with
+// -progress, until the returned function is called.
+func (c *Converter) follow(ctx context.Context, videoID int64) (stop func()) {
+	var duration sql.NullInt64
+	if err := c.db.QueryRowContext(ctx, `SELECT duration FROM videos WHERE id = ?`, videoID).Scan(&duration); err != nil ||
+		duration.Int64 <= 0 {
+		return func() {}
+	}
+	total := float64(duration.Int64)
+	jobs.Report(ctx, jobs.Progress{Percent: 0, Total: total})
+	quit, ended := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(ended)
+		ticker := time.NewTicker(followEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-quit:
+				return
+			case <-ticker.C:
+			}
+			if done, ok, err := ConvertedSoFar(c.dataDir, videoID); err == nil && ok {
+				done = min(done, total)
+				jobs.Report(ctx, jobs.Progress{Percent: done * 100 / total, Done: done, Total: total})
+			}
+		}
+	}()
+	return func() {
+		close(quit)
+		<-ended
+	}
 }
 
 // soundCodecs returns the formats of the sound tracks of a video, in the

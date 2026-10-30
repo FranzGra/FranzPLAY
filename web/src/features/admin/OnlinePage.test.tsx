@@ -20,7 +20,7 @@ describe("online sources page", () => {
       "PUT /api/online": { body: { ...allOff, youtube: true } },
     });
     const list = await screen.findByRole("list", { name: "Fonti su internet" });
-    const youtube = screen.getByRole("checkbox", { name: "YouTube accesa" });
+    const youtube = screen.getByRole("switch", { name: "YouTube accesa" });
     expect(youtube).not.toBeChecked();
     expect(list).toHaveTextContent("Non serve nessuna chiave");
 
@@ -40,9 +40,9 @@ describe("online sources page", () => {
       "GET /api/online": { body: { ...allOff, youtube: true } },
       "PUT /api/online": { status: 500, body: { error: "boom" } },
     });
-    await user.click(await screen.findByRole("checkbox", { name: "YouTube accesa" }));
+    await user.click(await screen.findByRole("switch", { name: "YouTube accesa" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Non si è riusciti a salvare");
-    expect(screen.getByRole("checkbox", { name: "YouTube accesa" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "YouTube accesa" })).toBeChecked();
   });
 
   it("saves TMDB's key, then turns TMDB on", async () => {
@@ -53,7 +53,7 @@ describe("online sources page", () => {
       "PUT /api/online/tmdb-key": { body: { ...allOff, tmdbKey: true } },
       "PUT /api/online": { body: { ...allOff, tmdb: true, tmdbKey: true } },
     });
-    const tmdb = await screen.findByRole("checkbox", { name: "TMDB accesa" });
+    const tmdb = await screen.findByRole("switch", { name: "TMDB accesa" });
     expect(tmdb).toBeDisabled();
     expect(screen.getByText(/non è approvato né certificato da TMDB/)).toBeInTheDocument();
     const card = tmdb.closest("li") as HTMLElement;
@@ -95,7 +95,7 @@ describe("online sources page", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "TMDB dice che questa chiave non è valida",
     );
-    expect(screen.getByRole("checkbox", { name: "TMDB accesa" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "TMDB accesa" })).toBeDisabled();
   });
 
   it("saves ThePornDB's key, then turns it on", async () => {
@@ -106,7 +106,7 @@ describe("online sources page", () => {
       "PUT /api/online/tpdb-key": { body: { ...allOff, tpdbKey: true } },
       "PUT /api/online": { body: { ...allOff, tpdb: true, tpdbKey: true } },
     });
-    const tpdb = await screen.findByRole("checkbox", { name: "ThePornDB accesa" });
+    const tpdb = await screen.findByRole("switch", { name: "ThePornDB accesa" });
     expect(tpdb).toBeDisabled();
     expect(tpdb.closest("li")).toHaveTextContent("calcola un'impronta del file");
 

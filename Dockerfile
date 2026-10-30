@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.10
 #
 # FranzPLAY in one small image: the program (interface included), ffmpeg
-# and ffprobe for the videos, and whisper.cpp for automatic subtitles.
+# and ffprobe for the videos, whisper.cpp for automatic subtitles and Bergamot
+# to translate them.
 #
 # The interface and the program are built on the machine that builds the
 # image, for any target: so an image for a Raspberry Pi builds fast even
@@ -55,15 +56,59 @@ RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
  && cmake --build build --config Release --target whisper-cli -j"$(nproc)" \
  && install -D -s build/bin/whisper-cli /out/whisper-cli
 
-# --- 4. The image that runs: Alpine, ffmpeg and the two programs.
+# --- 4. The translator of subtitles: Bergamot (Mozilla's, the one in Firefox),
+# for translating with no other container. Built on the target system like
+# whisper.cpp; it picks the best instructions of the CPU when it runs. Only
+# the folder of the translator, at a fixed commit, is taken from the big
+# repository, with three small changes for Alpine (none in how it translates):
+#  1. faiss uses int64_t without including <cstdint>
+#  2. zstr picks the GNU strerror_r since g++ sets _GNU_SOURCE; musl has the other
+#  3. musl has no execinfo.h (backtraces): an empty stand-in
+FROM alpine:${ALPINE_VERSION} AS translator
+RUN apk add --no-cache build-base cmake linux-headers git pcre2-dev
+ARG TARGETARCH
+ARG BERGAMOT_REVISION=8eada038fd45bbf6fa58a412b22f80c79887fabc
+# Few at a time: this is heavy C++, and it must not stop the machine building.
+ARG BERGAMOT_JOBS=4
+WORKDIR /src
+RUN git init -q . \
+ && git remote add origin https://github.com/mozilla/translations \
+ && git sparse-checkout set --cone inference \
+ && git fetch -q --depth=1 --filter=blob:none origin ${BERGAMOT_REVISION} \
+ && git checkout -q FETCH_HEAD \
+ && git submodule update -q --init --depth=1 inference/3rd_party/ssplit-cpp \
+      inference/marian-fork/src/3rd_party/sentencepiece \
+      inference/marian-fork/src/3rd_party/intgemm \
+      inference/marian-fork/src/3rd_party/ruy \
+      inference/marian-fork/src/3rd_party/simd_utils \
+      inference/marian-fork/src/3rd_party/onnxjs \
+ && (cd inference/marian-fork/src/3rd_party/ruy && git submodule update -q --init --depth=1 || true) \
+ && (cd inference/3rd_party/ssplit-cpp && git submodule update -q --init --depth=1 || true)
+WORKDIR /src/inference
+RUN sed -i '1i #include <cstdint>' marian-fork/src/3rd_party/faiss/utils/misc.h \
+ && sed -i 's/^#elif (_POSIX_C_SOURCE >= 200112L.*/#elif 1/' marian-fork/src/3rd_party/zstr/strict_fstream.hpp \
+ && printf '%s\n' '#pragma once' \
+      'static inline int backtrace(void **b, int n) { (void)b; (void)n; return 0; }' \
+      'static inline char **backtrace_symbols(void *const *b, int n) { (void)b; (void)n; return 0; }' \
+      > /usr/include/execinfo.h
+# The same steps on both systems; only the name of the processor changes.
+# Ruy does the matrix sums too, so that OpenBLAS (33 MB more) is not needed.
+RUN case "$TARGETARCH" in arm64) arch=armv8-a ;; *) arch=x86-64 ;; esac \
+ && cmake -B /build -DCMAKE_BUILD_TYPE=Release -DBUILD_ARCH=$arch \
+      -DGIT_SUBMODULE=OFF -DUSE_MKL=OFF -DCOMPILE_TESTS=OFF -DUSE_RUY=ON -DUSE_RUY_SGEMM=ON \
+ && cmake --build /build --target translator-cli -j"${BERGAMOT_JOBS}" \
+ && install -D -s /build/src/app/translator-cli /out/translator-cli
+
+# --- 5. The image that runs: Alpine, ffmpeg and the three programs.
 FROM alpine:${ALPINE_VERSION}
 # ffmpeg: covers, previews, copies for the browsers. ca-certificates: the
-# online sources and the whisper models are on https. tzdata: the TZ
-# setting. su-exec: start as the user chosen with PUID and PGID.
-# libstdc++: whisper-cli is C++.
-RUN apk add --no-cache ffmpeg ca-certificates tzdata su-exec libstdc++
+# online sources and the models are on https. tzdata: the TZ setting.
+# su-exec: start as the user chosen with PUID and PGID. libstdc++: whisper-cli
+# and translator-cli are C++. pcre2: translator-cli splits text with it.
+RUN apk add --no-cache ffmpeg ca-certificates tzdata su-exec libstdc++ pcre2
 COPY --from=program /out/franzplay /usr/local/bin/franzplay
 COPY --from=whisper /out/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=translator /out/translator-cli /usr/local/bin/translator-cli
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Settings that belong to the image: where things are inside it.

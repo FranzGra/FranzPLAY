@@ -179,7 +179,12 @@ func validMadeName(name, ext string) bool {
 			}
 		}
 		return len(tag) <= 11
-	case 'w': // the width of the frames of the previews
+	case 'w': // the width of the frames of the previews, then "t" when
+		// the frames are the exact ones of their moment
+		tag = strings.TrimSuffix(tag, "t")
+		if len(tag) < 2 {
+			return false
+		}
 		for _, c := range tag[1:] {
 			if c < '0' || c > '9' {
 				return false

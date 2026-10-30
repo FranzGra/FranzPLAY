@@ -23,7 +23,7 @@ import (
 //	PUT /api/online/tmdb-key   save TMDB's key {key}, after TMDB said it is valid
 //	PUT /api/online/tpdb-key   the same for ThePornDB
 //	PUT /api/online/rules      the hours, the daily limit, the order and the confirm mode {from, to, daily, order, confirm}
-//	GET /api/online/search     search a source by hand ?source=tmdb|tpdb&q=words
+//	GET /api/online/search     search by hand ?source=tmdb|tpdb|all&q=words&title=title of the video
 //	GET /api/online/picture    a picture a search found ?source=…&at=…
 //	GET /api/online/proposals              what was found and waits for a yes
 //	GET /api/online/proposals/{id}/picture its picture

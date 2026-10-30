@@ -50,11 +50,15 @@ func categoryImageURL(name string) *string {
 // AdminCategory is a category as the administrator sees it: as the videos
 // have it, with what people see instead.
 type AdminCategory struct {
-	Name   string  `json:"name"`  // as the videos have it
-	Label  string  `json:"label"` // the name people see; "" = Name itself
-	Color  string  `json:"color"` // "" = none
-	Image  *string `json:"image"` // address of the image; nil = none
-	Videos int     `json:"videos"`
+	Name  string  `json:"name"`  // as the videos have it
+	Label string  `json:"label"` // the name people see; "" = Name itself
+	Color string  `json:"color"` // "" = none
+	Image *string `json:"image"` // address of the image; nil = none
+	// FolderImage and Poster are the pictures found in its folder: they do
+	// not belong to the administrator, but the card people see shows them.
+	FolderImage *string `json:"folderImage"`
+	Poster      *string `json:"poster"`
+	Videos      int     `json:"videos"`
 }
 
 // cleanColor checks a color: "" means none.
@@ -207,7 +211,22 @@ func (s store) adminCategories(ctx context.Context) (_ []AdminCategory, err erro
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list categories: %w", err)
+	}
+	found, err := s.categoryPictures(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		c := &out[i]
+		shown := c.Label
+		if shown == "" {
+			shown = c.Name
+		}
+		c.FolderImage, c.Poster = found[shown].wide, found[shown].poster
+	}
+	return out, nil
 }
 
 // categoryID returns the row of a category in the categories table, made

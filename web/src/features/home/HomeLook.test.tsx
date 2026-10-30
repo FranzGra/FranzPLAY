@@ -4,7 +4,7 @@ import { parseHomeLayout } from "../../api/home";
 import { videoJSON } from "../../test/fixtures";
 import { renderApp, signedIn } from "../../test/render";
 import { VideoRow } from "../videos/VideoRow";
-import { cardWidth, lookStyle, SectionsContext } from "./look";
+import { cardsPerLine, cardWidth, lookStyle, SectionsContext } from "./look";
 
 const look = { columns: 0, size: 3, sections: "one" };
 
@@ -13,6 +13,12 @@ describe("the look of the Home", () => {
     expect(cardWidth(1)).toBe(180);
     expect(cardWidth(3)).toBe(260);
     expect(cardWidth(5)).toBe(400);
+    // As many as fit, with 20px between them; never fewer than one.
+    expect(cardsPerLine(1200, 3)).toBe(4);
+    expect(cardsPerLine(1200, 1)).toBe(6);
+    expect(cardsPerLine(1200, 5)).toBe(2);
+    expect(cardsPerLine(864, 3)).toBe(3);
+    expect(cardsPerLine(100, 5)).toBe(1);
     expect(lookStyle({ columns: 0, size: 4, sections: "one" })).toEqual({
       "--home-grid": "repeat(auto-fill, minmax(320px, 1fr))",
       "--home-card": "320px",
@@ -63,24 +69,79 @@ describe("the look of the Home", () => {
     expect(await puts[0]?.clone().json()).toEqual({ columns: 4, size: 3, sections: "two" });
   });
 
-  it("lets the size decide the cards in a line when the slider moves", async () => {
+  it("lets the size decide only in Auto, and puts it aside with a fixed number", async () => {
     const { user } = renderApp("/", {
       ...signedIn(),
       "GET /api/home": { body: { closed: [], look: { columns: 5, size: 3, sections: "one" } } },
+      "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
       "PUT /api/home/look": { body: { closed: [], look } },
     });
     await user.click(await screen.findByRole("button", { name: "Personalizza" }));
-    const slider = screen.getByRole("slider", { name: "Grandezza delle card" });
+    const panel = screen.getByRole("region", { name: "Personalizza la Home" });
+    // A fixed number: no slider, and a word on why.
+    expect(within(panel).queryByRole("slider")).not.toBeInTheDocument();
+    expect(panel).toHaveTextContent("Con un numero fisso la grandezza si adatta da sola.");
+
+    // Auto brings the slider back; moving it keeps Auto.
+    await user.click(within(panel).getByRole("button", { name: "Auto" }));
+    const slider = within(panel).getByRole("slider", { name: "Grandezza delle card" });
     fireEvent.change(slider, { target: { value: "4" } });
     expect(slider).toHaveValue("4");
-    expect(screen.getByRole("button", { name: "Auto" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(screen.getByRole("button", { name: "Torna come prima" }));
-    expect(slider).toHaveValue("3");
-    expect(screen.getByRole("button", { name: "Una riga" })).toHaveAttribute(
+    expect(within(panel).getByRole("button", { name: "Auto" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
+    const grid = screen.getByRole("list", { name: "Tutti i video" });
+    const page = grid.closest<HTMLElement>("[style]");
+    expect(page?.style.getPropertyValue("--home-grid")).toBe(
+      "repeat(auto-fill, minmax(320px, 1fr))",
+    );
+
+    // Choosing a number again keeps the size for the next Auto.
+    await user.click(within(panel).getByRole("button", { name: "3" }));
+    expect(within(panel).queryByRole("slider")).not.toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Auto" }));
+    expect(within(panel).getByRole("slider")).toHaveValue("4");
+
+    await user.click(within(panel).getByRole("button", { name: "Torna come prima" }));
+    expect(within(panel).getByRole("slider")).toHaveValue("3");
+    expect(within(panel).getByRole("button", { name: "Una riga" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("opens the panel on the side and closes it with the X, Esc and Personalizza", async () => {
+    const { user } = renderApp("/", {
+      ...signedIn(),
+      "GET /api/videos": { body: { videos: [videoJSON()], total: 1 } },
+    });
+    const button = await screen.findByRole("button", { name: "Personalizza" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("region", { name: "Personalizza la Home" })).not.toBeInTheDocument();
+
+    await user.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByRole("region", { name: "Personalizza la Home" });
+    expect(panel).toHaveAttribute("data-side-panel", "open");
+    // The Home stays there beside it.
+    expect(screen.getByRole("list", { name: "Tutti i video" })).toBeInTheDocument();
+    expect(panel).toHaveFocus();
+
+    await user.click(within(panel).getByRole("button", { name: "Chiudi" }));
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("region", { name: "Personalizza la Home" })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+
+    await user.click(button);
+    await user.keyboard("{Escape}");
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(button).toHaveFocus();
+
+    await user.click(button);
+    expect(screen.getByRole("region", { name: "Personalizza la Home" })).toBeInTheDocument();
+    await user.click(button);
+    expect(screen.queryByRole("region", { name: "Personalizza la Home" })).not.toBeInTheDocument();
   });
 
   it("has nothing to choose on a phone", async () => {
