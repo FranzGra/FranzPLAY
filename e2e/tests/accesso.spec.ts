@@ -25,10 +25,13 @@ async function entered(page: Page) {
   await expect(page.getByRole("heading", { name: "Esplora la libreria" })).toBeVisible();
 }
 
-async function typeName(page: Page, name: string) {
+// typeName writes the name on the login page. Name and password are on one
+// screen: "Entra" asks the server how the person enters, and whoever has a
+// PIN or a pattern goes on to it, without a wrong try.
+async function typeName(page: Page, name: string, button = "Entra") {
   await page.goto("/");
   await page.getByLabel("Nome").fill(name);
-  await page.getByRole("button", { name: "Avanti" }).click();
+  await page.getByRole("button", { name: button, exact: true }).click();
 }
 
 test("PIN on the keypad", async ({ page, browser }, info) => {
@@ -36,6 +39,7 @@ test("PIN on the keypad", async ({ page, browser }, info) => {
   await addPerson(page, name, "pin", "482915");
   const guest = await stranger(browser);
   await typeName(guest, name);
+  await expect(guest.getByRole("status")).toHaveText(`${name} entra con il PIN.`);
   await expect(guest.getByText("0 cifre su 6")).toBeVisible();
   for (const digit of "482915") {
     await guest.getByRole("button", { name: digit, exact: true }).click();
@@ -48,7 +52,9 @@ test("pattern drawn with the pointer", async ({ page, browser }, info) => {
   // An L: down the left column, then along the bottom row.
   await addPerson(page, name, "pattern", "14789");
   const guest = await stranger(browser);
-  await typeName(guest, name);
+  // The other way in: the link under the form, not "Entra".
+  await typeName(guest, name, "Entra con PIN o sequenza");
+  await expect(guest.getByRole("status")).toHaveText(`${name} entra con la sequenza.`);
   const board = guest.getByRole("group", { name: "Sequenza" });
   const box = await board.boundingBox();
 
@@ -101,9 +107,10 @@ test("setting a pattern in the profile takes two steps", async ({ page, browser 
   const name = `Bea ${info.project.name}`;
   await addPerson(page, name, "password", "password-di-bea");
   const guest = await stranger(browser);
-  await typeName(guest, name);
+  await guest.goto("/");
+  await guest.getByLabel("Nome").fill(name);
   await guest.getByLabel("Password").fill("password-di-bea");
-  await guest.getByRole("button", { name: "Entra" }).click();
+  await guest.getByRole("button", { name: "Entra", exact: true }).click();
   await entered(guest);
   await guest.goto("/profilo");
   await guest.getByRole("button", { name: /Cambia accesso/ }).click();

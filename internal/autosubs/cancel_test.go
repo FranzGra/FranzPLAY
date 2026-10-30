@@ -2,6 +2,7 @@ package autosubs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -73,7 +74,7 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 
 func TestDownloadCanBeCanceled(t *testing.T) {
 	fx := newSlowFixture(t)
-	if err := fx.d.Cancel(); err != errNotDownloading {
+	if err := fx.d.Cancel(); !errors.Is(err, errNotDownloading) {
 		t.Errorf("cancel with nothing going on = %v, want errNotDownloading", err)
 	}
 	waitFor(t, "Run", func() bool { return fx.d.Start("base") == nil })
@@ -103,7 +104,7 @@ func TestDownloadCanBeCanceled(t *testing.T) {
 	if len(entries) != 0 {
 		t.Errorf("left %d files: the half-downloaded model must go", len(entries))
 	}
-	if err := fx.d.Cancel(); err != errNotDownloading {
+	if err := fx.d.Cancel(); !errors.Is(err, errNotDownloading) {
 		t.Errorf("cancel after the end = %v, want errNotDownloading", err)
 	}
 	if j := fx.d.Jobs(); len(j) != 0 {

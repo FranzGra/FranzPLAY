@@ -206,7 +206,7 @@ func modelServer(t *testing.T, change func(kind string, body []byte) []byte) *ht
 	var srv *httptest.Server
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/{$}", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, `{"capabilities":{"attachments":{"base_url":%q}}}`, srv.URL+"/files/")
+		_, _ = fmt.Fprintf(w, `{"capabilities":{"attachments":{"base_url":%q}}}`, srv.URL+"/files/")
 	})
 	mux.HandleFunc("GET /v1/buckets/x", func(w http.ResponseWriter, _ *http.Request) {
 		var records []record

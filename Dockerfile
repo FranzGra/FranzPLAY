@@ -93,8 +93,17 @@ RUN sed -i '1i #include <cstdint>' marian-fork/src/3rd_party/faiss/utils/misc.h 
       > /usr/include/execinfo.h
 # The same steps on both systems; only the name of the processor changes.
 # Ruy does the matrix sums too, so that OpenBLAS (33 MB more) is not needed.
-RUN case "$TARGETARCH" in arm64) arch=armv8-a ;; *) arch=x86-64 ;; esac \
- && cmake -B /build -DCMAKE_BUILD_TYPE=Release -DBUILD_ARCH=$arch \
+# On ARM, marian's CMake turns on its NEON code with options that stay inside
+# its own folder (marian-fork/CMakeLists.txt, USE_SIMD_UTILS). The translator
+# is in another folder and includes the same headers, so it gets them here.
+# Marian replaces CMAKE_CXX_FLAGS with its own, so this changes only the
+# translator; on x86-64 it stays empty, as before.
+RUN flags= \
+ && case "$TARGETARCH" in \
+      arm64) arch=armv8-a flags='-DARM -DFMA -DSSE -flax-vector-conversions -fno-strict-aliasing' ;; \
+      *) arch=x86-64 ;; \
+    esac \
+ && cmake -B /build -DCMAKE_BUILD_TYPE=Release -DBUILD_ARCH=$arch "-DCMAKE_CXX_FLAGS=$flags" \
       -DGIT_SUBMODULE=OFF -DUSE_MKL=OFF -DCOMPILE_TESTS=OFF -DUSE_RUY=ON -DUSE_RUY_SGEMM=ON \
  && cmake --build /build --target translator-cli -j"${BERGAMOT_JOBS}" \
  && install -D -s /build/src/app/translator-cli /out/translator-cli

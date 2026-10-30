@@ -288,7 +288,7 @@ test("on the computer the side menu stays in place while the page scrolls", asyn
   await expect(menu.getByRole("link", { name: "Home" })).toBeInViewport();
 });
 
-test("the administration menu: beside the page on the computer, a page of its own on the phone", async ({
+test("the administration menu: beside the page on the computer, chips over the page on the phone", async ({
   page,
   isMobile,
 }) => {
@@ -301,17 +301,27 @@ test("the administration menu: beside the page on the computer, a page of its ow
     // The menu stays on screen, under the top bar, while a long page scrolls.
     await page.goto("/admin/internet");
     await page.getByRole("button", { name: "Salva le regole" }).waitFor({ state: "attached" });
+    const first = menu.getByRole("link", { name: "Riepilogo" });
+    const before = await first.boundingBox();
     await page.mouse.wheel(0, 1500);
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
-    await expect(menu.getByRole("link", { name: "Riepilogo" })).toBeInViewport();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    // Half a pixel of give: the top bar is not a whole number of pixels tall.
+    expect((await first.boundingBox())?.y).toBeCloseTo(before?.y ?? -1, 0);
+    await expect(first).toBeInViewport();
     await expect(menu.getByRole("link", { name: "Sito" })).toBeInViewport();
     return;
   }
+  // On the phone the sections are chips over the page, the open one in sight.
   await page.goto("/admin");
-  await menu.getByRole("link", { name: /^Sito/ }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "Sito" })).toBeVisible();
-  await page.locator("main a[href='/admin']").click();
-  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("link", { name: /^Riepilogo/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const site = menu.getByRole("link", { name: /^Sito/ });
+  await site.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Sito" })).toBeVisible();
+  await expect(site).toHaveAttribute("aria-current", "page");
+  await expect(site).toBeInViewport();
 });
 
 test("on the computer the search stays in the middle, whatever the site's name", async ({

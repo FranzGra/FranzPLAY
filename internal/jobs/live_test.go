@@ -58,7 +58,7 @@ func TestWorkerFollowsProgress(t *testing.T) {
 	}
 }
 
-func TestReportOutsideAJobDoesNothing(t *testing.T) {
+func TestReportOutsideAJobDoesNothing(_ *testing.T) {
 	Report(context.Background(), Progress{Percent: 50}) // no panic
 }
 

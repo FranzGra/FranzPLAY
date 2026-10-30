@@ -200,21 +200,6 @@ func joinArgs(work string, count int, out string) []string {
 	}
 }
 
-// countFrames counts the single frames ffmpeg wrote.
-func countFrames(work string) (int, error) {
-	entries, err := os.ReadDir(work)
-	if err != nil {
-		return 0, err
-	}
-	n := 0
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".jpg") {
-			n++
-		}
-	}
-	return n, nil
-}
-
 // RemoveOrphanPreviews deletes the files in the previews folder that no
 // video uses any more, and work left half done. Like RemoveOrphanCovers,
 // it must run before the job worker starts.

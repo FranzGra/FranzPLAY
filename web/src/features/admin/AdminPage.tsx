@@ -291,14 +291,14 @@ function Console() {
           </ol>
           <WorkPill />
         </header>
-        <main
+        <div
           ref={(element) => {
             work.current = element;
           }}
           className={styles.work}
         >
           {page}
-        </main>
+        </div>
       </div>
       {going && <GoTo onClose={() => setGoing(false)} />}
     </div>
