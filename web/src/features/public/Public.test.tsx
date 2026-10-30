@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { videoJSON } from "../../test/fixtures";
 import { emptyLibrary, renderApp, signedIn, testAccount } from "../../test/render";
 
@@ -36,65 +36,25 @@ function guest(openRegistration = false) {
   };
 }
 
-describe("public link button on the page of a video", () => {
-  it("is not there without the permission, even on my own video", async () => {
+describe("public link on the page of a video", () => {
+  // It is managed on my channel and, for administrators, in Amministrazione
+  // › Video: the player's page only plays the video.
+  it.each([
+    [
+      "my own video, with the permission",
+      { ...giulia, canSharePublic: true },
+      { id: 2, name: "Giulia" },
+    ],
+    ["an administrator, on a video of the folders", testAccount, null],
+  ])("is never there: %s", async (_, who, uploader) => {
     const { server } = renderApp("/video/7", {
-      ...signedIn(giulia),
-      "GET /api/videos/7": { body: videoJSON({ uploader: { id: 2, name: "Giulia" } }) },
+      ...signedIn(who),
+      "GET /api/videos/7": { body: videoJSON({ uploader }) },
     });
     await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
     expect(screen.queryByRole("region", { name: "Link pubblico" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Crea link pubblico/ })).not.toBeInTheDocument();
     expect(server.requests.some((r) => r.url.endsWith("/public-link"))).toBe(false);
-  });
-
-  it("is not there on someone else's video, even with the permission", async () => {
-    renderApp("/video/7", {
-      ...signedIn({ ...giulia, canSharePublic: true }),
-      "GET /api/videos/7": { body: videoJSON({ uploader: { id: 3, name: "Anna" } }) },
-      "GET /api/videos/7/public-link": { body: { link: null, createdAt: null } },
-    });
-    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
-    expect(screen.queryByRole("region", { name: "Link pubblico" })).not.toBeInTheDocument();
-  });
-
-  it("makes, renews and turns off the link of my video with the permission", async () => {
-    let made = 0;
-    const { user, server } = renderApp("/video/7", {
-      ...signedIn({ ...giulia, canSharePublic: true }),
-      "GET /api/videos/7": { body: videoJSON({ uploader: { id: 2, name: "Giulia" } }) },
-      "GET /api/videos/7/public-link": { body: { link: null, createdAt: null } },
-      "POST /api/videos/7/public-link": () => {
-        made++;
-        const link = made === 1 ? `/p/${key}` : "/p/ZYXWVUTSRQPONMLKJIHGFE";
-        return Response.json({ link, createdAt: "2026-10-15T10:00:00Z" });
-      },
-      "DELETE /api/videos/7/public-link": { status: 204 },
-    });
-    const panel = await screen.findByRole("region", { name: "Link pubblico" });
-    await user.click(within(panel).getByRole("button", { name: "Crea link pubblico" }));
-    expect(await within(panel).findByRole("textbox", { name: "Link del video" })).toHaveValue(
-      `${window.location.origin}/p/${key}`,
-    );
-    await user.click(within(panel).getByRole("button", { name: "Rinnova link" }));
-    await waitFor(() =>
-      expect(within(panel).getByRole("textbox", { name: "Link del video" })).toHaveValue(
-        `${window.location.origin}/p/ZYXWVUTSRQPONMLKJIHGFE`,
-      ),
-    );
-    await user.click(within(panel).getByRole("button", { name: "Disattiva link" }));
-    expect(
-      await within(panel).findByRole("button", { name: "Crea link pubblico" }),
-    ).toBeInTheDocument();
-    expect(server.requests.filter((r) => r.method === "DELETE")).toHaveLength(1);
-  });
-
-  it("is there for an administrator, also on a video of the folders", async () => {
-    renderApp("/video/7", {
-      ...signedIn(),
-      "GET /api/videos/7": { body: videoJSON() },
-      "GET /api/videos/7/public-link": { body: { link: null, createdAt: null } },
-    });
-    expect(await screen.findByRole("region", { name: "Link pubblico" })).toBeInTheDocument();
   });
 });
 
@@ -107,6 +67,15 @@ describe("page of a public link", () => {
     // Nothing of the library is asked.
     const asked = server.requests.map((r) => new URL(r.url).pathname);
     expect(asked.filter((p) => p.startsWith("/api/videos") || p === "/api/categories")).toEqual([]);
+  });
+
+  it("names the site for a video from a folder", async () => {
+    renderApp(`/p/${key}`, {
+      ...guest(),
+      [`GET /api/public/${key}`]: { body: publicVideo({ owner: "" }) },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    expect(screen.getByText(/^Condiviso da/)).toHaveTextContent(/^Condiviso da FranzPLAY$/);
   });
 
   it("asks a guest to log in to like, save or comment, closed registration", async () => {
@@ -162,8 +131,7 @@ describe("page of a public link", () => {
     await user.click(screen.getByRole("button", { name: "Commenta" }));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Accedi" }));
     await user.type(await screen.findByLabelText("Nome"), "Giulia");
-    await user.click(screen.getByRole("button", { name: "Avanti" }));
-    await user.type(await screen.findByLabelText("Password"), "giulia-password");
+    await user.type(screen.getByLabelText("Password"), "giulia-password");
     await user.click(screen.getByRole("button", { name: "Entra" }));
     expect(
       await screen.findByRole("heading", { level: 1, name: "Mare 2024 (pagina)" }),

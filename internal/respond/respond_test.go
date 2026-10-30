@@ -2,6 +2,7 @@ package respond
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,18 @@ func TestErrorIsJSON(t *testing.T) {
 	}
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
 		t.Errorf("Content-Type = %q", ct)
+	}
+}
+
+func TestInternalErrorOfAPageThatLeftIsNoError(t *testing.T) {
+	var log bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&log, nil))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := httptest.NewRequest(http.MethodGet, "/api/x", nil).WithContext(ctx)
+	InternalError(httptest.NewRecorder(), r, logger, context.Canceled)
+	if strings.Contains(log.String(), "ERROR") {
+		t.Errorf("log %q: a canceled request is not an error", log.String())
 	}
 }
 

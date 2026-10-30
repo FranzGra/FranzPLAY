@@ -28,9 +28,9 @@ export type Video = {
   likes: number; // how many people like it
   private: boolean; // only the person who uploaded it sees it, and the people they chose
   uploader: Person | null; // who uploaded it from the browser; null = from a video folder
-  // owner is whose video it is, shown under the title: the uploader, or for
-  // a video from a folder the main administrator. Only when asking for one
-  // video; null otherwise.
+  // owner is whose video it is, shown under the title and on its card: the
+  // person who uploaded it. null = the site's own video (from a video
+  // folder, or its uploader left): the site's logo and name show instead.
   owner: Owner | null;
   // sharedWith are the people a private video is shared with: only for one
   // video, and only for the person who uploaded it; [] otherwise.

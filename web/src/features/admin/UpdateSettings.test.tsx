@@ -21,7 +21,7 @@ describe("update check setting", () => {
       "GET /api/updates": { body: status },
       "PUT /api/updates": { body: { ...status, enabled: false, checkedAt: null, latest: "" } },
     });
-    const toggle = await screen.findByRole("checkbox", {
+    const toggle = await screen.findByRole("switch", {
       name: "Controlla automaticamente le nuove versioni",
     });
     expect(toggle).toBeChecked();

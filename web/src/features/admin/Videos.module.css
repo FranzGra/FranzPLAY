@@ -1,0 +1,624 @@
+/* The list of videos: a dense table that gives up columns as its own room
+   shrinks, never scrolling sideways, with the chosen video's preview beside
+   it. With little room the videos are cards and the preview opens under its
+   card. Everything goes by the real width of the page's room (container
+   queries), not by the window: the console's menus and the preview take
+   part of it. */
+
+.stage {
+  container: stage / inline-size;
+}
+
+.layout {
+  --preview: clamp(320px, 34cqi, 400px);
+  display: flex;
+}
+
+.listSide {
+  flex: 1;
+  min-width: 0;
+  container: list / inline-size;
+}
+
+/* The preview's place opens and closes softly, and the table beside it
+   follows. Its content keeps its width meanwhile, so it does not reflow. */
+.previewSlot {
+  flex: none;
+  width: 0;
+  min-width: 0;
+  overflow: clip;
+  transition:
+    width var(--duration-normal) var(--ease-out),
+    margin-left var(--duration-normal) var(--ease-out);
+}
+
+.previewSlot[data-open] {
+  width: var(--preview);
+  margin-left: 20px;
+}
+
+.previewBox {
+  position: sticky;
+  top: 88px;
+  width: var(--preview);
+  animation: var(--motion-fade-in);
+}
+
+.previewBox[data-leaving] {
+  animation: var(--motion-fade-out);
+}
+
+/* ---------- The table ---------- */
+
+/* Columns of fixed width, the video takes what remains: whatever the texts,
+   the table is as wide as its room. Every row is as tall as the others in
+   every shape of the table, so nothing jumps when columns come and go. */
+.table {
+  --cell: 10px;
+  --thumb-width: 120px;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  padding-right: var(--cell);
+  padding-left: var(--cell);
+}
+
+.table td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table [data-col="duration"] {
+  width: 76px;
+}
+
+.table [data-col="folder"],
+.table [data-col="category"] {
+  width: 112px;
+}
+
+.table [data-col="author"] {
+  width: 148px;
+}
+
+.table [data-col="state"] {
+  width: 176px;
+}
+
+.table [data-col="actions"] {
+  width: 56px;
+}
+
+.pickable {
+  cursor: pointer;
+}
+
+.table tbody tr[data-working] td {
+  background: rgb(var(--color-accent-rgb) / 0.06);
+}
+
+.videoCell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 68px;
+}
+
+.coverLink {
+  display: block;
+  flex: none;
+  border-radius: var(--radius-s);
+}
+
+.coverLink:hover {
+  opacity: 0.85;
+}
+
+.thumb {
+  width: var(--thumb-width);
+}
+
+.videoText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.path {
+  overflow: hidden;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Two lines at most; the whole text is in the tooltip and in the preview. */
+.clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
+}
+
+.none {
+  color: var(--faint);
+}
+
+.author {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.author[data-end] {
+  justify-content: flex-end;
+}
+
+.authorName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.actions {
+  text-align: right;
+}
+
+.actionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* The button of a row or card: it points down, and up while its preview is
+   open. */
+.toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-text);
+}
+
+.toggle svg {
+  rotate: -90deg;
+  transition: rotate var(--duration-fast) var(--ease-out);
+}
+
+.toggle[aria-expanded="true"] {
+  color: var(--color-accent);
+}
+
+.toggle[aria-expanded="true"] svg {
+  rotate: 90deg;
+}
+
+@media (pointer: coarse) {
+  .toggle {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* "Modifica" in the row only with plenty of room: the title opens the same
+   page, and the preview has the button. */
+.edit {
+  display: none;
+}
+
+/* Plenty of room: wider columns, the button too. */
+@container list (min-width: 1320px) {
+  .table {
+    --cell: 14px;
+  }
+
+  .table [data-col="duration"] {
+    width: 88px;
+  }
+
+  .table [data-col="folder"],
+  .table [data-col="category"] {
+    width: 150px;
+  }
+
+  .table [data-col="author"] {
+    width: 190px;
+  }
+
+  .table [data-col="state"] {
+    width: 190px;
+  }
+
+  .table [data-col="actions"] {
+    width: 168px;
+  }
+
+  .edit {
+    display: inline-flex;
+  }
+}
+
+/* Less room: the length goes (it is on the picture), the file name goes, the
+   author keeps only the photo. */
+@container list (max-width: 999px) {
+  .table {
+    --thumb-width: 88px;
+  }
+
+  .table [data-col="duration"],
+  .table .path {
+    display: none;
+  }
+
+  .videoCell {
+    gap: 12px;
+  }
+
+  .title {
+    font-size: 14px;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .table [data-col="folder"],
+  .table [data-col="category"] {
+    width: 108px;
+  }
+
+  .table [data-col="author"] {
+    width: 66px;
+  }
+
+  .table [data-col="state"] {
+    width: 172px;
+  }
+
+  .table [data-col="actions"] {
+    width: 52px;
+  }
+
+  .table .authorName {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+
+/* The preview is open, or little room anyway: folder and category go, they
+   are in the preview. */
+@container list (max-width: 719px) {
+  .table [data-col="folder"],
+  .table [data-col="category"] {
+    display: none;
+  }
+
+  .table [data-col="author"] {
+    width: 64px;
+  }
+}
+
+/* Very little room: the video and its state. */
+@container list (max-width: 519px) {
+  .table {
+    --cell: 8px;
+    --thumb-width: 72px;
+  }
+
+  .table [data-col="author"] {
+    display: none;
+  }
+
+  .table [data-col="state"] {
+    width: 142px;
+  }
+
+  .table [data-col="actions"] {
+    width: 50px;
+  }
+
+  .videoCell {
+    gap: 10px;
+  }
+
+  /* The longest states take two lines rather than being cut. */
+  .table [data-col="state"] > span {
+    white-space: normal;
+  }
+}
+
+.more {
+  display: flex;
+  margin: 20px auto 0;
+}
+
+/* ---------- The preview ---------- */
+
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100dvh - 112px);
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border: var(--glass-border);
+  border-radius: var(--radius-l);
+  background: var(--glass-bg);
+  box-shadow: var(--glass-highlight);
+}
+
+.inspector .coverLink,
+.inspector .thumb {
+  width: 100%;
+}
+
+.inspector .thumb {
+  border-radius: var(--radius-m);
+}
+
+.inspHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inspTitle {
+  min-width: 0;
+  margin: 4px 0 0;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: -4px -8px 0 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-text);
+}
+
+@media (pointer: coarse) {
+  .close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.inspector .path {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.inspActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Under a card: it opens by growing, and pushes the next cards down. The
+   card above already shows the picture and the title. */
+.previewBox[data-inline] {
+  position: static;
+  display: grid;
+  grid-template-rows: 1fr;
+  width: auto;
+  margin-top: 8px;
+  scroll-margin: 80px 0 104px;
+  animation: grow-in var(--duration-normal) var(--ease-out) both;
+}
+
+.previewBox[data-inline][data-leaving] {
+  animation: grow-out var(--duration-fast) ease-in both;
+}
+
+.previewBox[data-inline] > .inspector {
+  position: relative;
+  min-height: 0;
+  max-height: none;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.inspector[data-inline] .inspHead {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 1;
+}
+
+.inspector[data-inline] .path {
+  padding-right: 44px;
+}
+
+@keyframes grow-in {
+  from {
+    grid-template-rows: 0fr;
+    margin-top: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes grow-out {
+  to {
+    grid-template-rows: 0fr;
+    margin-top: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .previewBox[data-inline],
+  .previewBox[data-inline][data-leaving] {
+    animation: none;
+  }
+}
+
+/* ---------- Little room: cards ---------- */
+
+.cards {
+  display: none;
+}
+
+@container stage (max-width: 719px) {
+  .tableBox {
+    display: none;
+  }
+
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .card {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    padding: 12px;
+    border: var(--glass-border);
+    border-radius: var(--radius-m);
+    background: var(--glass-bg);
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .card[data-selected] {
+    border-color: rgb(var(--color-accent-rgb) / 0.45);
+    background: rgb(var(--color-accent-rgb) / 0.08);
+  }
+
+  /* Its preview opens below: the button points down, then up. */
+  .card .toggle svg {
+    rotate: 0deg;
+  }
+
+  .card .toggle[aria-expanded="true"] svg {
+    rotate: 180deg;
+  }
+
+  .card .coverLink,
+  .card .thumb {
+    width: 100%;
+  }
+
+  .cardText {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .cardTitle {
+    display: -webkit-box;
+    overflow: hidden;
+    color: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow-wrap: anywhere;
+  }
+
+  .cardText > span:not(.cardFoot) {
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cardFoot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-top: 4px;
+    font-size: 13px;
+  }
+}
+
+/* A phone: the button goes under the picture's line, so the words keep their
+   room. */
+@container stage (max-width: 439px) {
+  .card {
+    grid-template-columns: 104px minmax(0, 1fr) 44px;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .card .toggle {
+    margin: -6px -6px 0 0;
+  }
+}

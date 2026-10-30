@@ -50,6 +50,13 @@ func TestLinkPreview(t *testing.T) {
 	if got, _ := ask("/p/" + key); got.Description != "Un video di Giulia · 4:05" {
 		t.Errorf("description = %q", got.Description)
 	}
+	// A video from a folder is the site's own.
+	if _, err := s.db.Exec(`UPDATE videos SET uploaded_by = NULL, private = 0 WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := ask("/p/" + key); got.Description != "Un video di FranzPLAY · 4:05" {
+		t.Errorf("description of a folder video = %q", got.Description)
+	}
 
 	// Wrong keys, other pages and a revoked link tell nothing.
 	for _, path := range []string{"/p/zzzzzzzzzzzzzzzzzzzzzz", "/p/short", "/video/1", "/p/" + key + "/x"} {

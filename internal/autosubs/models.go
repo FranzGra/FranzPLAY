@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/safefile"
 )
@@ -48,6 +49,14 @@ type Download struct {
 	Total int64  `json:"total"` // bytes in all, 0 = not known yet
 	Error string `json:"error"` // why it stopped
 	Ended bool   `json:"ended"` // finished, well (Error "") or not
+	// Canceled says the administrator stopped it (Ended is true, Error
+	// says so too); the half-downloaded file is deleted.
+	Canceled  bool       `json:"canceled"`
+	StartedAt time.Time  `json:"startedAt"`
+	EndedAt   *time.Time `json:"endedAt"` // null while it goes on
+	// Speed is the bytes a second since it started, until it ended. With
+	// Done and Total the page says how long is left.
+	Speed int64 `json:"speed"`
 }
 
 // How long the models' server may keep FranzPLAY waiting. Without
@@ -67,6 +76,16 @@ var errBusy = errors.New("another model is downloading")
 // errUnknownModel means the name is not in Models.
 var errUnknownModel = errors.New("unknown model")
 
+// errNotDownloading means there is no download to cancel.
+var errNotDownloading = errors.New("no model is downloading")
+
+// errCanceled is why a download the administrator stopped ended.
+var errCanceled = errors.New("download canceled")
+
+// tellEvery is how often the pages hear how a download goes: often
+// enough for its bar to move smoothly.
+const tellEvery = 500 * time.Millisecond
+
 // Downloader downloads one model at a time into the whisper folder of
 // the data folder. Run does the work; Start asks for it.
 type Downloader struct {
@@ -77,10 +96,13 @@ type Downloader struct {
 	changed func() // tells the pages how the download goes
 	models  []Model
 	stall   time.Duration // stallTimeout, shorter in the tests
+	clock   func() time.Time
 
-	start chan Model
-	mu    sync.Mutex
-	now   *Download // nil: nothing downloaded since FranzPLAY started
+	start  chan Model
+	mu     sync.Mutex
+	now    *Download               // nil: nothing downloaded since FranzPLAY started
+	cancel context.CancelCauseFunc // stops the download going on; nil when none
+	told   time.Time               // when the pages last heard of it
 }
 
 // NewDownloader returns a downloader into dataDir/whisper. changed is
@@ -94,7 +116,7 @@ func NewDownloader(dataDir, baseURL string, changed func(), logger *slog.Logger)
 		ResponseHeaderTimeout: connectTimeout,
 	}}
 	return &Downloader{dataDir: dataDir, baseURL: baseURL, client: client, logger: logger,
-		changed: changed, models: Models, stall: stallTimeout, start: make(chan Model)}
+		changed: changed, models: Models, stall: stallTimeout, clock: time.Now, start: make(chan Model)}
 }
 
 // Status returns how the last download goes or went; nil if none.
@@ -105,7 +127,43 @@ func (d *Downloader) Status() *Download {
 		return nil
 	}
 	s := *d.now
+	end := d.clock()
+	if s.EndedAt != nil {
+		end = *s.EndedAt
+	}
+	if took := end.Sub(s.StartedAt); took > 0 {
+		s.Speed = int64(float64(s.Done) / took.Seconds())
+	}
 	return &s
+}
+
+// Cancel stops the download going on; its half-downloaded file is
+// deleted. errNotDownloading when there is none.
+func (d *Downloader) Cancel() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.cancel == nil || d.now == nil || d.now.Ended {
+		return errNotDownloading
+	}
+	d.cancel(errCanceled)
+	return nil
+}
+
+// Jobs returns the download going on as work on the queue's page, or
+// nothing.
+func (d *Downloader) Jobs() []jobs.JobView {
+	s := d.Status()
+	if s == nil || s.Ended {
+		return nil
+	}
+	started := s.StartedAt.UTC()
+	j := jobs.JobView{Kind: jobs.ModelDownload, Title: s.Name, At: started, State: "running",
+		StartedAt: &started, Seconds: new(max(0, d.clock().Sub(s.StartedAt).Seconds()))}
+	if s.Total > 0 {
+		j.Progress = new(min(100, float64(s.Done)*100/float64(s.Total)))
+		j.DoneSeconds, j.TotalSeconds = new(float64(s.Done)), new(float64(s.Total))
+	}
+	return []jobs.JobView{j}
 }
 
 // Start asks for a model's download. It never waits: if another download
@@ -136,18 +194,35 @@ func (d *Downloader) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case m := <-d.start:
-			d.set(Download{Name: m.Name})
-			err := d.download(ctx, m)
+			one, cancel := context.WithCancelCause(ctx)
+			d.mu.Lock()
+			d.now = &Download{Name: m.Name, StartedAt: d.clock()}
+			d.cancel = cancel
+			d.mu.Unlock()
+			d.changed()
+			err := d.download(one, m)
+			canceled := errors.Is(context.Cause(one), errCanceled)
+			cancel(nil)
 			if ctx.Err() != nil {
 				return
 			}
-			if err != nil {
+			ended := d.clock()
+			switch {
+			case canceled:
+				d.logger.InfoContext(ctx, "whisper model download canceled", "model", m.Name)
+				d.update(func(s *Download) {
+					s.Error, s.Canceled, s.Ended, s.EndedAt = "Download annullato.", true, true, &ended
+				})
+			case err != nil:
 				d.logger.ErrorContext(ctx, "download whisper model", "model", m.Name, "error", err)
-				d.update(func(s *Download) { s.Error, s.Ended = failure(err), true })
-			} else {
+				d.update(func(s *Download) { s.Error, s.Ended, s.EndedAt = failure(err), true, &ended })
+			default:
 				d.logger.InfoContext(ctx, "whisper model downloaded", "model", m.Name)
-				d.update(func(s *Download) { s.Ended = true })
+				d.update(func(s *Download) { s.Ended, s.EndedAt = true, &ended })
 			}
+			d.mu.Lock()
+			d.cancel = nil
+			d.mu.Unlock()
 			d.changed()
 		}
 	}
@@ -233,23 +308,20 @@ type progress struct {
 
 func (p progress) Write(b []byte) (int, error) {
 	p.stalled.Reset(p.d.stall)
+	now := p.d.clock()
 	tell := false
-	p.d.update(func(s *Download) {
-		before := s.Done
-		s.Done += int64(len(b))
-		tell = before>>24 != s.Done>>24 // every 16 MB
-	})
+	p.d.mu.Lock()
+	if p.d.now != nil {
+		p.d.now.Done += int64(len(b))
+		if now.Sub(p.d.told) >= tellEvery {
+			p.d.told, tell = now, true
+		}
+	}
+	p.d.mu.Unlock()
 	if tell {
 		p.d.changed()
 	}
 	return len(b), nil
-}
-
-func (d *Downloader) set(s Download) {
-	d.mu.Lock()
-	d.now = &s
-	d.mu.Unlock()
-	d.changed()
 }
 
 func (d *Downloader) update(f func(*Download)) {

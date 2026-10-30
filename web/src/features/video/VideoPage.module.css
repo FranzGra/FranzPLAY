@@ -126,15 +126,17 @@
   font-weight: 600;
 }
 
-.owner:hover {
+/* Only the owner that leads to a channel answers the mouse: the site's
+   own video leads nowhere. */
+a.owner:hover {
   color: var(--color-text);
 }
 
-.owner > :first-child {
+a.owner > :first-child {
   transition: scale var(--duration-normal) var(--ease-spring);
 }
 
-.owner:hover > :first-child {
+a.owner:hover > :first-child {
   scale: 1.06;
 }
 
@@ -144,9 +146,25 @@
   white-space: nowrap;
 }
 
-.owner:hover .ownerName {
+a.owner:hover .ownerName {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* Whose it is and the details, left of the buttons. Its width, not the
+   window's, decides whether the details fit beside the name. */
+.lead {
+  display: flex;
+  flex: 1 1 340px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.lead > .owner {
+  max-width: 100%;
 }
 
 .details {
@@ -154,9 +172,25 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  margin: 14px 0 0;
+  min-width: 0;
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+/* Beside the name, a thin line keeps the two apart. */
+@container (min-width: 460px) {
+  .details {
+    padding-left: 20px;
+    border-left: 1px solid var(--color-border);
+  }
+}
+
+/* Too narrow: the details go under the name, on their own line. */
+@container (max-width: 459px) {
+  .details {
+    flex-basis: 100%;
+  }
 }
 
 /* The category, easy to spot: a chip in the accent color. */
@@ -277,17 +311,26 @@ div.private p {
     font-size: 20px;
   }
 
+  /* On a phone, as before: the details right under the title, then whose
+     it is and the big buttons. */
+  .lead {
+    display: contents;
+  }
+
   .details {
-    order: 1;
-    margin-top: 12px;
+    flex-basis: 100%;
+    order: -1;
+    margin-bottom: 8px;
+    padding-left: 0;
+    border-left: none;
   }
 
   .bar {
     order: 2;
-    margin-top: 20px;
+    margin-top: 12px;
   }
 
-  .info > :nth-child(n + 4) {
+  .info > :nth-child(n + 3) {
     order: 3;
   }
 

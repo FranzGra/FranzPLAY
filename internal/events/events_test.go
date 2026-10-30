@@ -15,7 +15,7 @@ import (
 func newTestHub(t *testing.T) (*Hub, *httptest.Server) {
 	t.Helper()
 	h := NewHub()
-	h.keepAlive, h.calm = time.Hour, 50*time.Millisecond
+	h.keepAlive, h.calm, h.jobsCalm = time.Hour, 300*time.Millisecond, 50*time.Millisecond
 	mux := http.NewServeMux()
 	h.Routes(slog.New(slog.NewTextHandler(io.Discard, nil)))(mux)
 	srv := httptest.NewServer(mux)
@@ -148,6 +148,80 @@ func TestDifferentChangesAreAllTold(t *testing.T) {
 	want := []string{"event: jobs", "data: {}", "event: library", "data: {}"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("after the pause = %q, want %q", got, want)
+	}
+}
+
+func TestJobsHaveAShorterPause(t *testing.T) {
+	h, srv := newTestHub(t)
+	_, lines := stream(t, srv)
+	next(t, lines) // retry
+	waitListeners(t, h, 1)
+
+	h.Publish(Library)
+	h.Publish(Jobs)
+	// Both go out at once the first time, in a fixed order.
+	got := []string{next(t, lines), next(t, lines), next(t, lines), next(t, lines)}
+	want := []string{"event: jobs", "data: {}", "event: library", "data: {}"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("first events = %q, want %q", got, want)
+	}
+	// Now both change again: the queue's bars move after the short pause,
+	// the list of videos waits for the long one.
+	start := time.Now()
+	h.Publish(Library)
+	h.Publish(Jobs)
+	if got := next(t, lines); got != "event: jobs" {
+		t.Fatalf("after the short pause = %q, want the jobs", got)
+	}
+	jobsAfter := time.Since(start)
+	next(t, lines) // data
+	if got := next(t, lines); got != "event: library" {
+		t.Fatalf("after the long pause = %q, want the library", got)
+	}
+	libraryAfter := time.Since(start)
+	if jobsAfter >= 250*time.Millisecond {
+		t.Errorf("jobs waited %v, want about the short pause (50ms)", jobsAfter)
+	}
+	if libraryAfter < 250*time.Millisecond {
+		t.Errorf("library waited %v, want about the long pause (300ms)", libraryAfter)
+	}
+}
+
+func TestJobsAtMostOncePerPause(t *testing.T) {
+	h, srv := newTestHub(t)
+	_, lines := stream(t, srv)
+	next(t, lines) // retry
+	waitListeners(t, h, 1)
+
+	// The queue moves every 5ms for 400ms: the page hears of it about
+	// once every 50ms, never at every move.
+	stop := time.After(400 * time.Millisecond)
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+				h.Publish(Jobs)
+			}
+		}
+	}()
+	events := 0
+	deadline := time.After(500 * time.Millisecond)
+	for done := false; !done; {
+		select {
+		case line := <-lines:
+			if line == "event: jobs" {
+				events++
+			}
+		case <-deadline:
+			done = true
+		}
+	}
+	if events < 3 || events > 12 {
+		t.Errorf("%d jobs events in 500ms, want about 8 (one every 50ms)", events)
 	}
 }
 

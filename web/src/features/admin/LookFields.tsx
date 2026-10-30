@@ -19,7 +19,8 @@ export const presets = [
 ] as const;
 
 // LookFields are the fields for the name and color of the site, with a
-// preview of the logo. Used in the administration and at the first setup.
+// preview of the logo. Used in the administration; the first setup
+// (auth/SetupWizard) has its own bigger ones, with the same presets.
 export function LookFields({ look, onChange }: { look: Look; onChange: (look: Look) => void }) {
   const color = look.color.toLowerCase();
   return (

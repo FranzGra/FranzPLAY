@@ -218,7 +218,9 @@ func TestWorkerPostponesAJobNotDueYet(t *testing.T) {
 }
 
 func TestWorkerRunsTheKindsInOrder(t *testing.T) {
-	fx := newFixture(t, 7)
+	fx := newFixture(t, 8)
+	// Asked before the others: it gives way, so it must not go before them.
+	fx.enqueue(t, fx.videos[7], Translate)
 	fx.enqueue(t, fx.videos[5], Details)
 	fx.enqueue(t, fx.videos[4], Convert)
 	fx.enqueue(t, fx.videos[6], Transcribe)
@@ -231,10 +233,10 @@ func TestWorkerRunsTheKindsInOrder(t *testing.T) {
 		return func(context.Context, int64) error { order = append(order, k); return nil }
 	}
 	w := fx.worker(map[Kind]Handler{Probe: record(Probe), Details: record(Details), Cover: record(Cover),
-		Preview: record(Preview), Tracks: record(Tracks), Transcribe: record(Transcribe), Convert: record(Convert)})
+		Preview: record(Preview), Tracks: record(Tracks), Translate: record(Translate), Transcribe: record(Transcribe), Convert: record(Convert)})
 	for runNext(t, w) {
 	}
-	if want := []Kind{Probe, Details, Cover, Preview, Tracks, Transcribe, Convert}; !slices.Equal(order, want) {
+	if want := []Kind{Probe, Details, Cover, Preview, Tracks, Translate, Transcribe, Convert}; !slices.Equal(order, want) {
 		t.Errorf("order = %v, want %v", order, want)
 	}
 }

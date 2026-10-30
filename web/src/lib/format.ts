@@ -70,6 +70,17 @@ export function formatDate(date: Date): string {
   return date.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 }
 
+// formatRemaining says how long some work still takes, roughly, as people
+// say it: "meno di un minuto", "circa 4 min", "circa 1 h 20 min".
+export function formatRemaining(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 60) return "meno di un minuto";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `circa ${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `circa ${h} h` : `circa ${h} h ${m} min`;
+}
+
 // formatBytes says how big a file or a space is, as people say it:
 // "750 MB", "1,5 GB", "10 GB". Steps of 1024, as computers count.
 export function formatBytes(bytes: number): string {

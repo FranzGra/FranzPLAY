@@ -3,17 +3,20 @@
 package media
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
@@ -58,6 +61,65 @@ func runWith(ctx context.Context, start func(*exec.Cmd) error, program string, a
 		return nil, fmt.Errorf("%s: %w: %s", filepath.Base(program), err, msg)
 	}
 	return stdout.Bytes(), nil
+}
+
+// streamFunc runs a program and hands each line it prints, on its output
+// or its error output, to line as soon as it is printed. Tests replace it.
+type streamFunc func(ctx context.Context, program string, line func(string), args ...string) error
+
+// maxStreamLine is the longest line read whole; a longer one is cut.
+const maxStreamLine = 64 << 10
+
+// streamInBackground is runInBackground for a program whose output tells
+// how far it is, like whisper: the lines are read while it runs, not at
+// the end. line is never called by two lines at once. On failure the
+// error carries the end of the error output, as with run.
+func streamInBackground(ctx context.Context, program string, line func(string), args ...string) error {
+	cmd := exec.CommandContext(ctx, program, args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	if err := startInBackground(cmd); err != nil {
+		return fmt.Errorf("%s: %w", filepath.Base(program), err)
+	}
+	var mu sync.Mutex
+	var tail []byte // the end of the error output
+	read := func(r io.Reader, keep bool) {
+		lines := bufio.NewScanner(r)
+		lines.Buffer(make([]byte, 0, 4096), maxStreamLine)
+		for lines.Scan() {
+			mu.Lock()
+			if keep {
+				tail = append(tail, lines.Bytes()...)
+				tail = append(tail, '\n')
+				if len(tail) > 2000 {
+					tail = tail[len(tail)-1000:]
+				}
+			}
+			line(lines.Text())
+			mu.Unlock()
+		}
+		// A line too long stops the scanner: the rest is thrown away, so
+		// the program never blocks on a full pipe.
+		_, _ = io.Copy(io.Discard, r)
+	}
+	var wg sync.WaitGroup
+	wg.Go(func() { read(stdout, false) })
+	wg.Go(func() { read(stderr, true) })
+	wg.Wait() // before Wait, which closes the pipes
+	if err := cmd.Wait(); err != nil {
+		msg := strings.TrimSpace(string(tail))
+		if len(msg) > 500 {
+			msg = "…" + msg[len(msg)-500:]
+		}
+		return fmt.Errorf("%s: %w: %s", filepath.Base(program), err, msg)
+	}
+	return nil
 }
 
 // Prober reads duration, size and codecs of videos with ffprobe.

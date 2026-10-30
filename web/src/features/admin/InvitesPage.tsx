@@ -8,10 +8,10 @@ import {
   inviteLink,
   maxNoteLength,
 } from "../../api/invites";
-import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { formatDate } from "../../lib/format";
-import styles from "./Admin.module.css";
+import pages from "./Pages.module.css";
+import { Card, Chip, Empty, Loading, PageHeader, type Tone, Unavailable, ui } from "./ui";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; invites: Invite[] };
 
@@ -46,48 +46,64 @@ export function InvitesPage() {
       s.kind === "ready" ? { kind: "ready", invites: s.invites.filter((i) => i.id !== id) } : s,
     );
 
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
-  if (state.kind === "error") {
+  const create = !making && !made && (
+    <button type="button" className={`${ui.btn} ${ui.primary}`} onClick={() => setMaking(true)}>
+      <Icon name="link" size={18} />
+      Crea un invito
+    </button>
+  );
+  const header = (
+    <PageHeader
+      title="Inviti"
+      description="Crea un link e mandalo a chi vuoi invitare, con un messaggio o una email. Chi lo apre sceglie da solo nome e password. Ogni link vale per una persona sola e funziona per 7 giorni."
+      actions={state.kind === "ready" && state.invites.length > 0 ? create : undefined}
+    />
+  );
+  if (state.kind === "loading") {
     return (
-      <EmptyState title="Inviti non disponibili">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
+      <div className={ui.ui}>
+        {header}
+        <Loading />
+      </div>
     );
   }
-  return (
-    <>
-      <div className={styles.top}>
-        <p className={styles.lead}>
-          Crea un link e mandalo a chi vuoi invitare, con un messaggio o una email. Chi lo apre
-          sceglie da solo nome e password. Ogni link vale per una persona sola e funziona per 7
-          giorni.
-        </p>
-        {!making && !made && (
-          <button type="button" className={styles.primary} onClick={() => setMaking(true)}>
-            <Icon name="link" size={18} />
-            Crea un invito
-          </button>
-        )}
+  if (state.kind === "error") {
+    return (
+      <div className={ui.ui}>
+        {header}
+        <Unavailable title="Inviti non disponibili" />
       </div>
+    );
+  }
+  const waiting = state.invites.filter((i) => i.status === "waiting").length;
+  return (
+    <div className={ui.ui}>
+      {header}
       {making && <NewInviteForm onMade={add} onCancel={() => setMaking(false)} />}
       {made && <NewLink invite={made.invite} code={made.code} onDone={() => setMade(null)} />}
       {state.invites.length === 0 ? (
         !making &&
         !made && (
-          <EmptyState title="Nessun invito">
+          <Empty icon="mail" title="Nessun invito" action={create}>
             Qui vedrai gli inviti che crei: chi li ha usati e quali aspettano ancora.
-          </EmptyState>
+          </Empty>
         )
       ) : (
-        <ul className={`stagger ${styles.list}`} aria-label="Inviti">
-          {state.invites.map((invite) => (
-            <li key={invite.id}>
-              <InviteRow invite={invite} onRemoved={() => remove(invite.id)} />
-            </li>
-          ))}
-        </ul>
+        <Card
+          title="Tutti gli inviti"
+          icon="mail"
+          sub={waiting === 1 ? "1 aspetta" : `${waiting} aspettano`}
+        >
+          <ul className={ui.rows} aria-label="Inviti">
+            {state.invites.map((invite) => (
+              <li key={invite.id}>
+                <InviteRow invite={invite} onRemoved={() => remove(invite.id)} />
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
-    </>
+    </div>
   );
 }
 
@@ -117,10 +133,17 @@ function NewInviteForm({
   };
 
   return (
-    <form className={`glass ${styles.panel}`} onSubmit={send} aria-label="Nuovo invito">
-      <label className={styles.field}>
-        Per chi è (facoltativo, ti serve per ricordarlo)
+    <form className={`${ui.card} ${pages.newForm}`} onSubmit={send} aria-label="Nuovo invito">
+      <h2 className={ui.cardTitle}>
+        <span className={ui.cardIcon} aria-hidden="true">
+          <Icon name="link" size={18} />
+        </span>
+        Nuovo invito
+      </h2>
+      <label className={ui.field}>
+        <span className={ui.label}>Per chi è (facoltativo, ti serve per ricordarlo)</span>
         <input
+          className={ui.input}
           value={note}
           maxLength={maxNoteLength}
           autoComplete="off"
@@ -130,26 +153,32 @@ function NewInviteForm({
           onChange={(e) => setNote(e.target.value)}
         />
       </label>
-      <label className={styles.check}>
-        <input
-          type="checkbox"
-          checked={canUpload}
-          onChange={(e) => setCanUpload(e.target.checked)}
-        />
-        Potrà caricare video
-      </label>
+      <div className={pages.checks}>
+        <label className={pages.check}>
+          <input
+            type="checkbox"
+            checked={canUpload}
+            onChange={(e) => setCanUpload(e.target.checked)}
+          />
+          Potrà caricare video
+        </label>
+      </div>
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
-      <div className={styles.buttons}>
-        <button type="button" className={`glass ${styles.action}`} onClick={onCancel}>
-          Annulla
-        </button>
-        <button type="submit" className={styles.primary} disabled={sending}>
-          Crea il link
-        </button>
+      <div className={pages.formFoot}>
+        <span />
+        <div className={ui.chips}>
+          <button type="button" className={`${ui.btn} ${ui.ghost}`} onClick={onCancel}>
+            Annulla
+          </button>
+          <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={sending}>
+            <Icon name="link" size={16} />
+            Crea il link
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -172,31 +201,34 @@ function NewLink({ invite, code, onDone }: { invite: Invite; code: string; onDon
   };
 
   return (
-    <section className={`glass ${styles.panel}`} aria-label="Link dell'invito">
-      <h2 className={styles.subheading}>
+    <section className={`${ui.card} ${pages.newLink}`} aria-label="Link dell'invito">
+      <h2 className={ui.cardTitle}>
+        <span className={ui.cardIcon} aria-hidden="true">
+          <Icon name="check" size={18} />
+        </span>
         {invite.note ? `Il link per ${invite.note}` : "Il link dell'invito"}
       </h2>
-      <label className={styles.field}>
-        Mandalo a chi vuoi invitare
+      <label className={ui.field}>
+        <span className={ui.label}>Mandalo a chi vuoi invitare</span>
         <input
           readOnly
           value={link}
           onFocus={(e) => e.target.select()}
-          className={styles.linkBox}
+          className={`${ui.input} ${ui.mono}`}
         />
       </label>
-      <p className={styles.done}>
+      <p className={ui.hint}>
         Copialo adesso: per sicurezza FranzPLAY non potrà mostrarlo di nuovo. Se lo perdi, crea un
         invito nuovo.
       </p>
-      <div className={styles.buttons}>
+      <div className={ui.chips}>
         {canCopy && (
-          <button type="button" className={styles.primary} onClick={copy}>
-            <Icon name={copied ? "check" : "link"} size={18} />
+          <button type="button" className={`${ui.btn} ${ui.primary}`} onClick={copy}>
+            <Icon name={copied ? "check" : "copy"} size={16} />
             {copied ? "Copiato" : "Copia il link"}
           </button>
         )}
-        <button type="button" className={`glass ${styles.action}`} onClick={onDone}>
+        <button type="button" className={ui.btn} onClick={onDone}>
           Fatto
         </button>
       </div>
@@ -221,36 +253,44 @@ function InviteRow({ invite, onRemoved }: { invite: Invite; onRemoved: () => voi
   };
 
   return (
-    <div className={`glass ${styles.person}`}>
-      <div className={styles.who}>
-        <span className={styles.avatar}>
-          <Icon name={invite.status === "used" ? "check" : "link"} size={20} />
+    <div className={ui.row}>
+      <span className={pages.rowIcon} data-tone={tones[invite.status]} aria-hidden="true">
+        <Icon name={invite.status === "used" ? "check" : "link"} size={18} />
+      </span>
+      <div className={ui.rowMain}>
+        <b>{invite.note || "Invito senza nome"}</b>
+        <span>
+          {statusText(invite)}
+          {invite.canUpload && " · potrà caricare video"}
         </span>
-        <div>
-          <p className={styles.name}>{invite.note || "Invito senza nome"}</p>
-          <p className={styles.role}>
-            {statusText(invite)}
-            {invite.canUpload && " · potrà caricare video"}
+        {problem && (
+          <p role="alert" className={ui.problem}>
+            {problem}
           </p>
-        </div>
+        )}
       </div>
-      <button
-        type="button"
-        className={`glass ${styles.action} ${invite.status === "waiting" ? styles.danger : ""}`}
-        disabled={busy}
-        onClick={remove}
-      >
-        <Icon name="trash" size={16} />
-        {invite.status === "waiting" ? "Annulla l'invito" : "Togli dall'elenco"}
-      </button>
-      {problem && (
-        <p role="alert" className={styles.problem}>
-          {problem}
-        </p>
-      )}
+      <div className={ui.rowSide}>
+        <Chip tone={tones[invite.status]}>{statusNames[invite.status]}</Chip>
+        <button
+          type="button"
+          className={`${ui.btn} ${ui.small} ${invite.status === "waiting" ? ui.dangerBtn : ui.ghost}`}
+          disabled={busy}
+          onClick={remove}
+        >
+          <Icon name="trash" size={16} />
+          {invite.status === "waiting" ? "Annulla l'invito" : "Togli dall'elenco"}
+        </button>
+      </div>
     </div>
   );
 }
+
+const tones: Record<Invite["status"], Tone> = { waiting: "info", used: "ok", expired: "warn" };
+const statusNames: Record<Invite["status"], string> = {
+  waiting: "Aspetta",
+  used: "Usato",
+  expired: "Scaduto",
+};
 
 // statusText says where an invite is, in words.
 export function statusText(invite: Invite): string {

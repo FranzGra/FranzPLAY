@@ -85,6 +85,9 @@
 
   --header-height: 72px;
   --tabbar-height: 68px;
+  /* The side menu on the left, and the side panels that open on the right
+     (Personalizza on the Home), are as wide. */
+  --sidebar-width: 248px;
   --touch: 44px;
 }
 

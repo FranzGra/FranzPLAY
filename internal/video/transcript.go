@@ -110,13 +110,16 @@ func vttTime(d time.Duration) string {
 // vttEscapes are the characters WebVTT reads as markup in a cue.
 var vttEscapes = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
-// vttText is a cue's text, safe inside a WebVTT file: no markup, and no
-// empty line, which would end the cue.
+// vttStyle is italics, bold or underline once escaped: the markup that stays.
+var vttStyle = regexp.MustCompile(`&lt;(/?[biu])&gt;`)
+
+// vttText is a cue's text, safe inside a WebVTT file: no markup but italics,
+// bold and underline, and no empty line, which would end the cue.
 func vttText(text string) string {
 	var lines []string
 	for line := range strings.Lines(text) {
 		if line = strings.TrimSpace(line); line != "" {
-			lines = append(lines, vttEscapes.Replace(line))
+			lines = append(lines, vttStyle.ReplaceAllString(vttEscapes.Replace(line), "<$1>"))
 		}
 	}
 	return strings.Join(lines, "\n")

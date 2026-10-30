@@ -181,7 +181,10 @@ function Watch({
       />
       <h1 className={styles.title}>{video.title}</h1>
       <div className={styles.bar}>
-        {video.owner && <p className={styles.owner}>Condiviso da {video.owner}</p>}
+        {/* A video from a folder is the site's own. */}
+        <p className={styles.owner}>
+          Condiviso da {video.owner || <SiteName accentClass={styles.accent} />}
+        </p>
         {/* A guest sees the buttons of everybody else: pressing one tells
             them an account is needed. */}
         {guest && (

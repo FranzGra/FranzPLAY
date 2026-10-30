@@ -129,46 +129,94 @@ export async function saveKey(source: KeySource, key: string): Promise<OnlineSta
 }
 
 // Candidate is one answer to a search made by hand: picture and thumb are
-// what to ask pictureURL for, "" when the answer has no picture.
+// what to ask pictureURL for, "" when the answer has no picture. match is
+// how much its title looks like the video's, from 0 to 100: it compares
+// the words of the titles, not the pictures.
 export type Candidate = {
   title: string;
   date: string;
   author: string;
   picture: string;
   thumb: string;
+  source: KeySource;
+  sourceName: string;
+  match: number;
 };
 
-export function parseCandidates(data: unknown): Candidate[] {
-  if (typeof data !== "object" || data === null) throw new Error("search: not an object");
-  const { results } = data as Record<string, unknown>;
-  if (!Array.isArray(results)) throw new Error("search results: not a list");
-  return results.map((item, i) => {
-    if (typeof item !== "object" || item === null)
-      throw new Error(`search result ${i}: not an object`);
-    const fields = item as Record<string, unknown>;
-    const text = (name: keyof Candidate): string => {
-      const value = fields[name];
-      if (typeof value !== "string") throw new Error(`search result ${i} ${name}: not text`);
-      return value;
-    };
-    return {
-      title: text("title"),
-      date: text("date"),
-      author: text("author"),
-      picture: text("picture"),
-      thumb: text("thumb"),
-    };
-  });
+// SearchProblem says that a source gave no answers to a search in all the
+// sources: it refused the key, or it did not answer.
+export type SearchProblem = {
+  source: KeySource;
+  sourceName: string;
+  kind: "key" | "down";
+};
+
+// SearchAnswer is what a search found, from the best match.
+export type SearchAnswer = {
+  results: Candidate[];
+  problems: SearchProblem[];
+};
+
+const keySources: readonly string[] = ["tmdb", "tpdb"];
+
+function parseKeySource(value: unknown, where: string): KeySource {
+  if (typeof value !== "string" || !keySources.includes(value)) {
+    throw new Error(`${where} source: unknown`);
+  }
+  return value as KeySource;
 }
 
-// searchOnline searches a source by hand, with the administrator's words.
+export function parseSearchAnswer(data: unknown): SearchAnswer {
+  if (typeof data !== "object" || data === null) throw new Error("search: not an object");
+  const { results, problems } = data as Record<string, unknown>;
+  if (!Array.isArray(results)) throw new Error("search results: not a list");
+  if (!Array.isArray(problems)) throw new Error("search problems: not a list");
+  return {
+    results: results.map((item, i) => {
+      if (typeof item !== "object" || item === null)
+        throw new Error(`search result ${i}: not an object`);
+      const fields = item as Record<string, unknown>;
+      const text = (name: string): string => {
+        const value = fields[name];
+        if (typeof value !== "string") throw new Error(`search result ${i} ${name}: not text`);
+        return value;
+      };
+      const { match } = fields;
+      if (typeof match !== "number" || match < 0 || match > 100) {
+        throw new Error(`search result ${i} match: not from 0 to 100`);
+      }
+      return {
+        title: text("title"),
+        date: text("date"),
+        author: text("author"),
+        picture: text("picture"),
+        thumb: text("thumb"),
+        source: parseKeySource(fields.source, `search result ${i}`),
+        sourceName: text("sourceName"),
+        match,
+      };
+    }),
+    problems: problems.map((item, i) => {
+      if (typeof item !== "object" || item === null)
+        throw new Error(`search problem ${i}: not an object`);
+      const { source, sourceName, kind } = item as Record<string, unknown>;
+      if (typeof sourceName !== "string") throw new Error(`search problem ${i} name: not text`);
+      if (kind !== "key" && kind !== "down") throw new Error(`search problem ${i} kind: unknown`);
+      return { source: parseKeySource(source, `search problem ${i}`), sourceName, kind };
+    }),
+  };
+}
+
+// searchOnline searches a source, or all those ready, with the
+// administrator's words. title is what the answers are compared with.
 export async function searchOnline(
-  source: KeySource,
+  source: KeySource | "all",
   words: string,
+  title: string,
   signal?: AbortSignal,
-): Promise<Candidate[]> {
-  const query = new URLSearchParams({ source, q: words });
-  return parseCandidates(await request(`/api/online/search?${query}`, { signal }));
+): Promise<SearchAnswer> {
+  const query = new URLSearchParams({ source, q: words, title });
+  return parseSearchAnswer(await request(`/api/online/search?${query}`, { signal }));
 }
 
 // pictureURL is where FranzPLAY passes on a picture a search found: the

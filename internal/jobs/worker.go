@@ -28,12 +28,13 @@ type Worker struct {
 	now      func() time.Time
 	wake     chan struct{}
 	changed  func()
+	live     *live // the jobs running now and how far they are
 }
 
 // NewWorker returns a worker for the given kinds of job. Jobs of a kind
 // with no handler stay in the queue untouched.
 func NewWorker(db *sql.DB, handlers map[Kind]Handler, logger *slog.Logger) *Worker {
-	return &Worker{
+	w := &Worker{
 		db:       db,
 		handlers: handlers,
 		logger:   logger,
@@ -41,12 +42,21 @@ func NewWorker(db *sql.DB, handlers map[Kind]Handler, logger *slog.Logger) *Work
 		wake:     make(chan struct{}, 1),
 		changed:  func() {},
 	}
+	w.live = newLive(func() time.Time { return w.now() })
+	return w
 }
 
 // OnChange sets a function called whenever a job starts or ends, so the
-// administrator's page can follow the queue. Call it before Run.
+// administrator's page can follow the queue, and at most once a second
+// while a running job tells how far it is (Report). Call it before Run.
 func (w *Worker) OnChange(f func()) {
 	w.changed = f
+	w.live.changed = f
+}
+
+// Running returns the jobs running now, with how far they are.
+func (w *Worker) Running() []Running {
+	return w.live.running()
 }
 
 // Wake tells the worker there may be new jobs. It never blocks.
@@ -97,8 +107,9 @@ const crashMessage = "FranzPLAY stopped suddenly during this job (power cut, out
 func (w *Worker) resetInterrupted(ctx context.Context) error {
 	_, err := w.db.ExecContext(ctx, `
 		UPDATE jobs SET state = CASE WHEN attempts + 1 >= ? THEN 'failed' ELSE 'pending' END,
+			ended_ms = CASE WHEN attempts + 1 >= ? THEN ? ELSE ended_ms END,
 			attempts = attempts + 1, last_error = ?, updated_at = ?
-		WHERE state = 'running'`, MaxAttempts, crashMessage, w.now().Unix())
+		WHERE state = 'running'`, MaxAttempts, MaxAttempts, w.now().UnixMilli(), crashMessage, w.now().Unix())
 	if err != nil {
 		return fmt.Errorf("put back interrupted jobs: %w", err)
 	}
@@ -127,7 +138,8 @@ type job struct {
 	videoID  int64
 	kind     Kind
 	attempts int
-	urgent   bool // someone is waiting for it: it never gives way
+	urgent   bool      // someone is waiting for it: it never gives way
+	started  time.Time // when it was claimed
 }
 
 // RunNext runs the next job that is due, if there is one, and reports
@@ -149,7 +161,8 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 		stopWatching = w.watchForOthers(jobCtx, j.id, yield)
 	}
 	start := time.Now()
-	runErr := w.runHandler(jobCtx, h, j)
+	runErr := w.runHandler(w.live.begin(jobCtx, j, j.started), h, j)
+	w.live.end(j.id)
 	stopWatching()
 	cancel()
 	gaveWay := errors.Is(context.Cause(yieldCtx), errGaveWay)
@@ -318,7 +331,8 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 		return job{}, false, nil
 	}
 
-	now := w.now().Unix()
+	started := w.now()
+	now := started.Unix()
 	args := append([]any{now}, kinds...)
 	var j job
 	var kind string
@@ -330,9 +344,11 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 		return job{}, false, fmt.Errorf("find next job: %w", err)
 	}
 	j.kind = Kind(kind)
+	j.started = started
 
 	if _, err := w.db.ExecContext(ctx,
-		`UPDATE jobs SET state = 'running', updated_at = ? WHERE id = ?`, now, j.id); err != nil {
+		`UPDATE jobs SET state = 'running', updated_at = ?, started_ms = ? WHERE id = ?`,
+		now, started.UnixMilli(), j.id); err != nil {
 		return job{}, false, fmt.Errorf("start job %d: %w", j.id, err)
 	}
 	return j, true, nil
@@ -346,10 +362,16 @@ func (w *Worker) finish(ctx context.Context, j job, s state, runAfter time.Time,
 	if s != done {
 		attempts++
 	}
+	now := w.now()
+	var ended any // a job trying again later has not ended
+	if s == done || s == failed {
+		ended = now.UnixMilli()
+	}
 	_, err := w.db.ExecContext(ctx, `
-		UPDATE jobs SET state = ?, attempts = ?, last_error = ?, run_after = ?, updated_at = ?
+		UPDATE jobs SET state = ?, attempts = ?, last_error = ?, run_after = ?, updated_at = ?,
+			ended_ms = COALESCE(?, ended_ms)
 		WHERE id = ? AND state = 'running'`,
-		string(s), attempts, lastError, runAfter.Unix(), w.now().Unix(), j.id)
+		string(s), attempts, lastError, runAfter.Unix(), now.Unix(), ended, j.id)
 	if err != nil {
 		return fmt.Errorf("save job %d: %w", j.id, err)
 	}

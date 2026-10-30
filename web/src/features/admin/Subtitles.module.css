@@ -1,0 +1,525 @@
+/* The page of subtitles: one line for whisper's models and one for the
+   translator, then the videos, the one being worked on lit up. */
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 24px;
+}
+
+/* A box that is one line, until there is something to do in it. */
+.panel {
+  border: var(--glass-border);
+  border-radius: var(--radius-l);
+  background: var(--glass-bg);
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 14px;
+}
+
+.lineIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
+.lineIcon[data-tone="ok"] {
+  color: var(--color-success);
+}
+
+.lineIcon[data-tone="warn"] {
+  color: var(--color-warning, #f59e0b);
+}
+
+.lineText {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  align-items: baseline;
+  min-width: 0;
+  margin: 0;
+  font-size: 14.5px;
+}
+
+.lineText b {
+  font-weight: 650;
+}
+
+.lineMore {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  display: inline-grid;
+  place-items: center;
+  transition: transform 0.15s ease;
+}
+
+.chevron[data-open] {
+  transform: rotate(180deg);
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 14px 14px;
+}
+
+.downloadFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.lines {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: rgb(0 0 0 / 0.2);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.models {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model {
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.model:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+
+.modelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modelText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.modelText b {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.size {
+  margin-left: 6px;
+  color: var(--color-text-muted);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.about {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* The download, right under the row of its model. */
+.download {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgb(var(--color-accent-rgb) / 0.4);
+  border-radius: var(--radius-m);
+  background: rgb(var(--color-accent-rgb) / 0.08);
+}
+
+.downloadHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.downloadHead > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.downloadHead b {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.downloadDone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--color-success);
+  font-size: 14px;
+}
+
+.downloadDone[data-tone="quiet"] {
+  color: var(--color-text-muted);
+}
+
+.panel > .download,
+.panel > [role="alert"] {
+  margin: 0 14px 14px;
+}
+
+/* How a download goes, and how far whisper listened to a video. */
+.downloadNumbers {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.listened {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.downloadNumbers b,
+.listened b {
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.listened {
+  margin-top: 8px;
+}
+
+.tools {
+  flex-wrap: wrap;
+}
+
+.tools > search {
+  flex: 1 1 320px;
+}
+
+.tools .filters,
+.tools [role="group"] {
+  margin: 0;
+}
+
+.count {
+  margin: 0 0 12px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One video: picture, title and subtitles, buttons. */
+.row {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 14px;
+  border: var(--glass-border);
+  border-radius: var(--radius-l);
+  background: var(--glass-bg);
+}
+
+/* The one being listened to now: lit up, alive. */
+.row[data-state="running"] {
+  border-color: rgb(var(--color-accent-rgb) / 0.55);
+  background: linear-gradient(
+    90deg,
+    rgb(var(--color-accent-rgb) / 0.12),
+    rgb(var(--color-accent-rgb) / 0.03)
+  );
+  box-shadow:
+    0 0 0 1px rgb(var(--color-accent-rgb) / 0.2),
+    0 10px 30px rgb(0 0 0 / 0.25);
+}
+
+/* The ones waiting their turn: a dashed border. */
+.row[data-state="pending"] {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: transparent;
+}
+
+.row[data-state="failed"] {
+  border-color: rgb(239 68 68 / 0.3);
+}
+
+.thumb {
+  width: 100%;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.title a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.none {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* What a video has: the original, what was already there, the translations. */
+.tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.groupName {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* Work going on: the bar with its numbers, close together. */
+.work {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.work .listened {
+  margin-top: 0;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger);
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.chipButton {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: 0 -4px 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.1);
+  color: inherit;
+  cursor: pointer;
+}
+
+.chipButton:hover {
+  background: rgb(255 255 255 / 0.2);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.more {
+  display: flex;
+  margin: 20px auto 0;
+}
+
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: rgb(0 0 0 / 0.2);
+}
+
+.askLead {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.askLead b {
+  font-weight: 650;
+}
+
+.hint,
+.warn {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.warn {
+  color: var(--color-warning, #f59e0b);
+}
+
+.from {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 14.5px;
+}
+
+.redo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.askFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.translate {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.translate legend {
+  margin-bottom: 8px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.check[data-off] {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.check:has(input:checked) {
+  border-color: rgb(var(--color-accent-rgb) / 0.5);
+  background: rgb(var(--color-accent-rgb) / 0.12);
+}
+
+@media (max-width: 899px) {
+  .row {
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+
+  .actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 479px) {
+  .row {
+    /* One column: the forms and the long labels need all the width. */
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .thumb {
+    width: 120px;
+  }
+
+  .askFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modelRow {
+    flex-wrap: wrap;
+  }
+
+  .group {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .line {
+    flex-wrap: wrap;
+  }
+
+  .lineText {
+    flex-basis: calc(100% - 30px);
+  }
+}

@@ -204,9 +204,13 @@ describe("profile page", () => {
     await user.type(within(form).getByLabelText(/password per confermare/), "la-mia-password");
     await user.click(confirm);
     expect(await screen.findByRole("heading", { name: "Accedi a FranzPLAY" })).toBeInTheDocument();
-    const sent = server.requests.at(-1);
-    expect(sent?.method).toBe("DELETE");
-    expect(await sent?.json()).toEqual({ password: "la-mia-password" });
+    // The login page then asks the server how one may enter (GET
+    // /api/setup): the request that deleted the account came just before.
+    const deletes = server.requests.filter((r) => r.method === "DELETE");
+    expect(deletes.map((r) => new URL(r.url).pathname)).toEqual(["/api/me"]);
+    expect(await deletes[0]?.json()).toEqual({ password: "la-mia-password" });
+    const after = server.requests.slice(server.requests.indexOf(deletes[0] as Request) + 1);
+    expect(after.every((r) => r.method === "GET")).toBe(true);
   });
 
   it("keeps the account when the password is wrong or I am the last administrator", async () => {

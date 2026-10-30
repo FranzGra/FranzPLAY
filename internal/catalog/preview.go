@@ -75,8 +75,11 @@ func previewOf(v Video, base, siteName string) webui.Preview {
 	if p.Description == "" {
 		// Shown to people, in the language of the interface.
 		var parts []string
-		if v.Owner != nil && v.Owner.Name != "" {
+		switch {
+		case v.Owner != nil && v.Owner.Name != "":
 			parts = append(parts, "Un video di "+v.Owner.Name)
+		case v.Owner == nil && siteName != "":
+			parts = append(parts, "Un video di "+siteName) // from a folder: the site's own
 		}
 		if v.Duration != nil && *v.Duration > 0 {
 			parts = append(parts, clock(*v.Duration))

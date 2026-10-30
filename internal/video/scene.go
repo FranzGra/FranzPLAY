@@ -56,8 +56,9 @@ type tpdbScene struct {
 	} `json:"site"`
 	Image      string `json:"image"`
 	Background struct {
-		Large string `json:"large"`
-		Small string `json:"small"`
+		Large  string `json:"large"`
+		Medium string `json:"medium"`
+		Small  string `json:"small"`
 	} `json:"background"`
 	Posters struct {
 		Large string `json:"large"`
@@ -115,7 +116,7 @@ func sceneOf(s tpdbScene) Scene {
 			Date:        firstDay(s.Date),
 		},
 		Picture: firstPicture(s.Background.Large, s.Image, s.Posters.Large),
-		Thumb:   firstPicture(s.Background.Small, s.Image, s.Background.Large, s.Posters.Large),
+		Thumb:   firstPicture(s.Background.Medium, s.Background.Small, s.Image, s.Background.Large, s.Posters.Large),
 	}
 }
 

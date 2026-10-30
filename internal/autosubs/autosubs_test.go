@@ -147,7 +147,7 @@ func TestOnlyAdministrators(t *testing.T) {
 	s := newSite(t)
 	s.who = users.Account{ID: 2, Name: "Ada", Role: users.User}
 	s.do(t, "GET", "/api/admin/subtitles", "", http.StatusForbidden)
-	s.do(t, "PUT", "/api/admin/subtitles/1", `{"model":"small"}`, http.StatusForbidden)
+	s.do(t, "PUT", "/api/admin/subtitles/1", `{"spoken":"it","model":"small"}`, http.StatusForbidden)
 	s.who = users.Account{}
 	s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusUnauthorized)
 }
@@ -179,7 +179,7 @@ func TestAskAndTakeBack(t *testing.T) {
 	}
 
 	// Asking again replaces the request.
-	s.do(t, "PUT", path, `{"spoken":"","model":"medium","translate":[]}`, http.StatusNoContent)
+	s.do(t, "PUT", path, `{"spoken":"auto","model":"medium","translate":[]}`, http.StatusNoContent)
 	got = decode[listAnswer](t, s.do(t, "GET", "/api/admin/subtitles", "", http.StatusOK))
 	if r := got.Videos[0].Request; r.Spoken != "" || r.Model != "medium" || len(r.Translate) != 0 {
 		t.Errorf("request = %+v", r)
@@ -208,26 +208,29 @@ func TestAskRefuses(t *testing.T) {
 	path := "/api/admin/subtitles/" + strconv.FormatInt(id, 10)
 	for name, body := range map[string]string{
 		"not json":          `oops`,
-		"unknown field":     `{"model":"small","colour":"red"}`,
-		"unknown model":     `{"model":"large"}`,
-		"model as path":     `{"model":"../small"}`,
+		"unknown field":     `{"spoken":"it","model":"small","colour":"red"}`,
+		"unknown model":     `{"spoken":"it","model":"large"}`,
+		"model as path":     `{"spoken":"it","model":"../small"}`,
+		"no spoken":         `{"model":"small"}`,
+		"empty spoken":      `{"spoken":"","model":"small"}`,
 		"odd spoken":        `{"model":"small","spoken":"klingon"}`,
-		"odd language":      `{"model":"small","translate":["xx"]}`,
-		"language twice":    `{"model":"small","translate":["en","en"]}`,
-		"language as other": `{"model":"small","translate":["auto"]}`,
+		"odd language":      `{"spoken":"it","model":"small","translate":["xx"]}`,
+		"language twice":    `{"spoken":"it","model":"small","translate":["en","en"]}`,
+		"language as other": `{"spoken":"it","model":"small","translate":["auto"]}`,
+		"spoken as target":  `{"spoken":"it","model":"small","translate":["it"]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			s.do(t, "PUT", path, body, http.StatusBadRequest)
 		})
 	}
-	s.do(t, "PUT", "/api/admin/subtitles/999", `{"model":"small"}`, http.StatusNotFound)
-	s.do(t, "PUT", "/api/admin/subtitles/"+strconv.FormatInt(gone, 10), `{"model":"small"}`, http.StatusConflict)
+	s.do(t, "PUT", "/api/admin/subtitles/999", `{"spoken":"it","model":"small"}`, http.StatusNotFound)
+	s.do(t, "PUT", "/api/admin/subtitles/"+strconv.FormatInt(gone, 10), `{"spoken":"it","model":"small"}`, http.StatusConflict)
 
 	s.opts.Translator = nil
-	s.do(t, "PUT", path, `{"model":"small","translate":["en"]}`, http.StatusBadRequest)
-	s.do(t, "PUT", path, `{"model":"small"}`, http.StatusNoContent)
+	s.do(t, "PUT", path, `{"spoken":"it","model":"small","translate":["en"]}`, http.StatusBadRequest)
+	s.do(t, "PUT", path, `{"spoken":"it","model":"small"}`, http.StatusNoContent)
 	s.opts.Whisper = false
-	s.do(t, "PUT", path, `{"model":"small"}`, http.StatusBadRequest)
+	s.do(t, "PUT", path, `{"spoken":"it","model":"small"}`, http.StatusBadRequest)
 	if s.queued != 1 {
 		t.Errorf("queued %d times, want 1", s.queued)
 	}
@@ -264,7 +267,7 @@ func TestListShowsEverySubtitle(t *testing.T) {
 	if subs := got.Videos[0].Subtitles; len(subs) != 0 {
 		t.Errorf("bosco: %+v, the old content's subtitles do not count", subs)
 	}
-	wantLago := []Subtitle{{Lang: "en", Source: FromInside}, {Lang: "it", Source: FromAuto}, {Lang: "de", Source: FromAuto, From: "it"}}
+	wantLago := []Subtitle{{Lang: "en", Source: FromInside}, {Lang: "it", Source: FromAuto, Model: "small"}, {Lang: "de", Source: FromAuto, From: "it", Model: "small"}}
 	if !reflect.DeepEqual(got.Videos[1].Subtitles, wantLago) {
 		t.Errorf("lago: %+v", got.Videos[1].Subtitles)
 	}

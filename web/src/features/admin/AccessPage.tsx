@@ -7,9 +7,9 @@ import {
   type Outcome,
   unblock,
 } from "../../api/logins";
-import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
-import styles from "./Admin.module.css";
+import pages from "./Pages.module.css";
+import { Card, Chip, Empty, Loading, PageHeader, type Tone, Unavailable, ui } from "./ui";
 
 type State =
   | { kind: "loading" }
@@ -20,6 +20,12 @@ const outcomes: Record<Outcome, string> = {
   entered: "Entrato",
   wrong_password: "Accesso sbagliato",
   locked: "Bloccato: troppi tentativi",
+};
+
+const outcomeTones: Record<Outcome, Tone> = {
+  entered: "ok",
+  wrong_password: "warn",
+  locked: "bad",
 };
 
 const when = new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" });
@@ -71,18 +77,15 @@ export function AccessPage() {
 
   const filtering = search.trim() !== "" || onlyFailed;
   return (
-    <>
-      <div className={styles.top}>
-        <p className={styles.lead}>
-          Chi ha provato a entrare negli ultimi 90 giorni, quando e da quale indirizzo. Tante
-          password, PIN o sequenze sbagliate di seguito possono voler dire che qualcuno prova a
-          indovinarle: FranzPLAY allora blocca per un po' quel nome e quell'indirizzo.
-        </p>
-      </div>
+    <div className={ui.ui}>
+      <PageHeader
+        title="Accessi"
+        description="Chi ha provato a entrare negli ultimi 90 giorni, quando e da quale indirizzo. Tante password, PIN o sequenze sbagliate di seguito possono voler dire che qualcuno prova a indovinarle: FranzPLAY allora blocca per un po' quel nome e quell'indirizzo."
+      />
       <Blocks />
-      <div className={styles.tools}>
-        <search className={styles.searchForm}>
-          <label className={`glass ${styles.searchBox}`}>
+      <div className={ui.toolbar}>
+        <search className={ui.search}>
+          <label className={ui.searchBox}>
             <Icon name="search" size={18} />
             <span className="visually-hidden">Cerca un nome o un indirizzo</span>
             <input
@@ -93,7 +96,7 @@ export function AccessPage() {
             />
           </label>
         </search>
-        <label className={styles.check}>
+        <label className={pages.check}>
           <input
             type="checkbox"
             checked={onlyFailed}
@@ -102,49 +105,51 @@ export function AccessPage() {
           Solo tentativi sbagliati
         </label>
       </div>
-      {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
-      {state.kind === "error" && (
-        <EmptyState title="Registro non disponibile">
-          Il server non ha risposto. Ricarica la pagina tra poco.
-        </EmptyState>
-      )}
+      {state.kind === "loading" && <Loading />}
+      {state.kind === "error" && <Unavailable title="Registro non disponibile" />}
       {state.kind === "ready" && state.logins.length === 0 && (
-        <EmptyState title={filtering ? "Nessun accesso trovato" : "Ancora nessun accesso"}>
+        <Empty
+          icon={filtering ? "search" : "key"}
+          title={filtering ? "Nessun accesso trovato" : "Ancora nessun accesso"}
+        >
           {filtering
             ? "Prova a cercare un'altra parola o togli il filtro."
             : "Quando qualcuno entra con nome e password, compare qui."}
-        </EmptyState>
+        </Empty>
       )}
       {state.kind === "ready" && state.logins.length > 0 && (
-        <>
-          <ul className={`stagger ${styles.list}`} aria-label="Accessi">
+        <Card label="Registro degli accessi">
+          <div className={pages.logHead} aria-hidden="true">
+            <span>Persona</span>
+            <span>Quando</span>
+            <span>Da dove</span>
+            <span>Esito</span>
+          </div>
+          <ul className={pages.log} aria-label="Accessi">
             {state.logins.map((l) => (
-              <li key={l.id} className={`glass ${styles.person}`}>
-                <div>
-                  <p className={styles.name}>{l.name || "(nessun nome)"}</p>
-                  <p className={styles.role}>
-                    {when.format(l.at)} · da {l.address}
-                  </p>
-                </div>
-                <span className={l.outcome === "entered" ? styles.badgeOk : styles.badge}>
-                  {outcomes[l.outcome]}
+              <li key={l.id} className={pages.logRow} data-outcome={l.outcome}>
+                <b className={pages.logName}>{l.name || "(nessun nome)"}</b>
+                <span className={pages.logWhen}>{when.format(l.at)}</span>
+                <span className={`${pages.logWhere} ${ui.mono}`}>
+                  <span className="visually-hidden">da </span>
+                  {l.address}
+                </span>
+                <span className={pages.logOutcome}>
+                  <Chip tone={outcomeTones[l.outcome]}>{outcomes[l.outcome]}</Chip>
                 </span>
               </li>
             ))}
           </ul>
           {state.more && (
-            <button
-              type="button"
-              className={`glass ${styles.action} ${styles.more}`}
-              disabled={loadingMore}
-              onClick={more}
-            >
-              Mostra altri
-            </button>
+            <div className={pages.more}>
+              <button type="button" className={ui.btn} disabled={loadingMore} onClick={more}>
+                Mostra altri
+              </button>
+            </div>
           )}
-        </>
+        </Card>
       )}
-    </>
+    </div>
   );
 }
 
@@ -183,36 +188,40 @@ function Blocks() {
 
   if (blocks.length === 0 && !problem) return null;
   return (
-    <section aria-label="Bloccati adesso">
-      <h2 className={styles.groupTitle}>Bloccati adesso</h2>
-      {problem && (
-        <p role="alert" className={styles.problem}>
-          {problem}
-        </p>
-      )}
-      <ul className={`stagger ${styles.list}`}>
-        {blocks.map((b) => (
-          <li key={b.key} className={`glass ${styles.person}`}>
-            <div>
-              <p className={styles.name}>
-                {b.kind === "account" ? `Nome «${b.value}»` : `Indirizzo ${b.value}`}
-              </p>
-              <p className={styles.role}>
-                Fino alle {until.format(b.until)}
-                {b.level > 1 && ` · ${b.level}° blocco di seguito`}
-              </p>
-            </div>
-            <button
-              type="button"
-              className={`glass ${styles.action}`}
-              disabled={busy === b.key}
-              onClick={() => lift(b.key)}
-            >
-              Sblocca
-            </button>
-          </li>
-        ))}
-      </ul>
+    <section className={pages.blocks} aria-label="Bloccati adesso">
+      <Card title="Bloccati adesso" icon="lock" titleTag="h2" className={pages.blocksCard}>
+        {problem && (
+          <p role="alert" className={ui.problem}>
+            {problem}
+          </p>
+        )}
+        <ul className={ui.rows}>
+          {blocks.map((b) => (
+            <li key={b.key} className={ui.row}>
+              <span className={pages.rowIcon} data-tone="bad" aria-hidden="true">
+                <Icon name="lock" size={18} />
+              </span>
+              <div className={ui.rowMain}>
+                <b>{b.kind === "account" ? `Nome «${b.value}»` : `Indirizzo ${b.value}`}</b>
+                <span>
+                  Fino alle {until.format(b.until)}
+                  {b.level > 1 && ` · ${b.level}° blocco di seguito`}
+                </span>
+              </div>
+              <div className={ui.rowSide}>
+                <button
+                  type="button"
+                  className={`${ui.btn} ${ui.small}`}
+                  disabled={busy === b.key}
+                  onClick={() => lift(b.key)}
+                >
+                  Sblocca
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </section>
   );
 }

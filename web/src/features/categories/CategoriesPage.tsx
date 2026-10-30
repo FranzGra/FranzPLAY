@@ -1,12 +1,10 @@
-import { type CSSProperties, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useState } from "react";
 import { type Category, fetchCategories } from "../../api/videos";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
-import { formatVideos } from "../../lib/format";
 import styles from "./CategoriesPage.module.css";
-import { tileColor } from "./color";
+import { CategoryTile } from "./CategoryTile";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; categories: Category[] };
 
@@ -50,37 +48,17 @@ export function CategoriesPage() {
         <ul className={`stagger ${styles.list}`}>
           {state.categories.map((category) => (
             <li key={category.name}>
-              <CategoryTile category={category} />
+              <CategoryTile
+                name={category.name}
+                videos={category.videos}
+                color={category.color}
+                image={category.image}
+                to={`/categorie/${encodeURIComponent(category.name)}`}
+              />
             </li>
           ))}
         </ul>
       )}
     </>
-  );
-}
-
-// CategoryTile is a big card for a category. With the administrator's
-// image, the picture under a dark shade where the name is. Without one, as
-// in the old FranzPLAY: its color fading into dark, a grainy surface and a
-// big folder in the corner that straightens up under the mouse.
-function CategoryTile({ category }: { category: Category }) {
-  const image = category.image;
-  return (
-    <Link
-      to={`/categorie/${encodeURIComponent(category.name)}`}
-      className={styles.tile}
-      data-image={image ? "" : undefined}
-      style={{ "--tile-color": tileColor(category) } as CSSProperties}
-    >
-      {image ? (
-        <img className={styles.image} src={image} alt="" loading="lazy" decoding="async" />
-      ) : (
-        <span className={styles.folder}>
-          <Icon name="folder" size={160} />
-        </span>
-      )}
-      <span className={styles.name}>{category.name}</span>
-      <span className={styles.count}>{formatVideos(category.videos)}</span>
-    </Link>
   );
 }

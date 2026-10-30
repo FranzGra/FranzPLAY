@@ -11,22 +11,35 @@ import {
 import { ApiError } from "../../api/client";
 import { type Look, lookProblem, saveLook } from "../../api/site";
 import { useSite } from "../../app/site";
-import { EmptyState } from "../../components/EmptyState";
-import styles from "./Admin.module.css";
+import { Icon } from "../../components/Icon";
 import { LookFields } from "./LookFields";
+import pages from "./Pages.module.css";
 import { UpdateSettings } from "./UpdateSettings";
+import { Card, Chip, Loading, PageHeader, SettingSwitch, Unavailable, ui } from "./ui";
 
 // SitePage holds the settings of the whole site: its name and color, and
 // whether anyone may create an account by themselves, and the check for
 // new versions.
 export function SitePage() {
   return (
-    <>
-      <LookSettings />
-      <RegistrationSettings />
-      <LoginMethodSettings />
-      <UpdateSettings />
-    </>
+    <div className={ui.ui}>
+      <PageHeader
+        title="Sito"
+        description="Le impostazioni di tutto FranzPLAY: come si chiama, il suo colore, chi può entrare e come, e il controllo delle nuove versioni."
+      />
+      <div className={ui.grid}>
+        <div className={`${ui.span7} ${ui.stack}`}>
+          <LookSettings />
+        </div>
+        <div className={`${ui.span5} ${ui.stack}`}>
+          <Card title="Chi può entrare" icon="lock">
+            <RegistrationSettings />
+            <LoginMethodSettings />
+          </Card>
+          <UpdateSettings />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -34,7 +47,7 @@ export function SitePage() {
 // once the site's look has arrived, so it starts from the saved one.
 function LookSettings() {
   const { ready } = useSite();
-  if (!ready) return <div className={styles.placeholder} aria-busy="true" />;
+  if (!ready) return <Loading />;
   return <LookForm />;
 }
 
@@ -76,33 +89,53 @@ function LookForm() {
     look.nameSecond === site.look.nameSecond &&
     look.color.toLowerCase() === site.look.color;
   return (
-    <>
-      <h2 className={styles.groupTitle}>Nome e colore</h2>
-      <form
-        className={`glass ${styles.person}`}
-        onSubmit={send}
-        aria-label="Nome e colore del sito"
-      >
-        <p className={styles.role}>
+    <Card title="Nome e colore" icon="sparkles">
+      <form className={pages.editor} onSubmit={send} aria-label="Nome e colore del sito">
+        <p className={ui.cardText}>
           Il nome compare in alto, nella pagina di accesso e nel titolo della scheda del browser. Il
           colore è quello di pulsanti e collegamenti.
         </p>
         <LookFields look={look} onChange={setLook} />
-        <button type="submit" className={styles.primary} disabled={busy || unchanged}>
-          Salva nome e colore
-        </button>
+        <div className={pages.formFoot}>
+          <span />
+          <div className={ui.chips}>
+            {unchanged ? (
+              <Chip tone="ok" icon="check">
+                Nessuna modifica da salvare
+              </Chip>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={`${ui.btn} ${ui.ghost}`}
+                  disabled={busy}
+                  onClick={() => {
+                    setLook(site.look);
+                    setProblem("");
+                  }}
+                >
+                  Annulla
+                </button>
+                <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={busy}>
+                  <Icon name="check" size={16} />
+                  Salva nome e colore
+                </button>
+              </>
+            )}
+          </div>
+        </div>
         {problem && (
-          <p role="alert" className={styles.problem}>
+          <p role="alert" className={ui.problem}>
             {problem}
           </p>
         )}
         {done && (
-          <p role="status" className={styles.done}>
+          <p role="status" className={ui.okText}>
             {done}
           </p>
         )}
       </form>
-    </>
+    </Card>
   );
 }
 
@@ -128,20 +161,14 @@ function RegistrationSettings() {
     return () => controller.abort();
   }, []);
 
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
-  if (state.kind === "error") {
-    return (
-      <EmptyState title="Impostazioni non disponibili">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
-    );
-  }
+  if (state.kind === "loading") return <Loading />;
+  if (state.kind === "error") return <Unavailable title="Impostazioni non disponibili" />;
 
   const change = (open: boolean) => {
     setBusy(true);
     setProblem("");
     setDone("");
-    saveRegistration(open)
+    return saveRegistration(open)
       .then((saved) => {
         setState({ kind: "ready", open: saved });
         setDone(
@@ -158,41 +185,25 @@ function RegistrationSettings() {
   };
 
   return (
-    <>
-      <h2 className={styles.groupTitle}>Accesso al sito</h2>
-      <ul className={`stagger ${styles.list}`} aria-label="Accesso al sito">
-        <li className={`glass ${styles.setting}`}>
-          <div>
-            <p className={styles.name}>Chiunque può registrarsi</p>
-            <p className={styles.role}>
-              Se è acceso, chi apre FranzPLAY può crearsi un account da solo, senza invito. Le
-              persone nuove sono utenti normali e non possono caricare video: lo decidi tu in
-              Persone. Se è spento, si entra solo con un invito o se aggiungi tu la persona.
-            </p>
-          </div>
-          <label className={styles.toggle}>
-            {state.open ? "Acceso" : "Spento"}
-            <input
-              type="checkbox"
-              aria-label="Chiunque può registrarsi"
-              checked={state.open}
-              disabled={busy}
-              onChange={(e) => change(e.target.checked)}
-            />
-          </label>
-        </li>
-      </ul>
+    <div className={pages.block}>
+      <SettingSwitch
+        label="Chiunque può registrarsi"
+        hint="Se è acceso, chi apre FranzPLAY può crearsi un account da solo, senza invito. Le persone nuove sono utenti normali e non possono caricare video: lo decidi tu in Persone. Se è spento, si entra solo con un invito o se aggiungi tu la persona."
+        checked={state.open}
+        disabled={busy}
+        onChange={change}
+      />
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
       {done && (
-        <p role="status" className={styles.done}>
+        <p role="status" className={ui.okText}>
           {done}
         </p>
       )}
-    </>
+    </div>
   );
 }
 
@@ -224,14 +235,8 @@ function LoginMethodSettings() {
     return () => controller.abort();
   }, []);
 
-  if (failed) {
-    return (
-      <EmptyState title="Modi di accesso non disponibili">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
-    );
-  }
-  if (list === null) return <div className={styles.placeholder} aria-busy="true" />;
+  if (failed) return <Unavailable title="Modi di accesso non disponibili" />;
+  if (list === null) return <Loading />;
 
   const toggle = (m: Method, on: boolean) => {
     const next = methods.filter((x) => (x === m ? on : list.includes(x)));
@@ -259,42 +264,37 @@ function LoginMethodSettings() {
   };
 
   return (
-    <>
-      <h2 className={styles.groupTitle}>Modi per entrare</h2>
-      <p className={styles.lead}>
-        Scegli come possono entrare le persone. Vale per tutti; in Persone puoi restringere i modi
-        di una persona sola.
+    <div className={pages.block}>
+      <h3 className={pages.blockTitle}>Modi per entrare</h3>
+      <p className={ui.hint}>
+        Vale per tutti; in Persone puoi restringere i modi di una persona sola. Ne resta sempre
+        almeno uno.
       </p>
-      <ul className={`stagger ${styles.list}`} aria-label="Modi per entrare">
+      <ul className={ui.settingList} aria-label="Modi per entrare">
         {methods.map((m) => (
-          <li key={m} className={`glass ${styles.setting}`}>
-            <div>
-              <p className={styles.name}>{methodNames[m]}</p>
-              <p className={styles.role}>{methodHints[m]}</p>
-            </div>
-            <label className={styles.toggle}>
-              {list.includes(m) ? "Ammesso" : "Non ammesso"}
-              <input
-                type="checkbox"
-                aria-label={`${methodNames[m]} ammesso`}
-                checked={list.includes(m)}
-                disabled={busy || (list.length === 1 && list.includes(m))}
-                onChange={(e) => toggle(m, e.target.checked)}
-              />
-            </label>
+          <li key={m}>
+            <SettingSwitch
+              label={methodNames[m]}
+              hint={methodHints[m]}
+              checked={list.includes(m)}
+              disabled={busy || (list.length === 1 && list.includes(m))}
+              on="Ammesso"
+              off="Non ammesso"
+              onChange={(on) => toggle(m, on)}
+            />
           </li>
         ))}
       </ul>
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
       {done && (
-        <p role="status" className={styles.done}>
+        <p role="status" className={ui.okText}>
           {done}
         </p>
       )}
-    </>
+    </div>
   );
 }

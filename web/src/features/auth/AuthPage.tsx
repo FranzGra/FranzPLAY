@@ -1,81 +1,94 @@
-import { type FormEvent, useEffect, useId, useState } from "react";
-import {
-  fetchSetup,
-  login,
-  loginMethod,
-  type Method,
-  nameProblem,
-  passwordProblem,
-  register,
-  setup,
-} from "../../api/auth";
-import { ApiError } from "../../api/client";
-import { type Look, lookProblem, saveLook, siteName } from "../../api/site";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { fetchSetup, login, loginMethod, type Method, nameProblem, register } from "../../api/auth";
+import { siteName } from "../../api/site";
 import { useAuth } from "../../app/auth";
 import { useSite } from "../../app/site";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
-import { LookFields } from "../admin/LookFields";
 import styles from "./AuthPage.module.css";
+import { explain, type Mode } from "./authText";
+import { SetupWizard } from "./SetupWizard";
 import { type NewChoice, NewSecret } from "./secret/NewSecret";
 import { SecretInput } from "./secret/SecretInput";
-import { blockedText } from "./secret/wait";
 
-type Mode = "login" | "setup" | "register";
+export { checkSetup } from "./authText";
 
-function title(mode: Mode, name: string): string {
+function title(mode: Exclude<Mode, "setup">, name: string): string {
   switch (mode) {
     case "login":
       return `Accedi a ${name}`;
-    case "setup":
-      return "Benvenuto in FranzPLAY";
     case "register":
       return "Crea il tuo account";
   }
 }
 
+const methodWord: Record<Method, string> = {
+  password: "la password",
+  pin: "il PIN",
+  pattern: "la sequenza",
+};
+
+// otherWays names the link to the PIN and the pattern, when the server
+// allows them, or returns "".
+function otherWays(allowed: Method[]): string {
+  const pin = allowed.includes("pin");
+  const pattern = allowed.includes("pattern");
+  if (pin && pattern) return "Entra con PIN o sequenza";
+  if (pin) return "Entra con il PIN";
+  if (pattern) return "Entra con la sequenza";
+  return "";
+}
+
 // AuthPage is what people see before logging in: the login form, or, on a
-// brand new FranzPLAY, the form that creates the administrator (asking for
-// the code in the log only when the installer turned it on). When the
-// administrator lets anyone register, the login form also offers to
-// create an account.
-export function AuthPage({
+// brand new FranzPLAY, the wizard that creates the administrator
+// (SetupWizard). When the administrator lets anyone register, the login
+// form also offers to create an account.
+export function AuthPage(props: {
+  mode: Mode;
+  setupCode?: boolean;
+  openRegistration?: boolean;
+  onBack?: () => void;
+}) {
+  if (props.mode === "setup") return <SetupWizard setupCode={props.setupCode ?? false} />;
+  return (
+    <SignIn mode={props.mode} openRegistration={props.openRegistration} onBack={props.onBack} />
+  );
+}
+
+function SignIn({
   mode: startMode,
-  setupCode = false,
   openRegistration = false,
   onBack,
 }: {
-  mode: Mode;
-  setupCode?: boolean;
+  mode: Exclude<Mode, "setup">;
   openRegistration?: boolean;
   // onBack, when given, offers a way back to the page the person came
   // from, like the video of a public link.
   onBack?: () => void;
 }) {
-  const [mode, setMode] = useState<Mode>(startMode);
-  usePageTitle({ login: "Accedi", setup: "Benvenuto", register: "Registrati" }[mode]);
+  const [mode, setMode] = useState(startMode);
+  usePageTitle({ login: "Accedi", register: "Registrati" }[mode]);
   const { signedIn } = useAuth();
-  const site = useSite();
-  const look = site.look;
-  // At the first setup the administrator can also name the site.
-  const [newLook, setNewLook] = useState<Look>(look);
-  const [code, setCode] = useState("");
+  const look = useSite().look;
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const errorId = useId();
-  // Logging in goes in two steps: the name, then the way that person
-  // enters (method), asked of the server. null: still at the name.
+  const form = useRef<HTMLFormElement>(null);
+  // Logging in shows name and password together, so password managers
+  // fill both. Who enters with a PIN or a pattern goes on to it (method,
+  // asked of the server). null: name and password.
   const [method, setMethod] = useState<Method | null>(null);
+  // hint says, without alarm, why the page asks something else.
+  const [hint, setHint] = useState("");
   const [shake, setShake] = useState(0);
-  // Registering: the methods allowed, and what the person chose.
+  // The methods the server allows: at login they decide which other ways
+  // are offered; registering, what the person may choose.
   const [allowed, setAllowed] = useState<Method[]>(["password"]);
   const [choice, setChoice] = useState<NewChoice | null>(null);
 
   useEffect(() => {
-    if (mode !== "register") return;
     const stop = new AbortController();
     fetchSetup(stop.signal)
       .then((s) => setAllowed(s.methods))
@@ -83,29 +96,70 @@ export function AuthPage({
         if (!stop.signal.aborted) console.error(err);
       });
     return () => stop.abort();
-  }, [mode]);
+  }, []);
 
-  // askMethod is the first step of logging in.
-  async function askMethod() {
+  function focus(field: "username" | "password") {
+    const input = form.current?.elements.namedItem(field);
+    if (input instanceof HTMLInputElement) input.focus();
+  }
+
+  // askMethod asks the server how the person enters, which never counts as
+  // a try. A password stays here; a PIN or a pattern takes its place.
+  async function askMethod(): Promise<Method | null> {
     if (name.trim() === "") {
       setError("Scrivi il tuo nome.");
-      return;
+      focus("username");
+      return null;
     }
     setBusy(true);
     setError("");
+    setHint("");
     try {
-      setMethod(await loginMethod(name));
-      setPassword("");
+      const m = await loginMethod(name);
+      if (m !== "password") {
+        setMethod(m);
+        setPassword("");
+        setHint(`${name.trim()} entra con ${methodWord[m]}.`);
+      }
+      setBusy(false);
+      return m;
     } catch (err) {
       setError(explain(err, mode, "password"));
+      setBusy(false);
+      return null;
     }
-    setBusy(false);
   }
 
-  async function enter(secret: string) {
-    if (method === null) return;
+  // signIn sends name and password. The server is asked first how the
+  // person enters, so a password is never tried against a PIN or a
+  // pattern and never counts as a wrong try of theirs.
+  async function signIn() {
+    if ((await askMethod()) !== "password") return;
+    if (password === "") {
+      setError("Scrivi la password.");
+      focus("password");
+      return;
+    }
+    await enter("password", password);
+  }
+
+  // otherWay is the link to the PIN and the pattern: it shows the way of
+  // whoever wrote the name, the password too when that is theirs.
+  async function otherWay() {
+    if (name.trim() === "") {
+      setError("Scrivi prima il tuo nome.");
+      focus("username");
+      return;
+    }
+    if ((await askMethod()) === "password") {
+      setHint(`${name.trim()} entra con la password.`);
+      focus("password");
+    }
+  }
+
+  async function enter(m: Method, secret: string) {
     if (secret === "") {
-      setError(method === "password" ? "Scrivi la password." : "");
+      setError(m === "password" ? "Scrivi la password." : "");
       return;
     }
     setBusy(true);
@@ -113,23 +167,22 @@ export function AuthPage({
     try {
       signedIn(await login(name, secret));
     } catch (err) {
-      setError(explain(err, mode, method));
+      setError(explain(err, mode, m));
+      setHint("");
       setPassword("");
       setShake((n) => n + 1);
       setBusy(false);
+      if (m === "password") requestAnimationFrame(() => focus("password"));
     }
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (mode === "login") {
-      await (method === null ? askMethod() : enter(password));
+      await (method === null ? signIn() : enter(method, password));
       return;
     }
-    const problem =
-      mode === "register"
-        ? nameProblem(name) || choice?.problem || ""
-        : checkSetup(name, password, confirm) || lookProblem(newLook);
+    const problem = nameProblem(name) || choice?.problem || "";
     if (problem) {
       setError(problem);
       return;
@@ -137,71 +190,26 @@ export function AuthPage({
     setBusy(true);
     setError("");
     try {
-      const account =
-        mode === "setup"
-          ? await setup(setupCode ? code : "", name, password)
-          : await register(name, choice?.method ?? "password", choice?.secret ?? "");
-      if (mode === "setup") {
-        await keepLook(newLook);
-      }
-      signedIn(account);
+      signedIn(await register(name, choice?.method ?? "password", choice?.secret ?? ""));
     } catch (err) {
       setError(explain(err, mode, choice?.method ?? "password"));
       setBusy(false);
     }
   }
 
-  // keepLook saves the name and color chosen at the first setup. The
-  // administrator is already created: if this fails, FranzPLAY keeps its
-  // own name, which can be changed later in Amministrazione › Sito.
-  async function keepLook(chosen: Look) {
-    const same =
-      chosen.nameFirst === look.nameFirst &&
-      chosen.nameSecond === look.nameSecond &&
-      chosen.color.toLowerCase() === look.color;
-    if (same) return;
-    try {
-      site.changed(await saveLook(chosen));
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   const describedBy = error ? errorId : undefined;
+  const others = otherWays(allowed);
   return (
     <main className={styles.root}>
-      <form className={`glass ${styles.card}`} onSubmit={onSubmit} noValidate>
+      <form ref={form} className={`glass ${styles.card}`} onSubmit={onSubmit} noValidate>
         <span className={styles.logoMark} aria-hidden="true">
           <Icon name="play" size={22} />
         </span>
         <h1 className={styles.title}>{title(mode, siteName(look))}</h1>
-        {mode === "setup" && (
-          <p className={styles.intro}>
-            Crea l'amministratore, cioè il tuo utente: potrai gestire video, persone e impostazioni.
-            {setupCode && (
-              <>
-                {" "}
-                Il codice di installazione è scritto nel terminale dove hai avviato FranzPLAY, alla
-                voce <code>setup_code</code>.
-              </>
-            )}
-          </p>
-        )}
-
         {mode === "register" && (
           <p className={styles.intro}>Scegli il nome e il modo in cui entrerai in FranzPLAY.</p>
         )}
 
-        {mode === "setup" && setupCode && (
-          <Field
-            label="Codice di installazione"
-            value={code}
-            onChange={setCode}
-            autoComplete="off"
-            placeholder="XXXX-XXXX-XXXX"
-            describedBy={describedBy}
-          />
-        )}
         {mode === "login" && method !== null ? (
           <>
             <p className={styles.who}>
@@ -213,6 +221,7 @@ export function AuthPage({
                   setMethod(null);
                   setPassword("");
                   setError("");
+                  setHint("");
                 }}
               >
                 Cambia nome
@@ -234,7 +243,7 @@ export function AuthPage({
                 setPassword(value);
                 if (value !== "" && method !== "password") setError("");
               }}
-              onComplete={(value) => void enter(value)}
+              onComplete={(value) => void enter(method, value)}
               autoFocus
               disabled={busy}
               shake={shake}
@@ -244,43 +253,30 @@ export function AuthPage({
         ) : (
           <Field
             label="Nome"
+            name="username"
             value={name}
             onChange={setName}
             autoComplete="username"
             describedBy={describedBy}
           />
         )}
-        {mode === "setup" && (
-          <>
-            <Field
-              label="Password"
-              type="password"
-              value={password}
-              onChange={setPassword}
-              autoComplete="new-password"
-              describedBy={describedBy}
-            />
-            <Field
-              label="Ripeti la password"
-              type="password"
-              value={confirm}
-              onChange={setConfirm}
-              autoComplete="new-password"
-              describedBy={describedBy}
-            />
-          </>
+        {mode === "login" && method === null && (
+          <Field
+            label="Password"
+            name="password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+            describedBy={describedBy}
+          />
         )}
         {mode === "register" && <NewSecret allowed={allowed} onChange={setChoice} />}
-        {mode === "setup" && (
-          <section className={styles.siteLook} aria-label="Il tuo sito">
-            <p className={styles.intro}>
-              Come si chiama il tuo sito? Puoi lasciarlo così e cambiarlo quando vuoi in
-              Amministrazione.
-            </p>
-            <LookFields look={newLook} onChange={setNewLook} />
-          </section>
+        {hint && !error && (
+          <p className={styles.hint} role="status">
+            {hint}
+          </p>
         )}
-
         {error && (
           <p id={errorId} className={styles.error} role="alert">
             {error}
@@ -289,11 +285,24 @@ export function AuthPage({
 
         {(mode !== "login" || method === null || method === "password") && (
           <button type="submit" className={styles.submit} disabled={busy}>
-            {mode !== "login" ? "Crea e entra" : method === null ? "Avanti" : "Entra"}
+            {mode === "register" ? "Crea e entra" : "Entra"}
           </button>
         )}
 
-        {openRegistration && mode !== "setup" && (
+        {mode === "login" && method === null && others !== "" && (
+          <p className={styles.switch}>
+            <button
+              type="button"
+              className={styles.link}
+              disabled={busy}
+              onClick={() => void otherWay()}
+            >
+              {others}
+            </button>
+          </p>
+        )}
+
+        {openRegistration && (
           <p className={styles.switch}>
             {mode === "login" ? "Non hai un account?" : "Hai già un account?"}{" "}
             <button
@@ -302,9 +311,9 @@ export function AuthPage({
               onClick={() => {
                 setMode(mode === "login" ? "register" : "login");
                 setError("");
-                setConfirm("");
                 setMethod(null);
                 setPassword("");
+                setHint("");
               }}
             >
               {mode === "login" ? "Registrati" : "Accedi"}
@@ -325,6 +334,7 @@ export function AuthPage({
 
 type FieldProps = {
   label: string;
+  name?: string;
   value: string;
   onChange: (value: string) => void;
   type?: "text" | "password";
@@ -335,6 +345,7 @@ type FieldProps = {
 
 export function Field({
   label,
+  name,
   value,
   onChange,
   type = "text",
@@ -348,6 +359,7 @@ export function Field({
       <input
         className={styles.input}
         type={type}
+        name={name}
         value={value}
         autoComplete={autoComplete}
         placeholder={placeholder}
@@ -359,56 +371,4 @@ export function Field({
       />
     </label>
   );
-}
-
-// checkSetup finds mistakes before asking the server.
-export function checkSetup(name: string, password: string, confirm: string): string {
-  const problem = nameProblem(name) || passwordProblem(password);
-  if (problem) {
-    return problem;
-  }
-  if (password !== confirm) {
-    return "Le due password non sono uguali.";
-  }
-  return "";
-}
-
-const wrongWhat: Record<Method, string> = {
-  password: "Nome o password sbagliati.",
-  pin: "Nome o PIN sbagliati.",
-  pattern: "Nome o sequenza sbagliati.",
-};
-
-// explain turns a refusal of the server into a sentence for people.
-function explain(error: unknown, mode: Mode, method: Method): string {
-  if (!(error instanceof ApiError)) {
-    return "Il server non risponde. Controlla che FranzPLAY sia acceso e riprova.";
-  }
-  switch (error.status) {
-    case 400:
-      if (mode === "login") return "Scrivi nome e password.";
-      if (error.message.includes("method")) {
-        return "Questo modo di entrare non è ammesso su questo server: scegline un altro.";
-      }
-      return "Il nome può contenere solo lettere, numeri, spazi, punti, trattini e trattini bassi.";
-    case 401:
-      return mode === "setup"
-        ? "Il codice di installazione non è giusto. Copialo dal terminale."
-        : wrongWhat[method];
-    case 403:
-      if (mode !== "register" || error.message === "request from another site") {
-        return "Il server ha rifiutato la richiesta perché arriva da un indirizzo diverso da quello del sito. Se usi un proxy, controlla che passi l'indirizzo giusto.";
-      }
-      return "La registrazione è chiusa: per entrare chiedi un invito a chi gestisce FranzPLAY.";
-    case 409:
-      return mode === "register"
-        ? "Questo nome lo usa già un'altra persona: scegline un altro."
-        : "FranzPLAY ha già un amministratore: ricarica la pagina per accedere.";
-    case 429:
-      return mode === "register"
-        ? "Troppi account nuovi da questa rete. Aspetta qualche minuto e riprova."
-        : blockedText(error);
-    default:
-      return "Qualcosa è andato storto sul server. Riprova tra poco.";
-  }
 }

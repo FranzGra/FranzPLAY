@@ -19,12 +19,12 @@ import {
 } from "../../api/users";
 import { useAccount } from "../../app/auth";
 import { Avatar } from "../../components/Avatar";
-import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { Select } from "../../components/Select";
 import { formatBytes, formatSince } from "../../lib/format";
 import { type NewChoice, NewSecret } from "../auth/secret/NewSecret";
-import styles from "./Admin.module.css";
+import pages from "./Pages.module.css";
+import { Chip, Empty, Loading, PageHeader, SettingSwitch, Unavailable, ui } from "./ui";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; people: Person[] };
 
@@ -85,44 +85,80 @@ export function PeoplePage() {
       s.kind === "ready" ? { kind: "ready", people: s.people.filter((p) => p.id !== id) } : s,
     );
 
-  if (state.kind === "loading") return <div className={styles.placeholder} aria-busy="true" />;
-  if (state.kind === "error") {
-    return (
-      <EmptyState title="Elenco non disponibile">
-        Il server non ha risposto. Ricarica la pagina tra poco.
-      </EmptyState>
-    );
-  }
-  return (
-    <>
-      <div className={styles.top}>
-        <p className={styles.lead}>
-          Solo le persone che aggiungi qui possono entrare in FranzPLAY. Dai a ognuno il suo nome e
-          un modo di entrare (password, PIN o sequenza): potrà cambiarlo dal suo profilo.
-        </p>
-        {!adding && (
-          <button type="button" className={styles.primary} onClick={() => setAdding(true)}>
+  const header = (
+    <PageHeader
+      title="Persone"
+      description="Solo le persone che aggiungi qui possono entrare in FranzPLAY. Dai a ognuno il suo nome e un modo di entrare (password, PIN o sequenza): potrà cambiarlo dal suo profilo."
+      actions={
+        !adding && (
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.primary}`}
+            onClick={() => setAdding(true)}
+          >
             <Icon name="plus" size={18} />
             Aggiungi una persona
           </button>
-        )}
+        )
+      }
+      below={
+        state.kind === "ready" && (
+          <div className={`${ui.chips} ${pages.headChips}`}>
+            <Chip icon="people">{count(state.people.length, "persona", "persone")}</Chip>
+            <Chip icon="shield">
+              {count(admins(state.people), "amministratore", "amministratori")}
+            </Chip>
+            <Chip icon="upload">
+              {count(uploaders(state.people), "carica video", "caricano video")}
+            </Chip>
+          </div>
+        )
+      }
+    />
+  );
+  if (state.kind === "loading") {
+    return (
+      <div className={ui.ui}>
+        {header}
+        <Loading />
       </div>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <div className={ui.ui}>
+        {header}
+        <Unavailable title="Elenco non disponibile" />
+      </div>
+    );
+  }
+  return (
+    <div className={ui.ui}>
+      {header}
       {adding && <NewPersonForm server={server} onAdded={add} onCancel={() => setAdding(false)} />}
-      <ul className={`stagger ${styles.list}`} aria-label="Persone">
-        {state.people.map((person) => (
-          <li key={person.id}>
-            <PersonRow
-              person={person}
-              server={server}
-              onChanged={replace}
-              onRemoved={() => remove(person.id)}
-            />
-          </li>
-        ))}
-      </ul>
-    </>
+      {state.people.length === 0 ? (
+        <Empty icon="people" title="Ancora nessuna persona" />
+      ) : (
+        <ul className={pages.people} aria-label="Persone">
+          {state.people.map((person) => (
+            <li key={person.id}>
+              <PersonRow
+                person={person}
+                server={server}
+                onChanged={replace}
+                onRemoved={() => remove(person.id)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
+
+const admins = (people: Person[]) => people.filter((p) => p.role === "admin").length;
+const uploaders = (people: Person[]) => people.filter((p) => p.canUpload).length;
+const count = (x: number, one: string, many: string) => (x === 1 ? `1 ${one}` : `${x} ${many}`);
 
 function NewPersonForm({
   server,
@@ -167,10 +203,22 @@ function NewPersonForm({
   };
 
   return (
-    <form className={`glass ${styles.panel}`} onSubmit={send} aria-label="Nuova persona" noValidate>
-      <label className={styles.field}>
-        Nome
+    <form
+      className={`${ui.card} ${pages.newForm}`}
+      onSubmit={send}
+      aria-label="Nuova persona"
+      noValidate
+    >
+      <h2 className={ui.cardTitle}>
+        <span className={ui.cardIcon} aria-hidden="true">
+          <Icon name="plus" size={18} />
+        </span>
+        Nuova persona
+      </h2>
+      <label className={ui.field}>
+        <span className={ui.label}>Nome</span>
         <input
+          className={ui.input}
           value={name}
           autoComplete="off"
           // biome-ignore lint/a11y/noAutofocus: the person just asked to add someone
@@ -185,30 +233,36 @@ function NewPersonForm({
         onChange={setChoice}
         disabled={sending}
       />
-      <label className={styles.check}>
-        <input
-          type="checkbox"
-          checked={canUpload}
-          onChange={(e) => setCanUpload(e.target.checked)}
-        />
-        Può caricare video
-      </label>
-      <label className={styles.check}>
-        <input type="checkbox" checked={admin} onChange={(e) => setAdmin(e.target.checked)} />
-        Amministratore
-      </label>
+      <div className={pages.checks}>
+        <label className={pages.check}>
+          <input
+            type="checkbox"
+            checked={canUpload}
+            onChange={(e) => setCanUpload(e.target.checked)}
+          />
+          Può caricare video
+        </label>
+        <label className={pages.check}>
+          <input type="checkbox" checked={admin} onChange={(e) => setAdmin(e.target.checked)} />
+          Amministratore
+        </label>
+      </div>
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
-      <div className={styles.buttons}>
-        <button type="button" className={`glass ${styles.action}`} onClick={onCancel}>
-          Annulla
-        </button>
-        <button type="submit" className={styles.primary} disabled={sending}>
-          Aggiungi
-        </button>
+      <div className={pages.formFoot}>
+        <span />
+        <div className={ui.chips}>
+          <button type="button" className={`${ui.btn} ${ui.ghost}`} onClick={onCancel}>
+            Annulla
+          </button>
+          <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={sending}>
+            <Icon name="check" size={16} />
+            Aggiungi
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -265,69 +319,76 @@ function PersonRow({
     });
 
   return (
-    <div className={`glass ${styles.personCard}`}>
-      <div className={styles.who}>
-        <Avatar name={person.name} size={44} photo={avatarUrl(person.id, person.avatar)} />
-        <div>
-          <p className={styles.name}>
-            {person.name}
-            {itsMe && <span className={styles.you}> (tu)</span>}
+    <article className={`${ui.card} ${pages.person}`} aria-label={person.name}>
+      <header className={pages.personHead}>
+        <Avatar name={person.name} size={48} photo={avatarUrl(person.id, person.avatar)} />
+        <div className={pages.personText}>
+          <p className={pages.personName}>
+            <span>
+              {person.name}
+              {itsMe && <span className={pages.you}> (tu)</span>}
+            </span>
+            {person.role === "admin" && (
+              <Chip tone="info" icon="shield">
+                Amministratore
+              </Chip>
+            )}
           </p>
-          <p className={styles.role}>
+          <p className={pages.personMeta}>
             {person.role === "admin" ? "Amministratore" : "Utente"}
             {person.canUpload && ` · carica video, fino a ${formatBytes(person.uploadQuota)}`}
             {person.canSharePublic && person.role !== "admin" && " · crea link pubblici"}
           </p>
-          <p className={styles.role}>
+          <p className={pages.personMeta}>
             Entra con {methodNames[person.loginMethod].toLowerCase()}
             {person.mustChooseMethod &&
               " (non più ammesso: al prossimo accesso ne sceglierà un altro)"}
             {person.ownMethods &&
               ` · solo ${person.ownMethods.map((m) => methodNames[m].toLowerCase()).join(", ")}`}
           </p>
-          <p className={styles.role}>
+          <p className={pages.personMeta}>
             {person.lastLogin
               ? `Ultimo accesso ${formatSince(person.lastLogin, new Date())}`
               : "Non è ancora entrato con nome e password"}
           </p>
         </div>
-      </div>
-
-      <div className={styles.personActions}>
-        <button
-          type="button"
-          className={`glass ${styles.action}`}
-          onClick={() => setAsking(asking === "password" ? "nothing" : "password")}
-        >
-          <Icon name="lock" size={16} />
-          Nuovo accesso
-        </button>
-        {!itsMe && (
+        <div className={pages.personActions}>
           <button
             type="button"
-            className={`glass ${styles.action} ${styles.danger}`}
-            onClick={() => setAsking("delete")}
+            className={`${ui.btn} ${ui.small}`}
+            aria-expanded={asking === "password"}
+            onClick={() => setAsking(asking === "password" ? "nothing" : "password")}
           >
-            <Icon name="trash" size={16} />
-            Elimina
+            <Icon name="key" size={16} />
+            Nuovo accesso
           </button>
-        )}
-      </div>
+          {!itsMe && (
+            <button
+              type="button"
+              className={`${ui.btn} ${ui.small} ${ui.dangerBtn}`}
+              onClick={() => setAsking("delete")}
+            >
+              <Icon name="trash" size={16} />
+              Elimina
+            </button>
+          )}
+        </div>
+      </header>
 
-      <div className={styles.perms}>
-        <div className={styles.perm}>
-          <label className={styles.toggle}>
-            Può caricare video
-            <input
-              type="checkbox"
-              checked={person.canUpload}
-              disabled={busy}
-              onChange={(e) => change(person.role, e.target.checked)}
-            />
-          </label>
-          {person.canUpload ? (
-            <label className={styles.permField}>
-              Spazio
+      <div className={pages.perms}>
+        <div className={pages.perm}>
+          <SettingSwitch
+            label="Può caricare video"
+            hint="Dalla sua pagina Profilo"
+            checked={person.canUpload}
+            disabled={busy}
+            on="Sì"
+            off="No"
+            onChange={(on) => change(person.role, on)}
+          />
+          {person.canUpload && (
+            <div className={pages.permField}>
+              <span className={ui.label}>Spazio</span>
               <Select
                 compact
                 aria-label="Spazio"
@@ -339,43 +400,37 @@ function PersonRow({
                 }))}
                 onChange={(bytes) => change(person.role, true, bytes)}
               />
-            </label>
-          ) : (
-            <p className={styles.permHint}>Dalla sua pagina Profilo</p>
+            </div>
           )}
         </div>
-        <div className={styles.perm}>
-          <label className={styles.toggle}>
-            Può creare link pubblici
-            <input
-              type="checkbox"
-              checked={person.role === "admin" || person.canSharePublic}
-              disabled={busy || person.role === "admin"}
-              onChange={(e) => changePublic(e.target.checked)}
-            />
-          </label>
-          <p className={styles.permHint}>
-            {person.role === "admin"
-              ? "Gli amministratori possono sempre"
-              : "Link che chiunque apre, anche senza account"}
-          </p>
+        <div className={pages.perm}>
+          <SettingSwitch
+            label="Può creare link pubblici"
+            hint={
+              person.role === "admin"
+                ? "Gli amministratori possono sempre"
+                : "Link che chiunque apre, anche senza account"
+            }
+            checked={person.role === "admin" || person.canSharePublic}
+            disabled={busy || person.role === "admin"}
+            on="Sì"
+            off="No"
+            onChange={changePublic}
+          />
         </div>
-        <div className={styles.perm}>
-          <label className={styles.toggle}>
-            Amministratore
-            <input
-              type="checkbox"
-              checked={person.role === "admin"}
-              // Taking away your own role would lock you out of this page.
-              disabled={busy || itsMe}
-              onChange={(e) => change(e.target.checked ? "admin" : "user", person.canUpload)}
-            />
-          </label>
-          <p className={styles.permHint}>
-            {itsMe ? "Sei tu: non puoi toglierlo a te stesso" : "Vede e cambia queste pagine"}
-          </p>
+        <div className={pages.perm}>
+          <SettingSwitch
+            label="Amministratore"
+            hint={itsMe ? "Sei tu: non puoi toglierlo a te stesso" : "Vede e cambia queste pagine"}
+            checked={person.role === "admin"}
+            // Taking away your own role would lock you out of this page.
+            disabled={busy || itsMe}
+            on="Sì"
+            off="No"
+            onChange={(on) => change(on ? "admin" : "user", person.canUpload)}
+          />
         </div>
-        <div className={styles.perm}>
+        <div className={pages.perm}>
           <MethodsChoice
             server={server}
             own={person.ownMethods ?? []}
@@ -418,22 +473,22 @@ function PersonRow({
         />
       )}
       {asking === "delete" && (
-        <div className={styles.confirm}>
+        <div className={pages.confirm}>
           <p>
             Eliminare <strong>{person.name}</strong>? Spariscono anche i suoi commenti, mi piace,
             playlist e cronologia. Non si può annullare.
           </p>
-          <div className={styles.buttons}>
+          <div className={ui.chips}>
             <button
               type="button"
-              className={`glass ${styles.action}`}
+              className={`${ui.btn} ${ui.ghost}`}
               onClick={() => setAsking("nothing")}
             >
               Annulla
             </button>
             <button
               type="button"
-              className={`${styles.action} ${styles.danger}`}
+              className={`${ui.btn} ${ui.dangerBtn}`}
               disabled={busy}
               onClick={() =>
                 run(async () => {
@@ -442,22 +497,23 @@ function PersonRow({
                 })
               }
             >
+              <Icon name="trash" size={16} />
               Sì, elimina
             </button>
           </div>
         </div>
       )}
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}
       {done && (
-        <p role="status" className={styles.done}>
+        <p role="status" className={ui.okText}>
           {done}
         </p>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -481,20 +537,22 @@ function MethodsChoice({
     onChange(next.length === server.length ? [] : next);
   };
   return (
-    <fieldset className={styles.methods} disabled={disabled}>
+    <fieldset className={pages.methods} disabled={disabled}>
       <legend>Modi per entrare</legend>
-      {methods.map((m) => (
-        <label key={m} className={styles.toggle}>
-          {methodNames[m]}
-          <input
-            type="checkbox"
-            checked={shown.includes(m)}
-            disabled={!server.includes(m) || (shown.length === 1 && shown.includes(m))}
-            onChange={(e) => toggle(m, e.target.checked)}
-          />
-        </label>
-      ))}
-      <p className={styles.permHint}>
+      <div className={pages.checks}>
+        {methods.map((m) => (
+          <label key={m} className={pages.check}>
+            <input
+              type="checkbox"
+              checked={shown.includes(m)}
+              disabled={!server.includes(m) || (shown.length === 1 && shown.includes(m))}
+              onChange={(e) => toggle(m, e.target.checked)}
+            />
+            {methodNames[m]}
+          </label>
+        ))}
+      </div>
+      <p className={ui.hint}>
         {own.length === 0 ? "Come il resto del server" : "Solo per questa persona"}
       </p>
     </fieldset>
@@ -524,28 +582,28 @@ function ResetForm({
   };
   return (
     <form
-      className={styles.inline}
+      className={pages.inlineForm}
       onSubmit={send}
       aria-label={`Nuovo accesso per ${name}`}
       noValidate
     >
-      <p className={styles.name}>Nuovo accesso per {name}</p>
+      <p className={pages.blockTitle}>Nuovo accesso per {name}</p>
       <NewSecret
         allowed={allowed}
         onChange={setChoice}
         disabled={busy}
         passwordLabel="Nuova password"
       />
-      <div className={styles.buttons}>
-        <button type="button" className={`glass ${styles.action}`} onClick={onCancel}>
+      <div className={ui.chips}>
+        <button type="button" className={`${ui.btn} ${ui.ghost}`} onClick={onCancel}>
           Annulla
         </button>
-        <button type="submit" className={styles.primary} disabled={busy}>
+        <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={busy}>
           Salva
         </button>
       </div>
       {problem && (
-        <p role="alert" className={styles.problem}>
+        <p role="alert" className={ui.problem}>
           {problem}
         </p>
       )}

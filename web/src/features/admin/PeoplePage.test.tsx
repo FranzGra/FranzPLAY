@@ -39,7 +39,7 @@ describe("people page", () => {
 
   it("shows who I am and what I cannot do to myself", async () => {
     renderApp("/admin/persone", people());
-    expect(await screen.findByRole("heading", { name: "Amministrazione" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Persone", level: 1 })).toBeInTheDocument();
     const me = await rowOf("Paolo");
     const sections = screen.getByRole("navigation", { name: "Sezioni dell'amministrazione" });
     expect(within(sections).getByRole("link", { name: "Persone" })).toHaveAttribute(
@@ -49,7 +49,7 @@ describe("people page", () => {
     expect(within(me).getByText("(tu)")).toBeInTheDocument();
     // Nobody can remove themselves or stop being administrator from here.
     expect(within(me).queryByRole("button", { name: /Elimina/ })).not.toBeInTheDocument();
-    expect(within(me).getByRole("checkbox", { name: "Amministratore" })).toBeDisabled();
+    expect(within(me).getByRole("switch", { name: "Amministratore" })).toBeDisabled();
   });
 
   it("is closed to normal users", async () => {
@@ -138,9 +138,9 @@ describe("people page", () => {
       people({ "PUT /api/users/2": { body: { ...giulia, canUpload: true } } }),
     );
     const row = await rowOf("Giulia");
-    await user.click(within(row).getByRole("checkbox", { name: "Può caricare video" }));
+    await user.click(within(row).getByRole("switch", { name: "Può caricare video" }));
     expect(await within(row).findByText(/carica video, fino a 10 GB$/)).toBeInTheDocument();
-    expect(within(row).getByRole("checkbox", { name: "Può caricare video" })).toBeChecked();
+    expect(within(row).getByRole("switch", { name: "Può caricare video" })).toBeChecked();
     expect(await server.requests.at(-1)?.json()).toEqual({ role: "user", canUpload: true });
   });
 
@@ -181,11 +181,11 @@ describe("people page", () => {
       }),
     );
     const row = await rowOf("Giulia");
-    await user.click(within(row).getByRole("checkbox", { name: "Amministratore" }));
+    await user.click(within(row).getByRole("switch", { name: "Amministratore" }));
     expect(await within(row).findByRole("alert")).toHaveTextContent(
       "Deve restare almeno un amministratore.",
     );
-    expect(within(row).getByRole("checkbox", { name: "Amministratore" })).toBeChecked();
+    expect(within(row).getByRole("switch", { name: "Amministratore" })).toBeChecked();
   });
 
   it("gives a new password", async () => {
@@ -252,14 +252,14 @@ describe("people page", () => {
       }),
     );
     const row = await rowOf("Giulia");
-    const box = within(row).getByRole("checkbox", { name: "Può creare link pubblici" });
+    const box = within(row).getByRole("switch", { name: "Può creare link pubblici" });
     expect(box).not.toBeChecked();
     await user.click(box);
     await waitFor(() =>
       expect(sent).toEqual({ role: "user", canUpload: false, canSharePublic: true }),
     );
     // An administrator always may: the box is ticked and locked.
-    const mine = within(await rowOf("Paolo")).getByRole("checkbox", {
+    const mine = within(await rowOf("Paolo")).getByRole("switch", {
       name: "Può creare link pubblici",
     });
     expect(mine).toBeChecked();
@@ -275,7 +275,7 @@ describe("people page", () => {
       }),
     );
     const row = await rowOf("Giulia");
-    await user.click(within(row).getByRole("checkbox", { name: "Può creare link pubblici" }));
+    await user.click(within(row).getByRole("switch", { name: "Può creare link pubblici" }));
     expect(
       await screen.findByText("I link pubblici creati da Giulia non funzionano più."),
     ).toBeInTheDocument();

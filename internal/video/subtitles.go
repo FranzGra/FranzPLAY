@@ -113,6 +113,13 @@ func LangCode(lang string) string {
 	return strings.ReplaceAll(code, "_", "-")
 }
 
+// MainLang is the language without its country, in lower case: "en" from
+// "en-US", "it" from "ita". "" when unknown. This is what a translator knows.
+func MainLang(lang string) string {
+	main, _, _ := strings.Cut(LangCode(lang), "-")
+	return strings.ToLower(main)
+}
+
 // DecodeSubtitleText turns a subtitle file into text. Files are often not
 // UTF-8: old Italian .srt files are usually Windows-1252, some are UTF-16.
 func DecodeSubtitleText(b []byte) string {

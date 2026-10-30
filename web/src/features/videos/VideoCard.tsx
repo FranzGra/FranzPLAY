@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { Audience, Video } from "../../api/videos";
 import { VideoPage } from "../../app/lazyPages";
+import { Byline } from "../../components/Byline";
 import { Icon, type IconName } from "../../components/Icon";
 import { goodConnection } from "../../lib/connection";
 import { formatAge, formatDuration } from "../../lib/format";
@@ -22,8 +23,8 @@ type VideoCardProps = {
   note?: string;
 };
 
-// VideoCard is a video in a grid: cover with its duration, title, and
-// category with how long ago it arrived and how many people like it. On
+// VideoCard is a video in a grid: cover with its duration, title, whose it
+// is (its uploader, or the site for a video from a folder), and category with how long ago it arrived and how many people like it. On
 // my own channel the cover also says who sees each of my videos. Resting the mouse on it
 // plays a few silent seconds of the video; on a touch screen the card that
 // stays in the middle of the screen plays them.
@@ -86,6 +87,10 @@ export function VideoCard({ video, now, layout = "grid", position, note }: Video
       </div>
       <div className={styles.text}>
         <h3 className={styles.title}>{video.title}</h3>
+        {/* Plain text: the whole card is already a link to the video. */}
+        <p className={styles.owner}>
+          <Byline owner={video.owner} size={22} nameClass={styles.ownerName} />
+        </p>
         <p className={styles.details}>
           {details}
           {video.likes > 0 && (

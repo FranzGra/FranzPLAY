@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { type AudioTrack, fetchAudioStart, fetchAudioTracks } from "../../api/audio";
-import { avatarUrl, maySharePublic } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { fetchProgress, saveProgress } from "../../api/progress";
 import { fetchSimilar, reasonText } from "../../api/recommend";
@@ -17,7 +16,7 @@ import {
 } from "../../api/videos";
 import { useAccount } from "../../app/auth";
 import { usePageWidth } from "../../app/pageWidth";
-import { Avatar } from "../../components/Avatar";
+import { Byline } from "../../components/Byline";
 import { EmptyState } from "../../components/EmptyState";
 import { usePageTitle } from "../../components/PageTitle";
 import { formatAge, formatDate } from "../../lib/format";
@@ -28,7 +27,6 @@ import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
 import { useSkip } from "../player/useSkip";
 import { SaveButton } from "../playlists/SaveButton";
-import { PublicLinkPanel } from "../public/PublicLinkPanel";
 import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
 import { namesList } from "../sharing/audience";
@@ -262,7 +260,23 @@ function Watch({
       <div className={styles.info}>
         <h1 className={styles.title}>{video.title}</h1>
         <div className={styles.bar}>
-          {video.owner && <OwnerLink owner={video.owner} />}
+          {/* Whose it is, then, well apart, its category and details: on
+              one line when there is room, the details under it when not. */}
+          <div className={styles.lead}>
+            <VideoOwner owner={video.owner} />
+            <p className={styles.details}>
+              {/* The category stands out as a chip, leading to its page. */}
+              {video.category && (
+                <Link
+                  to={`/categorie/${encodeURIComponent(video.category)}`}
+                  className={styles.category}
+                >
+                  {video.category}
+                </Link>
+              )}
+              <span>{details.join(" · ")}</span>
+            </p>
+          </div>
           <div className={styles.actions}>
             <LikeButton videoId={video.id} />
             {/* A private video opens only for its few people: a playlist or
@@ -275,20 +289,7 @@ function Watch({
             )}
           </div>
         </div>
-        <p className={styles.details}>
-          {/* The category stands out as a chip, leading to its page. */}
-          {video.category && (
-            <Link
-              to={`/categorie/${encodeURIComponent(video.category)}`}
-              className={styles.category}
-            >
-              {video.category}
-            </Link>
-          )}
-          <span>{details.join(" · ")}</span>
-        </p>
         {video.private && <PrivateNote video={video} />}
-        <PublicLinkFor video={video} />
         {video.description && (
           <div className={styles.below}>
             <Description text={video.description} />
@@ -307,14 +308,15 @@ function Watch({
   );
 }
 
-// OwnerLink is whose the video is, with their photo, leading to their
-// channel: the person who uploaded it, or the main administrator for a
-// video from a folder.
-function OwnerLink({ owner }: { owner: Owner }) {
+// VideoOwner is whose the video is: the person who uploaded it, with their
+// photo, leading to their channel; or, for a video from a folder, the site
+// itself, with its logo and name, leading nowhere.
+function VideoOwner({ owner }: { owner: Owner | null }) {
+  const byline = <Byline owner={owner} size={40} nameClass={styles.ownerName} />;
+  if (owner === null) return <div className={styles.owner}>{byline}</div>;
   return (
     <Link to={`/canale/${owner.id}`} className={styles.owner}>
-      <Avatar name={owner.name} photo={avatarUrl(owner.id, owner.avatar)} />
-      <span className={styles.ownerName}>{owner.name}</span>
+      {byline}
     </Link>
   );
 }
@@ -355,16 +357,6 @@ function PrivateNote({ video }: { video: Video }) {
       {change}
     </p>
   );
-}
-
-// PublicLinkFor shows the public link panel to who may make one for this
-// video: its uploader, when the administrator allowed them, or an
-// administrator, also for the videos of the folders.
-function PublicLinkFor({ video }: { video: Video }) {
-  const me = useAccount();
-  const mine = me.role === "admin" || (video.uploader !== null && video.uploader.id === me.id);
-  if (!mine || !maySharePublic(me)) return null;
-  return <PublicLinkPanel videoId={video.id} />;
 }
 
 // UpNext lists the videos to watch after this one, each saying why.

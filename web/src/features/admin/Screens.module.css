@@ -1,0 +1,569 @@
+/* The layouts of the Riepilogo and of Lavori: the strip of big numbers,
+   the work going on now, the disks. The pieces they are made of are in
+   Ui.module.css. */
+
+/* ---------- The strip of big numbers ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 24px;
+  overflow: hidden;
+  border: var(--glass-border);
+  border-radius: var(--radius-l);
+  background: var(--glass-bg);
+  box-shadow: var(--glass-highlight);
+}
+
+.kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 22px 24px;
+  color: inherit;
+}
+
+.kpi + .kpi {
+  border-left: 1px solid var(--color-border);
+}
+
+a.kpi:hover {
+  background: rgb(255 255 255 / 0.03);
+}
+
+.kpiLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kpiLabel svg {
+  color: var(--faint);
+}
+
+.kpiValue {
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiNote {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.kpiNote b {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+@media (max-width: 1099px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi:nth-child(3) {
+    border-left: 0;
+  }
+
+  .kpi:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+@media (max-width: 599px) {
+  .kpi {
+    padding: 16px 18px;
+  }
+
+  .kpiValue {
+    font-size: 36px;
+  }
+
+  .kpiNote {
+    font-size: 13px;
+  }
+}
+
+/* ---------- The work going on now ---------- */
+
+/* More jobs at once (a transcription beside the queue): one under the other. */
+.nowList {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.nowList > * + * {
+  padding-top: 28px;
+  border-top: 1px solid var(--color-border);
+}
+
+.downloadBox:first-child {
+  margin-top: 0;
+}
+
+.nowJob {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+}
+
+.nowJob > .thumbLink,
+.nowJob > a:first-child {
+  width: 100%;
+}
+
+.nowBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nowTitle {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.nowTitle a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.nowNumbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: -4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nowNumbers b {
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.nowMeta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+@media (max-width: 599px) {
+  .nowJob {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .nowTitle {
+    font-size: 18px;
+  }
+}
+
+.quiet {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-m);
+  color: var(--color-text-muted);
+  font-size: 15px;
+}
+
+.quiet svg {
+  flex: none;
+  color: var(--color-success);
+}
+
+.quiet b {
+  display: block;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.downloadBox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 18px 20px;
+  border: 1px solid rgb(var(--color-accent-rgb) / 0.35);
+  border-radius: var(--radius-m);
+  background: rgb(var(--color-accent-rgb) / 0.07);
+}
+
+.downloadTitle,
+.downloadNumbers {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.downloadTitle b {
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.downloadNumbers b {
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Disks ---------- */
+
+.disk + .disk {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-border);
+}
+
+.diskHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin: 0 0 12px;
+}
+
+.diskName {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.diskName code {
+  margin-left: 8px;
+  color: var(--color-text-muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.diskFree {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.diskFree b {
+  margin-right: 4px;
+  color: var(--color-text);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.diskBar {
+  display: flex;
+  height: 16px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.08);
+}
+
+.diskUsed {
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.diskUsed[data-tone="warning"] {
+  background: #f59e0b;
+}
+
+.diskUsed[data-tone="danger"] {
+  background: #ef4444;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  list-style: none;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend li::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--swatch, rgb(255 255 255 / 0.2));
+}
+
+/* ---------- Lavori: four numbers ---------- */
+
+.jobStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 0 24px;
+}
+
+.jobStat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 18px 20px;
+  border: var(--glass-border);
+  border-radius: var(--radius-l);
+  background: var(--glass-bg);
+}
+
+.jobStat dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.jobStat dd {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.jobStat[data-tone="live"] {
+  border-color: rgb(var(--color-accent-rgb) / 0.4);
+}
+
+.jobStat[data-tone="bad"] dd {
+  color: var(--color-danger);
+}
+
+@media (max-width: 1099px) {
+  .jobStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A failed job: what, of which video, why, and "Riprova". */
+.failRow {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.failRowFirst {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.failText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.failText b {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failText span {
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+}
+
+.failError.failError {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--color-danger);
+  font-family: var(--mono);
+  font-size: 13px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 599px) {
+  .failRow {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .failRow > :last-child {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+/* The kinds of work and whether their program is there. */
+.kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kinds li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  font-size: 14px;
+}
+
+.failList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.failList > li + li .failRow {
+  border-top: 1px solid var(--color-border);
+}
+
+.failList > li:first-child .failRow {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.missingBox {
+  margin: 0 0 24px;
+}
+
+.queueCount {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 15px;
+}
+
+.queueCount b {
+  color: var(--color-text);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.queueCount span {
+  font-size: 14px;
+}
+
+/* The queue and the jobs ended lately: one short row each, with the
+   small picture of the video. */
+.jobList {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jobRow {
+  display: grid;
+  grid-template-columns: 2ch 72px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.jobRow[data-done] {
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+}
+
+.jobList > li + li .jobRow {
+  border-top: 1px solid var(--color-border);
+}
+
+.jobPlace {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.jobText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.jobText b {
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobText b a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.jobText span {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 599px) {
+  .jobRow {
+    grid-template-columns: 2ch 56px minmax(0, 1fr);
+  }
+
+  .jobRow[data-done] {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .jobRow > :last-child:not(.jobText) {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .jobRow[data-done] > :last-child:not(.jobText) {
+    grid-column: 1 / -1;
+  }
+}

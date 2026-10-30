@@ -1,4 +1,13 @@
-import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useLocation, useParams } from "react-router";
 import {
   type AdminVideo,
@@ -6,26 +15,38 @@ import {
   maxCategory,
   maxTitle,
   refreshVideo,
-  resetCover,
-  setCoverSecond,
   setVideoDetails,
   setVideoHidden,
 } from "../../api/adminVideos";
 import { ApiError } from "../../api/client";
+import { onServerEvent } from "../../api/events";
+import { retryJob } from "../../api/jobs";
 import { makePublicLink, revokePublicLink } from "../../api/publicLinks";
-import { fetchCategories, type Preview, prepareVideo, streamURL } from "../../api/videos";
-import { EmptyState } from "../../components/EmptyState";
+import { fetchCategories, prepareVideo, streamURL } from "../../api/videos";
+import { Byline } from "../../components/Byline";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
-import { formatDuration } from "../../lib/format";
+import { BusyRing, LiveDot, ProgressBar } from "../../components/ProgressBar";
+import { formatDuration, formatSince } from "../../lib/format";
 import { Player } from "../player/Player";
 import { useSkip } from "../player/useSkip";
 import { copyText } from "../share/copyText";
 import { fullLink } from "../sharing/audience";
-import styles from "./AdminVideo.module.css";
+import { useCrumb } from "./AdminPage";
+import { runningJobs, useActivity } from "./activity";
 import { ClipForm } from "./ClipForm";
 import { CoverForm } from "./CoverForm";
+import edit from "./Edit.module.css";
+import {
+  forgetJobVideo,
+  kindNames,
+  progressText,
+  stageNames,
+  workNumbers,
+  workPercent,
+} from "./jobText";
 import { compatibility, qualityLabel } from "./quality";
+import { Card, Chip, Empty, Loading, SettingSwitch, Unavailable, ui, useToast } from "./ui";
 
 type State =
   | { kind: "loading" }
@@ -42,10 +63,15 @@ function idsFrom(state: unknown): number[] {
   return Array.isArray(ids) ? ids.filter((n) => Number.isInteger(n)) : [];
 }
 
-// AdminVideoPage is one video as the administrator changes it: the video
-// on the left, and on the right one form with everything about it.
-// Title and category wait for Salva; the switches and the cover act at
-// once and say so.
+type SetVideo = (next: AdminVideo | ((video: AdminVideo) => AdminVideo)) => void;
+type Say = (text: string, problem?: boolean) => void;
+
+const failed = "Non ci sono riuscito. Riprova tra poco.";
+
+// AdminVideoPage is one video as the administrator changes it: the video,
+// its cover and its clip on the left; its details, who sees it, the work
+// on it and its file on the right. Title and category wait for "Salva
+// modifiche"; the switches and the cover act at once and say so.
 export function AdminVideoPage() {
   const param = useParams().id ?? "";
   const id = /^\d+$/.test(param) ? Number(param) : 0;
@@ -53,6 +79,7 @@ export function AdminVideoPage() {
   const ids = idsFrom(location.state);
   const [state, setState] = useState<State>({ kind: "loading" });
   usePageTitle(state.kind === "ready" ? state.video.title : "Video");
+  useCrumb(state.kind === "ready" ? state.video.title : "");
 
   useEffect(() => {
     if (id <= 0) {
@@ -75,266 +102,118 @@ export function AdminVideoPage() {
     return () => controller.abort();
   }, [id]);
 
-  const at = ids.indexOf(id);
-  const before = at > 0 ? ids[at - 1] : undefined;
-  const after = at >= 0 && at < ids.length - 1 ? ids[at + 1] : undefined;
+  const setVideo = useCallback<SetVideo>((next) => {
+    setState((s) =>
+      s.kind === "ready"
+        ? { kind: "ready", video: typeof next === "function" ? next(s.video) : next }
+        : s,
+    );
+  }, []);
 
-  return (
-    <div className={styles.page}>
-      <div className={styles.top}>
-        <Link to="/admin/video" className={`glass ${styles.back}`}>
-          <Icon name="chevronLeft" size={18} />
-          Video
-        </Link>
-        {at >= 0 && ids.length > 1 && (
-          <nav className={styles.steps} aria-label="Altri video">
-            <StepLink to={before} ids={ids} label="Video precedente" icon="chevronLeft" />
-            <span className={styles.stepCount}>
-              {at + 1} di {ids.length}
-            </span>
-            <StepLink to={after} ids={ids} label="Video successivo" icon="chevronRight" />
-          </nav>
-        )}
-      </div>
-      {state.kind === "loading" && <div className={styles.placeholder} aria-busy="true" />}
-      {state.kind === "missing" && (
-        <EmptyState title="Video non trovato">Questo video non c'è più.</EmptyState>
-      )}
-      {state.kind === "error" && (
-        <EmptyState title="Video non disponibile">
-          Il server non ha risposto. Ricarica la pagina tra poco.
-        </EmptyState>
-      )}
-      {state.kind === "ready" && (
-        <Detail
-          key={state.video.id}
-          video={state.video}
-          onChanged={(video) => setState({ kind: "ready", video })}
-        />
-      )}
-    </div>
-  );
-}
-
-function StepLink({
-  to,
-  ids,
-  label,
-  icon,
-}: {
-  to: number | undefined;
-  ids: number[];
-  label: string;
-  icon: "chevronLeft" | "chevronRight";
-}) {
-  if (to === undefined) {
+  if (state.kind === "loading") return <Loading />;
+  if (state.kind === "missing") {
     return (
-      <span className={`${styles.step} ${styles.stepOff}`} aria-hidden="true">
-        <Icon name={icon} size={18} />
-      </span>
+      <Empty
+        icon="film"
+        title="Video non trovato"
+        action={
+          <Link to="/admin/video" className={ui.btn}>
+            Tutti i video
+          </Link>
+        }
+      >
+        Questo video non c'è più.
+      </Empty>
     );
   }
-  return (
-    <Link
-      to={`/admin/video/${to}`}
-      state={{ ids } satisfies ListState}
-      className={`glass ${styles.step}`}
-      aria-label={label}
-      title={label}
-    >
-      <Icon name={icon} size={18} />
-    </Link>
-  );
+  if (state.kind === "error") return <Unavailable title="Video non disponibile" />;
+  return <Detail key={state.video.id} video={state.video} setVideo={setVideo} ids={ids} />;
 }
 
-// useToast is a short message at the bottom of the page, after an action
-// that took effect at once.
-function useToast(): [ReactNode, (text: string, problem?: boolean) => void] {
-  const [toast, setToast] = useState<{ text: string; problem: boolean; n: number } | null>(null);
+// useCoverWatch waits for a new cover after a choice: the server makes it
+// in the queue, then the video's cover gets a new address. Until then
+// the page says "Preparo la nuova copertina…"; it asks again when the
+// queue or the library change (and every few seconds, in case a message
+// was lost), and puts the new cover in place by itself.
+function useCoverWatch(video: AdminVideo, setVideo: SetVideo, say: Say) {
+  const [pending, setPending] = useState<{ from: string | null } | null>(null);
+  const said = useRef(say);
+  useLayoutEffect(() => {
+    said.current = say;
+  });
+
   useEffect(() => {
-    if (toast === null) return;
-    const timer = window.setTimeout(() => setToast(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-  const view = (
-    <div className={styles.toastBox} aria-live="polite">
-      {toast && (
-        <p
-          key={toast.n}
-          role="status"
-          className={`${styles.toast} ${toast.problem ? styles.toastBad : ""}`}
-        >
-          <Icon name={toast.problem ? "close" : "check"} size={16} />
-          {toast.text}
-        </p>
-      )}
-    </div>
-  );
-  return [view, (text, problem = false) => setToast({ text, problem, n: Date.now() })];
-}
+    if (!pending) return;
+    let alive = true;
+    const check = () => {
+      fetchAdminVideo(video.id)
+        .then((fresh) => {
+          if (!alive || fresh.cover === pending.from) return;
+          alive = false;
+          forgetJobVideo(video.id);
+          setVideo((v) => ({
+            ...v,
+            cover: fresh.cover,
+            coverChoice: fresh.coverChoice,
+            coverSecond: fresh.coverSecond,
+            preview: fresh.preview,
+          }));
+          setPending(null);
+          said.current("Copertina aggiornata.");
+        })
+        .catch(() => {
+          // A failed question is asked again at the next message.
+        });
+    };
+    check();
+    const stopJobs = onServerEvent("jobs", check);
+    const stopLibrary = onServerEvent("library", check);
+    const timer = window.setInterval(check, 4000);
+    // After two minutes stop waiting: the work may have failed.
+    const giveUp = window.setTimeout(() => {
+      if (!alive) return;
+      alive = false;
+      setPending(null);
+      said.current("La copertina ci mette più del solito: guarda in Lavori.", true);
+    }, 120_000);
+    return () => {
+      alive = false;
+      stopJobs();
+      stopLibrary();
+      window.clearInterval(timer);
+      window.clearTimeout(giveUp);
+    };
+  }, [pending, video.id, setVideo]);
 
-const failed = "Non ci sono riuscito. Riprova tra poco.";
+  const wait = useCallback(() => setPending({ from: video.cover }), [video.cover]);
+  return { pending: pending !== null, wait };
+}
 
 function Detail({
   video,
-  onChanged,
+  setVideo,
+  ids,
 }: {
   video: AdminVideo;
-  onChanged: (video: AdminVideo) => void;
+  setVideo: SetVideo;
+  ids: number[];
 }) {
   const [toast, say] = useToast();
-  const quality = qualityLabel(video.height);
-  const facts = [
-    video.duration === null ? "" : formatDuration(video.duration),
-    quality,
-    [video.format, video.videoCodec.toUpperCase()].filter(Boolean).join(" · "),
-  ].filter(Boolean);
-  const watchable = !(video.hidden || video.missing || video.tooShort || video.private);
-
-  return (
-    <div className={styles.layout}>
-      <div className={styles.media}>
-        <Stage video={video} watchable={watchable} />
-        {facts.length > 0 && (
-          <ul className={styles.facts} aria-label="Il file">
-            {facts.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-        )}
-        <p className={styles.path} title={`${video.folder}/${video.path}`}>
-          {video.folder}/{video.path}
-        </p>
-        {watchable && (
-          <Link to={`/video/${video.id}`} className={styles.quiet}>
-            Apri nella pagina del video
-          </Link>
-        )}
-      </div>
-
-      <div className={styles.form}>
-        <h2 className="visually-hidden">{video.title}</h2>
-        <Details video={video} onChanged={onChanged} />
-        <Group title="Chi lo vede">
-          <Audience video={video} />
-          <Switch
-            label="Nascosto"
-            hint="Non compare nelle liste e nessuno lo apre. Mi piace e commenti restano."
-            checked={video.hidden}
-            onChange={async (hidden) => {
-              try {
-                await setVideoHidden(video.id, hidden);
-                onChanged({ ...video, hidden });
-                say(hidden ? "Nascosto a tutti." : "Di nuovo visibile a tutti.");
-              } catch (error) {
-                console.error(error);
-                say(failed, true);
-              }
-            }}
-          />
-          {!video.missing && <PublicLink video={video} onChanged={onChanged} say={say} />}
-        </Group>
-        <Group title="Copertina">
-          <Cover video={video} onChanged={onChanged} say={say} />
-        </Group>
-        <Group title="Formato">
-          <Format video={video} say={say} />
-        </Group>
-      </div>
-      {toast}
-    </div>
-  );
-}
-
-// Stage is the video itself: its cover with a play button, which starts
-// the player in its place. A video nobody can open shows only the cover.
-function Stage({ video, watchable }: { video: AdminVideo; watchable: boolean }) {
-  const [playing, setPlaying] = useState(false);
-  const { skip, onSkip } = useSkip();
-  if (playing) {
-    return (
-      <div className={styles.stage}>
-        <Player
-          src={streamURL(video.id)}
-          poster={video.cover}
-          preview={video.preview}
-          length={video.duration}
-          autoPlay
-          skip={skip}
-          onSkip={onSkip}
-        />
-      </div>
-    );
-  }
-  return (
-    <div className={styles.stage}>
-      {video.cover ? (
-        <img className={styles.poster} src={video.cover} alt="" />
-      ) : (
-        <span className={styles.noPoster}>
-          <Icon name="play" size={32} />
-        </span>
-      )}
-      {watchable && video.playable && (
-        <button
-          type="button"
-          className={styles.play}
-          aria-label={`Guarda ${video.title}`}
-          onClick={() => setPlaying(true)}
-        >
-          <Icon name="play" size={28} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  const heading = useId();
-  return (
-    <section className={styles.group} aria-labelledby={heading}>
-      <h2 id={heading} className={styles.groupTitle}>
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-// Details are the title and the category, changed in place; a bar to
-// save them comes up as soon as one differs.
-function Details({
-  video,
-  onChanged,
-}: {
-  video: AdminVideo;
-  onChanged: (video: AdminVideo) => void;
-}) {
+  const cover = useCoverWatch(video, setVideo, say);
   const [title, setTitle] = useState(video.title);
   const [category, setCategory] = useState(video.category);
-  const [categories, setCategories] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
-  const [saved, setSaved] = useState(false);
-  const titleId = useId();
-  const categoryId = useId();
+  const titleField = useRef<HTMLInputElement>(null);
+  const formId = useId();
   const dirty = title !== video.title || category !== video.category;
+  const quality = qualityLabel(video.height);
+  const compat = compatibility(video);
+  const watchable = !(video.hidden || video.missing || video.tooShort || video.private);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchCategories(controller.signal)
-      .then((list) => setCategories(list.map((c) => c.name)))
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.error(error);
-      });
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    if (!saved) return;
-    const timer = window.setTimeout(() => setSaved(false), 2500);
-    return () => window.clearTimeout(timer);
-  }, [saved]);
+  const at = ids.indexOf(video.id);
+  const before = at > 0 ? ids[at - 1] : undefined;
+  const after = at >= 0 && at < ids.length - 1 ? ids[at + 1] : undefined;
 
   const save = (event: FormEvent) => {
     event.preventDefault();
@@ -360,14 +239,14 @@ function Details({
       .then(() => {
         setTitle(t);
         setCategory(c);
-        onChanged({
-          ...video,
+        setVideo((v) => ({
+          ...v,
           title: t,
           category: c,
           titleSet: details.title !== null,
           categorySet: details.category !== null,
-        });
-        setSaved(true);
+        }));
+        say("Modifiche salvate.");
       })
       .catch((error: unknown) => {
         console.error(error);
@@ -382,91 +261,371 @@ function Details({
     setProblem("");
   };
 
+  const changed =
+    title !== video.title && category !== video.category
+      ? "Titolo e categoria cambiati, non salvati"
+      : title !== video.title
+        ? "Titolo cambiato, non salvato"
+        : "Categoria cambiata, non salvata";
+
   return (
-    <form className={styles.details} onSubmit={save} aria-label="Titolo e categoria">
-      <datalist id="admin-categories">
-        {categories.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
-      <label htmlFor={titleId} className={styles.label}>
-        Titolo
-      </label>
-      <textarea
-        id={titleId}
-        className={styles.titleInput}
-        value={title}
-        rows={2}
-        maxLength={maxTitle}
-        onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-          }
-        }}
-      />
-      {title.trim() !== video.foundTitle && (
-        <p className={styles.hint}>
-          Nome del file: «{video.foundTitle}».{" "}
+    <>
+      <header className={edit.head}>
+        <div className={edit.headTop}>
+          <Link to="/admin/video" className={ui.pageBack}>
+            <Icon name="chevronLeft" size={18} />
+            Tutti i video
+          </Link>
+          {at >= 0 && ids.length > 1 && (
+            <nav className={edit.steps} aria-label="Altri video">
+              <StepLink to={before} ids={ids} label="Video precedente" icon="chevronLeft" />
+              <span className={edit.stepCount}>
+                {at + 1} di {ids.length}
+              </span>
+              <StepLink to={after} ids={ids} label="Video successivo" icon="chevronRight" />
+            </nav>
+          )}
+        </div>
+        <div className={edit.titleRow}>
+          <h1 className={edit.title}>{video.title}</h1>
           <button
             type="button"
-            className={styles.textButton}
-            onClick={() => setTitle(video.foundTitle)}
+            className={`${ui.btn} ${ui.small} ${ui.ghost}`}
+            onClick={() => {
+              titleField.current?.focus();
+              titleField.current?.select();
+            }}
           >
-            Usa questo
+            <Icon name="edit" size={16} />
+            Cambia titolo
           </button>
-        </p>
-      )}
-      <div className={styles.field}>
-        <label htmlFor={categoryId} className={styles.label}>
-          Categoria
-        </label>
-        <input
-          id={categoryId}
-          className={styles.input}
-          value={category}
-          maxLength={maxCategory}
-          list="admin-categories"
-          placeholder="Nessuna categoria"
-          onChange={(e) => setCategory(e.target.value)}
-        />
-        {category.trim() !== video.foundCategory && (
-          <p className={styles.hint}>
-            {video.foundCategory
-              ? `Dalla cartella: «${video.foundCategory}». `
-              : "La cartella non ne dà una. "}
-            <button
-              type="button"
-              className={styles.textButton}
-              onClick={() => setCategory(video.foundCategory)}
-            >
-              Usa questa
-            </button>
-          </p>
-        )}
-      </div>
-      {problem && (
-        <p role="alert" className={styles.problem}>
-          {problem}
-        </p>
-      )}
-      {(dirty || saved) && (
-        <div className={`glass ${styles.saveBar}`}>
-          <span className={styles.saveText} role="status">
-            {dirty ? "Modifiche non salvate" : "Salvato"}
+        </div>
+        <div className={edit.headInfo}>
+          <span className={edit.owner}>
+            <Byline owner={video.owner} size={24} />
           </span>
+          {video.duration !== null && <Chip>{formatDuration(video.duration)}</Chip>}
+          {quality && <Chip>{quality}</Chip>}
+          {compat && (
+            <Chip tone={compat.ok ? "ok" : "warn"} icon={compat.ok ? "check" : "alert"}>
+              {compat.label}
+            </Chip>
+          )}
+          {video.missing && <Chip tone="bad">File non trovato</Chip>}
+          {video.hidden && <Chip tone="warn">Nascosto</Chip>}
+          {video.tooShort && <Chip tone="warn">Troppo corto</Chip>}
+        </div>
+        <div className={edit.headActions}>
+          {dirty && (
+            <span className={edit.unsaved} role="status">
+              <span className={edit.unsavedDot} />
+              {changed}
+            </span>
+          )}
+          {watchable && (
+            <Link to={`/video/${video.id}`} className={ui.btn}>
+              <Icon name="play" size={16} />
+              Apri pagina
+            </Link>
+          )}
           {dirty && (
             <>
-              <button type="button" className={styles.textButton} onClick={undo}>
+              <button type="button" className={`${ui.btn} ${ui.ghost}`} onClick={undo}>
                 Annulla
               </button>
-              <button type="submit" className={styles.primary} disabled={busy}>
-                Salva
+              <button
+                type="submit"
+                form={formId}
+                className={`${ui.btn} ${ui.primary}`}
+                disabled={busy}
+              >
+                <Icon name="save" size={16} />
+                Salva modifiche
               </button>
             </>
           )}
         </div>
+      </header>
+
+      <div className={edit.layout}>
+        <div className={edit.column}>
+          <div className={edit.stageBox} data-order="1">
+            <Stage video={video} watchable={watchable} />
+          </div>
+          <div data-order="3">
+            <CoverForm
+              video={video}
+              pending={cover.pending}
+              onAsked={(message) => {
+                cover.wait();
+                say(message);
+              }}
+            />
+          </div>
+          <div data-order="5">
+            <ClipForm
+              video={video}
+              onChosen={(changed, message) => {
+                setVideo(changed);
+                say(message);
+              }}
+            />
+          </div>
+        </div>
+
+        <div className={edit.column}>
+          <div data-order="2">
+            <Card title="Dettagli" icon="edit">
+              <Details
+                formId={formId}
+                video={video}
+                title={title}
+                category={category}
+                onTitle={setTitle}
+                onCategory={setCategory}
+                problem={problem}
+                titleField={titleField}
+                onSubmit={save}
+              />
+            </Card>
+          </div>
+          <div data-order="4">
+            <Card title="Chi lo vede" icon="eye">
+              <Audience video={video} />
+              <div className={ui.settingList}>
+                <SettingSwitch
+                  label="Nascosto"
+                  hint="Non compare nelle liste e nessuno lo apre. Mi piace e commenti restano."
+                  on="Nascosto"
+                  off="Visibile"
+                  checked={video.hidden}
+                  disabled={video.missing}
+                  onChange={async (hidden) => {
+                    try {
+                      await setVideoHidden(video.id, hidden);
+                      setVideo((v) => ({ ...v, hidden }));
+                      say(hidden ? "Nascosto a tutti." : "Di nuovo visibile a tutti.");
+                    } catch (error) {
+                      console.error(error);
+                      say(failed, true);
+                    }
+                  }}
+                />
+                {!video.missing && <PublicLink video={video} setVideo={setVideo} say={say} />}
+              </div>
+            </Card>
+          </div>
+          <div data-order="6">
+            <VideoJobs video={video} coverPending={cover.pending} say={say} />
+          </div>
+          <div data-order="7">
+            <FileCard video={video} say={say} />
+          </div>
+        </div>
+      </div>
+      {toast}
+    </>
+  );
+}
+
+function StepLink({
+  to,
+  ids,
+  label,
+  icon,
+}: {
+  to: number | undefined;
+  ids: number[];
+  label: string;
+  icon: "chevronLeft" | "chevronRight";
+}) {
+  if (to === undefined) {
+    return (
+      <span className={`${ui.btn} ${ui.small} ${ui.iconBtn} ${edit.stepOff}`} aria-hidden="true">
+        <Icon name={icon} size={18} />
+      </span>
+    );
+  }
+  return (
+    <Link
+      to={`/admin/video/${to}`}
+      state={{ ids } satisfies ListState}
+      className={`${ui.btn} ${ui.small} ${ui.iconBtn}`}
+      aria-label={label}
+      title={label}
+    >
+      <Icon name={icon} size={18} />
+    </Link>
+  );
+}
+
+// Stage is the video itself: its cover with a play button, which starts
+// the player in its place. A video nobody can open shows only the cover.
+function Stage({ video, watchable }: { video: AdminVideo; watchable: boolean }) {
+  const [playing, setPlaying] = useState(false);
+  const { skip, onSkip } = useSkip();
+  if (playing) {
+    return (
+      <div className={edit.stage}>
+        <Player
+          src={streamURL(video.id)}
+          poster={video.cover}
+          preview={video.preview}
+          length={video.duration}
+          autoPlay
+          skip={skip}
+          onSkip={onSkip}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className={edit.stage}>
+      {video.cover ? (
+        <img className={edit.poster} src={video.cover} alt="" />
+      ) : (
+        <span className={edit.noPoster}>
+          <Icon name="film" size={40} />
+        </span>
+      )}
+      {watchable && video.playable && (
+        <button
+          type="button"
+          className={edit.play}
+          aria-label={`Guarda ${video.title}`}
+          onClick={() => setPlaying(true)}
+        >
+          <Icon name="play" size={30} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Details are the title and the category, changed in place; the buttons to
+// save them come up on top as soon as one differs.
+function Details({
+  formId,
+  video,
+  title,
+  category,
+  onTitle,
+  onCategory,
+  problem,
+  titleField,
+  onSubmit,
+}: {
+  formId: string;
+  video: AdminVideo;
+  title: string;
+  category: string;
+  onTitle: (t: string) => void;
+  onCategory: (c: string) => void;
+  problem: string;
+  titleField: RefObject<HTMLInputElement | null>;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const [categories, setCategories] = useState<string[]>([]);
+  const titleId = useId();
+  const categoryId = useId();
+  const listId = useId();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchCategories(controller.signal)
+      .then((list) => setCategories(list.map((c) => c.name)))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
+    return () => controller.abort();
+  }, []);
+
+  return (
+    <form id={formId} className={edit.details} onSubmit={onSubmit} aria-label="Titolo e categoria">
+      <datalist id={listId}>
+        {categories.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+      <div className={ui.field}>
+        <label htmlFor={titleId} className={ui.label}>
+          Titolo
+        </label>
+        <span className={edit.titleBox}>
+          <input
+            ref={titleField}
+            id={titleId}
+            className={`${ui.input} ${edit.titleInput}`}
+            value={title}
+            maxLength={maxTitle}
+            onChange={(e) => onTitle(e.target.value)}
+          />
+          <Icon name="edit" size={18} />
+        </span>
+        <p className={ui.hint}>
+          {title.trim() === video.foundTitle ? (
+            "Come il nome del file."
+          ) : (
+            <>
+              Dal nome del file: «{video.foundTitle}».{" "}
+              <button type="button" className={ui.link} onClick={() => onTitle(video.foundTitle)}>
+                Usa questo
+              </button>
+            </>
+          )}
+        </p>
+      </div>
+      <div className={ui.field}>
+        <label htmlFor={categoryId} className={ui.label}>
+          Categoria
+        </label>
+        <input
+          id={categoryId}
+          className={ui.input}
+          value={category}
+          maxLength={maxCategory}
+          list={listId}
+          placeholder="Nessuna categoria"
+          onChange={(e) => onCategory(e.target.value)}
+        />
+        <p className={ui.hint}>
+          {category.trim() === video.foundCategory ? (
+            video.foundCategory ? (
+              "Come la cartella in cui si trova."
+            ) : (
+              "Scrivine una nuova o scegline una esistente."
+            )
+          ) : (
+            <>
+              {video.foundCategory
+                ? `Dalla cartella: «${video.foundCategory}». `
+                : "La cartella non ne dà una. "}
+              <button
+                type="button"
+                className={ui.link}
+                onClick={() => onCategory(video.foundCategory)}
+              >
+                Usa questa
+              </button>
+            </>
+          )}
+        </p>
+      </div>
+      <div className={edit.authorRow}>
+        <span className={ui.label}>Autore</span>
+        <span className={edit.owner}>
+          <Byline owner={video.owner} size={28} />
+        </span>
+        <span className={ui.hint}>
+          {video.uploader
+            ? `Caricato da ${video.uploader.name}`
+            : `Trovato nella cartella ${video.folder}`}
+        </span>
+      </div>
+      {problem && (
+        <p role="alert" className={ui.problem}>
+          {problem}
+        </p>
       )}
     </form>
   );
@@ -482,11 +641,11 @@ function Audience({ video }: { video: AdminVideo }) {
     { id: "uploader", icon: "lock" as const, label: "Chi l'ha caricato" },
   ];
   return (
-    <>
-      <fieldset className={styles.segmented} disabled>
+    <div className={edit.audience}>
+      <fieldset className={ui.segmented} disabled>
         <legend className="visually-hidden">Chi lo vede</legend>
         {options.map((o) => (
-          <label key={o.id} className={styles.segment}>
+          <label key={o.id} className={ui.segment}>
             <input
               type="radio"
               name={`audience-${video.id}`}
@@ -499,68 +658,19 @@ function Audience({ video }: { video: AdminVideo }) {
           </label>
         ))}
       </fieldset>
-      <p className={styles.hint}>
+      <p className={ui.hint}>
         {video.uploader
           ? `Lo sceglie ${video.uploader.name}, che l'ha caricato.`
           : "I video delle cartelle li vedono tutti quelli che hanno un account."}
         {video.tooShort && " È più corto del minimo scelto per le cartelle: per ora non compare."}
       </p>
-    </>
-  );
-}
-
-// Switch is an on/off control that acts at once.
-function Switch({
-  label,
-  hint,
-  checked,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  hint: string;
-  checked: boolean;
-  onChange: (on: boolean) => Promise<void>;
-  disabled?: boolean;
-}) {
-  const [busy, setBusy] = useState(false);
-  const hintId = useId();
-  return (
-    <label className={styles.switchRow}>
-      <span className={styles.switchText}>
-        <span className={styles.switchLabel}>{label}</span>
-        <span id={hintId} className={styles.hint}>
-          {hint}
-        </span>
-      </span>
-      <input
-        type="checkbox"
-        role="switch"
-        className={styles.switch}
-        checked={checked}
-        aria-checked={checked}
-        disabled={busy || disabled}
-        aria-describedby={hintId}
-        onChange={(e) => {
-          setBusy(true);
-          void onChange(e.target.checked).finally(() => setBusy(false));
-        }}
-      />
-    </label>
+    </div>
   );
 }
 
 // PublicLink turns the public link on and off; on, its address is there
 // to copy, and a new one can replace it.
-function PublicLink({
-  video,
-  onChanged,
-  say,
-}: {
-  video: AdminVideo;
-  onChanged: (video: AdminVideo) => void;
-  say: (text: string, problem?: boolean) => void;
-}) {
+function PublicLink({ video, setVideo, say }: { video: AdminVideo; setVideo: SetVideo; say: Say }) {
   const [asking, setAsking] = useState(false);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -577,7 +687,7 @@ function PublicLink({
     setBusy(true);
     try {
       const next = await makePublicLink(video.id);
-      onChanged({ ...video, publicLink: next.link });
+      setVideo((v) => ({ ...v, publicLink: next.link }));
       say(message);
     } catch (error) {
       console.error(error);
@@ -590,7 +700,7 @@ function PublicLink({
     setBusy(true);
     try {
       await revokePublicLink(video.id);
-      onChanged({ ...video, publicLink: null });
+      setVideo((v) => ({ ...v, publicLink: null }));
       setAsking(false);
       say("Link pubblico disattivato: non funziona più.");
     } catch (error) {
@@ -603,7 +713,7 @@ function PublicLink({
 
   return (
     <>
-      <Switch
+      <SettingSwitch
         label="Link pubblico"
         hint="Chiunque abbia il link può guardarlo, anche senza account."
         checked={link !== null}
@@ -614,14 +724,18 @@ function PublicLink({
         }}
       />
       {asking && (
-        <div className={styles.confirm} role="alertdialog" aria-label="Disattivare il link?">
-          <p className={styles.confirmText}>Disattivarlo? Chi ha il link non potrà più aprirlo.</p>
-          <button type="button" className={styles.textButton} onClick={() => setAsking(false)}>
+        <div className={edit.confirm} role="alertdialog" aria-label="Disattivare il link?">
+          <p>Disattivarlo? Chi ha il link non potrà più aprirlo.</p>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.small}`}
+            onClick={() => setAsking(false)}
+          >
             Annulla
           </button>
           <button
             type="button"
-            className={styles.danger}
+            className={`${ui.btn} ${ui.small} ${ui.dangerBtn}`}
             disabled={busy}
             onClick={() => void revoke()}
           >
@@ -630,11 +744,11 @@ function PublicLink({
         </div>
       )}
       {link !== null && (
-        <>
-          <div className={styles.linkField}>
+        <div className={edit.linkBox}>
+          <div className={edit.linkField}>
             <input
               ref={field}
-              className={styles.input}
+              className={`${ui.input} ${ui.mono}`}
               value={fullLink(link)}
               readOnly
               aria-label="Link pubblico"
@@ -642,7 +756,7 @@ function PublicLink({
             />
             <button
               type="button"
-              className={`${styles.iconButton} ${copied ? styles.copied : ""}`}
+              className={`${ui.btn} ${ui.iconBtn}`}
               aria-label={copied ? "Copiato" : "Copia link"}
               title={copied ? "Copiato" : "Copia link"}
               onClick={() =>
@@ -658,241 +772,182 @@ function PublicLink({
               <Icon name={copied ? "check" : "copy"} size={18} />
             </button>
           </div>
-          <p className={styles.hint}>
+          <p className={ui.hint}>
             {copied ? "Copiato. " : ""}
             <button
               type="button"
-              className={styles.textButton}
+              className={ui.link}
               disabled={busy}
               onClick={() => void make("Nuovo link creato: quello vecchio non funziona più.")}
             >
               Genera nuovo link
             </button>
           </p>
-        </>
+        </div>
       )}
     </>
   );
 }
 
-// frames picks a few moments of the video from the frames over its
-// timeline, evenly spread, to choose the cover from.
-function frames(preview: Preview, count = 7): { second: number; index: number }[] {
-  const out: { second: number; index: number }[] = [];
-  for (let i = 0; i < count; i++) {
-    const index = Math.min(preview.count - 1, Math.round(((i + 0.5) * preview.count) / count));
-    if (!out.some((f) => f.index === index)) out.push({ index, second: index * preview.gap });
-  }
-  return out;
-}
-
-function Cover({
+// VideoJobs is the work on this video: what runs now, the new cover being
+// made, what failed with "Riprova", and the button to make it all again.
+function VideoJobs({
   video,
-  onChanged,
+  coverPending,
   say,
 }: {
   video: AdminVideo;
-  onChanged: (video: AdminVideo) => void;
-  say: (text: string, problem?: boolean) => void;
+  coverPending: boolean;
+  say: Say;
 }) {
-  const [open, setOpen] = useState<"cover" | "clip" | null>(null);
+  const { jobs, refresh } = useActivity();
   const [busy, setBusy] = useState(false);
-  const act = async (work: () => Promise<void>, message: string) => {
-    setBusy(true);
-    try {
-      await work();
-      say(message);
-    } catch (error) {
-      console.error(error);
-      say(failed, true);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const picks = video.preview ? frames(video.preview) : [];
-  const current = video.coverChoice === "moment" ? video.coverSecond : null;
-
+  const runningHere = runningJobs(jobs).filter((j) => j.videoId === video.id);
+  const running = runningHere[0] ?? null;
+  const queuedHere = jobs?.queue.filter((j) => j.videoId === video.id) ?? [];
+  const failedHere = jobs?.failed.filter((j) => j.videoId === video.id) ?? [];
+  const quiet = !running && !coverPending && failedHere.length === 0 && queuedHere.length === 0;
+  const coverQueued = queuedHere.some((j) => j.kind === "cover");
   return (
-    <>
-      <fieldset className={styles.thumbs} disabled={busy || video.missing}>
-        <legend className="visually-hidden">Scegli la copertina</legend>
-        <Thumb
-          name={video.id}
-          label="Quella scelta da FranzPLAY"
-          checked={video.coverChoice === ""}
-          onPick={() =>
-            void act(async () => {
-              await resetCover(video.id);
-              onChanged({ ...video, coverChoice: "", coverSecond: null });
-            }, "La copertina la sceglie di nuovo FranzPLAY.")
-          }
-        >
-          {video.cover && video.coverChoice === "" ? (
-            <img src={video.cover} alt="" />
-          ) : (
-            <span className={styles.thumbAuto}>Automatica</span>
-          )}
-        </Thumb>
-        {video.coverChoice === "image" && video.cover && (
-          <Thumb name={video.id} label="Immagine caricata" checked onPick={() => {}}>
-            <img src={video.cover} alt="" />
-          </Thumb>
+    <Card
+      title="Lavori su questo video"
+      icon={running || coverPending ? <BusyRing size={20} /> : "layers"}
+      tone={running ? "busy" : undefined}
+    >
+      <ul className={edit.jobList}>
+        {runningHere.map((job) => {
+          const how = progressText(job);
+          const heard = workNumbers(job);
+          return (
+            <li key={job.id} className={edit.jobRow}>
+              <span className={edit.jobHead}>
+                <Chip tone="live" icon={<LiveDot />}>
+                  {kindNames[job.kind]}
+                </Chip>
+                {job.stage && stageNames[job.stage] && (
+                  <Chip tone="info">{stageNames[job.stage]}</Chip>
+                )}
+                <span className={edit.jobWhen}>
+                  da {formatSince(job.startedAt ?? job.at, new Date())}
+                </span>
+              </span>
+              <ProgressBar percent={workPercent(job)} label={`${kindNames[job.kind]} in corso`} />
+              {(how || heard) && (
+                <span className={edit.jobWhen}>{[how, heard].filter(Boolean).join(" · ")}</span>
+              )}
+            </li>
+          );
+        })}
+        {queuedHere.map((job) => (
+          <li key={job.id} className={edit.jobRow}>
+            <span className={edit.jobHead}>
+              <Chip tone="info" icon="clock">
+                {kindNames[job.kind]}
+              </Chip>
+              <span className={edit.jobWhen}>in coda</span>
+            </span>
+          </li>
+        ))}
+        {coverPending && !coverQueued && !runningHere.some((j) => j.kind === "cover") && (
+          <li className={edit.jobRow}>
+            <span className={edit.jobHead}>
+              <Chip tone="info">Copertina</Chip>
+              <span className={edit.jobWhen}>in coda, arriva tra poco</span>
+            </span>
+          </li>
         )}
-        {video.preview &&
-          picks.map((f) => (
-            <Thumb
-              key={f.index}
-              name={video.id}
-              label={`Il momento ${formatDuration(f.second)}`}
-              checked={current === f.second}
-              onPick={() =>
-                void act(async () => {
-                  await setCoverSecond(video.id, f.second);
-                  onChanged({ ...video, coverChoice: "moment", coverSecond: f.second });
-                }, "In coda: la nuova copertina arriva tra poco.")
-              }
-            >
-              <FrameOf preview={video.preview as Preview} index={f.index} />
-            </Thumb>
-          ))}
-      </fieldset>
-      <p className={styles.actionsLine}>
-        <button
-          type="button"
-          className={styles.textButton}
-          aria-expanded={open === "cover"}
-          disabled={video.missing}
-          onClick={() => setOpen(open === "cover" ? null : "cover")}
-        >
-          Carica immagine o cerca
-        </button>
-        <button
-          type="button"
-          className={styles.textButton}
-          disabled={busy || video.missing}
-          onClick={() =>
-            void act(
-              () => refreshVideo(video.id),
-              "In coda: copertina e anteprime arrivano tra poco.",
-            )
-          }
-        >
-          Rigenera
-        </button>
-      </p>
-      {open === "cover" && (
-        <CoverForm
-          video={video}
-          onChosen={(changed) => {
-            onChanged(changed);
-            setOpen(null);
-            say("In coda: la nuova copertina arriva tra poco.");
-          }}
-          onClose={() => setOpen(null)}
-        />
+        {failedHere.map((job) => (
+          <li key={job.id} className={edit.jobRow}>
+            <span className={edit.jobHead}>
+              <Chip tone="bad">{kindNames[job.kind]}</Chip>
+              <span className={edit.jobWhen}>non riuscito · {formatSince(job.at, new Date())}</span>
+              <button
+                type="button"
+                className={`${ui.btn} ${ui.small}`}
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  retryJob(job.id)
+                    .then(() => {
+                      say("Lavoro rimesso in coda.");
+                      refresh();
+                    })
+                    .catch(() => say(failed, true))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Riprova
+              </button>
+            </span>
+            <span className={edit.jobError}>{job.error}</span>
+          </li>
+        ))}
+      </ul>
+      {quiet && (
+        <p className={ui.cardText}>
+          Nessun lavoro in corso: copertina, anteprime e lettura del file sono pronte.
+        </p>
       )}
-      <div className={styles.clipRow}>
-        <span>
-          <span className={styles.label}>Anteprima sulla scheda</span>
-          <span className={styles.value}>
-            {video.clipChoice === "video"
-              ? "Caricata da te"
-              : video.clipChoice === "none"
-                ? "Senza anteprima"
-                : "Fatta da FranzPLAY"}
-          </span>
-        </span>
-        <button
-          type="button"
-          className={styles.textButton}
-          aria-expanded={open === "clip"}
-          disabled={video.missing}
-          onClick={() => setOpen(open === "clip" ? null : "clip")}
-        >
-          Cambia anteprima
-        </button>
-      </div>
-      {open === "clip" && (
-        <ClipForm
-          video={video}
-          onChosen={(changed, message) => {
-            onChanged(changed);
-            setOpen(null);
-            say(message);
-          }}
-          onClose={() => setOpen(null)}
-        />
-      )}
-    </>
+      <button
+        type="button"
+        className={`${ui.btn} ${ui.small}`}
+        disabled={busy || video.missing}
+        onClick={() => {
+          setBusy(true);
+          refreshVideo(video.id)
+            .then(() => {
+              say("In coda: FranzPLAY rilegge il video e rifà copertina e anteprime.");
+              refresh();
+            })
+            .catch(() => say(failed, true))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <Icon name="refresh" size={16} />
+        Rileggi il video
+      </button>
+    </Card>
   );
 }
 
-// Thumb is one cover to choose: a radio button drawn as the picture.
-function Thumb({
-  name,
-  label,
-  checked,
-  onPick,
-  children,
-}: {
-  name: number;
-  label: string;
-  checked: boolean;
-  onPick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <label className={styles.thumb} data-checked={checked}>
-      <input
-        type="radio"
-        name={`cover-${name}`}
-        className="visually-hidden"
-        aria-label={label}
-        checked={checked}
-        onChange={onPick}
-      />
-      {children}
-    </label>
-  );
-}
-
-// FrameOf shows one small frame of the image over the timeline.
-function FrameOf({ preview, index }: { preview: Preview; index: number }) {
-  const column = index % preview.columns;
-  const row = Math.floor(index / preview.columns);
-  const rows = Math.ceil(preview.count / preview.columns);
-  return (
-    <span
-      className={styles.frame}
-      style={{
-        backgroundImage: `url("${preview.src}")`,
-        backgroundSize: `${preview.columns * 100}% ${rows * 100}%`,
-        backgroundPosition: `${preview.columns > 1 ? (column / (preview.columns - 1)) * 100 : 0}% ${rows > 1 ? (row / (rows - 1)) * 100 : 0}%`,
-      }}
-    />
-  );
-}
-
-function Format({
-  video,
-  say,
-}: {
-  video: AdminVideo;
-  say: (text: string, problem?: boolean) => void;
-}) {
+// FileCard is the file of the video: where it is, what it is made of, and
+// whether every browser plays it, with the button to make a copy.
+function FileCard({ video, say }: { video: AdminVideo; say: Say }) {
   const compat = compatibility(video);
   const [asked, setAsked] = useState(false);
-  const codecs = [video.videoCodec, video.audioCodec].filter(Boolean).join(" · ");
+  const format = [video.format, video.videoCodec.toUpperCase(), video.audioCodec.toUpperCase()]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <div className={styles.format}>
-      <p className={styles.value}>
-        {compat?.label ?? "Non ancora letto"}
-        {codecs && <span className={styles.hint}> · {codecs}</span>}
-      </p>
+    <Card title="Il file" icon="file">
+      <dl className={`${ui.kv} ${edit.fileKv}`}>
+        <dt>Percorso</dt>
+        <dd className={ui.mono}>
+          {video.folder}/{video.path}
+        </dd>
+        <dt>Formato</dt>
+        <dd>{format || "Non ancora letto"}</dd>
+        {video.height ? (
+          <>
+            <dt>Qualità</dt>
+            <dd>
+              {qualityLabel(video.height) === `${video.height}p`
+                ? `${video.height}p`
+                : `${qualityLabel(video.height)} · ${video.height}p`}
+            </dd>
+          </>
+        ) : null}
+        <dt>Durata</dt>
+        <dd>{video.duration === null ? "Non ancora letta" : formatDuration(video.duration)}</dd>
+        <dt>Aggiunto</dt>
+        <dd>{video.addedAt.toLocaleDateString("it-IT")}</dd>
+        <dt>Browser</dt>
+        <dd>{compat?.label ?? "Non ancora letto"}</dd>
+      </dl>
       {compat && !compat.ok && !video.missing && (
         <button
           type="button"
-          className={styles.textButton}
+          className={`${ui.btn} ${ui.small} ${edit.fileAction}`}
           disabled={asked}
           onClick={() => {
             setAsked(true);
@@ -908,6 +963,6 @@ function Format({
           {asked ? "Copia in preparazione" : "Crea copia compatibile"}
         </button>
       )}
-    </div>
+    </Card>
   );
 }

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/autosubs"
+	"github.com/FranzGra/FranzPLAY/internal/bergamot"
 	"github.com/FranzGra/FranzPLAY/internal/catalog"
 	"github.com/FranzGra/FranzPLAY/internal/channels"
 	"github.com/FranzGra/FranzPLAY/internal/comments"
@@ -145,10 +146,29 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	// The whisper models can be downloaded from the administration.
 	downloader := autosubs.NewDownloader(cfg.DataDir, autosubs.ModelsURL, func() { hub.Publish(events.Jobs) }, logger)
 	subtitles := autosubs.Options{DataDir: cfg.DataDir, Downloader: downloader}
-	translatorClient := translate.New(cfg.TranslateURL, cfg.TranslateKey)
+	// The translator is the one part that knows which engine translates:
+	// the rest of FranzPLAY speaks to media.Translator and autosubs.Languages,
+	// and shows the words the engine gives for its own state. A server, if one
+	// is named; otherwise the program inside the image.
+	var translator media.Translator // stays nil without a translator
 	if cfg.TranslateURL != "" {
-		subtitles.Translator = translatorClient
+		client := translate.New(cfg.TranslateURL, cfg.TranslateKey)
+		subtitles.Translator = client
+		subtitles.TranslatorHelp = autosubs.TranslatorHelp(translate.Help)
+		translator = client
+	} else if program, err := exec.LookPath(cfg.Translator); err != nil {
+		logger.Info("translator not found: subtitles cannot be translated", "setting", config.EnvTranslator)
+		subtitles.TranslatorHelp = autosubs.TranslatorHelp(bergamot.Help)
+	} else {
+		engine := bergamot.New(program, cfg.DataDir, func() { hub.Publish(events.Jobs) }, logger)
+		subtitles.Translator = engine
+		subtitles.TranslatorHelp = autosubs.TranslatorHelp(bergamot.Help)
+		subtitles.TranslatorModels = engine
+		translator = engine
 	}
+	// Translating needs no other program. Without a translator the job fails
+	// and says why, rather than waiting in the queue forever.
+	handlers[jobs.Translate] = media.NewTranscriber(db, "", "", cfg.DataDir, translator).HandleTranslation
 	if ffprobe, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe not found: videos will have no duration until it is installed",
 			"setting", config.EnvFFprobe, "error", err)
@@ -174,10 +194,6 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 			logger.Info("whisper not found: automatic subtitles are off", "setting", config.EnvWhisper)
 		} else {
 			subtitles.Whisper = true
-			var translator media.Translator // stays nil without a translator
-			if cfg.TranslateURL != "" {
-				translator = translatorClient
-			}
 			transcriber := media.NewTranscriber(db, ffmpeg, whisper, cfg.DataDir, translator)
 			transcriber.OnStage(func() { hub.Publish(events.Jobs) })
 			handlers[jobs.Transcribe] = transcriber.Handle
@@ -236,6 +252,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 	}
 	worker := jobs.NewWorker(db, handlers, logger)
 	worker.OnChange(func() { hub.Publish(events.Jobs) })
+	subtitles.Running = worker.Running // how far a transcription is
 	available := map[jobs.Kind]bool{}
 	for k := range handlers {
 		available[k] = true
@@ -294,7 +311,8 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		channels.Routes(db, playlists.PublicLists(db, catalog.NewLookup(db)), logger),
 		sharing.Routes(db, logger),
 		sharing.PublicRoutes(db, logger),
-		jobs.Routes(db, available, worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
+		jobs.Routes(db, available, jobs.Live{Running: worker.Running, Others: downloader.Jobs},
+			worker.Wake, func() { hub.Publish(events.Jobs) }, logger),
 		autosubs.Routes(db, subtitles, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		scanner.Routes(scanInterval, logger),
 		uploader.Routes,

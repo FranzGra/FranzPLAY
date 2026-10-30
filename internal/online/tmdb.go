@@ -25,10 +25,10 @@ type tmdb struct {
 }
 
 // The sizes of TMDB's pictures FranzPLAY asks for: a big one for covers,
-// a small one for a list to choose from.
+// a small one for a list to choose from, sharp also on a large card.
 const (
 	tmdbBig   = "/w1280"
-	tmdbSmall = "/w300"
+	tmdbSmall = "/w780"
 )
 
 // newTMDB returns the client of TMDB's real addresses.

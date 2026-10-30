@@ -30,8 +30,7 @@ async function openClip(video: Record<string, unknown>, routes: Record<string, u
     "GET /api/admin/videos/7": { body: video },
     ...routes,
   });
-  await screen.findByRole("heading", { level: 2, name: "Mare 2024" });
-  await app.user.click(screen.getByRole("button", { name: "Cambia anteprima" }));
+  await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 });
   return { ...app, panel: screen.getByRole("region", { name: "Anteprima di Mare 2024" }) };
 }
 
@@ -40,7 +39,7 @@ describe("choosing a clip", () => {
     const { server, panel } = await openClip(adminVideo(), {
       "PUT /api/admin/videos/7/clip": { status: 204 },
     });
-    expect(panel).toHaveTextContent("la fa FranzPLAY");
+    expect(panel).toHaveTextContent("Pochi secondi presi da momenti diversi");
     const file = new File(["mp4"], "mio.mp4", { type: "video/mp4" });
     fireEvent.change(within(panel).getByLabelText("Carica un video"), {
       target: { files: [file] },
@@ -49,7 +48,7 @@ describe("choosing a clip", () => {
     const sent = server.requests.at(-1);
     expect(sent?.url).toContain("/api/admin/videos/7/clip");
     expect(sent?.headers.get("Content-Type")).toBe("video/mp4");
-    expect(screen.getByText(/Caricata da te/)).toBeInTheDocument();
+    expect(within(panel).getByText("Caricata da te")).toHaveAttribute("aria-current", "true");
   });
 
   it("refuses a video too large before sending it", async () => {
@@ -70,17 +69,16 @@ describe("choosing a clip", () => {
     });
     await user.click(within(panel).getByRole("button", { name: "Nessuna anteprima" }));
     expect(await screen.findByText(/niente anteprima/)).toBeInTheDocument();
-    expect(screen.getByText(/Senza anteprima/)).toBeInTheDocument();
+    expect(within(panel).getByText("Senza anteprima")).toBeInTheDocument();
     expect(server.requests.at(-1)?.method).toBe("DELETE");
 
-    await user.click(screen.getByRole("button", { name: "Cambia anteprima" }));
     const again = screen.getByRole("region", { name: "Anteprima di Mare 2024" });
     expect(again).toHaveTextContent("non ha anteprima");
     expect(within(again).queryByRole("button", { name: "Nessuna anteprima" })).toBeNull();
     await user.click(within(again).getByRole("button", { name: "Rifalla dal video" }));
     await waitFor(() => expect(server.requests.at(-1)?.url).toContain("/clip/remake"));
     expect(await screen.findByText(/rifà l'anteprima/)).toBeInTheDocument();
-    expect(screen.queryByText("Senza anteprima")).not.toBeInTheDocument();
+    expect(within(again).queryByText("Senza anteprima")).not.toBeInTheDocument();
   });
 
   it("says when the file is not a video", async () => {

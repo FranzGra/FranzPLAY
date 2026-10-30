@@ -1,15 +1,23 @@
-import { type ReactNode, type Ref, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import type { AudioTrack } from "../../api/audio";
 import type { SubtitleTrack } from "../../api/videos";
 import { Icon } from "../../components/Icon";
 import { skipChoices, speedLabel, speeds } from "./controls";
 import styles from "./Player.module.css";
 import {
-  optionLabel,
   type SubtitleStyle,
   styleKeys,
-  subtitleCSS,
+  subtitleColors,
   subtitleOptions,
+  subtitlePreviewCSS,
 } from "./subtitleStyle";
 
 type SettingsMenuProps = {
@@ -32,11 +40,13 @@ type SettingsMenuProps = {
   leaving?: boolean; // the panel is closing
 };
 
-type Page = "main" | "speed" | "skip" | "audio" | "subtitles" | "style" | keyof SubtitleStyle;
+type Page = "main" | "speed" | "skip" | "audio" | "subtitles" | "style";
 
 // SettingsMenu is the panel opened by the gear button. Each setting has its
 // own page, as on YouTube, so the panel stays small on phones. A deeper
-// page slides in from the right, going back slides in from the left.
+// page slides in from the right, going back slides in from the left. The
+// style of the subtitles is the exception: all its choices are on one page,
+// each a click away, above a preview that follows them.
 export function SettingsMenu(props: SettingsMenuProps) {
   const { speed, onSpeed, tracks, track, onTrack, audio, audioStream, onAudio } = props;
   const { subtitleStyle, onSubtitleStyle, repeat, onRepeat, skip, onSkip, onClose, ref, leaving } =
@@ -45,10 +55,22 @@ export function SettingsMenu(props: SettingsMenuProps) {
   // How the page came in; none for the first one, which opens with the panel.
   const [direction, setDirection] = useState<"forward" | "back" | undefined>(undefined);
   const setPage = (next: Page) => {
-    setDirection(next === "main" || (next === "style" && page !== "main") ? "back" : "forward");
+    setDirection(next === "main" ? "back" : "forward");
     setPageOnly(next);
   };
   const trackLabel = tracks.find((t) => t.key === track)?.label ?? "Disattivati";
+  const onStylePage = page === "style";
+
+  // Back from the style page, the keyboard stays on the row that led there.
+  const leftStyle = useRef(false);
+  const styleRow = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (page === "style") leftStyle.current = true;
+    else if (leftStyle.current) {
+      leftStyle.current = false;
+      styleRow.current?.focus({ preventScroll: true });
+    }
+  }, [page]);
 
   return (
     <div
@@ -57,10 +79,16 @@ export function SettingsMenu(props: SettingsMenuProps) {
       role="dialog"
       aria-label="Impostazioni del video"
       data-leaving={leaving || undefined}
+      data-page={onStylePage ? "style" : undefined}
+      // A click on the page's labels keeps the keyboard here, away from the player.
+      tabIndex={onStylePage ? -1 : undefined}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
           onClose();
+        } else if (onStylePage) {
+          // The player's keys sleep while the style is being chosen.
+          event.stopPropagation();
         }
       }}
     >
@@ -87,7 +115,12 @@ export function SettingsMenu(props: SettingsMenuProps) {
               value={tracks.length === 0 ? "Nessuno" : trackLabel}
               onClick={() => setPage("subtitles")}
             />
-            <Row label="Stile dei sottotitoli" value="" onClick={() => setPage("style")} />
+            <Row
+              ref={styleRow}
+              label="Stile dei sottotitoli"
+              value=""
+              onClick={() => setPage("style")}
+            />
             <button
               type="button"
               role="switch"
@@ -170,52 +203,28 @@ export function SettingsMenu(props: SettingsMenuProps) {
           />
         )}
 
-        {page === "style" && (
-          <>
-            <Back title="Stile dei sottotitoli" onBack={() => setPage("main")} />
-            {styleKeys.map((key) => (
-              <Row
-                key={key}
-                label={subtitleOptions[key].title}
-                value={optionLabel(key, subtitleStyle[key])}
-                onClick={() => setPage(key)}
-              />
-            ))}
-            <div className={styles.preview} aria-hidden="true">
-              <span style={subtitleCSS(subtitleStyle)} className={styles.previewText}>
-                Così appariranno i sottotitoli
-              </span>
-            </div>
-          </>
-        )}
-
-        {styleKeys.map(
-          (key) =>
-            page === key && (
-              <Choices
-                key={key}
-                title={subtitleOptions[key].title}
-                onBack={() => setPage("style")}
-                options={subtitleOptions[key].options.map((o) => ({
-                  key: o.value,
-                  label: o.label,
-                  chosen: o.value === subtitleStyle[key],
-                }))}
-                onChoose={(value) => {
-                  onSubtitleStyle({ ...subtitleStyle, [key]: value });
-                  setPage("style");
-                }}
-              />
-            ),
+        {onStylePage && (
+          <StylePage
+            style={subtitleStyle}
+            onChange={onSubtitleStyle}
+            onBack={() => setPage("main")}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function Row({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
+type RowProps = {
+  label: string;
+  value: string;
+  onClick: () => void;
+  ref?: Ref<HTMLButtonElement>;
+};
+
+function Row({ label, value, onClick, ref }: RowProps) {
   return (
-    <button type="button" className={styles.menuRow} onClick={onClick}>
+    <button ref={ref} type="button" className={styles.menuRow} onClick={onClick}>
       <span>{label}</span>
       <span className={styles.menuValue}>
         {value}
@@ -265,5 +274,116 @@ function Choices({ title, onBack, options, onChoose, note }: ChoicesProps) {
       </ul>
       {note && <p className={styles.menuNote}>{note}</p>}
     </>
+  );
+}
+
+type StylePageProps = {
+  style: SubtitleStyle;
+  onChange: (style: SubtitleStyle) => void;
+  onBack: () => void;
+};
+
+// StylePage shows every setting of the subtitles at once. The back button
+// and the preview stay in place; on a small player the settings between
+// them scroll.
+function StylePage({ style, onChange, onBack }: StylePageProps) {
+  const groups = useRef<HTMLDivElement>(null);
+  // The keyboard starts on the first setting, as the row that led here is gone.
+  useEffect(() => {
+    groups.current
+      ?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')
+      ?.focus({ preventScroll: true });
+  }, []);
+
+  return (
+    <>
+      <Back title="Stile dei sottotitoli" onBack={onBack} />
+      <div ref={groups} className={styles.styleGroups}>
+        {styleKeys.map((key) => (
+          <StyleGroup
+            key={key}
+            setting={key}
+            value={style[key]}
+            onChoose={(value) => onChange({ ...style, [key]: value })}
+          />
+        ))}
+      </div>
+      <div className={styles.preview} data-position={style.position} aria-hidden="true">
+        <span style={subtitlePreviewCSS(style)} className={styles.previewText}>
+          Così appariranno i sottotitoli
+        </span>
+      </div>
+    </>
+  );
+}
+
+type StyleGroupProps = {
+  setting: keyof SubtitleStyle;
+  value: string;
+  onChoose: (value: string) => void;
+};
+
+// StyleGroup is one setting: its name, and below it all the choices as
+// radio buttons. The arrows move and choose, as in any group of radios.
+function StyleGroup({ setting, value, onChoose }: StyleGroupProps) {
+  const titleId = useId();
+  const { title, options } = subtitleOptions[setting];
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    const steps: Record<string, number> = {
+      ArrowRight: 1,
+      ArrowDown: 1,
+      ArrowLeft: -1,
+      ArrowUp: -1,
+    };
+    const step = steps[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const at = options.findIndex((o) => o.value === value);
+    const next = options[(at + step + options.length) % options.length];
+    if (!next) return;
+    onChoose(next.value);
+    event.currentTarget.querySelector<HTMLElement>(`[data-value="${next.value}"]`)?.focus();
+  }
+
+  return (
+    <div className={styles.styleGroup}>
+      <div id={titleId} className={styles.styleTitle}>
+        {title}
+      </div>
+      <div
+        role="radiogroup"
+        aria-labelledby={titleId}
+        className={styles.segments}
+        onKeyDown={onKeyDown}
+      >
+        {options.map((o) => (
+          // biome-ignore lint/a11y/useSemanticElements: a segmented control, the look of a native radio would be in the way
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={o.value === value}
+            tabIndex={o.value === value ? 0 : -1}
+            data-value={o.value}
+            className={styles.segment}
+            onClick={(event) => {
+              event.currentTarget.focus(); // Safari leaves a clicked button without it
+              onChoose(o.value);
+            }}
+          >
+            {setting === "color" && (
+              <span
+                className={styles.swatch}
+                style={{ backgroundColor: subtitleColors[o.value as SubtitleStyle["color"]] }}
+                aria-hidden="true"
+              />
+            )}
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

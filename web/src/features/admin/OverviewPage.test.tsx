@@ -37,27 +37,34 @@ describe("administration summary", () => {
 
   it("says what needs attention, the numbers and the disks", async () => {
     renderApp("/admin/riepilogo", { ...signedIn(), "GET /api/overview": { body: overview } });
-    const problems = await screen.findByRole("list", { name: "Da sistemare" });
-    const rows = within(problems).getAllByRole("listitem");
-    expect(rows[0]).toHaveTextContent("Non si riesce a leggere /mnt/usb");
-    expect(rows[1]).toHaveTextContent("2 lavori non sono riusciti.");
-    expect(rows[2]).toHaveTextContent("3 video non si trovano più nelle cartelle.");
-    expect(
-      within(rows[1] as HTMLElement).getByRole("link", { name: "Vedi i lavori" }),
-    ).toHaveAttribute("href", "/admin/lavori");
+    const problems = await screen.findByRole("region", { name: /Da sistemare/ });
+    const titles = within(problems).getAllByRole("heading", { level: 3 });
+    expect(titles.map((t) => t.textContent)).toEqual([
+      "Non si legge /mnt/usb",
+      "2 lavori non sono riusciti",
+      "3 video non si trovano più",
+    ]);
+    expect(within(problems).getByRole("link", { name: "Vedi quali" })).toHaveAttribute(
+      "href",
+      "/admin/video?show=missing",
+    );
+    expect(within(problems).getByRole("button", { name: "Riprova tutti" })).toBeInTheDocument();
 
-    expect(
-      screen.getByText("75% pronti per tutti i dispositivi", { exact: false }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("1 amministratore", { exact: false })).toBeInTheDocument();
+    const numbers = screen.getByRole("region", { name: "In numeri" });
+    expect(numbers).toHaveTextContent("75% pronti per tutti i browser");
+    expect(numbers).toHaveTextContent("1 amministratore");
+    expect(within(numbers).getByRole("link", { name: /Persone/ })).toHaveAttribute(
+      "href",
+      "/admin/persone",
+    );
 
-    const disks = screen.getByRole("list", { name: "Dischi" });
-    expect(disks).toHaveTextContent("liberi 60 GB su 100 GB");
+    const disks = screen.getByRole("region", { name: "Spazio sui dischi" });
+    expect(disks).toHaveTextContent("60 GB liberi su 100 GB");
     expect(
-      screen.getByRole("meter", { name: "Cartella dati di FranzPLAY: 40% usato" }),
+      within(disks).getByRole("meter", { name: "Cartella dati di FranzPLAY: 40% usato" }),
     ).toBeInTheDocument();
-    expect(disks).toHaveTextContent("non si riesce a leggere");
-    expect(screen.getByText("FranzPLAY versione 1.2.3")).toBeInTheDocument();
+    expect(disks).toHaveTextContent("Non si legge");
+    expect(screen.getByRole("region", { name: "Il sito" })).toHaveTextContent("1.2.3");
   });
 
   it("says when all is well", async () => {
