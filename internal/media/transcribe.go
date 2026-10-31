@@ -91,9 +91,9 @@ type Transcriber struct {
 	ffmpeg     string // programs to run
 	whisper    string
 	dataDir    string
-	translator Translator // nil: no translations
+	translator Translator     // nil: no translations
 	picker     *WhisperPicker // nil: whisper is run without looking at the CPU
-	threads    int        // how many processor cores whisper may use
+	threads    int            // how many processor cores whisper may use
 	run        runFunc
 	stream     streamFunc // runs whisper, reading how far it is as it goes
 	now        func() time.Time

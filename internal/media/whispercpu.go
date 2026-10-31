@@ -152,7 +152,7 @@ func isIllegalInstruction(err error) bool {
 		return false
 	}
 	const windowsIllegalInstruction = 0xC000001D
-	return strings.Contains(exit.ProcessState.String(), "illegal instruction") ||
+	return strings.Contains(exit.String(), "illegal instruction") ||
 		uint32(exit.ExitCode()) == windowsIllegalInstruction
 }
 

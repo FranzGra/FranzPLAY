@@ -57,12 +57,12 @@ type TranslatorHelp struct {
 
 // Options are the parts of the machine the page depends on.
 type Options struct {
-	DataDir    string
-	Whisper    bool        // whisper.cpp and ffmpeg were found: subtitles can be made
+	DataDir string
+	Whisper bool // whisper.cpp and ffmpeg were found: subtitles can be made
 	// WhisperStatus says whether it really runs on this CPU; nil: not known.
 	WhisperStatus func(context.Context) media.WhisperStatus
-	Translator Languages   // nil: no translator set, nothing is translated
-	Downloader *Downloader // downloads the models; nil: none can be downloaded
+	Translator    Languages   // nil: no translator set, nothing is translated
+	Downloader    *Downloader // downloads the models; nil: none can be downloaded
 	// TranslatorHelp is shown when the translator is off or does not answer.
 	TranslatorHelp TranslatorHelp
 	// TranslatorModels says which models it has; nil: it needs none here.
@@ -128,14 +128,14 @@ func (p page) only(next http.HandlerFunc) http.HandlerFunc {
 
 // Setup is what this machine can do, so the page offers only that.
 type Setup struct {
-	Whisper bool     `json:"whisper"` // whisper.cpp is installed
+	Whisper bool `json:"whisper"` // whisper.cpp is installed
 	// WhisperBuild is the version chosen for this CPU: "complete", "basic", or
 	// "" when there is only one. WhisperProblem says why it does not run on
 	// this CPU; "" when it does. SlowCPU: no AVX2, transcribing takes long.
-	WhisperBuild   string `json:"whisperBuild"`
-	WhisperProblem string `json:"whisperProblem"`
-	SlowCPU        bool   `json:"slowCpu"`
-	Models  []string `json:"models"`  // the models in the data folder: "small", "medium"
+	WhisperBuild   string   `json:"whisperBuild"`
+	WhisperProblem string   `json:"whisperProblem"`
+	SlowCPU        bool     `json:"slowCpu"`
+	Models         []string `json:"models"` // the models in the data folder: "small", "medium"
 	// Translator says whether a translator is set; TranslatorError why it
 	// does not answer, when it does not; TranslatorLanguages the languages
 	// it knows.
