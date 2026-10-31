@@ -568,9 +568,7 @@ function Stage({ video, watchable, say }: { video: AdminVideo; watchable: boolea
       {video.cover ? (
         <img className={edit.poster} src={video.cover} alt="" />
       ) : (
-        <span className={edit.noPoster}>
-          <Icon name="film" size={40} />
-        </span>
+        <span className={edit.noPoster}>{!why && <Icon name="film" size={40} />}</span>
       )}
       {why && (
         <div className={edit.stageWhy}>
