@@ -341,7 +341,7 @@ export const spokenUnknown = "auto";
 // before.
 export async function askSubtitles(
   id: number,
-  ask: { spoken: string; model: string; translate: string[] },
+  ask: { spoken: string; model: string; translate: string[]; priority?: boolean },
 ): Promise<void> {
   await request(`/api/admin/subtitles/${id}`, { method: "PUT", body: ask });
 }
@@ -355,7 +355,7 @@ export async function takeBackSubtitles(id: number): Promise<void> {
 // listening to it again.
 export async function askTranslation(
   id: number,
-  ask: { source: SubtitleSource; from: string; to: string[]; redo: boolean },
+  ask: { source: SubtitleSource; from: string; to: string[]; redo: boolean; priority?: boolean },
 ): Promise<void> {
   await request(`/api/admin/subtitles/${id}/translation`, { method: "PUT", body: ask });
 }

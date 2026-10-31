@@ -244,6 +244,7 @@ type askBody struct {
 	Spoken    string   `json:"spoken"`    // the language spoken, or spokenUnknown
 	Model     string   `json:"model"`     // one of Setup.Models
 	Translate []string `json:"translate"` // the other languages wanted
+	Priority  bool     `json:"priority"`  // before the other jobs, now
 }
 
 // spokenUnknown is the administrator saying they do not know the language
@@ -379,7 +380,15 @@ func (p page) ask(ctx context.Context, id int64, b askBody) (err error) {
 	if err := forgetTranslation(ctx, tx, id); err != nil {
 		return fmt.Errorf("ask subtitles of video %d: %w", id, err)
 	}
-	return jobs.Enqueue(ctx, tx, id, jobs.Transcribe, false, now)
+	if err := jobs.Enqueue(ctx, tx, id, jobs.Transcribe, false, now); err != nil {
+		return err
+	}
+	if b.Priority {
+		if _, err := jobs.Hurry(ctx, tx, id, jobs.Transcribe, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p page) handleTakeBack(w http.ResponseWriter, r *http.Request) {

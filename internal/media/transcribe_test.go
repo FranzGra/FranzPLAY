@@ -178,6 +178,31 @@ func (fx *transcribeFixture) listenAndTranslate(t *testing.T) {
 	}
 }
 
+// The translations of a transcription put first come as soon as it did.
+func TestTranslationInheritsThePriorityOfItsTranscription(t *testing.T) {
+	fx := newTranscribeFixture(t)
+	ctx := context.Background()
+	fx.ask(t, "it", "small", "en")
+	if err := jobs.Enqueue(ctx, fx.db, fx.id, jobs.Transcribe, false, fx.tr.now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := jobs.Hurry(ctx, fx.db, fx.id, jobs.Transcribe, fx.tr.now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.tr.Handle(ctx, fx.id); err != nil {
+		t.Fatal(err)
+	}
+	var urgent bool
+	var at int64
+	if err := fx.db.QueryRow(`SELECT urgent, urgent_at FROM jobs WHERE video_id = ? AND kind = 'translate'`, fx.id).
+		Scan(&urgent, &at); err != nil {
+		t.Fatal(err)
+	}
+	if !urgent || at == 0 {
+		t.Errorf("translation: urgent %v at %d", urgent, at)
+	}
+}
+
 func TestTranscribeAndTranslate(t *testing.T) {
 	fx := newTranscribeFixture(t)
 	fx.ask(t, "", "small", "it,en")

@@ -234,6 +234,27 @@ export async function retryJob(id: number): Promise<void> {
 }
 
 // retryFailedJobs puts every failed job back in the queue and says how many.
+// setJobPriority puts a waiting job first, or back in its place.
+export async function setJobPriority(id: number, priority: boolean): Promise<void> {
+  await request(`/api/jobs/${id}/priority`, { method: "PUT", body: { priority } });
+}
+
+// fetchVideoQueue lists the jobs waiting on a video, in the order they will run.
+export async function fetchVideoQueue(videoId: number, signal?: AbortSignal): Promise<Job[]> {
+  const data = (await request(`/api/jobs/video/${videoId}`, { signal })) as { queue?: unknown };
+  if (!Array.isArray(data?.queue)) throw new Error("video queue: no list");
+  return data.queue.map(parseJob);
+}
+
+// setVideoPriority does it for all the jobs waiting on a video; it says how many.
+export async function setVideoPriority(videoId: number, priority: boolean): Promise<number> {
+  const data = (await request(`/api/jobs/video/${videoId}/priority`, {
+    method: "PUT",
+    body: { priority },
+  })) as { count?: unknown };
+  return count(data?.count, "priority count");
+}
+
 export async function retryFailedJobs(): Promise<number> {
   const data = await request("/api/jobs/retry", { method: "POST" });
   const n = (data as Record<string, unknown> | null)?.count;

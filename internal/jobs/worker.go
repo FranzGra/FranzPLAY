@@ -299,7 +299,7 @@ func (w *Worker) postpone(ctx context.Context, j job, until time.Time) error {
 func claimQuery(placeholders string) string {
 	return `SELECT id, video_id, kind, attempts, urgent FROM jobs INDEXED BY jobs_next
 		WHERE state = 'pending' AND run_after <= ? AND kind IN (` + placeholders + `)
-		ORDER BY priority, id
+		ORDER BY priority, urgent_at DESC, id
 		LIMIT 1`
 }
 

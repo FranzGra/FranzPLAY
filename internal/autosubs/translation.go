@@ -44,6 +44,8 @@ type translateBody struct {
 	From   string   `json:"from"`
 	To     []string `json:"to"`
 	Redo   bool     `json:"redo"`
+	// Priority puts the job before the others, now.
+	Priority bool `json:"priority"`
 }
 
 // The reasons a translation cannot be asked now.
@@ -191,7 +193,15 @@ func (p page) askTranslation(ctx context.Context, id int64, b translateBody) (er
 		id, string(b.Source), b.From, strings.Join(b.To, ","), b.Redo, now.Unix()); err != nil {
 		return fmt.Errorf("ask translation of video %d: %w", id, err)
 	}
-	return jobs.Enqueue(ctx, tx, id, jobs.Translate, false, now)
+	if err := jobs.Enqueue(ctx, tx, id, jobs.Translate, false, now); err != nil {
+		return err
+	}
+	if b.Priority {
+		if _, err := jobs.Hurry(ctx, tx, id, jobs.Translate, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p page) handleTakeBackTranslation(w http.ResponseWriter, r *http.Request) {

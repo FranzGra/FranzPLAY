@@ -7,6 +7,7 @@ import {
   type JobsOverview,
   retryFailedJobs,
   retryJob,
+  setJobPriority,
 } from "../../api/jobs";
 import { Icon } from "../../components/Icon";
 import { LiveDot } from "../../components/ProgressBar";
@@ -26,6 +27,22 @@ export { kindNames } from "./jobText";
 export function JobsPage() {
   const { jobs, download, working, overviewFailed, refresh } = useActivity();
   const [toast, say] = useToast();
+  const [moving, setMoving] = useState(false);
+  const changePriority = (job: Job, first: boolean) => {
+    setMoving(true);
+    setJobPriority(job.id, first)
+      .then(() => {
+        say(first ? `«${job.title}» è in cima alla coda.` : `«${job.title}» torna al suo posto.`);
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+        say("Non ci sono riuscito: forse quel lavoro è già partito.", true);
+      })
+      .finally(() => {
+        setMoving(false);
+        refresh();
+      });
+  };
   const [kind, setKind] = useState<JobKind | "">("");
 
   if (!jobs) return overviewFailed ? <Unavailable title="Lavori non disponibili" /> : <Loading />;
@@ -173,7 +190,13 @@ export function JobsPage() {
                   <ol className={screens.jobList} aria-label="Lavori in coda">
                     {queue.map((job, i) => (
                       <li key={job.id}>
-                        <QueuedJob job={job} place={i + 1} />
+                        <QueuedJob
+                          job={job}
+                          place={i + 1}
+                          runnable={jobs.kinds.some((k) => k.kind === job.kind && k.available)}
+                          busy={moving}
+                          onPriority={(first) => changePriority(job, first)}
+                        />
                       </li>
                     ))}
                   </ol>
@@ -183,6 +206,7 @@ export function JobsPage() {
                     Ne mostro i primi {n(queue.length)} su {n(waiting)}.
                   </p>
                 )}
+                {queue.length > 0 && <p className={ui.cardText}>{priorityNote}</p>}
               </>
             )}
           </Card>
@@ -260,8 +284,26 @@ function JobThumb({ job, size }: { job: Job; size: number }) {
   );
 }
 
-// QueuedJob is a job waiting its turn, with its place in the queue.
-function QueuedJob({ job, place }: { job: Job; place: number }) {
+// priorityNote says what putting a job first does to the one running now.
+const priorityNote =
+  "Un lavoro messo in cima ferma conversioni, trascrizioni e traduzioni in corso, che poi ripartono da capo; gli altri lavori, come le anteprime, prima finiscono: al massimo qualche minuto.";
+
+// QueuedJob is a job waiting its turn, with its place in the queue and the
+// button to put it first, or back. A job FranzPLAY cannot do has no button:
+// it would not start anyway.
+function QueuedJob({
+  job,
+  place,
+  runnable,
+  busy,
+  onPriority,
+}: {
+  job: Job;
+  place: number;
+  runnable: boolean;
+  busy: boolean;
+  onPriority: (first: boolean) => void;
+}) {
   const later = job.runAfter && job.runAfter.getTime() > Date.now() ? job.runAfter : null;
   return (
     <div className={screens.jobRow}>
@@ -277,7 +319,20 @@ function QueuedJob({ job, place }: { job: Job; place: number }) {
             ` · riprova alle ${later.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`}
         </span>
       </div>
-      {job.urgent && <Chip tone="info">Prima</Chip>}
+      <div className={screens.jobActions}>
+        {job.urgent && <Chip tone="info">Con priorità</Chip>}
+        {runnable && (
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.small}`}
+            disabled={busy}
+            aria-label={`${job.urgent ? "Togli priorità" : "Metti in cima"}: ${kindNames[job.kind]} di ${job.title}`}
+            onClick={() => onPriority(!job.urgent)}
+          >
+            {job.urgent ? "Togli priorità" : "Metti in cima"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

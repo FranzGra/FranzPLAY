@@ -276,6 +276,80 @@ func TestConversionGivesWayToOtherWork(t *testing.T) {
 	}
 }
 
+// TestLastJobPutFirstRunsFirst: among the jobs put first, the last one chosen
+// goes before the others; the others keep their order behind them.
+func TestLastJobPutFirstRunsFirst(t *testing.T) {
+	fx := newFixture(t, 4)
+	for _, v := range fx.videos {
+		fx.enqueue(t, v, Cover)
+	}
+	var order []int64
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{Cover: func(_ context.Context, video int64) error {
+		order = append(order, video)
+		return nil
+	}}
+	// In the same millisecond too: the last one chosen is the last one chosen.
+	for _, v := range []int64{fx.videos[3], fx.videos[1]} {
+		if _, err := Hurry(context.Background(), fx.db, v, Cover, fx.clock); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for runNext(t, w) {
+	}
+	want := []int64{fx.videos[1], fx.videos[3], fx.videos[0], fx.videos[2]}
+	if !slices.Equal(order, want) {
+		t.Errorf("order = %v, want %v", order, want)
+	}
+}
+
+func TestEnqueueMakesAJobOrdinaryAgain(t *testing.T) {
+	fx := newFixture(t, 1)
+	fx.enqueue(t, fx.videos[0], Cover)
+	if _, err := Hurry(context.Background(), fx.db, fx.videos[0], Cover, fx.clock); err != nil {
+		t.Fatal(err)
+	}
+	fx.enqueue(t, fx.videos[0], Cover)
+	var urgent, urgentAt int
+	if err := fx.db.QueryRow(`SELECT urgent, urgent_at FROM jobs`).Scan(&urgent, &urgentAt); err != nil {
+		t.Fatal(err)
+	}
+	if urgent != 0 || urgentAt != 0 {
+		t.Errorf("urgent = %d at %d", urgent, urgentAt)
+	}
+}
+
+func TestSamePriority(t *testing.T) {
+	fx := newFixture(t, 2)
+	ctx := context.Background()
+	for _, v := range fx.videos {
+		fx.enqueue(t, v, Transcribe)
+		fx.enqueue(t, v, Translate)
+	}
+	if _, err := Hurry(ctx, fx.db, fx.videos[0], Transcribe, fx.clock); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range fx.videos {
+		if err := SamePriority(ctx, fx.db, v, Translate, Transcribe); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func(v int64) (urgent bool, at int64) {
+		t.Helper()
+		if err := fx.db.QueryRow(`SELECT urgent, urgent_at FROM jobs WHERE video_id = ? AND kind = 'translate'`, v).
+			Scan(&urgent, &at); err != nil {
+			t.Fatal(err)
+		}
+		return urgent, at
+	}
+	if urgent, at := read(fx.videos[0]); !urgent || at == 0 {
+		t.Errorf("translation of the hurried transcription: urgent %v at %d", urgent, at)
+	}
+	if urgent, at := read(fx.videos[1]); urgent || at != 0 {
+		t.Errorf("translation of the ordinary transcription: urgent %v at %d", urgent, at)
+	}
+}
+
 // TestTranscriptionGivesWayOnlyToAJobSomeoneWaitsFor: new work waits, since
 // stopping would throw away hours of listening; a hurried job does not wait.
 func TestTranscriptionGivesWayOnlyToAJobSomeoneWaitsFor(t *testing.T) {

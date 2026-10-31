@@ -330,7 +330,63 @@ function group(name: string) {
   return screen.getByRole("region", { name });
 }
 
+// quietQueue is the queue of a server with nothing going on.
+const quietQueue = {
+  waiting: 0,
+  retrying: 0,
+  done: 0,
+  running: null,
+  failed: [],
+  failedTotal: 0,
+  kinds: [],
+};
+
 describe("page of a video in the administration", () => {
+  it("gives priority to the jobs waiting on the video, only when there are some", async () => {
+    const waiting = {
+      id: 31,
+      kind: "cover",
+      videoId: 7,
+      title: "Mare",
+      attempts: 0,
+      error: "",
+      at: "2026-10-12T10:00:00Z",
+      state: "pending",
+      urgent: false,
+    };
+    let queue = [waiting];
+    const { user, server } = await detail(adminVideo(), {
+      "GET /api/jobs": { body: quietQueue },
+      "GET /api/jobs/video/7": () => Response.json({ queue }),
+      "PUT /api/jobs/video/7/priority": () => {
+        queue = [{ ...waiting, urgent: true }];
+        return Response.json({ count: 1 });
+      },
+    });
+    const give = await screen.findByRole("button", { name: "Dai la priorità" });
+    await user.click(give);
+    await vi.waitFor(() =>
+      expect(server.requests.some((r) => r.method === "PUT" && r.url.includes("/priority"))).toBe(
+        true,
+      ),
+    );
+    expect(
+      await screen.findByText("I lavori di questo video sono in cima alla coda."),
+    ).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Togli priorità" })).toBeEnabled();
+  });
+
+  it("shows no priority button when no job waits on the video", async () => {
+    const { server } = await detail(adminVideo(), {
+      "GET /api/jobs": { body: quietQueue },
+      "GET /api/jobs/video/7": { body: { queue: [] } },
+    });
+    await vi.waitFor(() =>
+      expect(server.requests.some((r) => r.url.includes("/api/jobs/video/7"))).toBe(true),
+    );
+    expect(screen.queryByRole("button", { name: "Dai la priorità" })).not.toBeInTheDocument();
+  });
+
   it("shows the video and every section, each with its icon", async () => {
     const { user } = await detail();
     expect(screen.getByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();

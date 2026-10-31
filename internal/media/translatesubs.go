@@ -351,5 +351,8 @@ func (t *Transcriber) queueTranslations(ctx context.Context, videoID int64, hear
 		FromWhisper, heard, strings.Join(wanted, ","), now.Unix(), videoID); err != nil {
 		return fmt.Errorf("ask translations of video %d: %w", videoID, err)
 	}
-	return jobs.Enqueue(ctx, tx, videoID, jobs.Translate, false, now)
+	if err := jobs.Enqueue(ctx, tx, videoID, jobs.Translate, false, now); err != nil {
+		return err
+	}
+	return jobs.SamePriority(ctx, tx, videoID, jobs.Translate, jobs.Transcribe)
 }

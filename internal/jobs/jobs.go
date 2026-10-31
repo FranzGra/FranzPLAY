@@ -124,7 +124,7 @@ func Enqueue(ctx context.Context, db execer, videoID int64, kind Kind, onlyIfNot
 	query := `
 		INSERT INTO jobs (video_id, kind, state, updated_at) VALUES (?, ?, 'pending', ?)
 		ON CONFLICT (video_id, kind) DO UPDATE
-		SET state = 'pending', attempts = 0, last_error = '', run_after = 0, urgent = 0,
+		SET state = 'pending', attempts = 0, last_error = '', run_after = 0, urgent = 0, urgent_at = 0,
 		    updated_at = excluded.updated_at`
 	if onlyIfNotDone {
 		query += ` WHERE state != 'done'`
@@ -135,17 +135,22 @@ func Enqueue(ctx context.Context, db execer, videoID int64, kind Kind, onlyIfNot
 	return nil
 }
 
+// nextUrgentAt is the SQL for the urgent_at of a job put first now: after
+// every other, even within one millisecond or with a clock moved back. Its
+// argument is the time in milliseconds.
+const nextUrgentAt = `max(?, (SELECT coalesce(max(urgent_at), 0) + 1 FROM jobs))`
+
 // Hurry puts a job on a video before all the others, because someone is
 // waiting for it; a conversion then no longer gives way. A job that
 // failed is tried again from the start. It reports whether there was a
 // job to hurry: one that is done, or was never asked for, stays as it is.
 func Hurry(ctx context.Context, db execer, videoID int64, kind Kind, now time.Time) (bool, error) {
 	res, err := db.ExecContext(ctx, `
-		UPDATE jobs SET urgent = 1, run_after = 0, updated_at = ?,
+		UPDATE jobs SET urgent = 1, urgent_at = `+nextUrgentAt+`, run_after = 0, updated_at = ?,
 			attempts = CASE WHEN state = 'failed' THEN 0 ELSE attempts END,
 			last_error = CASE WHEN state = 'failed' THEN '' ELSE last_error END,
 			state = CASE WHEN state = 'failed' THEN 'pending' ELSE state END
-		WHERE video_id = ? AND kind = ? AND state != 'done'`, now.Unix(), videoID, string(kind))
+		WHERE video_id = ? AND kind = ? AND state != 'done'`, now.UnixMilli(), now.Unix(), videoID, string(kind))
 	if err != nil {
 		return false, fmt.Errorf("hurry %s job for video %d: %w", kind, videoID, err)
 	}
@@ -154,4 +159,18 @@ func Hurry(ctx context.Context, db execer, videoID int64, kind Kind, now time.Ti
 		return false, fmt.Errorf("hurry %s job for video %d: %w", kind, videoID, err)
 	}
 	return n > 0, nil
+}
+
+// SamePriority gives a job on a video the priority of another job on it: a
+// translation asked with a transcription comes as soon as the transcription
+// did. Without the other job nothing changes.
+func SamePriority(ctx context.Context, db execer, videoID int64, kind, as Kind) error {
+	if _, err := db.ExecContext(ctx, `
+		UPDATE jobs SET urgent = other.urgent, urgent_at = other.urgent_at
+		FROM jobs AS other
+		WHERE jobs.video_id = ? AND jobs.kind = ? AND other.video_id = jobs.video_id AND other.kind = ?`,
+		videoID, string(kind), string(as)); err != nil {
+		return fmt.Errorf("priority of %s job for video %d: %w", kind, videoID, err)
+	}
+	return nil
 }

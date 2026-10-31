@@ -173,6 +173,24 @@ func TestOnlyAdministrators(t *testing.T) {
 	s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusUnauthorized)
 }
 
+func TestAskWithPriority(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "mare.mp4", "Mare")
+	other := s.addVideo(t, "lago.mp4", "Lago")
+	s.do(t, "PUT", "/api/admin/subtitles/"+strconv.FormatInt(other, 10), `{"spoken":"it","model":"small"}`, http.StatusNoContent)
+	s.do(t, "PUT", "/api/admin/subtitles/"+strconv.FormatInt(id, 10), `{"spoken":"it","model":"small","priority":true}`, http.StatusNoContent)
+	urgent := func(video int64) (u bool) {
+		t.Helper()
+		if err := s.db.QueryRow(`SELECT urgent FROM jobs WHERE video_id = ? AND kind = 'transcribe'`, video).Scan(&u); err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}
+	if !urgent(id) || urgent(other) {
+		t.Errorf("urgent: asked with priority %v, without %v", urgent(id), urgent(other))
+	}
+}
+
 func TestAskAndTakeBack(t *testing.T) {
 	s := newSite(t)
 	id := s.addVideo(t, "Viaggi/mare.mp4", "Mare")

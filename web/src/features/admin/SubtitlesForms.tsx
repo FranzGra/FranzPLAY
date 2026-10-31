@@ -55,6 +55,16 @@ function askProblem(error: unknown): string {
   return "Non ci sono riuscito. Riprova tra poco.";
 }
 
+// PutFirst asks to put the new job before all the others.
+function PutFirst({ checked, onChange }: { checked: boolean; onChange: (first: boolean) => void }) {
+  return (
+    <label className={subs.check}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      Mettilo in cima alla coda, prima degli altri lavori
+    </label>
+  );
+}
+
 // Seconds of work for each second of video, on a small processor. Measured on
 // a Celeron N3450: base and the turbo model, which took even longer than this.
 // small was not measured: it is an estimate, and the page says so.
@@ -125,6 +135,7 @@ export function TranscribeForm({
           : (setup.models[0] ?? ""),
   );
   const [translate, setTranslate] = useState<string[]>(video.request?.translate ?? []);
+  const [first, setFirst] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const [missing, setMissing] = useState(false);
@@ -157,6 +168,7 @@ export function TranscribeForm({
       spoken,
       model,
       translate: canTranslate ? translate.filter((l) => targets.includes(l)) : [],
+      priority: first || undefined,
     })
       .then(onDone)
       .catch((error: unknown) => {
@@ -256,6 +268,7 @@ export function TranscribeForm({
           loro traduzioni.
         </p>
       )}
+      <PutFirst checked={first} onChange={setFirst} />
       <span className={ui.chips}>
         <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={busy}>
           Trascrivi
@@ -326,6 +339,7 @@ export function TranslateForm({
     </span>
   );
   const label = `Traduci ${video.title}`;
+  const [first, setFirst] = useState(false);
 
   if (!setup.translator) {
     return (
@@ -393,6 +407,7 @@ export function TranslateForm({
       from: start.from,
       to: chosen,
       redo: redo && chosen.some(redoable),
+      priority: first || undefined,
     })
       .then(onDone)
       .catch((error: unknown) => {
@@ -475,6 +490,7 @@ export function TranslateForm({
           )}
         </>
       )}
+      {sourceKnown && targets.length > 0 && <PutFirst checked={first} onChange={setFirst} />}
       <span className={ui.chips}>
         {sourceKnown && targets.length > 0 && (
           <button type="submit" className={`${ui.btn} ${ui.primary}`} disabled={busy}>

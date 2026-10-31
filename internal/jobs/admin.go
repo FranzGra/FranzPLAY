@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -34,6 +35,7 @@ const ModelDownload Kind = "model"
 var (
 	errJobNotFound = errors.New("job not found")
 	errNotFailed   = errors.New("only a failed job can be tried again")
+	errNotWaiting  = errors.New("only a waiting job can change its place")
 )
 
 // Overview is the state of the queue, as the administrator sees it.
@@ -126,6 +128,9 @@ type Live struct {
 //	GET  /api/jobs             the Overview
 //	POST /api/jobs/{id}/retry  try a failed job again
 //	POST /api/jobs/retry       try every failed job again {count}
+//	PUT  /api/jobs/{id}/priority  put a waiting job first, or back {priority}
+//	GET  /api/jobs/video/{id}  the jobs waiting on a video {queue}
+//	PUT  /api/jobs/video/{id}/priority  the same for all of them {priority}, gives {count}
 //
 // wake tells the worker there is work, changed tells the open pages.
 func Routes(db *sql.DB, available map[Kind]bool, live Live, wake, changed func(), logger *slog.Logger) func(mux *http.ServeMux) {
@@ -149,6 +154,9 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/jobs", a.only(a.handleOverview))
 	mux.HandleFunc("POST /api/jobs/{id}/retry", a.only(a.handleRetry))
 	mux.HandleFunc("POST /api/jobs/retry", a.only(a.handleRetryAll))
+	mux.HandleFunc("PUT /api/jobs/{id}/priority", a.only(a.handlePriority))
+	mux.HandleFunc("GET /api/jobs/video/{id}", a.only(a.handleVideoQueue))
+	mux.HandleFunc("PUT /api/jobs/video/{id}/priority", a.only(a.handleVideoPriority))
 }
 
 // only lets only administrators through.
@@ -208,6 +216,126 @@ func (a admin) handleRetryAll(w http.ResponseWriter, r *http.Request) {
 	who, _ := a.account(r.Context())
 	a.logger.InfoContext(r.Context(), "failed jobs retried", "count", n, "by", who.Name)
 	respond.JSON(w, r, a.logger, http.StatusOK, map[string]int{"count": n})
+}
+
+// priorityBody is the body of the requests that change a job's place.
+type priorityBody struct {
+	Priority bool `json:"priority"`
+}
+
+// parsePriority reads the id in the address and the body of such a request.
+func (a admin) parsePriority(w http.ResponseWriter, r *http.Request) (id int64, b priorityBody, ok bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respond.Error(w, r, a.logger, http.StatusNotFound, errJobNotFound.Error())
+		return 0, b, false
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&b); err != nil {
+		respond.Error(w, r, a.logger, http.StatusBadRequest, `the body must be {"priority": true}`)
+		return 0, b, false
+	}
+	return id, b, true
+}
+
+func (a admin) handlePriority(w http.ResponseWriter, r *http.Request) {
+	id, b, ok := a.parsePriority(w, r)
+	if !ok {
+		return
+	}
+	switch err := a.setPriority(r.Context(), id, b.Priority); {
+	case errors.Is(err, errJobNotFound):
+		respond.Error(w, r, a.logger, http.StatusNotFound, err.Error())
+	case errors.Is(err, errNotWaiting):
+		respond.Error(w, r, a.logger, http.StatusConflict, err.Error())
+	case err != nil:
+		respond.InternalError(w, r, a.logger, err)
+	default:
+		a.wake()
+		a.changed()
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (a admin) handleVideoQueue(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respond.Error(w, r, a.logger, http.StatusNotFound, "video not found")
+		return
+	}
+	queue, err := a.list(r.Context(), `j.state = 'pending' AND j.video_id = ? `+queueOrder, id)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	respond.JSON(w, r, a.logger, http.StatusOK, map[string][]JobView{"queue": queue})
+}
+
+func (a admin) handleVideoPriority(w http.ResponseWriter, r *http.Request) {
+	id, b, ok := a.parsePriority(w, r)
+	if !ok {
+		return
+	}
+	n, err := a.setVideoPriority(r.Context(), id, b.Priority)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	if n > 0 {
+		a.wake()
+		a.changed()
+	}
+	who, _ := a.account(r.Context())
+	a.logger.InfoContext(r.Context(), "video jobs priority", "video", id, "priority", b.Priority, "count", n, "by", who.Name)
+	respond.JSON(w, r, a.logger, http.StatusOK, map[string]int{"count": n})
+}
+
+// setPriority puts a waiting job first, or back in its place. A job waiting
+// to try again no longer waits. A job back in its place stays due.
+func (a admin) setPriority(ctx context.Context, id int64, first bool) error {
+	n, err := a.changePriority(ctx, "id", id, first)
+	if err != nil {
+		return fmt.Errorf("priority of job %d: %w", id, err)
+	}
+	if n == 1 {
+		return nil
+	}
+	var exists int
+	if err := a.db.QueryRowContext(ctx, `SELECT count(*) FROM jobs WHERE id = ?`, id).Scan(&exists); err != nil {
+		return fmt.Errorf("priority of job %d: %w", id, err)
+	}
+	if exists == 0 {
+		return errJobNotFound
+	}
+	return errNotWaiting
+}
+
+// setVideoPriority is setPriority for all the jobs waiting on a video, and
+// says how many.
+func (a admin) setVideoPriority(ctx context.Context, videoID int64, first bool) (int, error) {
+	n, err := a.changePriority(ctx, "video_id", videoID, first)
+	if err != nil {
+		return 0, fmt.Errorf("priority of the jobs of video %d: %w", videoID, err)
+	}
+	return n, nil
+}
+
+// changePriority changes the waiting jobs whose column has this value. The
+// column comes from this file, never from a request.
+func (a admin) changePriority(ctx context.Context, column string, value int64, first bool) (int, error) {
+	now := a.now()
+	query, args := `UPDATE jobs SET urgent = 0, urgent_at = 0, updated_at = ?`, []any{now.Unix()}
+	if first {
+		query = `UPDATE jobs SET urgent = 1, urgent_at = ` + nextUrgentAt + `, run_after = 0, updated_at = ?`
+		args = []any{now.UnixMilli(), now.Unix()}
+	}
+	res, err := a.db.ExecContext(ctx, query+` WHERE `+column+` = ? AND state = 'pending'`, append(args, value)...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
 }
 
 // overview reads the state of the queue.
@@ -303,6 +431,9 @@ func (a admin) counts(ctx context.Context, now time.Time) (_ []KindCount, err er
 	return out, nil
 }
 
+// queueOrder is the order of the waiting jobs: the one of Worker.claim.
+const queueOrder = `ORDER BY j.priority, j.urgent_at DESC, j.id`
+
 // queue lists the waiting jobs in the order the worker takes them (see
 // Worker.claim): first the ones due now that FranzPLAY can do, read with
 // the index the worker uses, then the others, by the time they wait for.
@@ -323,13 +454,13 @@ func (a admin) queue(ctx context.Context, now time.Time) ([]JobView, error) {
 	}
 	due := append(append([]any{now.Unix()}, kinds...), maxQueueShown)
 	out, err := a.listFrom(ctx, `jobs AS j INDEXED BY jobs_next`, `j.state = 'pending' AND j.run_after <= ?
-		AND j.kind IN (`+placeholders+`) ORDER BY j.priority, j.id LIMIT ?`, due...)
+		AND j.kind IN (`+placeholders+`) `+queueOrder+` LIMIT ?`, due...)
 	if err != nil || len(out) >= maxQueueShown {
 		return out, err
 	}
 	later := append(append([]any{now.Unix()}, kinds...), maxQueueShown-len(out))
 	rest, err := a.list(ctx, `j.state = 'pending' AND NOT (j.run_after <= ? AND j.kind IN (`+placeholders+`))
-		ORDER BY j.run_after, j.priority, j.id LIMIT ?`, later...)
+		ORDER BY j.run_after, j.priority, j.urgent_at DESC, j.id LIMIT ?`, later...)
 	if err != nil {
 		return nil, err
 	}

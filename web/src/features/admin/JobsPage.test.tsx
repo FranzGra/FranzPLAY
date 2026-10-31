@@ -295,15 +295,71 @@ describe("jobs page", () => {
       expect.stringContaining("Lago"),
       expect.stringContaining("Bosco"),
     ]);
-    expect(rows[0]).toHaveTextContent("Prima");
-    // No way to take a job out of the queue yet: no button for it.
-    expect(within(queue).queryByRole("button")).not.toBeInTheDocument();
+    expect(rows[0]).toHaveTextContent("Con priorità");
+    expect(screen.getByText(/gli altri lavori, come le anteprime, prima finiscono/)).toBeVisible();
 
     const recent = screen.getByRole("list", { name: "Lavori finiti di recente" });
     expect(recent).toHaveTextContent("Lettura del video · in 12 s");
     expect(recent).toHaveTextContent("Copia per i browser · in 1:15");
     expect(recent).toHaveTextContent("ffmpeg: no space left");
     expect(within(recent).getByText("Non riuscito")).toBeInTheDocument();
+  });
+
+  it("puts a waiting job first, and back, and the list follows", async () => {
+    const job = (id: number, title: string, urgent = false) =>
+      failedJob({ id, title, error: "", state: "pending", attempts: 0, urgent });
+    const before = overview({
+      waiting: 2,
+      retrying: 0,
+      queue: [job(21, "Lago"), job(22, "Bosco")],
+      active: [],
+      recent: [],
+      counts: [],
+    });
+    const after = { ...before, queue: [job(22, "Bosco", true), job(21, "Lago")] };
+    let answer = before;
+    const { user, server } = renderApp("/admin/lavori", {
+      ...signedIn(),
+      "GET /api/jobs": () => Response.json(answer),
+      "PUT /api/jobs/22/priority": () => {
+        answer = after;
+        return new Response(null, { status: 204 });
+      },
+    });
+    const queue = await screen.findByRole("list", { name: "Lavori in coda" });
+    await user.click(within(queue).getByRole("button", { name: /^Metti in cima: .* di Bosco$/ }));
+    await vi.waitFor(() => {
+      const rows = within(queue).getAllByRole("listitem");
+      expect(rows[0]).toHaveTextContent("Bosco");
+      expect(rows[0]).toHaveTextContent("Con priorità");
+    });
+    const put = server.requests.find((r) => r.method === "PUT");
+    expect(await put?.json()).toEqual({ priority: true });
+    expect(
+      within(queue).getByRole("button", { name: /^Togli priorità: .* di Bosco$/ }),
+    ).toBeEnabled();
+    expect(await screen.findByText("«Bosco» è in cima alla coda.")).toBeInTheDocument();
+  });
+
+  it("has no button for a job FranzPLAY cannot do", async () => {
+    renderApp("/admin/lavori", {
+      ...signedIn(),
+      "GET /api/jobs": {
+        body: overview({
+          waiting: 1,
+          retrying: 0,
+          queue: [
+            failedJob({ id: 21, kind: "transcribe", title: "Lago", error: "", state: "pending" }),
+          ],
+          active: [],
+          recent: [],
+          counts: [],
+          kinds: [{ kind: "transcribe", available: false }],
+        }),
+      },
+    });
+    const queue = await screen.findByRole("list", { name: "Lavori in coda" });
+    expect(within(queue).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("shows one kind of work only", async () => {

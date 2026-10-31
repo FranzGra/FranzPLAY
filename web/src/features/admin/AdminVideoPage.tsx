@@ -20,7 +20,7 @@ import {
 } from "../../api/adminVideos";
 import { ApiError } from "../../api/client";
 import { onServerEvent } from "../../api/events";
-import { retryJob } from "../../api/jobs";
+import { fetchVideoQueue, type Job, retryJob, setVideoPriority } from "../../api/jobs";
 import { makePublicLink, revokePublicLink } from "../../api/publicLinks";
 import {
   canPlayType,
@@ -829,7 +829,21 @@ function VideoJobs({
   const [busy, setBusy] = useState(false);
   const runningHere = runningJobs(jobs).filter((j) => j.videoId === video.id);
   const running = runningHere[0] ?? null;
-  const queuedHere = jobs?.queue.filter((j) => j.videoId === video.id) ?? [];
+  // Asked by video, since the queue of the whole site shows only its first
+  // jobs. Asked again whenever the queue moves.
+  const [videoQueue, setVideoQueue] = useState<Job[] | null>(null);
+  useEffect(() => {
+    if (!jobs) return;
+    const asking = new AbortController();
+    fetchVideoQueue(video.id, asking.signal)
+      .then(setVideoQueue)
+      .catch((error: unknown) => {
+        if (!asking.signal.aborted) console.error(error);
+      });
+    return () => asking.abort();
+  }, [video.id, jobs]);
+  const queuedHere = videoQueue ?? jobs?.queue.filter((j) => j.videoId === video.id) ?? [];
+  const allFirst = queuedHere.length > 0 && queuedHere.every((j) => j.urgent);
   const failedHere = jobs?.failed.filter((j) => j.videoId === video.id) ?? [];
   const quiet = !running && !coverPending && failedHere.length === 0 && queuedHere.length === 0;
   const coverQueued = queuedHere.some((j) => j.kind === "cover");
@@ -869,6 +883,7 @@ function VideoJobs({
               <Chip tone="info" icon="clock">
                 {kindNames[job.kind]}
               </Chip>
+              {job.urgent && <Chip tone="info">Con priorità</Chip>}
               <span className={edit.jobWhen}>in coda</span>
             </span>
           </li>
@@ -912,6 +927,30 @@ function VideoJobs({
         <p className={ui.cardText}>
           Nessun lavoro in corso: copertina, anteprime e lettura del file sono pronte.
         </p>
+      )}
+      {queuedHere.length > 0 && (
+        <button
+          type="button"
+          className={`${ui.btn} ${ui.small}`}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setVideoPriority(video.id, !allFirst)
+              .then(() => {
+                say(
+                  allFirst
+                    ? "I lavori di questo video tornano al loro posto."
+                    : "I lavori di questo video sono in cima alla coda.",
+                );
+                refresh();
+              })
+              .catch(() => say(failed, true))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <Icon name={allFirst ? "close" : "upload"} size={16} />
+          {allFirst ? "Togli priorità" : "Dai la priorità"}
+        </button>
       )}
       <button
         type="button"

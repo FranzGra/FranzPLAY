@@ -456,6 +456,23 @@ describe("subtitles page", () => {
     expect(within(form).getByRole("button", { name: "Trascrivi" })).toBeEnabled();
   });
 
+  it("asks for priority together with the subtitles", async () => {
+    const { user, server } = renderApp("/admin/sottotitoli", {
+      ...routes(),
+      "PUT /api/admin/subtitles/7": { status: 204 },
+    });
+    await screen.findByRole("list", { name: "Video" });
+    await user.click(within(rowOf("Mare 2024")).getByRole("button", { name: "Trascrivi" }));
+    const form = screen.getByRole("form", { name: "Trascrivi Mare 2024" });
+    await user.click(within(form).getByRole("combobox", { name: "Lingua originale del video" }));
+    await user.click(screen.getByRole("option", { name: "Italiano" }));
+    await user.click(within(form).getByRole("checkbox", { name: /Mettilo in cima alla coda/ }));
+    await user.click(within(form).getByRole("button", { name: "Trascrivi" }));
+    await vi.waitFor(() => expect(server.requests.some((r) => r.method === "PUT")).toBe(true));
+    const put = server.requests.find((r) => r.method === "PUT");
+    expect(await put?.json()).toMatchObject({ spoken: "it", priority: true });
+  });
+
   it("says which version of whisper runs here", async () => {
     renderApp("/admin/sottotitoli", routes([video()], { ...setup, whisperBuild: "basic" }));
     await screen.findByRole("list", { name: "Video" });
