@@ -1,15 +1,8 @@
-import {
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePresence } from "../lib/presence";
 import { Icon } from "./Icon";
+import { useListPlace } from "./listPlace";
 import styles from "./Select.module.css";
 
 export type SelectOption<T extends string | number> = {
@@ -30,17 +23,8 @@ type SelectProps<T extends string | number> = {
   className?: string;
 };
 
-// gap is the space between the button and its list, in pixels.
-const gap = 6;
-// tallest is the most the list grows before it scrolls.
-const tallest = 320;
 // typingPause ends a word typed to jump to a choice.
 const typingPause = 600; // milliseconds
-
-type Place = { left: number; width: number; maxHeight: number } & (
-  | { top: number }
-  | { bottom: number }
-);
 
 // Select lets a person pick one choice from a list. It replaces the browser's
 // own <select>, whose open list is drawn by the system: on some computers it
@@ -61,9 +45,9 @@ export function Select<T extends string | number>({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const [place, setPlace] = useState<Place | null>(null);
+  const place = useListPlace(buttonRef, open);
   const typed = useRef({ text: "", at: 0 });
-  const list = usePresence<Place, HTMLDivElement>(open ? place : null);
+  const list = usePresence<NonNullable<typeof place>, HTMLDivElement>(open ? place : null);
 
   const selectedIndex = Math.max(
     0,
@@ -86,39 +70,6 @@ export function Select<T extends string | number>({
     buttonRef.current?.focus();
     if (option && option.value !== value) onChange(option.value);
   };
-
-  // The list sits under the button, or over it when there is more room above.
-  // It lives at the end of the page (a portal), so no card can cut it.
-  const measure = useCallback(() => {
-    const button = buttonRef.current;
-    if (!button) return;
-    const box = button.getBoundingClientRect();
-    const below = window.innerHeight - box.bottom - gap - 8;
-    const above = box.top - gap - 8;
-    const width = Math.max(box.width, 160);
-    const left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8));
-    if (below >= Math.min(tallest, 200) || below >= above) {
-      setPlace({ left, width, top: box.bottom + gap, maxHeight: Math.min(tallest, below) });
-    } else {
-      setPlace({
-        left,
-        width,
-        bottom: window.innerHeight - box.top + gap,
-        maxHeight: Math.min(tallest, above),
-      });
-    }
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [open, measure]);
 
   // A click or touch anywhere else closes the list, without choosing.
   useEffect(() => {

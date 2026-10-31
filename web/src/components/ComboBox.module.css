@@ -1,0 +1,53 @@
+/* The field and, inside it on the right, the arrow that opens the list. */
+.box {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.box .input {
+  padding-right: 46px;
+  text-overflow: ellipsis;
+}
+
+.toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch);
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.toggle:hover {
+  color: var(--color-text);
+}
+
+.chevron {
+  display: flex;
+  transition: rotate var(--duration-normal) var(--ease-out);
+}
+
+.chevron[data-open] {
+  rotate: 180deg;
+}
+
+/* As wide as the field: long words end in dots, they do not leave the screen. */
+.list {
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+}
+
+.words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

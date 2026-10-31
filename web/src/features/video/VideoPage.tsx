@@ -5,12 +5,11 @@ import { ApiError } from "../../api/client";
 import { fetchProgress, saveProgress } from "../../api/progress";
 import { fetchSimilar, reasonText } from "../../api/recommend";
 import {
-  fetchSubtitles,
+  canPlayType,
   fetchVideo,
   type Owner,
   openVideoLink,
   playsFileItself,
-  type SubtitleTrack,
   streamURL,
   type Video,
 } from "../../api/videos";
@@ -26,6 +25,7 @@ import { Comments } from "../comments/Comments";
 import { LikeButton } from "../likes/LikeButton";
 import { Player } from "../player/Player";
 import { useSkip } from "../player/useSkip";
+import { useSubtitles } from "../player/useSubtitles";
 import { SaveButton } from "../playlists/SaveButton";
 import { useSuggestions } from "../recommend/useSuggestions";
 import { ShareButton } from "../share/ShareButton";
@@ -43,11 +43,6 @@ type State =
   | { kind: "missing" }
   | { kind: "error" }
   | { kind: "ready"; video: Video; startAt: number };
-
-// canPlayType asks this browser whether it can play a kind of video file.
-function canPlayType(type: string): string {
-  return document.createElement("video").canPlayType(type);
-}
 
 // VideoPage is where a video is watched: the player, its details, and
 // the videos to watch after it next to it.
@@ -376,25 +371,6 @@ function UpNext({ video, now }: { video: Video; now: Date }) {
       </ul>
     </>
   );
-}
-
-const none: SubtitleTrack[] = [];
-
-// useSubtitles loads the subtitles of a video. Without them the video
-// still plays, so a failure only goes to the console.
-function useSubtitles(id: number): SubtitleTrack[] {
-  const [tracks, setTracks] = useState<SubtitleTrack[]>(none);
-  useEffect(() => {
-    const controller = new AbortController();
-    setTracks(none);
-    fetchSubtitles(id, controller.signal)
-      .then(setTracks)
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.error(error);
-      });
-    return () => controller.abort();
-  }, [id]);
-  return tracks;
 }
 
 const noAudio: AudioTrack[] = [];

@@ -341,6 +341,11 @@ export function streamURL(id: number, original = false): string {
   return `/api/videos/${id}/stream${original ? "?original=1" : ""}`;
 }
 
+// canPlayType asks this browser whether it can play a kind of video file.
+export function canPlayType(type: string): string {
+  return document.createElement("video").canPlayType(type);
+}
+
 // playsFileItself reports whether this browser can play the file of a
 // video as it is: then it gets the file at its full quality, not the copy
 // made for every device. canPlayType answers "probably" only when it

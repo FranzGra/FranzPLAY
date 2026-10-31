@@ -22,18 +22,26 @@ import { ApiError } from "../../api/client";
 import { onServerEvent } from "../../api/events";
 import { retryJob } from "../../api/jobs";
 import { makePublicLink, revokePublicLink } from "../../api/publicLinks";
-import { fetchCategories, prepareVideo, streamURL } from "../../api/videos";
+import {
+  canPlayType,
+  fetchCategories,
+  playsFileItself,
+  prepareVideo,
+  streamURL,
+} from "../../api/videos";
 import { Byline } from "../../components/Byline";
+import { ComboBox } from "../../components/ComboBox";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
 import { BusyRing, LiveDot, ProgressBar } from "../../components/ProgressBar";
 import { formatDuration, formatSince } from "../../lib/format";
 import { Player } from "../player/Player";
 import { useSkip } from "../player/useSkip";
+import { useSubtitles } from "../player/useSubtitles";
 import { copyText } from "../share/copyText";
 import { fullLink } from "../sharing/audience";
 import { useCrumb } from "./AdminPage";
-import { runningJobs, useActivity } from "./activity";
+import { runningJobs, throttle, useActivity } from "./activity";
 import { ClipForm } from "./ClipForm";
 import { CoverForm } from "./CoverForm";
 import edit from "./Edit.module.css";
@@ -459,26 +467,44 @@ function StepLink({
   );
 }
 
+// StagePlayer plays the video as its public page does, with its subtitles.
+// They are asked again when the work or the library change, so a subtitle
+// just made or removed comes and goes without opening the page again.
+function StagePlayer({ video }: { video: AdminVideo }) {
+  const { skip, onSkip } = useSkip();
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    const again = throttle(() => setRound((r) => r + 1), 2000);
+    const stopJobs = onServerEvent("jobs", again.call);
+    const stopLibrary = onServerEvent("library", again.call);
+    return () => {
+      stopJobs();
+      stopLibrary();
+      again.cancel();
+    };
+  }, []);
+  const subtitles = useSubtitles(video.id, round);
+  return (
+    <div className={edit.stage}>
+      <Player
+        src={streamURL(video.id, video.copy && playsFileItself(video, canPlayType))}
+        poster={video.cover}
+        subtitles={subtitles}
+        preview={video.preview}
+        length={video.duration}
+        autoPlay
+        skip={skip}
+        onSkip={onSkip}
+      />
+    </div>
+  );
+}
+
 // Stage is the video itself: its cover with a play button, which starts
 // the player in its place. A video nobody can open shows only the cover.
 function Stage({ video, watchable }: { video: AdminVideo; watchable: boolean }) {
   const [playing, setPlaying] = useState(false);
-  const { skip, onSkip } = useSkip();
-  if (playing) {
-    return (
-      <div className={edit.stage}>
-        <Player
-          src={streamURL(video.id)}
-          poster={video.cover}
-          preview={video.preview}
-          length={video.duration}
-          autoPlay
-          skip={skip}
-          onSkip={onSkip}
-        />
-      </div>
-    );
-  }
+  if (playing) return <StagePlayer video={video} />;
   return (
     <div className={edit.stage}>
       {video.cover ? (
@@ -528,8 +554,10 @@ function Details({
   const [categories, setCategories] = useState<string[]>([]);
   const titleId = useId();
   const categoryId = useId();
-  const listId = useId();
+  // A category just saved may be a new one: ask for the list again.
+  const saved = video.category;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: saved is what asks again.
   useEffect(() => {
     const controller = new AbortController();
     fetchCategories(controller.signal)
@@ -538,15 +566,10 @@ function Details({
         if (!controller.signal.aborted) console.error(error);
       });
     return () => controller.abort();
-  }, []);
+  }, [saved]);
 
   return (
     <form id={formId} className={edit.details} onSubmit={onSubmit} aria-label="Titolo e categoria">
-      <datalist id={listId}>
-        {categories.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
       <div className={ui.field}>
         <label htmlFor={titleId} className={ui.label}>
           Titolo
@@ -579,14 +602,16 @@ function Details({
         <label htmlFor={categoryId} className={ui.label}>
           Categoria
         </label>
-        <input
+        <ComboBox
           id={categoryId}
-          className={ui.input}
+          inputClassName={ui.input}
           value={category}
+          options={categories}
           maxLength={maxCategory}
-          list={listId}
           placeholder="Nessuna categoria"
-          onChange={(e) => onCategory(e.target.value)}
+          toggleLabel="Elenco delle categorie"
+          newLabel={(text) => `Nuova categoria: «${text}»`}
+          onChange={onCategory}
         />
         <p className={ui.hint}>
           {category.trim() === video.foundCategory ? (

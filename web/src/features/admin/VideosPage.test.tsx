@@ -377,9 +377,6 @@ describe("page of a video in the administration", () => {
       "PUT /api/admin/videos/7/details": { status: 204 },
     });
     expect(screen.queryByRole("button", { name: "Salva modifiche" })).not.toBeInTheDocument();
-    await vi.waitFor(() =>
-      expect(document.querySelector('datalist option[value="Viaggi"]')).not.toBeNull(),
-    );
     await user.click(screen.getByRole("button", { name: "Cambia titolo" }));
     const title = screen.getByRole("textbox", { name: "Titolo" });
     expect(title).toHaveFocus();
@@ -393,11 +390,105 @@ describe("page of a video in the administration", () => {
     expect(screen.getByText("Titolo e categoria cambiati, non salvati")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Salva modifiche" }));
     expect(await screen.findByText("Modifiche salvate.")).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(
+      await server.requests
+        .filter((r) => r.method === "PUT")
+        .at(-1)
+        ?.json(),
+    ).toEqual({
       title: "Al mare con la nonna",
       category: "Viaggi",
     });
     expect(screen.getByRole("heading", { level: 1, name: "Al mare con la nonna" })).toBeVisible();
+  });
+
+  it("opens every category with words in the field, and saves a new one", async () => {
+    const { user, server } = await detail(adminVideo({ category: "Ciao", categorySet: true }), {
+      "GET /api/categories": {
+        body: [
+          { name: "Ciao", videos: 1, color: "", image: null },
+          { name: "Viaggi", videos: 3, color: "", image: null },
+        ],
+      },
+      "PUT /api/admin/videos/7/details": { status: 204 },
+    });
+    const field = screen.getByRole("combobox", { name: "Categoria" });
+    await vi.waitFor(async () => {
+      await user.click(field);
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Ciao", "Viaggi"]);
+    });
+    await user.clear(field);
+    await user.type(field, "Nuova{Enter}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Salva modifiche" }));
+    expect(await screen.findByText("Modifiche salvate.")).toBeInTheDocument();
+    expect(
+      await server.requests
+        .filter((r) => r.method === "PUT")
+        .at(-1)
+        ?.json(),
+    ).toEqual({
+      title: null,
+      category: "Nuova",
+    });
+  });
+
+  it("leaves a video with no category when the field is emptied", async () => {
+    const { user, server } = await detail(adminVideo(), {
+      "PUT /api/admin/videos/7/details": { status: 204 },
+    });
+    await user.clear(screen.getByRole("combobox", { name: "Categoria" }));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Salva modifiche" }));
+    expect(await screen.findByText("Modifiche salvate.")).toBeInTheDocument();
+    expect(
+      await server.requests
+        .filter((r) => r.method === "PUT")
+        .at(-1)
+        ?.json(),
+    ).toEqual({
+      title: null,
+      category: "",
+    });
+  });
+
+  it("plays the file itself when this browser can, not its copy", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("probably");
+    const { user } = await detail(adminVideo({ copy: true, fileType: "video/webm" }), {
+      "GET /api/videos/7/subtitles": { body: [] },
+    });
+    await user.click(screen.getByRole("button", { name: "Guarda Mare 2024" }));
+    expect(document.querySelector("video")).toHaveAttribute(
+      "src",
+      "/api/videos/7/stream?original=1",
+    );
+  });
+
+  it("gives the player the subtitles, and follows them when the work changes", async () => {
+    stubEventSource();
+    const italian = {
+      key: "it.vtt",
+      lang: "it",
+      label: "Italiano",
+      src: "/api/videos/7/subtitles/it.vtt",
+    };
+    const auto = {
+      key: "auto-en",
+      lang: "en",
+      label: "Inglese (automatici)",
+      src: "/api/videos/7/subtitles/auto-en",
+    };
+    const routes = { "GET /api/videos/7/subtitles": { body: [italian] } };
+    const { user } = await detail(adminVideo(), routes);
+    await user.click(screen.getByRole("button", { name: "Guarda Mare 2024" }));
+    expect(await screen.findByRole("button", { name: "Sottotitoli (c)" })).toBeEnabled();
+    expect(document.querySelectorAll("track")).toHaveLength(1);
+    expect(document.querySelector("track")).toHaveAttribute("src", italian.src);
+
+    routes["GET /api/videos/7/subtitles"].body = [italian, auto];
+    act(() => FakeEventSource.last?.emit("jobs"));
+    await vi.waitFor(() => expect(document.querySelectorAll("track")).toHaveLength(2));
+    expect(document.querySelectorAll("track")[1]).toHaveAttribute("src", auto.src);
   });
 
   it("undoes the changes not saved", async () => {
@@ -419,7 +510,15 @@ describe("page of a video in the administration", () => {
     await user.click(screen.getByRole("button", { name: "Usa questa" }));
     await user.click(screen.getByRole("button", { name: "Salva modifiche" }));
     expect(await screen.findByText("Modifiche salvate.")).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({ title: null, category: null });
+    expect(
+      await server.requests
+        .filter((r) => r.method === "PUT")
+        .at(-1)
+        ?.json(),
+    ).toEqual({
+      title: null,
+      category: null,
+    });
   });
 
   it("refuses an empty title", async () => {
@@ -437,7 +536,14 @@ describe("page of a video in the administration", () => {
     const hidden = screen.getByRole("switch", { name: "Nascosto" });
     await user.click(hidden);
     expect(await screen.findByText("Nascosto a tutti.")).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({ hidden: true });
+    expect(
+      await server.requests
+        .filter((r) => r.method === "PUT")
+        .at(-1)
+        ?.json(),
+    ).toEqual({
+      hidden: true,
+    });
     await vi.waitFor(() => expect(hidden).toBeChecked());
     await user.click(hidden);
     await vi.waitFor(async () =>
