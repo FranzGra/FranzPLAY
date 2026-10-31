@@ -2,11 +2,12 @@ import { type CSSProperties, useState } from "react";
 import { Link } from "react-router";
 import { retryFailedJobs } from "../../api/jobs";
 import { scanLibrary } from "../../api/library";
-import type { Disk, Problem } from "../../api/overview";
+import type { DamagedFile, Disk, Problem } from "../../api/overview";
 import { useAccount } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { formatBytes } from "../../lib/format";
 import { runningJobs, useActivity } from "./activity";
+import { fileProblemText } from "./fileProblem";
 import { DownloadBox, NowJob } from "./NowJob";
 import screens from "./Screens.module.css";
 import { Card, Empty, Loading, Notice, n, PageHeader, Unavailable, ui, useToast } from "./ui";
@@ -89,6 +90,12 @@ export function OverviewPage() {
             )}
             {v.hidden > 0 && ` · ${n(v.hidden)} nascosti`}
           </span>
+          {v.short + v.problems > 0 && (
+            <span className={screens.kpiNote}>
+              {n(v.eligible)} {v.eligible === 1 ? "idoneo" : "idonei"} · {n(v.short)}{" "}
+              {v.short === 1 ? "scartato" : "scartati"} · {n(v.problems)} con problemi
+            </span>
+          )}
         </Link>
         <Link to="/admin/persone" className={screens.kpi}>
           <span className={screens.kpiLabel}>
@@ -150,6 +157,8 @@ export function OverviewPage() {
             )}
             {download && <DownloadBox download={download} />}
           </Card>
+
+          <DamagedFiles files={o.damaged} total={v.problems} inContainer={o.inContainer} />
 
           <Card title="Spazio sui dischi" icon="disk">
             {o.disks.length === 0 ? (
@@ -215,6 +224,73 @@ export function OverviewPage() {
       </div>
       {toast}
     </>
+  );
+}
+
+// DamagedFiles lists the files FranzPLAY cannot read: where they are on the
+// disk and what they have. They are never deleted from here: the
+// administrator removes or replaces them by hand, and the next check of the
+// folders takes them off the list.
+function DamagedFiles({
+  files,
+  total,
+  inContainer,
+}: {
+  files: DamagedFile[];
+  total: number;
+  inContainer: boolean;
+}) {
+  return (
+    <Card
+      title="File con problemi"
+      icon="alert"
+      sub={
+        <span className={ui.chip} data-tone={total > 0 ? "bad" : undefined}>
+          {n(total)}
+        </span>
+      }
+    >
+      {total === 0 ? (
+        <p className={ui.cardText}>Nessun file rovinato: FranzPLAY riesce a leggerli tutti.</p>
+      ) : (
+        <>
+          <p className={ui.cardText}>
+            FranzPLAY non cancella questi file: cancellali o sostituiscili a mano sul disco. Al
+            prossimo controllo delle cartelle spariscono da questa lista.
+          </p>
+          {inContainer && (
+            <p className={ui.cardText}>
+              I percorsi sono quelli visti dentro il container: l'inizio, per esempio{" "}
+              <code>/videos</code>, è la cartella del computer collegata nel file{" "}
+              <code>compose.yaml</code>.
+            </p>
+          )}
+          {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the keyboard must be able to scroll it */}
+          <ul className={screens.damagedList} aria-label="File con problemi" tabIndex={0}>
+            {files.map((f) => (
+              <li key={f.id} className={screens.damagedFile}>
+                <code className={screens.damagedPath}>{f.path}</code>
+                <p className={screens.damagedWhy}>{fileProblemText[f.kind]}</p>
+                {f.detail && <p className={screens.damagedDetail}>Dettaglio tecnico: {f.detail}</p>}
+                <p className={screens.damagedMeta}>
+                  <span>{formatBytes(f.size)}</span>
+                  <Link to={`/admin/video/${f.id}`} aria-label={`Apri la scheda di ${f.title}`}>
+                    Apri la scheda
+                  </Link>
+                </p>
+              </li>
+            ))}
+          </ul>
+          {files.length < total && (
+            <p className={ui.cardText}>
+              Sono i primi {n(files.length)} di {n(total)}: gli altri compaiono quando questi sono
+              sistemati.{" "}
+              <Link to="/admin/video?show=problems">Vedili tutti nella lista dei video</Link>.
+            </p>
+          )}
+        </>
+      )}
+    </Card>
   );
 }
 

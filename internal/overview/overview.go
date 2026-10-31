@@ -3,9 +3,14 @@
 // a short list of what needs attention. It only reads.
 package overview
 
+import "github.com/FranzGra/FranzPLAY/internal/video"
+
 // Videos are the numbers about the videos.
 type Videos struct {
 	Present  int `json:"present"`  // in the folders now, hidden ones too
+	Eligible int `json:"eligible"` // of those, long enough and readable
+	Short    int `json:"short"`    // of those, below the minimum length
+	Problems int `json:"problems"` // of those, damaged or not a video
 	Hidden   int `json:"hidden"`   // hidden by the administrator
 	Missing  int `json:"missing"`  // no longer found in the folders
 	Analysed int `json:"analysed"` // FranzPLAY read their length and format
@@ -28,6 +33,16 @@ type Disk struct {
 	Error  bool   `json:"error"`  // the folder could not be read: not there, or not mounted
 }
 
+// DamagedFile is a file in the video folders FranzPLAY cannot read.
+type DamagedFile struct {
+	ID     int64                 `json:"id"`
+	Title  string                `json:"title"`
+	Path   string                `json:"path"` // the whole path, as FranzPLAY sees it
+	Size   int64                 `json:"size"` // bytes
+	Kind   video.FileProblemKind `json:"kind"`
+	Detail string                `json:"detail"` // the error of the tool
+}
+
 // Overview is everything the summary shows.
 type Overview struct {
 	Version    string    `json:"version"`
@@ -39,7 +54,16 @@ type Overview struct {
 	Jobs       Jobs      `json:"jobs"`
 	Disks      []Disk    `json:"disks"`
 	Problems   []Problem `json:"problems"`
+	// Damaged are the first files of Videos.Problems, at most maxDamaged.
+	Damaged []DamagedFile `json:"damaged"`
+	// InContainer says the paths are the ones seen inside a container, not
+	// the ones of the computer that runs it.
+	InContainer bool `json:"inContainer"`
 }
+
+// maxDamaged is how many damaged files the summary lists: enough to work
+// through, and the page stays light even with a disk gone bad.
+const maxDamaged = 200
 
 // ProblemKind names something that needs attention. The list is closed:
 // the interface has a sentence and a link for each.

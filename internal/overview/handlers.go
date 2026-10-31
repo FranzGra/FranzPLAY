@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 
+	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/video"
@@ -26,7 +29,7 @@ type Settings struct {
 //
 //	GET /api/overview   numbers, disks and what needs attention
 func Routes(db *sql.DB, s Settings, logger *slog.Logger) func(mux *http.ServeMux) {
-	a := api{db: db, settings: s, logger: logger, account: users.FromContext, disk: diskSpace}
+	a := api{db: db, settings: s, logger: logger, account: users.FromContext, disk: diskSpace, inContainer: inContainer()}
 	return a.routes
 }
 
@@ -40,6 +43,19 @@ type api struct {
 	logger   *slog.Logger
 	account  func(context.Context) (users.Account, bool)
 	disk     func(dir string) (total, free uint64, err error)
+	// inContainer: the paths of the video folders are the container's.
+	inContainer bool
+}
+
+// inContainer says FranzPLAY runs in a container, by the files Docker and
+// Podman leave in it.
+func inContainer() bool {
+	for _, sign := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(sign); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (a api) handleGet(w http.ResponseWriter, r *http.Request) {
@@ -62,9 +78,12 @@ func (a api) handleGet(w http.ResponseWriter, r *http.Request) {
 
 // build reads every number of the summary.
 func (a api) build(ctx context.Context) (Overview, error) {
-	o := Overview{Version: a.settings.Version, Disks: a.disks(ctx)}
+	o := Overview{Version: a.settings.Version, Disks: a.disks(ctx), InContainer: a.inContainer}
 	var err error
 	if o.Videos, err = countVideos(ctx, a.db); err != nil {
+		return Overview{}, err
+	}
+	if o.Damaged, err = damagedFiles(ctx, a.db); err != nil {
 		return Overview{}, err
 	}
 	err = a.db.QueryRowContext(ctx, `
@@ -104,13 +123,43 @@ func (a api) disks(ctx context.Context) []Disk {
 	return out
 }
 
+// damagedFiles lists the files FranzPLAY cannot read, in the order of their
+// paths, so the same folder stays together.
+func damagedFiles(ctx context.Context, db *sql.DB) (_ []DamagedFile, err error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT v.id, v.shown_title, l.path, v.path, v.size, `+jobs.FileUnreadableError+`
+		FROM videos v JOIN libraries l ON l.id = v.library_id
+		WHERE `+jobs.FileUnreadable+`
+		ORDER BY l.path, v.path LIMIT ?`, maxDamaged)
+	if err != nil {
+		return nil, fmt.Errorf("list damaged files: %w", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	out := []DamagedFile{}
+	for rows.Next() {
+		var f DamagedFile
+		var folder, inside, readError string
+		if err := rows.Scan(&f.ID, &f.Title, &folder, &inside, &f.Size, &readError); err != nil {
+			return nil, fmt.Errorf("list damaged files: %w", err)
+		}
+		f.Path = filepath.Join(folder, filepath.FromSlash(inside))
+		f.Kind, f.Detail = video.FileProblem(readError)
+		out = append(out, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list damaged files: %w", err)
+	}
+	return out, nil
+}
+
 // countVideos counts the videos. Whether a video plays in every browser
 // is decided by the same rule the player uses (video.DirectlyPlayable).
 func countVideos(ctx context.Context, db *sql.DB) (_ Videos, err error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT path, missing_since IS NOT NULL, hidden_at IS NOT NULL, video_codec,
-		       coalesce(audio_codec, ''), coalesce(pixel_format, ''), converted IS NOT NULL, cover IS NOT NULL
-		FROM videos`)
+		SELECT v.path, v.missing_since IS NOT NULL, v.hidden_at IS NOT NULL, v.video_codec,
+		       coalesce(v.audio_codec, ''), coalesce(v.pixel_format, ''), v.converted IS NOT NULL, v.cover IS NOT NULL,
+		       v.too_short, `+jobs.FileUnreadable+`
+		FROM videos v`)
 	if err != nil {
 		return Videos{}, fmt.Errorf("count videos: %w", err)
 	}
@@ -118,10 +167,10 @@ func countVideos(ctx context.Context, db *sql.DB) (_ Videos, err error) {
 	var v Videos
 	for rows.Next() {
 		var p string
-		var missing, hidden, converted, cover bool
+		var missing, hidden, converted, cover, short, unreadable bool
 		var codec sql.NullString
 		var audio, pixels string
-		if err := rows.Scan(&p, &missing, &hidden, &codec, &audio, &pixels, &converted, &cover); err != nil {
+		if err := rows.Scan(&p, &missing, &hidden, &codec, &audio, &pixels, &converted, &cover, &short, &unreadable); err != nil {
 			return Videos{}, fmt.Errorf("count videos: %w", err)
 		}
 		if missing {
@@ -129,6 +178,15 @@ func countVideos(ctx context.Context, db *sql.DB) (_ Videos, err error) {
 			continue
 		}
 		v.Present++
+		// The same three parts as the pills of the list of videos.
+		switch {
+		case unreadable:
+			v.Problems++
+		case short:
+			v.Short++
+		default:
+			v.Eligible++
+		}
 		if hidden {
 			v.Hidden++
 		}

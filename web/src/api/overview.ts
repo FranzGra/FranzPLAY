@@ -1,5 +1,6 @@
 // The administrator's summary: numbers, disks and what needs attention.
 
+import type { FileProblem } from "./adminVideos";
 import { request } from "./client";
 
 export type ProblemKind =
@@ -30,10 +31,22 @@ export type Problem = {
 
 export type Disk = { folder: string; data: boolean; total: number; free: number; error: boolean };
 
+export type DamagedFile = {
+  id: number;
+  title: string;
+  path: string; // the whole path, as FranzPLAY sees it
+  size: number; // bytes
+  kind: Exclude<FileProblem, "">;
+  detail: string; // the error of the tool
+};
+
 export type Overview = {
   version: string;
   videos: {
     present: number;
+    eligible: number;
+    short: number;
+    problems: number;
     hidden: number;
     missing: number;
     analysed: number;
@@ -47,6 +60,8 @@ export type Overview = {
   jobs: { waiting: number; failed: number };
   disks: Disk[];
   problems: Problem[];
+  damaged: DamagedFile[]; // the first ones of videos.problems
+  inContainer: boolean; // the paths are the ones seen inside a container
 };
 
 type Fields = Record<string, unknown>;
@@ -91,17 +106,36 @@ function parseDisk(data: unknown): Disk {
   };
 }
 
+function parseDamaged(data: unknown): DamagedFile {
+  const o = object(data, "damaged file");
+  const { id, title, path, kind, detail } = o;
+  if (typeof id !== "number" || typeof title !== "string" || typeof path !== "string") {
+    throw new Error("overview: bad damaged file");
+  }
+  if (kind !== "damaged" && kind !== "no_video" && kind !== "unreadable") {
+    throw new Error("overview: bad kind of damaged file");
+  }
+  if (typeof detail !== "string") throw new Error("overview: bad detail of damaged file");
+  return { id, title, path, size: count(o, "size"), kind, detail };
+}
+
 // parseOverview checks the summary sent by the server, once, at the edge.
 export function parseOverview(data: unknown): Overview {
   const o = object(data, "answer");
   const v = object(o.videos, "videos");
   const j = object(o.jobs, "jobs");
   if (typeof o.version !== "string") throw new Error("overview: bad version");
-  if (!Array.isArray(o.disks) || !Array.isArray(o.problems)) throw new Error("overview: bad lists");
+  if (!Array.isArray(o.disks) || !Array.isArray(o.problems) || !Array.isArray(o.damaged)) {
+    throw new Error("overview: bad lists");
+  }
+  if (typeof o.inContainer !== "boolean") throw new Error("overview: bad inContainer");
   return {
     version: o.version,
     videos: {
       present: count(v, "present"),
+      eligible: count(v, "eligible"),
+      short: count(v, "short"),
+      problems: count(v, "problems"),
       hidden: count(v, "hidden"),
       missing: count(v, "missing"),
       analysed: count(v, "analysed"),
@@ -115,6 +149,8 @@ export function parseOverview(data: unknown): Overview {
     jobs: { waiting: count(j, "waiting"), failed: count(j, "failed") },
     disks: o.disks.map(parseDisk),
     problems: o.problems.map(parseProblem),
+    damaged: o.damaged.map(parseDamaged),
+    inContainer: o.inContainer,
   };
 }
 
