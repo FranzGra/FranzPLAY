@@ -61,6 +61,7 @@ type Item struct {
 	ID        int64      `json:"id"`
 	Title     string     `json:"title"`
 	Cover     *string    `json:"cover"`
+	Duration  *int64     `json:"duration"` // seconds; null = not read yet
 	Subtitles []Subtitle `json:"subtitles"`
 	Request   *Request   `json:"request"` // nil: nothing asked
 	// Translation is the translation asked and not finished; nil: none.
@@ -263,7 +264,7 @@ func (p page) videos(ctx context.Context, q string) (_ []candidate, err error) {
 		where += ` AND v.shown_title LIKE ? ESCAPE '\'`
 		args = append(args, "%"+escapeLike(q)+"%")
 	}
-	rows, err := p.db.QueryContext(ctx, `SELECT v.id, v.shown_title, v.cover, l.path, v.path
+	rows, err := p.db.QueryContext(ctx, `SELECT v.id, v.shown_title, v.cover, v.duration, l.path, v.path
 		FROM videos v JOIN libraries l ON l.id = v.library_id
 		WHERE `+where+` ORDER BY v.shown_title COLLATE NOCASE, v.id`, args...)
 	if err != nil {
@@ -275,7 +276,7 @@ func (p page) videos(ctx context.Context, q string) (_ []candidate, err error) {
 		var c candidate
 		var cover *string
 		var root, rel string
-		if err := rows.Scan(&c.ID, &c.Title, &cover, &root, &rel); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &cover, &c.Duration, &root, &rel); err != nil {
 			return nil, fmt.Errorf("list videos: %w", err)
 		}
 		if cover != nil {

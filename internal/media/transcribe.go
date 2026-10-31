@@ -103,7 +103,7 @@ type Transcriber struct {
 // NewTranscriber returns a transcriber that runs the given ffmpeg and
 // whisper programs and writes in dataDir/autosubtitles. translator may be
 // nil. whisper leaves one processor core free, for the site: the job
-// gives way to any other, so it only runs when nothing else needs doing.
+// starts when nothing else needs doing, and then lets new work wait.
 func NewTranscriber(db *sql.DB, ffmpeg, whisper, dataDir string, translator Translator) *Transcriber {
 	return &Transcriber{db: db, ffmpeg: ffmpeg, whisper: whisper, dataDir: dataDir, translator: translator,
 		threads: max(1, runtime.NumCPU()-1), run: runInBackground, stream: streamInBackground, now: time.Now,

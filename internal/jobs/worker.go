@@ -158,7 +158,7 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	jobCtx, cancel := context.WithTimeout(yieldCtx, j.kind.timeout())
 	stopWatching := func() {}
 	if j.kind.givesWay() && !j.urgent {
-		stopWatching = w.watchForOthers(jobCtx, j.id, yield)
+		stopWatching = w.watchForOthers(jobCtx, j, yield)
 	}
 	start := time.Now()
 	runErr := w.runHandler(w.live.begin(jobCtx, j, j.started), h, j)
@@ -200,7 +200,7 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 // watchForOthers watches the queue while a job that gives way runs, and
 // stops it with errGaveWay as soon as another job is due. The returned
 // function ends the watch, and returns once it has ended.
-func (w *Worker) watchForOthers(ctx context.Context, jobID int64, stop context.CancelCauseFunc) func() {
+func (w *Worker) watchForOthers(ctx context.Context, j job, stop context.CancelCauseFunc) func() {
 	quit := make(chan struct{})
 	ended := make(chan struct{})
 	go func() {
@@ -216,7 +216,7 @@ func (w *Worker) watchForOthers(ctx context.Context, jobID int64, stop context.C
 			case <-w.wake:
 			case <-ticker.C:
 			}
-			waiting, err := w.othersWaiting(ctx, jobID)
+			waiting, err := w.othersWaiting(ctx, j)
 			if err != nil {
 				if ctx.Err() == nil {
 					w.logger.ErrorContext(ctx, "job queue", "error", err)
@@ -235,17 +235,17 @@ func (w *Worker) watchForOthers(ctx context.Context, jobID int64, stop context.C
 	}
 }
 
-// othersWaiting reports whether the running job jobID must give way to a
-// job that is due: new work of a kind that never gives way, or a job
-// someone is waiting for. It never must when someone is waiting for jobID
-// itself. A job trying again after a failure waits for the end of the long
-// one: offline, the internet lookups fail and come back every few minutes,
-// and each would throw away hours of conversion.
-func (w *Worker) othersWaiting(ctx context.Context, jobID int64) (bool, error) {
+// othersWaiting reports whether the running job must give way to a job that
+// is due: new work of a kind that never gives way, if the running one stops
+// for that, or a job someone is waiting for. It never must when someone is
+// waiting for the running job itself. A job trying again after a failure
+// waits for the end of the long one: offline, the internet lookups fail and
+// come back every few minutes, and each would throw away hours of conversion.
+func (w *Worker) othersWaiting(ctx context.Context, j job) (bool, error) {
 	args := []any{w.now().Unix()}
 	placeholders := ""
 	for k := range w.handlers {
-		if k.givesWay() {
+		if k.givesWay() || !j.kind.stopsForNewWork() {
 			continue
 		}
 		if placeholders != "" {
@@ -259,7 +259,7 @@ func (w *Worker) othersWaiting(ctx context.Context, jobID int64) (bool, error) {
 	}
 	urgent, urgentArgs := w.kindsPlaceholders()
 	args = append(args, urgentArgs...)
-	args = append(args, jobID)
+	args = append(args, j.id)
 	var waiting bool
 	err := w.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
 		WHERE state = 'pending' AND run_after <= ?

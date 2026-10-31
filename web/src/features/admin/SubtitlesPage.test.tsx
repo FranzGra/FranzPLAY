@@ -428,6 +428,34 @@ describe("subtitles page", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("on a slow processor advises the light model, with how long it takes", async () => {
+    const { user } = renderApp(
+      "/admin/sottotitoli",
+      routes([video({ duration: 3600 })], {
+        ...setup,
+        slowCpu: true,
+        models: ["base", "small", "large-v3-turbo-q5_0"],
+      }),
+    );
+    await screen.findByRole("list", { name: "Video" });
+    await user.click(within(rowOf("Mare 2024")).getByRole("button", { name: "Trascrivi" }));
+    const form = screen.getByRole("form", { name: "Trascrivi Mare 2024" });
+    expect(within(form).getByRole("combobox", { name: "Modello" })).toHaveTextContent("base");
+    expect(
+      within(form).getByText(/base è il modello giusto: circa 4 ore e 20 minuti/),
+    ).toBeVisible();
+
+    // A heavier model can still be chosen: it is only advice.
+    await user.click(within(form).getByRole("combobox", { name: "Modello" }));
+    await user.click(screen.getByRole("option", { name: "small" }));
+    expect(within(form).getByText(/una stima senza misura/)).toBeVisible();
+    expect(within(form).getByText(/Ti consiglio base/)).toBeVisible();
+    await user.click(within(form).getByRole("combobox", { name: "Modello" }));
+    await user.click(screen.getByRole("option", { name: "large-v3-turbo-q5_0" }));
+    expect(within(form).getByText(/oltre 20 ore per questo video/)).toBeVisible();
+    expect(within(form).getByRole("button", { name: "Trascrivi" })).toBeEnabled();
+  });
+
   it("says which version of whisper runs here", async () => {
     renderApp("/admin/sottotitoli", routes([video()], { ...setup, whisperBuild: "basic" }));
     await screen.findByRole("list", { name: "Video" });

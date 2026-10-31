@@ -53,13 +53,20 @@ func (k Kind) timeout() time.Duration {
 // givesWay reports whether a job of this kind stops when other work
 // arrives, to start again later from the beginning. Conversions do: they
 // run only when the machine has nothing else to do, so a new video gets
-// its cover in seconds, not after a film has been encoded. Transcriptions
-// do too, for the same reason. Translations do as well: a job that gives way
-// never stops another that does, so a translation waits for whisper instead
-// of throwing away hours of listening, and it loses little when it stops,
-// since each language is saved when ready.
+// its cover in seconds, not after a film has been encoded. Translations do as
+// well: they lose little when they stop, since each language is saved when
+// ready. Transcriptions stop only for a job someone is waiting for: see
+// stopsForNewWork.
 func (k Kind) givesWay() bool {
 	return k == Convert || k == Transcribe || k == Translate
+}
+
+// stopsForNewWork reports whether a job that gives way also stops for any new
+// work, not only for a job someone is waiting for. A transcription does not:
+// on a small computer it takes hours and starts again from zero when it stops,
+// so new work waits for its end.
+func (k Kind) stopsForNewWork() bool {
+	return k == Convert || k == Translate
 }
 
 // state is where a job is in its life. It is stored as text in the database.

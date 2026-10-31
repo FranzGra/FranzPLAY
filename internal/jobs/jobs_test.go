@@ -276,6 +276,50 @@ func TestConversionGivesWayToOtherWork(t *testing.T) {
 	}
 }
 
+// TestTranscriptionGivesWayOnlyToAJobSomeoneWaitsFor: new work waits, since
+// stopping would throw away hours of listening; a hurried job does not wait.
+func TestTranscriptionGivesWayOnlyToAJobSomeoneWaitsFor(t *testing.T) {
+	fx := newFixture(t, 3)
+	film, fresh, wanted := fx.videos[0], fx.videos[1], fx.videos[2]
+	fx.enqueue(t, film, Transcribe)
+	var order []string
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{
+		Transcribe: func(ctx context.Context, _ int64) error {
+			order = append(order, "transcribe")
+			if len(order) > 1 {
+				return nil
+			}
+			fx.enqueue(t, fresh, Probe)
+			w.Wake()
+			select {
+			case <-ctx.Done():
+				t.Error("the transcription stopped for new work")
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
+			fx.enqueue(t, wanted, Cover)
+			if _, err := Hurry(ctx, fx.db, wanted, Cover, fx.clock); err != nil {
+				t.Error(err)
+			}
+			w.Wake()
+			<-ctx.Done()
+			return ctx.Err()
+		},
+		Probe: func(context.Context, int64) error { order = append(order, "probe"); return nil },
+		Cover: func(context.Context, int64) error { order = append(order, "cover"); return nil },
+	}
+
+	for runNext(t, w) {
+	}
+	if want := []string{"transcribe", "cover", "probe", "transcribe"}; !slices.Equal(order, want) {
+		t.Errorf("order = %v, want %v", order, want)
+	}
+	if j := fx.job(t, film, Transcribe); j.state != done || j.attempts != 0 {
+		t.Errorf("transcription = %+v, want done with no failed attempt", j)
+	}
+}
+
 // TestConversionDoesNotGiveWayToARetry: a job failing again and again (an
 // internet lookup while offline) must not restart a long conversion from
 // zero every few minutes.

@@ -55,6 +55,51 @@ function askProblem(error: unknown): string {
   return "Non ci sono riuscito. Riprova tra poco.";
 }
 
+// Seconds of work for each second of video, on a small processor. Measured on
+// a Celeron N3450: base and the turbo model, which took even longer than this.
+// small was not measured: it is an estimate, and the page says so.
+const baseTimes = 4.3;
+const smallTimes = 12;
+const turboTimes = 20;
+
+// longTime says a long time in words, in round numbers: "2 ore e 20 minuti".
+function longTime(seconds: number): string {
+  const minutes =
+    seconds < 600 ? Math.max(1, Math.round(seconds / 60)) : Math.round(seconds / 600) * 10;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return minutes === 1 ? "1 minuto" : `${minutes} minuti`;
+  const hourWords = hours === 1 ? "1 ora" : `${hours} ore`;
+  return rest === 0 ? hourWords : `${hourWords} e ${rest} minuti`;
+}
+
+// slowCpuAdvice is what to expect from a model on a processor without AVX2,
+// for this video. It only advises: every model can still be chosen.
+function slowCpuAdvice(model: string, duration: number | null, hasBase: boolean) {
+  const about = (times: number) =>
+    duration === null
+      ? `circa ${String(times).replace(".", ",")} volte la durata del video`
+      : `circa ${longTime(duration * times)} per questo video`;
+  if (model === "base") {
+    return {
+      warn: false,
+      words: `Questo processore è lento e base è il modello giusto: ${about(baseTimes)}, misurato su un Celeron.`,
+    };
+  }
+  const better = hasBase
+    ? `Ti consiglio base: ${about(baseTimes)}.`
+    : `Ti consiglio base, da scaricare in «Altri modelli»: ${about(baseTimes)}.`;
+  let cost = `${model} è molto più pesante e non è stato misurato: può volerci più di un giorno.`;
+  if (model === "small") cost = `Con small: ${about(smallTimes)}, una stima senza misura.`;
+  if (model.includes("turbo")) {
+    cost =
+      duration === null
+        ? "Con questo modello: oltre 20 volte la durata del video, misurato su un Celeron."
+        : `Con questo modello: oltre ${longTime(duration * turboTimes)} per questo video, misurato su un Celeron.`;
+  }
+  return { warn: true, words: `Questo processore è lento. ${cost} ${better}` };
+}
+
 // TranscribeForm asks whisper to listen to one video. The language spoken has
 // to be said: whisper writes in the language it is told, it does not translate.
 export function TranscribeForm({
@@ -73,9 +118,11 @@ export function TranscribeForm({
   const [model, setModel] = useState(
     video.request && setup.models.includes(video.request.model)
       ? video.request.model
-      : setup.models.includes("small")
-        ? "small"
-        : (setup.models[0] ?? ""),
+      : setup.slowCpu && setup.models.includes("base")
+        ? "base"
+        : setup.models.includes("small")
+          ? "small"
+          : (setup.models[0] ?? ""),
   );
   const [translate, setTranslate] = useState<string[]>(video.request?.translate ?? []);
   const [busy, setBusy] = useState(false);
@@ -89,6 +136,9 @@ export function TranscribeForm({
   );
   const heard = video.subtitles.find((s) => s.source === "auto" && !s.from);
   const same = heard && heard.lang === spoken && heard.model === model;
+  const advice = setup.slowCpu
+    ? slowCpuAdvice(model, video.duration, setup.models.includes("base"))
+    : null;
   const elsewhere =
     spoken !== "" &&
     spoken !== spokenUnknown &&
@@ -165,6 +215,7 @@ export function TranscribeForm({
             options={setup.models.map((m) => ({ value: m, label: m }))}
             onChange={setModel}
           />
+          {advice && <span className={advice.warn ? subs.warn : subs.hint}>{advice.words}</span>}
         </span>
       </div>
       {canTranslate && targets.length > 0 ? (

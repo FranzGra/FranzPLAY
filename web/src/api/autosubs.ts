@@ -104,6 +104,7 @@ export type SubtitledVideo = {
   id: number;
   title: string;
   cover: string | null;
+  duration: number | null; // seconds; null: not read yet, or an older server
   subtitles: VideoSubtitle[];
   request: SubtitleRequest | null;
   // Newer servers only; an older answer gets null and an empty list.
@@ -299,6 +300,7 @@ export function parseSubtitledVideo(data: unknown): SubtitledVideo {
     id: d.id,
     title: d.title,
     cover: d.cover,
+    duration: typeof d.duration === "number" ? d.duration : null,
     subtitles: d.subtitles.map(parseSubtitle),
     request: d.request === null ? null : parseRequest(d.request),
     translation:
