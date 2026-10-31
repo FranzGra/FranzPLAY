@@ -92,5 +92,6 @@ test("the pills of the videos stay in the address, so the back button works", as
   await page.goBack();
   await expect(page).not.toHaveURL(/show=/);
   await expect(pill("Idonei")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("table", { name: "Video" })).toBeVisible();
+  // A table on a computer, cards on a phone: either way, the videos are there.
+  await expect(page.getByRole("link", { name: /^Lezione/ }).first()).toBeVisible();
 });
