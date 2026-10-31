@@ -28,17 +28,56 @@ export const adminPageSize = 50;
 type State =
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "ready"; videos: AdminVideo[]; total: number };
+  | { kind: "ready"; videos: AdminVideo[]; total: number; minDuration: number };
 
-const filters: { show: AdminShow; label: string }[] = [
-  { show: "", label: "Tutti" },
-  { show: "public", label: "Con link pubblico" },
-  { show: "hidden", label: "Nascosti" },
-  { show: "missing", label: "Non trovati" },
-  { show: "short", label: "Troppo corti" },
+// The pills. param is what the address says: the first pill, the one the page
+// opens on, has none. show is what the server is asked.
+type Pill = { param: string; show: AdminShow; label: string };
+
+const mainPills: Pill[] = [
+  { param: "", show: "eligible", label: "Idonei" },
+  { param: "short", show: "short", label: "Scartati" },
+  { param: "problems", show: "problems", label: "Con problemi" },
 ];
 
-const shows: readonly string[] = filters.map((f) => f.show);
+const otherPills: Pill[] = [
+  { param: "public", show: "public", label: "Con link pubblico" },
+  { param: "hidden", show: "hidden", label: "Nascosti" },
+  { param: "missing", show: "missing", label: "Non trovati" },
+  { param: "all", show: "", label: "Tutti" },
+];
+
+const pills = [...mainPills, ...otherPills];
+
+// PillSentence says what the videos of a pill are; the others need no words.
+function PillSentence({ show, minDuration }: { show: AdminShow; minDuration: number }) {
+  if (show === "short") {
+    return (
+      <p className={videos.pillNote}>
+        {minDuration > 0
+          ? `Durano meno del minimo scelto dall'amministratore, ${formatSeconds(minDuration)}: nessuno li vede, ma i file restano al loro posto. `
+          : "Non c'è nessun minimo di durata: nessun video viene scartato. "}
+        <Link to="/admin/cartelle">Cambia il minimo</Link>
+      </p>
+    );
+  }
+  if (show === "problems") {
+    return (
+      <p className={videos.pillNote}>
+        File rovinati o senza video: FranzPLAY non riesce a leggerli.{" "}
+        <Link to="/admin/riepilogo">Il riepilogo</Link> dice dove sono e cosa hanno.
+      </p>
+    );
+  }
+  return null;
+}
+
+// formatSeconds says a length in words: "90 secondi", "2 minuti".
+function formatSeconds(seconds: number): string {
+  if (seconds === 1) return "1 secondo";
+  if (seconds < 60 || seconds % 60 !== 0) return `${n(seconds)} secondi`;
+  return seconds === 60 ? "1 minuto" : `${n(seconds / 60)} minuti`;
+}
 
 // Below this width of its own room the page has no space for the table and
 // the preview side by side: the videos become cards, and the preview opens
@@ -80,8 +119,11 @@ export function VideosPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
   const asked = params.get("show") ?? "";
-  const show = (shows.includes(asked) ? asked : "") as AdminShow;
+  const pill = pills.find((p) => p.param === asked) ?? mainPills[0];
+  const param = pill?.param ?? "";
+  const show = pill?.show ?? "eligible";
   const [query, setQuery] = useState(q);
+  useEffect(() => setQuery(q), [q]); // the back button brings the search back too
   const [state, setState] = useState<State>({ kind: "loading" });
   const [counts, setCounts] = useState<AdminCounts | undefined>(undefined);
   const [chosen, setChosen] = useState<number | null>(null);
@@ -96,8 +138,8 @@ export function VideosPage() {
   const load = useCallback(
     (limit: number, signal?: AbortSignal) => {
       fetchAdminVideos({ q, show, limit }, signal)
-        .then(({ videos: list, total, counts: c }) => {
-          setState({ kind: "ready", videos: list, total });
+        .then(({ videos: list, total, counts: c, minDuration }) => {
+          setState({ kind: "ready", videos: list, total, minDuration });
           setCounts(c);
         })
         .catch((error: unknown) => {
@@ -121,13 +163,14 @@ export function VideosPage() {
     };
   }, [load]);
 
-  const change = (next: { q?: string; show?: AdminShow }) => {
+  // The search replaces the address; a pill adds a step, for the back button.
+  const change = (next: { q?: string; show?: string }, replace = true) => {
     const p = new URLSearchParams(params);
     for (const [key, value] of Object.entries(next)) {
       if (value) p.set(key, value);
       else p.delete(key);
     }
-    setParams(p, { replace: true });
+    setParams(p, { replace });
   };
 
   const search = (event: FormEvent) => {
@@ -220,6 +263,21 @@ export function VideosPage() {
     </div>
   );
 
+  const button = (f: Pill) => (
+    <button
+      key={f.param}
+      type="button"
+      className={ui.filter}
+      aria-pressed={param === f.param}
+      onClick={() => {
+        if (param !== f.param) change({ show: f.param }, false);
+      }}
+    >
+      {f.label}
+      {counts?.[f.show] !== undefined && <b>{n(counts[f.show] ?? 0)}</b>}
+    </button>
+  );
+
   return (
     <>
       <PageHeader
@@ -227,7 +285,7 @@ export function VideosPage() {
         description={
           counts?.[""] !== undefined
             ? `${n(counts[""])} video dalle cartelle e dai caricamenti. Scegli un video per l'anteprima, il suo titolo per cambiarlo.`
-            : "Tutti i video, anche nascosti o non trovati. Scegli un video per l'anteprima, il suo titolo per cambiarlo."
+            : "Scegli un video per l'anteprima, il suo titolo per cambiarlo."
         }
         actions={
           <>
@@ -265,37 +323,37 @@ export function VideosPage() {
 
       <fieldset className={ui.filters}>
         <legend className="visually-hidden">Mostra</legend>
-        {filters.map((f) => (
-          <button
-            key={f.show}
-            type="button"
-            className={ui.filter}
-            aria-pressed={show === f.show}
-            onClick={() => change({ show: f.show })}
-          >
-            {f.label}
-            {counts?.[f.show] !== undefined && <b>{n(counts[f.show] ?? 0)}</b>}
-          </button>
-        ))}
+        {mainPills.map(button)}
+        <span className={videos.pillGap} aria-hidden="true" />
+        {otherPills.map(button)}
       </fieldset>
+      {state.kind === "ready" && <PillSentence show={show} minDuration={state.minDuration} />}
 
       {state.kind === "loading" && <Loading />}
       {state.kind === "error" && <Unavailable title="Video non disponibili" />}
       {state.kind === "ready" && list.length === 0 && (
         <Empty
           icon="film"
-          title={q ? "Nessun video con queste parole" : "Nessun video qui"}
+          title={
+            q
+              ? "Nessun video con queste parole"
+              : show === "problems"
+                ? "Nessun file con problemi"
+                : show === "short"
+                  ? "Nessun video scartato"
+                  : "Nessun video qui"
+          }
           action={
-            q || show ? (
+            q || param ? (
               <button
                 type="button"
                 className={ui.btn}
                 onClick={() => {
                   setQuery("");
-                  change({ q: "", show: "" });
+                  change({ q: "", show: "" }, false);
                 }}
               >
-                Mostra tutti i video
+                Torna ai video idonei
               </button>
             ) : (
               <Link to="/admin/cartelle" className={`${ui.btn} ${ui.primary}`}>
@@ -304,7 +362,7 @@ export function VideosPage() {
             )
           }
         >
-          {q || show
+          {q || param
             ? "Prova un'altra ricerca, o togli il filtro."
             : "Aggiungi una cartella con dei video, o caricane uno."}
         </Empty>
@@ -399,6 +457,7 @@ export function VideosPage() {
 function videoState(video: AdminVideo, job: Job | null): { label: string; tone: Tone } {
   if (job) return { label: `${kindShort[job.kind]} in corso`, tone: "live" };
   if (video.missing) return { label: "File non trovato", tone: "bad" };
+  if (video.fileProblem) return { label: "File illeggibile", tone: "bad" };
   if (video.hidden) return { label: "Nascosto", tone: "warn" };
   if (video.tooShort) return { label: "Troppo corto", tone: "warn" };
   if (video.duration === null) return { label: "Da leggere", tone: "info" };

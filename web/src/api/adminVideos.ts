@@ -10,6 +10,9 @@ export type AdminVideo = Video & {
   hidden: boolean;
   missing: boolean; // not found at the last check
   tooShort: boolean; // shorter than the minimum chosen for the folders: nobody sees it
+  minDuration: number; // that minimum in seconds, known on the page of a video too short
+  fileProblem: FileProblem; // "" when the file can be read
+  fileProblemDetail: string; // the error of the tool, for whoever wants to look it up
   foundTitle: string; // the title FranzPLAY found by itself
   foundCategory: string; // the category of its folder; "" if none
   titleSet: boolean; // the title was chosen by the administrator
@@ -22,6 +25,10 @@ export type AdminVideo = Video & {
   hasCopy: boolean; // FranzPLAY made a copy every browser plays
 };
 
+// FileProblem is why a file in the folders cannot be read: "damaged" (broken
+// or cut short), "no_video" (no pictures in it), "unreadable" (anything else).
+export type FileProblem = "" | "damaged" | "no_video" | "unreadable";
+
 // ClipChoice is where the clip on the card comes from: a "video" the
 // administrator uploaded, "none" at all, or "" when FranzPLAY makes it.
 export type ClipChoice = "" | "video" | "none";
@@ -30,17 +37,22 @@ export type ClipChoice = "" | "video" | "none";
 // uploaded, a "moment" of the video they chose, or "" when FranzPLAY picks.
 export type CoverChoice = "" | "image" | "moment";
 
-export type AdminShow = "" | "public" | "hidden" | "missing" | "short";
+export type AdminShow = "" | "eligible" | "short" | "problems" | "public" | "hidden" | "missing";
 
 // AdminCounts are how many videos each filter shows, for the same search.
 export type AdminCounts = Partial<Record<AdminShow, number>>;
 
-export type AdminVideoList = { videos: AdminVideo[]; total: number; counts?: AdminCounts };
+export type AdminVideoList = {
+  videos: AdminVideo[];
+  total: number;
+  counts?: AdminCounts;
+  minDuration: number; // seconds, 0 when the administrator chose no minimum
+};
 
 function parseCounts(data: unknown): AdminCounts | undefined {
   if (typeof data !== "object" || data === null) return undefined;
   const out: AdminCounts = {};
-  for (const key of ["", "public", "hidden", "missing", "short"] as const) {
+  for (const key of ["", "eligible", "short", "problems", "public", "hidden", "missing"] as const) {
     const n = (data as Record<string, unknown>)[key];
     if (typeof n === "number" && Number.isInteger(n) && n >= 0) out[key] = n;
   }
@@ -86,8 +98,20 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   ) {
     throw new Error("admin video: bad coverSecond");
   }
+  const fileProblem = d.fileProblem ?? "";
+  if (
+    fileProblem !== "" &&
+    fileProblem !== "damaged" &&
+    fileProblem !== "no_video" &&
+    fileProblem !== "unreadable"
+  ) {
+    throw new Error("admin video: bad fileProblem");
+  }
   return {
     ...video,
+    minDuration: typeof d.minDuration === "number" ? d.minDuration : 0,
+    fileProblem,
+    fileProblemDetail: typeof d.fileProblemDetail === "string" ? d.fileProblemDetail : "",
     folder: d.folder,
     path: d.path,
     hidden: d.hidden,
@@ -120,7 +144,12 @@ export async function fetchAdminVideos(
   if (typeof d.total !== "number" || !Number.isInteger(d.total) || d.total < 0) {
     throw new Error("admin videos: bad total");
   }
-  return { videos: d.videos.map(parseAdminVideo), total: d.total, counts: parseCounts(d.counts) };
+  return {
+    videos: d.videos.map(parseAdminVideo),
+    total: d.total,
+    counts: parseCounts(d.counts),
+    minDuration: typeof d.minDuration === "number" ? d.minDuration : 0,
+  };
 }
 
 // setVideoHidden hides a video from everybody, or shows it again.

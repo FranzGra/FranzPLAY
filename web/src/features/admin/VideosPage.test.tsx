@@ -144,16 +144,19 @@ describe("videos page", () => {
         body: {
           videos: [adminVideo()],
           total: 9,
-          counts: { "": 9, public: 2, hidden: 1, missing: 0, short: 3 },
+          counts: { "": 9, eligible: 5, problems: 1, public: 2, hidden: 1, missing: 0, short: 3 },
         },
       },
     });
     await screen.findByRole("table", { name: "Video" });
     const filters = screen.getByRole("group", { name: "Mostra" });
-    expect(within(filters).getByRole("button", { name: /Tutti/ })).toHaveAttribute(
+    expect(within(filters).getByRole("button", { name: /Idonei/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
+    expect(server.requests.some((r) => r.url.includes("show=eligible"))).toBe(true);
+    expect(within(filters).getByRole("button", { name: /Scartati/ })).toHaveTextContent("3");
+    expect(within(filters).getByRole("button", { name: /Con problemi/ })).toHaveTextContent("1");
     const pub = within(filters).getByRole("button", { name: /Con link pubblico/ });
     expect(pub).toHaveTextContent("2");
     await user.click(pub);
@@ -164,6 +167,67 @@ describe("videos page", () => {
     await user.type(screen.getByRole("searchbox", { name: "Cerca tra i video" }), "mare{Enter}");
     await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("q=mare"));
     expect(server.requests.at(-1)?.url).toContain("show=hidden");
+  });
+
+  it("asks the server for what each pill says", async () => {
+    const { user, server } = renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": {
+        body: { videos: [adminVideo()], total: 1, counts: { "": 1, eligible: 1 }, minDuration: 90 },
+      },
+    });
+    await screen.findByRole("table", { name: "Video" });
+    const filters = screen.getByRole("group", { name: "Mostra" });
+    const pressed = (name: RegExp) =>
+      within(filters).getByRole("button", { name }).getAttribute("aria-pressed");
+
+    await user.click(within(filters).getByRole("button", { name: /Scartati/ }));
+    await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("show=short"));
+    expect(
+      await screen.findByText(/Durano meno del minimo scelto dall'amministratore, 90 secondi/),
+    ).toBeVisible();
+    await user.click(within(filters).getByRole("button", { name: /Con problemi/ }));
+    await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("show=problems"));
+    expect(pressed(/Con problemi/)).toBe("true");
+  });
+
+  it("asks for every video only on the pill that says so", async () => {
+    const { server } = renderApp("/admin/video?show=all", {
+      ...signedIn(),
+      "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
+    });
+    await screen.findByRole("table", { name: "Video" });
+    const list = server.requests.filter((r) => r.url.includes("/api/admin/videos"));
+    expect(list.at(-1)?.url).not.toContain("show=");
+    expect(
+      within(screen.getByRole("group", { name: "Mostra" })).getByRole("button", { name: /Tutti/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("marks a file that cannot be read", async () => {
+    renderApp("/admin/video?show=problems", {
+      ...signedIn(),
+      "GET /api/admin/videos": {
+        body: {
+          videos: [adminVideo({ fileProblem: "damaged", duration: null })],
+          total: 1,
+          counts: { problems: 1 },
+        },
+      },
+    });
+    await screen.findByRole("table", { name: "Video" });
+    expect(rowOf("Mare 2024")).toHaveTextContent("File illeggibile");
+    expect(screen.getByText(/FranzPLAY non riesce a leggerli/)).toBeVisible();
+  });
+
+  it("says when a pill is empty, and goes back to the eligible videos", async () => {
+    const { user, server } = renderApp("/admin/video?show=problems", {
+      ...signedIn(),
+      "GET /api/admin/videos": { body: { videos: [], total: 0 } },
+    });
+    expect(await screen.findByRole("heading", { name: "Nessun file con problemi" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Torna ai video idonei" }));
+    await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("show=eligible"));
   });
 
   it("follows the library as it changes", async () => {

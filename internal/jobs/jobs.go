@@ -135,6 +135,17 @@ func Enqueue(ctx context.Context, db execer, videoID int64, kind Kind, onlyIfNot
 	return nil
 }
 
+// FileUnreadable is the one rule, written for a query on "videos v", that
+// says a file is damaged or is not a video: it is in its folder, and FranzPLAY
+// gave up reading it. Attempts still to come do not count, and a file removed
+// or replaced leaves the list, because the scan asks to read it again.
+const FileUnreadable = `(v.missing_since IS NULL AND EXISTS (SELECT 1 FROM jobs j
+	WHERE j.video_id = v.id AND j.kind = 'probe' AND j.state = 'failed'))`
+
+// FileUnreadableError is, for the same query, why that file could not be read.
+const FileUnreadableError = `coalesce((SELECT j.last_error FROM jobs j
+	WHERE j.video_id = v.id AND j.kind = 'probe' AND j.state = 'failed'), '')`
+
 // nextUrgentAt is the SQL for the urgent_at of a job put first now: after
 // every other, even within one millisecond or with a clock moved back. Its
 // argument is the time in milliseconds.

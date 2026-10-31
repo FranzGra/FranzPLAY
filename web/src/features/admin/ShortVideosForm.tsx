@@ -86,7 +86,7 @@ export function ShortVideosForm({
         <p role="status" className={ui.okText}>
           {tooShort === 0
             ? `Nessun video dura meno di ${minDuration} secondi.`
-            : `${tooShort.toLocaleString("it-IT")} ${tooShort === 1 ? "video non si vede perché dura" : "video non si vedono perché durano"} meno di ${minDuration} secondi. Li trovi in Video › Troppo corti.`}
+            : `${tooShort.toLocaleString("it-IT")} ${tooShort === 1 ? "video non si vede perché dura" : "video non si vedono perché durano"} meno di ${minDuration} secondi. Li trovi in Video › Scartati.`}
         </p>
       )}
 

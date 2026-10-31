@@ -72,3 +72,25 @@ test("the player of the administration shows the subtitles of the video", async 
     await expect(words).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: 20_000 });
 });
+
+test("the pills of the videos stay in the address, so the back button works", async ({ page }) => {
+  await logIn(page, ADMIN);
+  await page.goto("/admin/video");
+  const filters = page.getByRole("group", { name: "Mostra" });
+  const pill = (name: string) => filters.getByRole("button", { name });
+  await expect(pill("Idonei")).toHaveAttribute("aria-pressed", "true");
+
+  await pill("Scartati").click();
+  await expect(page).toHaveURL(/show=short/);
+  await pill("Con problemi").click();
+  await expect(page).toHaveURL(/show=problems/);
+  await expect(page.getByText("Nessun file con problemi")).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/show=short/);
+  await expect(pill("Scartati")).toHaveAttribute("aria-pressed", "true");
+  await page.goBack();
+  await expect(page).not.toHaveURL(/show=/);
+  await expect(pill("Idonei")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("table", { name: "Video" })).toBeVisible();
+});

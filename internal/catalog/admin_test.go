@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/users"
+	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
 // adminSite is a catalog with the administrator's API on top, for who.
@@ -99,6 +100,117 @@ func TestHideRefusals(t *testing.T) {
 	}
 	s.do(t, "PUT", "/api/admin/videos/999/hidden", `{"hidden":true}`, http.StatusNotFound)
 	s.do(t, "PUT", "/api/admin/videos/abc/hidden", `{"hidden":true}`, http.StatusNotFound)
+}
+
+// Every video in the folders is in exactly one part: eligible, too short, or
+// with a problem. Nothing is taken out of the library, and the search counts
+// inside each part.
+func TestAdminListSplitsTheFolders(t *testing.T) {
+	s := newAdminSite(t)
+	good := s.addVideo(t, "Viaggi/mare.mp4", "sea", "Viaggi", 100, true)
+	waiting := s.addVideo(t, "Viaggi/nuovo.mp4", "new", "Viaggi", 110, false)
+	short := s.addVideo(t, "Viaggi/corto.mp4", "short", "Viaggi", 120, true)
+	broken := s.addVideo(t, "Viaggi/rotto.mp4", "broken", "Viaggi", 130, false)
+	silent := s.addVideo(t, "audio.mp4", "audio", "", 140, false)
+	shortBroken := s.addVideo(t, "corto-rotto.mp4", "both", "", 150, true)
+	goneBroken := s.addVideo(t, "perso.mp4", "gone", "", 160, false)
+	retrying := s.addVideo(t, "riprova.mp4", "retry", "", 170, false)
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := s.db.Exec(query, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`UPDATE videos SET too_short = 1 WHERE id IN (?, ?)`, short, shortBroken)
+	exec(`UPDATE videos SET missing_since = 1 WHERE id = ?`, goneBroken)
+	exec(`INSERT OR REPLACE INTO settings (key, value) VALUES ('library.min_duration', '90')`)
+	failed := func(id int64, state, why string) {
+		t.Helper()
+		exec(`INSERT OR REPLACE INTO jobs (video_id, kind, state, last_error, updated_at) VALUES (?, 'probe', ?, ?, 1)`, id, state, why)
+	}
+	failed(broken, "failed", "read video 4: ffprobe: exit status 1: moov atom not found")
+	failed(silent, "failed", "video 5: no video stream: permanent failure")
+	failed(shortBroken, "failed", "read video 6: ffprobe: exit status 1: Permission denied")
+	failed(goneBroken, "failed", "read video 7: file gone")
+	failed(retrying, "pending", "read video 8: not yet")
+
+	ids := func(url string) (map[int64]AdminVideo, adminList) {
+		t.Helper()
+		list := decode[adminList](t, s.do(t, "GET", url, "", http.StatusOK))
+		out := map[int64]AdminVideo{}
+		for _, v := range list.Videos {
+			out[v.ID] = v
+		}
+		if list.Total != len(list.Videos) {
+			t.Errorf("%s: total %d with %d videos", url, list.Total, len(list.Videos))
+		}
+		return out, list
+	}
+	wants := map[string][]int64{
+		"eligible": {good, waiting, retrying},
+		"short":    {short},
+		"problems": {broken, silent, shortBroken},
+		"missing":  {goneBroken},
+	}
+	all, list := ids("/api/admin/videos")
+	if list.Total != 8 {
+		t.Errorf("all = %d videos, want 8: nothing leaves the library", list.Total)
+	}
+	if list.MinDuration != 90 {
+		t.Errorf("minimum = %d, want 90", list.MinDuration)
+	}
+	for show, want := range wants {
+		got, _ := ids("/api/admin/videos?show=" + show)
+		if len(got) != len(want) || list.Counts[adminFilter(show)] != len(want) {
+			t.Errorf("show=%s: %d videos, count %d, want %d", show, len(got), list.Counts[adminFilter(show)], len(want))
+		}
+		for _, id := range want {
+			if _, ok := got[id]; !ok {
+				t.Errorf("show=%s: video %d is not there", show, id)
+			}
+		}
+	}
+
+	if v := all[broken]; v.FileProblem != video.FileDamaged || v.FileProblemDetail != "exit status 1: moov atom not found" {
+		t.Errorf("damaged file = %q, %q", v.FileProblem, v.FileProblemDetail)
+	}
+	if v := all[silent]; v.FileProblem != video.FileNoVideo {
+		t.Errorf("file without pictures = %q", v.FileProblem)
+	}
+	if v := all[shortBroken]; v.FileProblem != video.FileUnreadable {
+		t.Errorf("file not reached = %q", v.FileProblem)
+	}
+	for _, id := range []int64{good, waiting, short, goneBroken, retrying} {
+		if v := all[id]; v.FileProblem != "" || v.FileProblemDetail != "" {
+			t.Errorf("video %d has a problem it should not have: %q", id, v.FileProblem)
+		}
+	}
+
+	// The search counts inside each part, and the page holds what the pill says.
+	got, searched := ids("/api/admin/videos?show=problems&q=rotto")
+	if len(got) != 2 || searched.Counts[problemVideos] != 2 || searched.Counts[eligibleVideos] != 0 {
+		t.Errorf("search among the problems: %d videos, counts %+v", len(got), searched.Counts)
+	}
+	page := decode[adminList](t, s.do(t, "GET", "/api/admin/videos?show=problems&limit=1&offset=1", "", http.StatusOK))
+	if page.Total != 3 || len(page.Videos) != 1 {
+		t.Errorf("second page of the problems: total %d, %d videos", page.Total, len(page.Videos))
+	}
+
+	// The minimum is told on the page of a video too short, not on the others.
+	one := decode[AdminVideo](t, s.do(t, "GET", "/api/admin/videos/"+strconv.FormatInt(short, 10), "", http.StatusOK))
+	if one.MinDuration != 90 {
+		t.Errorf("minimum on the video too short = %d", one.MinDuration)
+	}
+	other := decode[AdminVideo](t, s.do(t, "GET", "/api/admin/videos/"+strconv.FormatInt(good, 10), "", http.StatusOK))
+	if other.MinDuration != 0 {
+		t.Errorf("minimum on a normal video = %d", other.MinDuration)
+	}
+
+	// Read again and read well: the file leaves the problems.
+	exec(`UPDATE jobs SET state = 'done' WHERE video_id = ? AND kind = 'probe'`, broken)
+	if got, _ := ids("/api/admin/videos?show=problems"); len(got) != 2 {
+		t.Errorf("file read again is still a problem: %d", len(got))
+	}
 }
 
 func TestAdminList(t *testing.T) {
@@ -247,7 +359,7 @@ func TestAdminOneVideoAndPublicFilter(t *testing.T) {
 	if list.Total != 1 || list.Videos[0].ID != id {
 		t.Errorf("public filter = %+v", list)
 	}
-	if want := map[adminFilter]int{"": 2, "public": 1, "hidden": 0, "missing": 0, "short": 0}; !reflect.DeepEqual(list.Counts, want) {
+	if want := map[adminFilter]int{"": 2, "public": 1, "eligible": 2, "problems": 0, "hidden": 0, "missing": 0, "short": 0}; !reflect.DeepEqual(list.Counts, want) {
 		t.Errorf("counts = %v, want %v", list.Counts, want)
 	}
 	s.who = users.Account{ID: 2, Role: users.User}

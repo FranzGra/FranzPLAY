@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
+	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/users"
+	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
 // The administrator's changes to the catalog live here and in edit.go:
@@ -37,6 +39,12 @@ type AdminVideo struct {
 	// TooShort: shorter than the minimum the administrator chose for the
 	// video folders, so nobody sees it.
 	TooShort bool `json:"tooShort"`
+	// MinDuration is that minimum in seconds, only on the page of one video.
+	MinDuration int `json:"minDuration,omitempty"`
+	// FileProblem says the file is in its folder but cannot be read (see
+	// video.FileProblem); FileProblemDetail is the error, as the tool wrote it.
+	FileProblem       video.FileProblemKind `json:"fileProblem,omitempty"`
+	FileProblemDetail string                `json:"fileProblemDetail,omitempty"`
 	// What FranzPLAY found by itself, shown when the administrator
 	// changes title or category, to put it back.
 	FoundTitle    string `json:"foundTitle"`
@@ -62,16 +70,26 @@ type AdminVideo struct {
 type adminFilter string
 
 const (
-	allVideos     adminFilter = ""
-	hiddenVideos  adminFilter = "hidden"
-	missingVideos adminFilter = "missing"
-	shortVideos   adminFilter = "short"
-	publicVideos  adminFilter = "public" // with a public link
+	allVideos      adminFilter = ""
+	eligibleVideos adminFilter = "eligible" // in the folders, long enough and readable
+	shortVideos    adminFilter = "short"    // in the folders and readable, below the minimum
+	problemVideos  adminFilter = "problems" // in the folders, but damaged or not a video
+	hiddenVideos   adminFilter = "hidden"
+	missingVideos  adminFilter = "missing"
+	publicVideos   adminFilter = "public" // with a public link
+)
+
+// The three parts every video in the folders falls into, exactly one each:
+// the summary counts them with the same rules.
+const (
+	isProblem  = jobs.FileUnreadable
+	isShort    = `(v.missing_since IS NULL AND v.too_short AND NOT ` + isProblem + `)`
+	isEligible = `(v.missing_since IS NULL AND NOT v.too_short AND NOT ` + isProblem + `)`
 )
 
 // AdminRoutes adds the administrator's video API to mux:
 //
-//	GET  /api/admin/videos                 every video (?q=&show=hidden|missing|short|public&limit=&offset=)
+//	GET  /api/admin/videos                 every video (?q=&show=eligible|short|problems|hidden|missing|public&limit=&offset=)
 //	GET  /api/admin/videos/{id}            one video, as in the list
 //	PUT  /api/admin/videos/{id}/hidden     hide or show again {hidden}
 //	POST /api/admin/videos/{id}/refresh    read it again and remake cover and previews
@@ -148,10 +166,10 @@ func parseAdminQuery(values url.Values) (listQuery, adminFilter, error) {
 	}
 	q.category = ""
 	switch f := adminFilter(values.Get("show")); f {
-	case allVideos, hiddenVideos, missingVideos, shortVideos, publicVideos:
+	case allVideos, eligibleVideos, shortVideos, problemVideos, hiddenVideos, missingVideos, publicVideos:
 		return q, f, nil
 	default:
-		return listQuery{}, "", fmt.Errorf(`%w: show must be "hidden", "missing", "short" or "public"`, errBadQuery)
+		return listQuery{}, "", fmt.Errorf(`%w: show must be "eligible", "short", "problems", "hidden", "missing" or "public"`, errBadQuery)
 	}
 }
 
@@ -159,8 +177,12 @@ type adminList struct {
 	Videos []AdminVideo `json:"videos"`
 	Total  int          `json:"total"`
 	// Counts are how many videos each filter shows for the same search,
-	// for the filter menu: "" (all), "public", "hidden", "missing", "short".
+	// for the filter menu: "" (all), "eligible", "short", "problems",
+	// "public", "hidden", "missing".
 	Counts map[adminFilter]int `json:"counts"`
+	// MinDuration is the minimum length the administrator chose, in seconds;
+	// 0 when there is none. It explains the videos left out as too short.
+	MinDuration int `json:"minDuration"`
 }
 
 func (a admin) handleList(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +201,12 @@ func (a admin) handleList(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	respond.JSON(w, r, a.logger, http.StatusOK, adminList{Videos: videos, Total: total, Counts: counts})
+	minimum, err := library.MinDuration(r.Context(), a.store.db)
+	if err != nil {
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	respond.JSON(w, r, a.logger, http.StatusOK, adminList{Videos: videos, Total: total, Counts: counts, MinDuration: minimum})
 }
 
 func (a admin) handleOne(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +224,14 @@ func (a admin) handleOne(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusNotFound, errNotFound.Error())
 		return
 	}
-	respond.JSON(w, r, a.logger, http.StatusOK, videos[0])
+	one := videos[0]
+	if one.TooShort {
+		if one.MinDuration, err = library.MinDuration(r.Context(), a.store.db); err != nil {
+			respond.InternalError(w, r, a.logger, err)
+			return
+		}
+	}
+	respond.JSON(w, r, a.logger, http.StatusOK, one)
 }
 
 func (a admin) handleHidden(w http.ResponseWriter, r *http.Request) {
@@ -261,18 +295,20 @@ func (s store) adminCounts(ctx context.Context, q listQuery) (map[adminFilter]in
 		p := likePattern(w)
 		args = append(args, p, p, p)
 	}
-	var all, public, hidden, missing, short int
+	var all, eligible, short, problems, public, hidden, missing int
 	err := s.db.QueryRowContext(ctx, `SELECT count(*),
+		coalesce(sum(`+isEligible+`), 0),
+		coalesce(sum(`+isShort+`), 0),
+		coalesce(sum(`+isProblem+`), 0),
 		coalesce(sum(v.id IN (SELECT p.video_id FROM public_links p)), 0),
 		coalesce(sum(v.hidden_at IS NOT NULL), 0),
-		coalesce(sum(v.missing_since IS NOT NULL), 0),
-		coalesce(sum(v.too_short), 0)
-		FROM videos v WHERE `+where, args...).Scan(&all, &public, &hidden, &missing, &short)
+		coalesce(sum(v.missing_since IS NOT NULL), 0)
+		FROM videos v WHERE `+where, args...).Scan(&all, &eligible, &short, &problems, &public, &hidden, &missing)
 	if err != nil {
 		return nil, fmt.Errorf("count videos: %w", err)
 	}
-	return map[adminFilter]int{allVideos: all, publicVideos: public, hiddenVideos: hidden,
-		missingVideos: missing, shortVideos: short}, nil
+	return map[adminFilter]int{allVideos: all, eligibleVideos: eligible, shortVideos: short, problemVideos: problems,
+		publicVideos: public, hiddenVideos: hidden, missingVideos: missing}, nil
 }
 
 func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, id int64) (_ []AdminVideo, total int, err error) {
@@ -283,6 +319,10 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 		args = append(args, id)
 	}
 	switch filter {
+	case eligibleVideos:
+		where += ` AND ` + isEligible
+	case problemVideos:
+		where += ` AND ` + isProblem
 	case publicVideos:
 		where += ` AND v.id IN (SELECT p.video_id FROM public_links p)`
 	case hiddenVideos:
@@ -290,7 +330,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 	case missingVideos:
 		where += ` AND v.missing_since IS NOT NULL`
 	case shortVideos:
-		where += ` AND v.too_short`
+		where += ` AND ` + isShort
 	}
 	for _, w := range q.words {
 		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
@@ -305,7 +345,8 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
 		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL,
 		       v.own_cover IS NOT NULL, v.cover_second, v.own_clip IS NOT NULL, v.no_clip,
-		       coalesce(v.video_codec, ''), coalesce(v.audio_codec, ''), v.converted IS NOT NULL
+		       coalesce(v.video_codec, ''), coalesce(v.audio_codec, ''), v.converted IS NOT NULL,
+		       `+isProblem+`, `+jobs.FileUnreadableError+`
 		FROM videos v JOIN libraries l ON l.id = v.library_id
 		WHERE `+where+`
 		ORDER BY v.added_at DESC, v.id DESC LIMIT ? OFFSET ?`, append(args, q.limit, q.offset)...)
@@ -316,13 +357,17 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 	out := []AdminVideo{}
 	for rows.Next() {
 		var av AdminVideo
-		var ownCover, ownClip, noClip bool
+		var ownCover, ownClip, noClip, unreadable bool
 		var second sql.NullInt64
+		var readError string
 		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing, &av.TooShort,
 			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second, &ownClip, &noClip,
-			&av.VideoCodec, &av.AudioCodec, &av.HasCopy}})
+			&av.VideoCodec, &av.AudioCodec, &av.HasCopy, &unreadable, &readError}})
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
+		}
+		if unreadable {
+			av.FileProblem, av.FileProblemDetail = video.FileProblem(readError)
 		}
 		av.showPublicLink() // the list is only for administrators, who manage every link
 		switch {

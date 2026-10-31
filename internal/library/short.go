@@ -51,8 +51,13 @@ func MarkShort(ctx context.Context, db execer, videoID int64) error {
 
 // minDuration returns the minimum length in seconds, 0 when there is none.
 func (s store) minDuration(ctx context.Context) (int, error) {
+	return MinDuration(ctx, s.db)
+}
+
+// MinDuration returns the minimum length in seconds, 0 when there is none.
+func MinDuration(ctx context.Context, db *sql.DB) (int, error) {
 	var value string
-	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, keyMinDuration).Scan(&value)
+	err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, keyMinDuration).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}

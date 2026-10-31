@@ -622,3 +622,24 @@
     margin: -6px -6px 0 0;
   }
 }
+
+/* The two kinds of pill, and what a pill means */
+.pillGap {
+  align-self: center;
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--color-border);
+}
+
+.pillNote {
+  margin: -6px 0 18px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.pillNote a {
+  color: var(--color-text);
+  text-decoration: underline;
+}
