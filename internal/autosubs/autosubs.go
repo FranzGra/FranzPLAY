@@ -59,6 +59,8 @@ type TranslatorHelp struct {
 type Options struct {
 	DataDir    string
 	Whisper    bool        // whisper.cpp and ffmpeg were found: subtitles can be made
+	// WhisperStatus says whether it really runs on this CPU; nil: not known.
+	WhisperStatus func(context.Context) media.WhisperStatus
 	Translator Languages   // nil: no translator set, nothing is translated
 	Downloader *Downloader // downloads the models; nil: none can be downloaded
 	// TranslatorHelp is shown when the translator is off or does not answer.
@@ -127,6 +129,12 @@ func (p page) only(next http.HandlerFunc) http.HandlerFunc {
 // Setup is what this machine can do, so the page offers only that.
 type Setup struct {
 	Whisper bool     `json:"whisper"` // whisper.cpp is installed
+	// WhisperBuild is the version chosen for this CPU: "complete", "basic", or
+	// "" when there is only one. WhisperProblem says why it does not run on
+	// this CPU; "" when it does. SlowCPU: no AVX2, transcribing takes long.
+	WhisperBuild   string `json:"whisperBuild"`
+	WhisperProblem string `json:"whisperProblem"`
+	SlowCPU        bool   `json:"slowCpu"`
 	Models  []string `json:"models"`  // the models in the data folder: "small", "medium"
 	// Translator says whether a translator is set; TranslatorError why it
 	// does not answer, when it does not; TranslatorLanguages the languages
@@ -167,6 +175,10 @@ func (p page) handleSetup(w http.ResponseWriter, r *http.Request) {
 		ModelsFolder: folder}
 	if s.Models == nil {
 		s.Models = []string{}
+	}
+	if s.Whisper && p.opts.WhisperStatus != nil {
+		st := p.opts.WhisperStatus(r.Context())
+		s.WhisperBuild, s.WhisperProblem, s.SlowCPU = st.Build, st.Problem, st.SlowCPU
 	}
 	s.Downloadable = []Model{}
 	if p.opts.Downloader != nil {
@@ -244,9 +256,12 @@ const spokenUnknown = "auto"
 var errBadRequest = errors.New("bad request")
 
 // check controls a request once, at the door (rule 8).
-func (p page) check(b askBody) error {
+func (p page) check(ctx context.Context, b askBody) error {
 	if !p.opts.Whisper {
 		return fmt.Errorf("%w: whisper is not installed", errBadRequest)
+	}
+	if p.opts.WhisperStatus != nil && p.opts.WhisperStatus(ctx).Problem != "" {
+		return fmt.Errorf("%w: whisper cannot run on this processor", errBadRequest)
 	}
 	if b.Spoken == "" {
 		return fmt.Errorf("%w: say the language spoken in the video, or %q", errBadRequest, spokenUnknown)
@@ -285,7 +300,7 @@ func (p page) handleAsk(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, p.logger, http.StatusBadRequest, `the body must be {"spoken": "en", "model": "small", "translate": ["it"]}`)
 		return
 	}
-	if err := p.check(b); errors.Is(err, errBadRequest) {
+	if err := p.check(r.Context(), b); errors.Is(err, errBadRequest) {
 		respond.Error(w, r, p.logger, http.StatusBadRequest, err.Error())
 		return
 	} else if err != nil {

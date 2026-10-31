@@ -129,6 +129,11 @@ E infine `docker compose up -d`. Il `:ro` alla fine è importante: vuol dire sol
 **Amministrazione › Sottotitoli** scegli e scarica un modello (finisce nella cartella dati) e
 FranzPLAY è pronto.
 
+Nell'immagine amd64 ci sono due versioni di Whisper: quella completa, per i processori con AVX2, e
+quella di base, più lenta, per i processori piccoli (Celeron, Atom) che hanno almeno SSE4.2.
+FranzPLAY sceglie da solo quando parte; la pagina dei sottotitoli dice quale usa. Se il processore
+non ha nemmeno SSE4.2, la stessa pagina lo spiega e i sottotitoli automatici restano spenti.
+
 Anche il **traduttore** è già dentro l'immagine: non c'è niente da impostare e non serve un altro
 container. Quando chiedi una traduzione, il modello di quelle due lingue si scarica da solo nella
 cartella dati, circa 36 MB per direzione. Lavora su un solo core e vuole circa 200 MB di memoria,

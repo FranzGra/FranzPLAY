@@ -55,6 +55,13 @@ function useStop(onChanged: () => void) {
   return { stop, stopping, problem };
 }
 
+// buildWords says which version of whisper runs here, when there are two.
+function buildWords(build: string): string {
+  if (build === "complete") return "Versione completa, va su questo processore. ";
+  if (build === "basic") return "Versione di base, adatta a questo processore: più lenta. ";
+  return "";
+}
+
 // SubtitlesSetupBox is what this machine can do: one line for whisper's
 // models, one for the translator. They open only when there is something to
 // do there.
@@ -67,7 +74,11 @@ export function SubtitlesSetupBox({
 }) {
   return (
     <div className={subs.setup}>
-      {setup.whisper ? (
+      {setup.whisper && setup.whisperProblem !== "" ? (
+        <Notice icon="subtitles" title="Whisper non può funzionare su questo processore">
+          {setup.whisperProblem}
+        </Notice>
+      ) : setup.whisper ? (
         <ModelsBox setup={setup} onChanged={onChanged} />
       ) : (
         <Notice icon="subtitles" title="I sottotitoli automatici sono spenti">
@@ -111,7 +122,9 @@ function ModelsBox({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () 
           ) : (
             <>
               <b>Whisper è pronto</b>
-              <span className={subs.lineMore}>Modelli: {setup.models.join(", ")}</span>
+              <span className={subs.lineMore}>
+                {buildWords(setup.whisperBuild)}Modelli: {setup.models.join(", ")}
+              </span>
             </>
           )}
         </p>

@@ -447,7 +447,7 @@ function VideoRow({
   const [open, setOpen] = useState<"" | "transcribe" | "translate">("");
   const r = video.request;
   const t = video.translation;
-  const canListen = setup.whisper && setup.models.length > 0;
+  const canListen = setup.whisper && setup.whisperProblem === "" && setup.models.length > 0;
   const listening = r?.state === "running";
   const running = listening || t?.state === "running";
   const waiting = r?.state === "pending" || t?.state === "pending";

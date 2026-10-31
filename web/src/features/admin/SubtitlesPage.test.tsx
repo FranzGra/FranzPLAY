@@ -415,6 +415,25 @@ describe("subtitles page", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("says when whisper cannot run on this processor", async () => {
+    renderApp(
+      "/admin/sottotitoli",
+      routes([video()], { ...setup, whisperProblem: "Questo processore è troppo vecchio." }),
+    );
+    await screen.findByRole("list", { name: "Video" });
+    expect(screen.getByText("Whisper non può funzionare su questo processore")).toBeInTheDocument();
+    expect(screen.getByText("Questo processore è troppo vecchio.")).toBeInTheDocument();
+    expect(
+      within(rowOf("Mare 2024")).queryByRole("button", { name: "Trascrivi" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says which version of whisper runs here", async () => {
+    renderApp("/admin/sottotitoli", routes([video()], { ...setup, whisperBuild: "basic" }));
+    await screen.findByRole("list", { name: "Video" });
+    expect(screen.getByText(/Versione di base, adatta a questo processore/)).toBeInTheDocument();
+  });
+
   it("says where the model goes when there is none", async () => {
     renderApp(
       "/admin/sottotitoli",

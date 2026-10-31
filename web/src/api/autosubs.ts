@@ -6,6 +6,11 @@ import { request } from "./client";
 
 export type SubtitlesSetup = {
   whisper: boolean; // whisper.cpp is installed
+  // Newer servers only. The version chosen for this processor: "complete",
+  // "basic", "" when there is only one.
+  whisperBuild: string;
+  whisperProblem: string; // why it does not run on this processor, "" when it does
+  slowCpu: boolean; // a processor without AVX2: transcribing takes long
   models: string[]; // "small", "medium"
   translator: boolean; // a translator is set
   translatorError: string; // why it does not answer, "" when it does
@@ -125,6 +130,9 @@ export function parseSetup(data: unknown): SubtitlesSetup {
   }
   return {
     whisper: d.whisper,
+    whisperBuild: typeof d.whisperBuild === "string" ? d.whisperBuild : "",
+    whisperProblem: typeof d.whisperProblem === "string" ? d.whisperProblem : "",
+    slowCpu: d.slowCpu === true,
     models: strings(d.models, "models"),
     translator: d.translator,
     translatorError: d.translatorError,

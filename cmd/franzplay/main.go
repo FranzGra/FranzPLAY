@@ -196,7 +196,11 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 			logger.Info("whisper not found: automatic subtitles are off", "setting", config.EnvWhisper)
 		} else {
 			subtitles.Whisper = true
+			picker := media.NewWhisperPicker(whisper)
+			subtitles.WhisperStatus = picker.Status
+			logger.Info("whisper found", "program", picker.Program())
 			transcriber := media.NewTranscriber(db, ffmpeg, whisper, cfg.DataDir, translator)
+			transcriber.UseWhisper(picker)
 			transcriber.OnStage(func() { hub.Publish(events.Jobs) })
 			handlers[jobs.Transcribe] = transcriber.Handle
 		}

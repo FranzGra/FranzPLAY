@@ -306,7 +306,7 @@ export function TranslateForm({
         </p>
         <p className={ui.cardText}>
           La traduzione parte da sottotitoli già scritti.{" "}
-          {setup.whisper && setup.models.length > 0
+          {setup.whisper && setup.whisperProblem === "" && setup.models.length > 0
             ? "Prima usa Trascrivi, indicando la lingua in cui si parla; poi torna qui."
             : "Serve prima una trascrizione, ma Whisper qui non è pronto: guarda il riquadro in cima."}
         </p>

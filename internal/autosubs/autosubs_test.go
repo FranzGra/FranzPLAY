@@ -143,6 +143,27 @@ func TestSetup(t *testing.T) {
 	}
 }
 
+func TestSetupSaysWhetherWhisperRunsHere(t *testing.T) {
+	s := newSite(t)
+	id := s.addVideo(t, "mare.mp4", "Mare")
+	s.opts.WhisperStatus = func(context.Context) media.WhisperStatus {
+		return media.WhisperStatus{Build: media.WhisperBasic, Runs: true, SlowCPU: true}
+	}
+	got := decode[Setup](t, s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusOK))
+	if got.WhisperBuild != "basic" || got.WhisperProblem != "" || !got.SlowCPU {
+		t.Errorf("setup on a small CPU = %+v", got)
+	}
+
+	s.opts.WhisperStatus = func(context.Context) media.WhisperStatus {
+		return media.WhisperStatus{Problem: "Troppo vecchio."}
+	}
+	got = decode[Setup](t, s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusOK))
+	if got.WhisperProblem != "Troppo vecchio." {
+		t.Errorf("setup on a CPU too old = %+v", got)
+	}
+	s.do(t, "PUT", "/api/admin/subtitles/"+strconv.FormatInt(id, 10), `{"spoken":"it","model":"small"}`, http.StatusBadRequest)
+}
+
 func TestOnlyAdministrators(t *testing.T) {
 	s := newSite(t)
 	s.who = users.Account{ID: 2, Name: "Ada", Role: users.User}

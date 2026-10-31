@@ -92,6 +92,7 @@ type Transcriber struct {
 	whisper    string
 	dataDir    string
 	translator Translator // nil: no translations
+	picker     *WhisperPicker // nil: whisper is run without looking at the CPU
 	threads    int        // how many processor cores whisper may use
 	run        runFunc
 	stream     streamFunc // runs whisper, reading how far it is as it goes
@@ -189,6 +190,9 @@ func (t *Transcriber) transcript(ctx context.Context, videoID int64, file, finge
 		return s.lang, false, nil
 	}
 
+	if err := t.whisperProblem(ctx); err != nil {
+		return "", false, err
+	}
 	modelFile := ModelFile(t.dataDir, req.model)
 	if _, err := os.Stat(modelFile); err != nil {
 		return "", false, fmt.Errorf("whisper model %q: %w: %w", req.model, err, jobs.ErrPermanent)
@@ -246,7 +250,7 @@ func (t *Transcriber) listen(ctx context.Context, videoID int64, file, modelFile
 		}
 	}, whisperArgs(modelFile, sound, spoken, t.threads, out)...)
 	if err != nil {
-		return "", nil, fmt.Errorf("whisper on video %d: %w", videoID, err)
+		return "", nil, t.whisperFailed(videoID, err)
 	}
 	data, err := readSmall(out + ".json")
 	if err != nil {

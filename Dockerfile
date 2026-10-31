@@ -44,17 +44,30 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -o /out/franzplay ./cmd/franzplay
 
 # --- 3. whisper.cpp, for automatic subtitles. Built on the target system
-# (it is C++), without -march=native, so it runs on any CPU of that kind.
+# (it is C++). GGML_NATIVE=OFF does not mean "any CPU": on x86 it turns on AVX,
+# AVX2, FMA, F16C and BMI2, and a CPU without them (Celeron, Atom, old Pentium)
+# crashes as whisper starts. So amd64 also gets whisper-cli-basic, without
+# them: slower, it needs only SSE4.2. FranzPLAY reads the CPU's flags and picks
+# one when it runs (internal/media/whispercpu.go). arm64 has one program only.
 FROM alpine:${ALPINE_VERSION} AS whisper
 RUN apk add --no-cache build-base cmake
+ARG TARGETARCH
 ARG WHISPER_VERSION=v1.9.5
+ARG WHISPER_JOBS=4
 ADD https://github.com/ggml-org/whisper.cpp.git#${WHISPER_VERSION} /src
 WORKDIR /src
-RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF \
-      -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF \
- && cmake --build build --config Release --target whisper-cli -j"$(nproc)" \
- && install -D -s build/bin/whisper-cli /out/whisper-cli
+RUN make_whisper() { \
+      cmake -B "$1" -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF \
+        -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF $3 \
+      && cmake --build "$1" --config Release --target whisper-cli -j"$WHISPER_JOBS" \
+      && install -D -s "$1/bin/whisper-cli" "/out/$2"; \
+    } \
+ && make_whisper build whisper-cli "" \
+ && if [ "$TARGETARCH" = amd64 ]; then \
+      make_whisper build-basic whisper-cli-basic \
+        "-DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF"; \
+    fi
 
 # --- 4. The translator of subtitles: Bergamot (Mozilla's, the one in Firefox),
 # for translating with no other container. Built on the target system like
@@ -116,7 +129,7 @@ FROM alpine:${ALPINE_VERSION}
 # and translator-cli are C++. pcre2: translator-cli splits text with it.
 RUN apk add --no-cache ffmpeg ca-certificates tzdata su-exec libstdc++ pcre2
 COPY --from=program /out/franzplay /usr/local/bin/franzplay
-COPY --from=whisper /out/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=whisper /out/ /usr/local/bin/
 COPY --from=translator /out/translator-cli /usr/local/bin/translator-cli
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
