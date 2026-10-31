@@ -45,6 +45,7 @@ import { runningJobs, throttle, useActivity } from "./activity";
 import { ClipForm } from "./ClipForm";
 import { CoverForm } from "./CoverForm";
 import edit from "./Edit.module.css";
+import { fileProblemText } from "./fileProblem";
 import {
   forgetJobVideo,
   kindNames,
@@ -217,7 +218,13 @@ function Detail({
   const dirty = title !== video.title || category !== video.category;
   const quality = qualityLabel(video.height);
   const compat = compatibility(video);
-  const watchable = !(video.hidden || video.missing || video.tooShort || video.private);
+  const watchable = !(
+    video.hidden ||
+    video.missing ||
+    video.fileProblem ||
+    video.tooShort ||
+    video.private
+  );
 
   const at = ids.indexOf(video.id);
   const before = at > 0 ? ids[at - 1] : undefined;
@@ -320,8 +327,10 @@ function Detail({
             </Chip>
           )}
           {video.missing && <Chip tone="bad">File non trovato</Chip>}
+          {video.fileProblem && !video.missing && <Chip tone="bad">File illeggibile</Chip>}
           {video.hidden && <Chip tone="warn">Nascosto</Chip>}
           {video.tooShort && <Chip tone="warn">Troppo corto</Chip>}
+          {video.private && <Chip tone="info">Privato</Chip>}
         </div>
         <div className={edit.headActions}>
           {dirty && (
@@ -358,7 +367,7 @@ function Detail({
       <div className={edit.layout}>
         <div className={edit.column}>
           <div className={edit.stageBox} data-order="1">
-            <Stage video={video} watchable={watchable} />
+            <Stage video={video} watchable={watchable} say={say} />
           </div>
           <div data-order="3">
             <CoverForm
@@ -500,11 +509,60 @@ function StagePlayer({ video }: { video: AdminVideo }) {
   );
 }
 
+// whyNoPlay says why a video has no play button, the most important reason
+// first; null when it has one.
+function whyNoPlay(video: AdminVideo): { title: string; text: string; copy?: boolean } | null {
+  if (video.missing) {
+    return {
+      title: "Il file non c'è più",
+      text: "Non è più nella sua cartella. Se l'hai solo spostato, FranzPLAY lo ritrova al prossimo controllo.",
+    };
+  }
+  if (video.fileProblem) {
+    return { title: "File illeggibile", text: fileProblemText[video.fileProblem] };
+  }
+  if (video.hidden) {
+    return {
+      title: "Video nascosto",
+      text: "Non lo vede nessuno: per guardarlo, rendilo di nuovo visibile.",
+    };
+  }
+  if (video.tooShort) {
+    const lasts = video.duration === null ? "" : `Dura ${formatDuration(video.duration)}: `;
+    const minimum =
+      video.minDuration > 0
+        ? `il minimo scelto per le cartelle è ${formatDuration(video.minDuration)}.`
+        : "è sotto il minimo scelto per le cartelle.";
+    return { title: "Troppo corto", text: `${lasts}${minimum} Non lo vede nessuno.` };
+  }
+  if (video.private) {
+    return {
+      title: "Video privato",
+      text: "Non si guarda da qui: per cambiarlo, vai a «Chi lo vede».",
+    };
+  }
+  if (video.duration === null) {
+    return {
+      title: "Non ancora letto",
+      text: "FranzPLAY sta ancora leggendo il file: tra poco si può guardare.",
+    };
+  }
+  if (!video.playable) {
+    return {
+      title: "Formato non diretto",
+      text: "I browser non riescono ad aprire questo formato: serve una copia compatibile.",
+      copy: true,
+    };
+  }
+  return null;
+}
+
 // Stage is the video itself: its cover with a play button, which starts
-// the player in its place. A video nobody can open shows only the cover.
-function Stage({ video, watchable }: { video: AdminVideo; watchable: boolean }) {
+// the player in its place. Without the button, the box says why.
+function Stage({ video, watchable, say }: { video: AdminVideo; watchable: boolean; say: Say }) {
   const [playing, setPlaying] = useState(false);
   if (playing) return <StagePlayer video={video} />;
+  const why = whyNoPlay(video);
   return (
     <div className={edit.stage}>
       {video.cover ? (
@@ -514,7 +572,14 @@ function Stage({ video, watchable }: { video: AdminVideo; watchable: boolean }) 
           <Icon name="film" size={40} />
         </span>
       )}
-      {watchable && video.playable && (
+      {why && (
+        <div className={edit.stageWhy}>
+          <p className={edit.stageWhyTitle}>{why.title}</p>
+          <p className={edit.stageWhyText}>{why.text}</p>
+          {why.copy && <CopyButton video={video} say={say} />}
+        </div>
+      )}
+      {!why && watchable && (
         <button
           type="button"
           className={edit.play}
@@ -978,7 +1043,7 @@ function VideoJobs({
 // whether every browser plays it, with the button to make a copy.
 function FileCard({ video, say }: { video: AdminVideo; say: Say }) {
   const compat = compatibility(video);
-  const [asked, setAsked] = useState(false);
+  const unread = video.fileProblem ? "File illeggibile" : null;
   const format = [video.format, video.videoCodec.toUpperCase(), video.audioCodec.toUpperCase()]
     .filter(Boolean)
     .join(" · ");
@@ -990,7 +1055,7 @@ function FileCard({ video, say }: { video: AdminVideo; say: Say }) {
           {video.folder}/{video.path}
         </dd>
         <dt>Formato</dt>
-        <dd>{format || "Non ancora letto"}</dd>
+        <dd>{format || unread || "Non ancora letto"}</dd>
         {video.height ? (
           <>
             <dt>Qualità</dt>
@@ -1002,31 +1067,64 @@ function FileCard({ video, say }: { video: AdminVideo; say: Say }) {
           </>
         ) : null}
         <dt>Durata</dt>
-        <dd>{video.duration === null ? "Non ancora letta" : formatDuration(video.duration)}</dd>
+        <dd>
+          {video.duration === null
+            ? (unread ?? "Non ancora letta")
+            : formatDuration(video.duration)}
+        </dd>
         <dt>Aggiunto</dt>
         <dd>{video.addedAt.toLocaleDateString("it-IT")}</dd>
         <dt>Browser</dt>
-        <dd>{compat?.label ?? "Non ancora letto"}</dd>
+        <dd>{compat?.label ?? unread ?? "Non ancora letto"}</dd>
+        {video.fileProblem && !video.missing && (
+          <>
+            <dt>Problema</dt>
+            <dd>
+              {fileProblemText[video.fileProblem]}
+              {video.fileProblemDetail && (
+                <span className={edit.fileDetail}>
+                  Dettaglio tecnico: {video.fileProblemDetail}
+                </span>
+              )}
+            </dd>
+          </>
+        )}
       </dl>
-      {compat && !compat.ok && !video.missing && (
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.small} ${edit.fileAction}`}
-          disabled={asked}
-          onClick={() => {
-            setAsked(true);
-            prepareVideo(video.id)
-              .then(() => say("In coda: la copia per tutti i browser arriva tra poco."))
-              .catch((error: unknown) => {
-                console.error(error);
-                setAsked(false);
-                say(failed, true);
-              });
-          }}
-        >
-          {asked ? "Copia in preparazione" : "Crea copia compatibile"}
-        </button>
+      {compat && !compat.ok && !video.missing && !video.fileProblem && !whyNoPlay(video)?.copy && (
+        <CopyButton video={video} say={say} className={edit.fileAction} />
       )}
     </Card>
+  );
+}
+
+// CopyButton asks for a copy of the video that every browser plays.
+function CopyButton({
+  video,
+  say,
+  className,
+}: {
+  video: AdminVideo;
+  say: Say;
+  className?: string;
+}) {
+  const [asked, setAsked] = useState(false);
+  return (
+    <button
+      type="button"
+      className={[ui.btn, ui.small, className].filter(Boolean).join(" ")}
+      disabled={asked}
+      onClick={() => {
+        setAsked(true);
+        prepareVideo(video.id)
+          .then(() => say("In coda: la copia per tutti i browser arriva tra poco."))
+          .catch((error: unknown) => {
+            console.error(error);
+            setAsked(false);
+            say(failed, true);
+          });
+      }}
+    >
+      {asked ? "Copia in preparazione" : "Crea copia compatibile"}
+    </button>
   );
 }

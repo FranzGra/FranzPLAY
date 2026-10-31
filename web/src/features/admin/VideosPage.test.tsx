@@ -451,6 +451,71 @@ describe("page of a video in the administration", () => {
     expect(screen.queryByRole("button", { name: "Dai la priorità" })).not.toBeInTheDocument();
   });
 
+  it.each([
+    [{ missing: true }, "Il file non c'è più", /Se l'hai solo spostato/],
+    [{ fileProblem: "damaged", duration: null }, "File illeggibile", /rovinato o incompleto/],
+    [{ fileProblem: "no_video", duration: null }, "File illeggibile", /non contiene immagini/],
+    [{ hidden: true }, "Video nascosto", /rendilo di nuovo visibile/],
+    [
+      { tooShort: true, duration: 12, minDuration: 90 },
+      "Troppo corto",
+      /Dura 0:12: il minimo scelto per le cartelle è 1:30/,
+    ],
+    [{ private: true }, "Video privato", /Chi lo vede/],
+    [{ duration: null }, "Non ancora letto", /sta ancora leggendo/],
+  ])("says why there is no play button: %o", async (change, title, why) => {
+    const { server } = await detail(adminVideo(change), { "GET /api/jobs": { body: quietQueue } });
+    expect(server.requests.length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /^Guarda / })).not.toBeInTheDocument();
+    const box = screen.getByText(title, { selector: "p" });
+    expect(box.parentElement).toHaveTextContent(why);
+  });
+
+  it("asks for a compatible copy from the box of a format browsers cannot open", async () => {
+    const { user, server } = await detail(adminVideo({ playable: false, videoCodec: "hevc" }), {
+      "GET /api/jobs": { body: quietQueue },
+      "POST /api/videos/7/prepare": { body: { state: "waiting" } },
+    });
+    expect(screen.queryByRole("button", { name: /^Guarda / })).not.toBeInTheDocument();
+    const box = screen.getByText("Formato non diretto").parentElement as HTMLElement;
+    await user.click(within(box).getByRole("button", { name: "Crea copia compatibile" }));
+    await vi.waitFor(() =>
+      expect(
+        server.requests.some((r) => r.method === "POST" && r.url.endsWith("/api/videos/7/prepare")),
+      ).toBe(true),
+    );
+  });
+
+  it("keeps the play button when nothing stops it, with no box", async () => {
+    await detail(adminVideo(), { "GET /api/jobs": { body: quietQueue } });
+    expect(screen.getByRole("button", { name: /^Guarda / })).toBeVisible();
+    expect(screen.queryByText("Formato non diretto")).not.toBeInTheDocument();
+  });
+
+  it("says a file is unreadable, not that it is yet to read", async () => {
+    await detail(
+      adminVideo({
+        fileProblem: "damaged",
+        fileProblemDetail: "exit status 1: moov atom not found",
+        duration: null,
+        videoCodec: "",
+        audioCodec: "",
+        format: "",
+      }),
+      { "GET /api/jobs": { body: quietQueue } },
+    );
+    expect(screen.queryByText(/Non ancora lett/)).not.toBeInTheDocument();
+    const file = screen.getByRole("region", { name: /Il file/ });
+    expect(file).toHaveTextContent("File illeggibile");
+    expect(file).toHaveTextContent("moov atom not found");
+    expect(within(file).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("shows a private video as private in the header", async () => {
+    await detail(adminVideo({ private: true }), { "GET /api/jobs": { body: quietQueue } });
+    expect(screen.getByText("Privato")).toBeVisible();
+  });
+
   it("shows the video and every section, each with its icon", async () => {
     const { user } = await detail();
     expect(screen.getByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();

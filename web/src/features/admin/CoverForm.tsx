@@ -288,6 +288,9 @@ function FromVideo({
   );
   const [exact, setExact] = useState(picks.length === 0);
 
+  if (video.fileProblem) {
+    return <p className={ui.cardText}>Il file è illeggibile: non ha momenti da scegliere.</p>;
+  }
   if (video.duration === null) {
     return (
       <p className={ui.cardText}>
