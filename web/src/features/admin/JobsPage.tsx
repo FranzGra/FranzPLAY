@@ -318,9 +318,13 @@ function QueuedJob({
           {later &&
             ` · riprova alle ${later.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`}
         </span>
+        {job.urgent && (
+          <span>
+            <Chip tone="info">Con priorità</Chip>
+          </span>
+        )}
       </div>
       <div className={screens.jobActions}>
-        {job.urgent && <Chip tone="info">Con priorità</Chip>}
         {runnable && (
           <button
             type="button"
