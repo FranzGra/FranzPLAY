@@ -1,16 +1,21 @@
 import { useState } from "react";
 import {
   cancelModelDownload,
+  deleteTranslatorModel,
+  deleteWhisperModel,
   downloadModel,
   languageName,
+  type ModelFile,
   type SubtitlesSetup,
   type TranslatorModels,
 } from "../../api/autosubs";
 import { ApiError } from "../../api/client";
 import { Icon } from "../../components/Icon";
 import { BusyRing, ProgressBar } from "../../components/ProgressBar";
+import { formatBytes } from "../../lib/format";
 import { downloadPercent } from "./activity";
 import { downloadedText } from "./jobText";
+import { ConfirmModelDelete, DeleteModelButton, usedSpace } from "./ModelDelete";
 import { downloadNumbers } from "./NowJob";
 import subs from "./Subtitles.module.css";
 import { Notice, ui } from "./ui";
@@ -88,7 +93,7 @@ export function SubtitlesSetupBox({
           video hanno già i sottotitoli.
         </Notice>
       )}
-      <TranslatorBox setup={setup} />
+      <TranslatorBox setup={setup} onChanged={onChanged} />
     </div>
   );
 }
@@ -124,6 +129,7 @@ function ModelsBox({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () 
               <b>Whisper è pronto</b>
               <span className={subs.lineMore}>
                 {buildWords(setup.whisperBuild)}Modelli: {setup.models.join(", ")}
+                {usedSpace(setup.modelFiles)}
               </span>
             </>
           )}
@@ -200,14 +206,48 @@ function megabytes(bytes: number): string {
 // shows its bar right under its own row.
 function Downloads({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () => void }) {
   const [startProblem, setStartProblem] = useState("");
+  const [asking, setAsking] = useState("");
+  const [deleted, setDeleted] = useState("");
   const { stop, stopping, problem: stopProblem } = useStop(onChanged);
   const d = setup.download;
   const going = d !== null && !d.ended;
   const problem = startProblem || stopProblem;
-  if (setup.downloadable.length === 0) return null;
+  // Models copied into the folder by hand: FranzPLAY cannot download them
+  // again, but they take space all the same.
+  const byHand = setup.modelFiles.filter((f) => !setup.downloadable.some((m) => m.name === f.name));
+  if (setup.downloadable.length === 0 && byHand.length === 0) return null;
+
+  // What a model leaves behind, in the words of the question.
+  const effect = (name: string, again: string) =>
+    `I sottotitoli già scritti restano. ${again}${
+      setup.models.length === 1 && setup.models[0] === name
+        ? " È l'unico modello: finché non ne hai un altro non puoi trascrivere."
+        : ""
+    }`;
+
+  const deleting = (file: ModelFile, again: string) => (
+    <>
+      {file.busy && <p className={subs.modelBusy}>{file.busy}</p>}
+      {asking === file.name && (
+        <ConfirmModelDelete
+          file={file}
+          title={file.name}
+          effect={effect(file.name, again)}
+          remove={() => deleteWhisperModel(file.name)}
+          onCancel={() => setAsking("")}
+          onDone={() => {
+            setAsking("");
+            setDeleted(`${file.name} eliminato: ${formatBytes(file.size)} liberati.`);
+            onChanged();
+          }}
+        />
+      )}
+    </>
+  );
 
   const start = (name: string) => {
     setStartProblem("");
+    setDeleted("");
     downloadModel(name)
       .then(onChanged)
       .catch((error: unknown) => {
@@ -223,6 +263,7 @@ function Downloads({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () 
           const here = setup.models.includes(m.name);
           const mine = d !== null && d.name === m.name;
           const percent = mine && d ? downloadPercent(d) : null;
+          const file = setup.modelFiles.find((f) => f.name === m.name);
           return (
             <li key={m.name} className={subs.model} data-busy={(mine && going) || undefined}>
               <div className={subs.modelRow}>
@@ -233,9 +274,22 @@ function Downloads({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () 
                   <span className={subs.about}>{m.about}</span>
                 </span>
                 {here ? (
-                  <span className={ui.chip} data-tone="ok">
-                    <Icon name="check" size={14} />
-                    Già qui
+                  <span className={subs.modelActions}>
+                    <span className={ui.chip} data-tone="ok">
+                      <Icon name="check" size={14} />
+                      Già qui
+                    </span>
+                    {file && (
+                      <DeleteModelButton
+                        title={m.name}
+                        busy={file.busy !== ""}
+                        asking={asking === m.name}
+                        onAsk={() => {
+                          setDeleted("");
+                          setAsking(m.name);
+                        }}
+                      />
+                    )}
                   </span>
                 ) : mine && going ? (
                   <button
@@ -261,6 +315,7 @@ function Downloads({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () 
                   </button>
                 )}
               </div>
+              {file && deleting(file, "Potrai scaricarlo di nuovo da qui quando vuoi.")}
               {mine && d && going && (
                 <div className={subs.download}>
                   <p className={subs.downloadHead} role="status">
@@ -294,7 +349,41 @@ function Downloads({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () 
             </li>
           );
         })}
+        {byHand.map((f) => (
+          <li key={f.name} className={subs.model}>
+            <div className={subs.modelRow}>
+              <span className={subs.modelText}>
+                <span>
+                  <b>{f.name}</b> <span className={subs.size}>{formatBytes(f.size)}</span>
+                </span>
+                <span className={subs.about}>Copiato a mano nella cartella dei modelli.</span>
+              </span>
+              <span className={subs.modelActions}>
+                <span className={ui.chip} data-tone="ok">
+                  <Icon name="check" size={14} />
+                  Già qui
+                </span>
+                <DeleteModelButton
+                  title={f.name}
+                  busy={f.busy !== ""}
+                  asking={asking === f.name}
+                  onAsk={() => {
+                    setDeleted("");
+                    setAsking(f.name);
+                  }}
+                />
+              </span>
+            </div>
+            {deleting(f, "Da qui non si può scaricare di nuovo: dovrai ricopiarlo tu.")}
+          </li>
+        ))}
       </ul>
+      {deleted && (
+        <p className={subs.downloadDone} role="status">
+          <Icon name="check" size={16} />
+          {deleted}
+        </p>
+      )}
       {problem && (
         <p className={ui.problem} role="alert">
           {problem}
@@ -313,12 +402,18 @@ function knownNames(langs: string[]): string {
 
 // TranslatorBox is one line on the translator. What to do when it is off, or
 // does not answer, comes from the server: only it knows which engine it is.
-function TranslatorBox({ setup }: { setup: SubtitlesSetup }) {
+function TranslatorBox({ setup, onChanged }: { setup: SubtitlesSetup; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const help = setup.translatorHelp;
   const models = setup.translatorModels;
   if (setup.translator && !setup.translatorError && models) {
-    return <TranslatorModelsBox models={models} languages={setup.translatorLanguages} />;
+    return (
+      <TranslatorModelsBox
+        models={models}
+        languages={setup.translatorLanguages}
+        onChanged={onChanged}
+      />
+    );
   }
   if (setup.translator && !setup.translatorError) {
     return (
@@ -392,10 +487,15 @@ function modelName(pair: string): string {
 function TranslatorModelsBox({
   models,
   languages,
+  onChanged,
 }: {
   models: TranslatorModels;
   languages: string[];
+  onChanged: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [asking, setAsking] = useState("");
+  const [deleted, setDeleted] = useState("");
   const percent = models.total > 0 ? (100 * models.done) / models.total : null;
   return (
     <section className={subs.panel} aria-label="Traduttore">
@@ -412,11 +512,76 @@ function TranslatorModelsBox({
           </span>
           <span className={subs.lineMore}>
             {models.have.length > 0
-              ? `Già scaricati: ${models.have.map(modelName).join(", ")}.`
+              ? `Già scaricati: ${models.have.map(modelName).join(", ")}${usedSpace(models.files)}.`
               : "Nessun modello scaricato finora."}
           </span>
         </p>
+        {models.files.length > 0 && (
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.small} ${ui.ghost}`}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open ? "Chiudi" : "Modelli scaricati"}
+            <span className={subs.chevron} data-open={open || undefined}>
+              <Icon name="chevronDown" size={16} />
+            </span>
+          </button>
+        )}
       </div>
+      {open && (models.files.length > 0 || deleted) && (
+        <div className={subs.panelBody}>
+          <ul className={subs.models} aria-label="Modelli di traduzione scaricati">
+            {models.files.map((f) => (
+              <li key={f.name} className={subs.model}>
+                <div className={subs.modelRow}>
+                  <span className={subs.modelText}>
+                    <span>
+                      <b>{modelName(f.name)}</b>{" "}
+                      <span className={subs.size}>{formatBytes(f.size)}</span>
+                    </span>
+                  </span>
+                  <span className={subs.modelActions}>
+                    <DeleteModelButton
+                      title={modelName(f.name)}
+                      busy={f.busy !== ""}
+                      asking={asking === f.name}
+                      onAsk={() => {
+                        setDeleted("");
+                        setAsking(f.name);
+                      }}
+                    />
+                  </span>
+                </div>
+                {f.busy && <p className={subs.modelBusy}>{f.busy}</p>}
+                {asking === f.name && (
+                  <ConfirmModelDelete
+                    file={f}
+                    title={modelName(f.name)}
+                    effect="Le traduzioni già fatte restano. Se servirà di nuovo, si scarica da solo alla prossima traduzione, con Internet."
+                    remove={() => deleteTranslatorModel(f.name)}
+                    onCancel={() => setAsking("")}
+                    onDone={() => {
+                      setAsking("");
+                      setDeleted(
+                        `${modelName(f.name)} eliminato: ${formatBytes(f.size)} liberati.`,
+                      );
+                      onChanged();
+                    }}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+          {deleted && (
+            <p className={subs.downloadDone} role="status">
+              <Icon name="check" size={16} />
+              {deleted}
+            </p>
+          )}
+        </div>
+      )}
       {models.name && (
         <div className={subs.panelBody}>
           <p className={subs.status} role="status">

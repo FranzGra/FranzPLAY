@@ -12,6 +12,9 @@ export type SubtitlesSetup = {
   whisperProblem: string; // why it does not run on this processor, "" when it does
   slowCpu: boolean; // a processor without AVX2: transcribing takes long
   models: string[]; // "small", "medium"
+  // Newer servers only; an older answer gets an empty list, and no model can
+  // be deleted.
+  modelFiles: ModelFile[];
   translator: boolean; // a translator is set
   translatorError: string; // why it does not answer, "" when it does
   translatorLanguages: string[];
@@ -32,6 +35,13 @@ export type TranslatorHelp = {
   after: string; // what happens then
 };
 
+// ModelFile is a model on this machine.
+export type ModelFile = {
+  name: string;
+  size: number; // bytes: what deleting it frees
+  busy: string; // why it cannot be deleted now, in words; "" when it can
+};
+
 // TranslatorModels are the models a translator downloads by itself, the first
 // time they are needed. A model goes one way: "en-it".
 export type TranslatorModels = {
@@ -39,6 +49,7 @@ export type TranslatorModels = {
   name: string; // the one downloading; "" when none
   done: number; // bytes
   total: number; // bytes
+  files: ModelFile[]; // newer servers only
 };
 
 export type DownloadableModel = { name: string; size: number; about: string };
@@ -135,6 +146,7 @@ export function parseSetup(data: unknown): SubtitlesSetup {
     whisperProblem: typeof d.whisperProblem === "string" ? d.whisperProblem : "",
     slowCpu: d.slowCpu === true,
     models: strings(d.models, "models"),
+    modelFiles: parseModelFiles(d.modelFiles),
     translator: d.translator,
     translatorError: d.translatorError,
     translatorLanguages: strings(d.translatorLanguages, "translatorLanguages"),
@@ -153,6 +165,18 @@ function parseHelp(data: unknown): TranslatorHelp {
   return { off: text(d.off), down: text(d.down), setup: text(d.setup), after: text(d.after) };
 }
 
+function parseModelFiles(data: unknown): ModelFile[] {
+  if (data === undefined || data === null) return [];
+  if (!Array.isArray(data)) throw new Error("model files: not a list");
+  return data.map((f: unknown) => {
+    const d = (f ?? {}) as Record<string, unknown>;
+    if (typeof d.name !== "string" || typeof d.size !== "number" || typeof d.busy !== "string") {
+      throw new Error("model files: bad model");
+    }
+    return { name: d.name, size: d.size, busy: d.busy };
+  });
+}
+
 function parseTranslatorModels(data: unknown): TranslatorModels | null {
   if (data === undefined || data === null) return null;
   const d = data as Record<string, unknown>;
@@ -162,6 +186,7 @@ function parseTranslatorModels(data: unknown): TranslatorModels | null {
     name: typeof d.name === "string" ? d.name : "",
     done: count(d.done),
     total: count(d.total),
+    files: parseModelFiles(d.files),
   };
 }
 
@@ -218,6 +243,21 @@ export async function downloadModel(name: string): Promise<void> {
 // so far. It fails (409) when nothing is downloading.
 export async function cancelModelDownload(): Promise<void> {
   await request("/api/admin/subtitles/download", { method: "DELETE" });
+}
+
+// deleteWhisperModel deletes a whisper model from this machine. The server
+// refuses (409, with the reason in words) a model some work needs.
+export async function deleteWhisperModel(name: string): Promise<void> {
+  await request(`/api/admin/subtitles/models/whisper/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+}
+
+// deleteTranslatorModel does the same for a translation model, like "en-it".
+export async function deleteTranslatorModel(name: string): Promise<void> {
+  await request(`/api/admin/subtitles/models/translator/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
 }
 
 const sources: readonly SubtitleSource[] = ["file", "inside", "auto"];

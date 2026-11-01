@@ -83,6 +83,9 @@ func route(from, to string) []string {
 	return []string{from + "-" + english, english + "-" + to}
 }
 
+// Route lists the models it takes to go from a language to another.
+func (e *Engine) Route(from, to string) []string { return route(from, to) }
+
 // Cues translates cues, times untouched, from one language to another.
 func (e *Engine) Cues(ctx context.Context, cues []video.Cue, from, to string) ([]video.Cue, error) {
 	pieces := split(cues)

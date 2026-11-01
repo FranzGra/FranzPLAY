@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
@@ -98,6 +99,9 @@ type Transcriber struct {
 	stream     streamFunc // runs whisper, reading how far it is as it goes
 	now        func() time.Time
 	changed    func()
+
+	usingMu sync.Mutex
+	using   map[string]int // the models whisper is listening with now
 }
 
 // NewTranscriber returns a transcriber that runs the given ffmpeg and
@@ -114,6 +118,29 @@ func NewTranscriber(db *sql.DB, ffmpeg, whisper, dataDir string, translator Tran
 // stage, so the administrator's page can follow it.
 func (t *Transcriber) OnStage(f func()) {
 	t.changed = f
+}
+
+// ModelInUse reports whether whisper is listening with a model right now.
+// The jobs table cannot always say: work taken back goes on until it ends.
+func (t *Transcriber) ModelInUse(model string) bool {
+	t.usingMu.Lock()
+	defer t.usingMu.Unlock()
+	return t.using[model] > 0
+}
+
+// holdModel marks a model as in use, until the function it returns is called.
+func (t *Transcriber) holdModel(model string) (release func()) {
+	t.usingMu.Lock()
+	defer t.usingMu.Unlock()
+	if t.using == nil {
+		t.using = map[string]int{}
+	}
+	t.using[model]++
+	return func() {
+		t.usingMu.Lock()
+		defer t.usingMu.Unlock()
+		t.using[model]--
+	}
 }
 
 // subtitleRequest is what the administrator asked for a video.
@@ -193,6 +220,7 @@ func (t *Transcriber) transcript(ctx context.Context, videoID int64, file, finge
 	if err := t.whisperProblem(ctx); err != nil {
 		return "", false, err
 	}
+	defer t.holdModel(req.model)()
 	modelFile := ModelFile(t.dataDir, req.model)
 	if _, err := os.Stat(modelFile); err != nil {
 		return "", false, fmt.Errorf("whisper model %q: %w: %w", req.model, err, jobs.ErrPermanent)

@@ -39,11 +39,19 @@ type ModelInfo struct {
 	Name  string   `json:"name"`  // the one downloading; "" when none
 	Done  int64    `json:"done"`  // bytes
 	Total int64    `json:"total"` // bytes
+	// Files are the models here with their sizes; the page says which of them
+	// cannot be deleted now.
+	Files []ModelFile `json:"files"`
 }
 
 // TranslatorModels is a translator that downloads models by itself.
 type TranslatorModels interface {
 	ModelInfo() ModelInfo
+	// Route lists the models it takes to go from a language to another.
+	Route(from, to string) []string
+	// DeleteModel deletes a model that is here; the next translation that
+	// needs it downloads it again.
+	DeleteModel(name string) error
 }
 
 // TranslatorHelp is what the translator's engine says of itself, for the
@@ -70,6 +78,9 @@ type Options struct {
 	// Running is the job worker's list of running jobs, to tell how far a
 	// transcription is; nil: not known.
 	Running func() []jobs.Running
+	// ModelInUse says whether whisper is listening with a model right now,
+	// also for work taken back that has not stopped yet; nil: not known.
+	ModelInUse func(name string) bool
 }
 
 // Routes adds the API of the page to mux, for administrators only:
@@ -77,6 +88,8 @@ type Options struct {
 //	GET    /api/admin/subtitles                     the videos and their subtitles (?q=&have=with|without&lang=&limit=&offset=)
 //	GET    /api/admin/subtitles/setup               what this machine can do: whisper, models, translator
 //	POST   /api/admin/subtitles/models/{name}       download a whisper model
+//	DELETE /api/admin/subtitles/models/whisper/{name}     delete a whisper model
+//	DELETE /api/admin/subtitles/models/translator/{name}  delete a translation model
 //	DELETE /api/admin/subtitles/download            stop the model download going on
 //	PUT    /api/admin/subtitles/{id}                ask whisper for subtitles {spoken, model, translate}
 //	DELETE /api/admin/subtitles/{id}/request        take the request back
@@ -94,6 +107,8 @@ func (p page) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/subtitles", p.only(p.handleList))
 	mux.HandleFunc("GET /api/admin/subtitles/setup", p.only(p.handleSetup))
 	mux.HandleFunc("POST /api/admin/subtitles/models/{name}", p.only(p.handleDownload))
+	mux.HandleFunc("DELETE /api/admin/subtitles/models/whisper/{name}", p.only(p.handleDeleteWhisperModel))
+	mux.HandleFunc("DELETE /api/admin/subtitles/models/translator/{name}", p.only(p.handleDeleteTranslatorModel))
 	mux.HandleFunc("DELETE /api/admin/subtitles/download", p.only(p.handleCancelDownload))
 	mux.HandleFunc("PUT /api/admin/subtitles/{id}", p.only(p.handleAsk))
 	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/request", p.only(p.handleTakeBack))
@@ -136,6 +151,9 @@ type Setup struct {
 	WhisperProblem string   `json:"whisperProblem"`
 	SlowCPU        bool     `json:"slowCpu"`
 	Models         []string `json:"models"` // the models in the data folder: "small", "medium"
+	// ModelFiles are the same models, with their sizes and whether they can be
+	// deleted now.
+	ModelFiles []ModelFile `json:"modelFiles"`
 	// Translator says whether a translator is set; TranslatorError why it
 	// does not answer, when it does not; TranslatorLanguages the languages
 	// it knows.
@@ -180,13 +198,20 @@ func (p page) handleSetup(w http.ResponseWriter, r *http.Request) {
 		st := p.opts.WhisperStatus(r.Context())
 		s.WhisperBuild, s.WhisperProblem, s.SlowCPU = st.Build, st.Problem, st.SlowCPU
 	}
+	if s.ModelFiles, err = p.whisperFiles(r.Context(), models); err != nil {
+		respond.InternalError(w, r, p.logger, err)
+		return
+	}
 	s.Downloadable = []Model{}
 	if p.opts.Downloader != nil {
 		s.Downloadable = Models
 		s.Download = p.opts.Downloader.Status()
 	}
 	if p.opts.TranslatorModels != nil {
-		s.TranslatorModels = new(p.opts.TranslatorModels.ModelInfo())
+		if s.TranslatorModels, err = p.translatorInfo(r.Context()); err != nil {
+			respond.InternalError(w, r, p.logger, err)
+			return
+		}
 	}
 	if p.opts.Translator != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), translatorTimeout)
@@ -316,6 +341,8 @@ func (p page) handleAsk(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, p.logger, http.StatusNotFound, "video not found")
 	case errors.Is(err, errMissing), errors.Is(err, errPresent):
 		respond.Error(w, r, p.logger, http.StatusConflict, err.Error())
+	case errors.Is(err, errBadRequest):
+		respond.Error(w, r, p.logger, http.StatusBadRequest, err.Error())
 	case err != nil:
 		respond.InternalError(w, r, p.logger, err)
 	default:
@@ -360,6 +387,11 @@ func (p page) ask(ctx context.Context, id int64, b askBody) (err error) {
 	}
 	if missing {
 		return errMissing
+	}
+	// Looked at again with the queue held: the model may have been deleted
+	// since the check at the door, and a job without it could only fail.
+	if _, err := os.Stat(media.ModelFile(p.opts.DataDir, b.Model)); errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%w: no model %q in the whisper folder", errBadRequest, b.Model)
 	}
 	for _, lang := range b.Translate {
 		if slices.ContainsFunc(subs, func(s Subtitle) bool {

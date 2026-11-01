@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -84,13 +85,54 @@ func (e *Engine) Models() []string {
 
 // ModelInfo says which models are here and how the download going on goes.
 func (e *Engine) ModelInfo() autosubs.ModelInfo {
-	info := autosubs.ModelInfo{Have: e.Models()}
+	info := autosubs.ModelInfo{Have: e.Models(), Files: []autosubs.ModelFile{}}
+	for _, pair := range info.Have {
+		info.Files = append(info.Files, autosubs.ModelFile{Name: pair, Size: e.modelSize(pair)})
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.now != nil {
 		info.Name, info.Done, info.Total = e.now.name, e.now.done, e.now.total
 	}
 	return info
+}
+
+// modelSize adds up the files of a model: what deleting it frees.
+func (e *Engine) modelSize(pair string) int64 {
+	entries, err := os.ReadDir(filepath.Dir(configFile(e.dataDir, pair)))
+	if err != nil {
+		return 0
+	}
+	total := int64(0)
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil {
+			total += info.Size()
+		}
+	}
+	return total
+}
+
+// DeleteModel deletes a model that is here, and nothing else: the name must
+// be among Models. The folder first takes the name of an unfinished download,
+// so the model goes all at once, and if the power goes off halfway the rest
+// goes with the next download. The caller sees that no job is using it.
+func (e *Engine) DeleteModel(pair string) error {
+	if !slices.Contains(e.Models(), pair) {
+		return fmt.Errorf("delete translation model %q: %w", pair, fs.ErrNotExist)
+	}
+	root := filepath.Join(e.dataDir, folder)
+	gone := filepath.Join(root, partial+"deleted-"+pair)
+	if err := os.RemoveAll(gone); err != nil {
+		return fmt.Errorf("delete translation model %s: %w", pair, err)
+	}
+	if err := os.Rename(filepath.Join(root, pair), gone); err != nil {
+		return fmt.Errorf("delete translation model %s: %w", pair, err)
+	}
+	if err := os.RemoveAll(gone); err != nil {
+		return fmt.Errorf("delete translation model %s: %w", pair, err)
+	}
+	e.logger.Info("translation model deleted", "model", pair)
+	return nil
 }
 
 // download is how the download of a model goes.

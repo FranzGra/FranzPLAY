@@ -551,13 +551,16 @@ function VideoRow({
             className={`${ui.btn} ${ui.small}`}
             disabled={busy || !canListen}
             onClick={() =>
-              run(() =>
-                askSubtitles(video.id, {
-                  spoken: r.spoken || spokenUnknown,
-                  model: r.model,
-                  translate: r.translate,
-                }),
-              )
+              // Its model may have been deleted since: then choose another.
+              setup.models.includes(r.model)
+                ? run(() =>
+                    askSubtitles(video.id, {
+                      spoken: r.spoken || spokenUnknown,
+                      model: r.model,
+                      translate: r.translate,
+                    }),
+                  )
+                : setOpen("transcribe")
             }
           >
             <Icon name="refresh" size={16} />

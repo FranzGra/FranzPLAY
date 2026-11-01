@@ -433,3 +433,22 @@ func TestRemoveOrphanAutoSubtitles(t *testing.T) {
 		t.Errorf("files %v", files)
 	}
 }
+
+func TestModelInUseWhileWhisperListens(t *testing.T) {
+	fx := newTranscribeFixture(t)
+	fx.ask(t, "it", "small", "")
+	during := false
+	fx.during = func() { during = fx.tr.ModelInUse("small") && !fx.tr.ModelInUse("medium") }
+	if fx.tr.ModelInUse("small") {
+		t.Error("in use before the job")
+	}
+	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
+		t.Fatal(err)
+	}
+	if !during {
+		t.Error("not in use while whisper listens")
+	}
+	if fx.tr.ModelInUse("small") {
+		t.Error("still in use after the job")
+	}
+}

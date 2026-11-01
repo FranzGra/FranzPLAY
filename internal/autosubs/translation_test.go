@@ -149,6 +149,10 @@ func (modelsTranslator) ModelInfo() ModelInfo {
 	return ModelInfo{Have: []string{"en-it"}, Name: "it-en", Done: 5, Total: 10}
 }
 
+func (modelsTranslator) Route(from, to string) []string { return []string{from + "-" + to} }
+
+func (modelsTranslator) DeleteModel(string) error { return nil }
+
 func TestSetupSaysWhichModelsTheTranslatorHas(t *testing.T) {
 	s := newSite(t)
 	plain := decode[Setup](t, s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusOK))

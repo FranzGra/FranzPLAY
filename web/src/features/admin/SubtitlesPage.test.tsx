@@ -526,6 +526,175 @@ describe("subtitles page", () => {
     );
   });
 
+  describe("deleting a model", () => {
+    const small = { name: "small", size: 466 << 20, busy: "" };
+    const medium = { name: "medium", size: 1536 << 20, busy: "" };
+    const withFiles = { ...setup, modelFiles: [medium, small] };
+
+    async function openList(user: ReturnType<typeof renderApp>["user"]) {
+      await screen.findByRole("list", { name: "Video" });
+      await openModels(user);
+      return screen.getByRole("list", { name: "Modelli da scaricare" });
+    }
+
+    it("asks first, says what it frees, and the model can be downloaded again", async () => {
+      const after = {
+        ...setup,
+        models: ["medium"],
+        modelFiles: [medium],
+      };
+      const answers = routes([video()], withFiles);
+      const { user, server } = renderApp("/admin/sottotitoli", {
+        ...answers,
+        "DELETE /api/admin/subtitles/models/whisper/small": () => {
+          answers["GET /api/admin/subtitles/setup"].body = after;
+          return new Response(null, { status: 204 });
+        },
+      });
+      const list = await openList(user);
+      // How much space the models take, before and after.
+      expect(screen.getByText(/Modelli: medium, small · 2 GB in tutto/)).toBeInTheDocument();
+      await user.click(within(list).getByRole("button", { name: "Elimina small" }));
+
+      const asked = screen.getByRole("alertdialog", { name: "Eliminare small?" });
+      expect(asked).toHaveTextContent("Libera 466 MB");
+      expect(asked).toHaveTextContent("I sottotitoli già scritti restano");
+      expect(asked).toHaveTextContent("Potrai scaricarlo di nuovo");
+      expect(asked).not.toHaveTextContent("È l'unico modello");
+      // Nothing was deleted so far; "Lascia stare" leaves all as it is.
+      expect(within(asked).getByRole("button", { name: "Lascia stare" })).toHaveFocus();
+      await user.click(within(asked).getByRole("button", { name: "Lascia stare" }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(server.requests.some((r) => r.method === "DELETE")).toBe(false);
+
+      await user.click(within(list).getByRole("button", { name: "Elimina small" }));
+      await user.click(screen.getByRole("button", { name: "Sì, elimina" }));
+
+      expect(await within(list).findByRole("button", { name: "Scarica small" })).toBeEnabled();
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(screen.getByText("small eliminato: 466 MB liberati.")).toBeInTheDocument();
+      expect(screen.getByText(/Modelli: medium · 1,5 GB in tutto/)).toBeInTheDocument();
+    });
+
+    it("says what the last model takes away", async () => {
+      const { user } = renderApp(
+        "/admin/sottotitoli",
+        routes([video()], { ...setup, models: ["small"], modelFiles: [small] }),
+      );
+      const list = await openList(user);
+      await user.click(within(list).getByRole("button", { name: "Elimina small" }));
+      expect(screen.getByRole("alertdialog")).toHaveTextContent(
+        "È l'unico modello: finché non ne hai un altro non puoi trascrivere.",
+      );
+    });
+
+    it("does not offer it while work needs it, and says why", async () => {
+      const why = "Non si può eliminare adesso: 1 video in coda aspetta questo modello.";
+      const { user } = renderApp(
+        "/admin/sottotitoli",
+        routes([video()], {
+          ...setup,
+          modelFiles: [medium, { ...small, busy: why }],
+        }),
+      );
+      const list = await openList(user);
+      expect(within(list).getByRole("button", { name: "Elimina small" })).toBeDisabled();
+      expect(within(list).getByRole("button", { name: "Elimina medium" })).toBeEnabled();
+      expect(within(list).getByText(why)).toBeInTheDocument();
+    });
+
+    it("shows the server's words when it refuses at the last moment", async () => {
+      const why = "Non si può eliminare adesso: Whisper lo sta usando.";
+      const { user } = renderApp("/admin/sottotitoli", {
+        ...routes([video()], withFiles),
+        "DELETE /api/admin/subtitles/models/whisper/small": {
+          status: 409,
+          body: { error: why },
+        },
+      });
+      const list = await openList(user);
+      await user.click(within(list).getByRole("button", { name: "Elimina small" }));
+      await user.click(screen.getByRole("button", { name: "Sì, elimina" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(why);
+      expect(screen.getByRole("button", { name: "Sì, elimina" })).toBeEnabled();
+      expect(within(list).queryByRole("button", { name: "Scarica small" })).toBeNull();
+    });
+
+    it("offers a model copied by hand too, saying it does not come back", async () => {
+      const { user } = renderApp(
+        "/admin/sottotitoli",
+        routes([video()], {
+          ...setup,
+          models: ["small", "tiny"],
+          modelFiles: [small, { name: "tiny", size: 75 << 20, busy: "" }],
+        }),
+      );
+      const list = await openList(user);
+      await user.click(within(list).getByRole("button", { name: "Elimina tiny" }));
+      expect(screen.getByRole("alertdialog")).toHaveTextContent(
+        "Da qui non si può scaricare di nuovo",
+      );
+    });
+
+    it("an older server shows no way to delete", async () => {
+      const { user } = renderApp("/admin/sottotitoli", routes([video()]));
+      const list = await openList(user);
+      expect(within(list).queryByRole("button", { name: /Elimina/ })).toBeNull();
+    });
+
+    it("deletes a translation model, with its own words", async () => {
+      const answers = routes([video()], {
+        ...setup,
+        translatorModels: {
+          have: ["en-it", "it-en"],
+          name: "",
+          done: 0,
+          total: 0,
+          files: [
+            { name: "en-it", size: 36 << 20, busy: "" },
+            { name: "it-en", size: 36 << 20, busy: "Una traduzione lo sta usando." },
+          ],
+        },
+      });
+      const { user, server } = renderApp("/admin/sottotitoli", {
+        ...answers,
+        "DELETE /api/admin/subtitles/models/translator/en-it": { status: 204 },
+      });
+      await screen.findByRole("list", { name: "Video" });
+      await user.click(screen.getByRole("button", { name: "Modelli scaricati" }));
+      const list = screen.getByRole("list", { name: "Modelli di traduzione scaricati" });
+      expect(
+        within(list).getByRole("button", { name: "Elimina Italiano → Inglese" }),
+      ).toBeDisabled();
+      expect(within(list).getByText("Una traduzione lo sta usando.")).toBeInTheDocument();
+      await user.click(within(list).getByRole("button", { name: "Elimina Inglese → Italiano" }));
+      const asked = screen.getByRole("alertdialog", { name: "Eliminare Inglese → Italiano?" });
+      expect(asked).toHaveTextContent("Libera 36 MB");
+      expect(asked).toHaveTextContent("si scarica da solo alla prossima traduzione");
+      await user.click(within(asked).getByRole("button", { name: "Sì, elimina" }));
+      await vi.waitFor(() =>
+        expect(
+          server.requests.some(
+            (r) =>
+              r.method === "DELETE" &&
+              r.url.endsWith("/api/admin/subtitles/models/translator/en-it"),
+          ),
+        ).toBe(true),
+      );
+    });
+
+    it("retrying a transcription whose model is gone asks for another", async () => {
+      const { user, server } = renderApp(
+        "/admin/sottotitoli",
+        routes([bosco], { ...setup, models: ["medium"] }),
+      );
+      await screen.findByRole("list", { name: "Video" });
+      await user.click(within(rowOf("Bosco")).getByRole("button", { name: "Riprova" }));
+      expect(screen.getByRole("form", { name: "Trascrivi Bosco" })).toBeInTheDocument();
+      expect(server.requests.some((r) => r.method === "PUT")).toBe(false);
+    });
+  });
+
   it("shows a download going on", async () => {
     const { user } = renderApp(
       "/admin/sottotitoli",

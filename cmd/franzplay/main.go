@@ -203,6 +203,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 			transcriber.UseWhisper(picker)
 			transcriber.OnStage(func() { hub.Publish(events.Jobs) })
 			handlers[jobs.Transcribe] = transcriber.Handle
+			subtitles.ModelInUse = transcriber.ModelInUse
 		}
 	}
 	// Before the worker starts, so it never sees a file being made.

@@ -302,6 +302,60 @@ func TestPrepareRefusesAFileThatIsNotTheOneOnTheList(t *testing.T) {
 	}
 }
 
+func TestDeleteModel(t *testing.T) {
+	srv := modelServer(t, func(_ string, body []byte) []byte { return body })
+	e := fakeEngine(t, "marks")
+	e.client = srv.Client()
+	e.records = recordsOf(srv)
+	if err := e.Prepare(context.Background(), "en", "it"); err != nil {
+		t.Fatal(err)
+	}
+	info := e.ModelInfo()
+	if len(info.Files) != 1 || info.Files[0].Name != "en-it" || info.Files[0].Size <= 0 {
+		t.Fatalf("files %+v", info.Files)
+	}
+
+	// Only a model that is here: no other name leads anywhere.
+	root := filepath.Join(e.dataDir, folder)
+	keep := filepath.Join(e.dataDir, "keep.txt")
+	if err := os.WriteFile(keep, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"it-en", "", ".", "..", "../keep.txt", "en-it/../..", filepath.Join(root, "en-it")} {
+		if err := e.DeleteModel(name); err == nil {
+			t.Errorf("deleted %q", name)
+		}
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(e.Models(), []string{"en-it"}) {
+		t.Fatalf("models %v", e.Models())
+	}
+
+	if err := e.DeleteModel("en-it"); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.Models()) != 0 {
+		t.Errorf("models %v", e.Models())
+	}
+	left, err := filepath.Glob(filepath.Join(root, "*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 0 {
+		t.Errorf("left behind: %v", left)
+	}
+
+	// The next translation downloads it again.
+	if err := e.Prepare(context.Background(), "en", "it"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(e.Models(), []string{"en-it"}) {
+		t.Errorf("models %v", e.Models())
+	}
+}
+
 func TestLanguagesAndRoutes(t *testing.T) {
 	e := fakeEngine(t, "marks")
 	known, err := e.Languages(context.Background())

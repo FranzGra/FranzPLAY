@@ -149,6 +149,23 @@ func (d *Downloader) Cancel() error {
 	return nil
 }
 
+// Downloading reports whether this model is downloading now.
+func (d *Downloader) Downloading(name string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.now != nil && !d.now.Ended && d.now.Name == name
+}
+
+// Forget drops what is known of the last download of a model that was
+// deleted, so the page does not go on saying it has just arrived.
+func (d *Downloader) Forget(name string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.now != nil && d.now.Ended && d.now.Name == name {
+		d.now = nil
+	}
+}
+
 // Jobs returns the download going on as work on the queue's page, or
 // nothing.
 func (d *Downloader) Jobs() []jobs.JobView {
