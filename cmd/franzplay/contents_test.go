@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,44 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 )
+
+// startAndStop runs FranzPLAY until its server answers, then stops it, and
+// gives what run() returned: its error, when it refuses to start. The start
+// can be slow (the race detector, a busy machine): the test waits for it, not
+// for a fixed time, and 30 seconds are only the limit.
+func startAndStop(t *testing.T, env map[string]string, logOut io.Writer) error {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, func(k string) string { return env[k] }, logOut) }()
+	client := &http.Client{Timeout: time.Second}
+	limit := time.After(30 * time.Second)
+	for {
+		select {
+		case err := <-done:
+			return err
+		case <-limit:
+			cancel()
+			t.Fatal("run() did not start in 30 seconds")
+		case <-time.After(20 * time.Millisecond):
+		}
+		resp, err := client.Get("http://" + env[config.EnvAddr] + "/api/health")
+		if err != nil {
+			continue
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			cancel()
+			select {
+			case err := <-done:
+				return err
+			case <-time.After(shutdownTimeout + time.Second):
+				t.Fatal("run() did not stop")
+			}
+		}
+	}
+}
 
 // A disk of contents not mounted is an empty folder: FranzPLAY must not start on
 // it and make everything again there.
@@ -31,9 +70,7 @@ func TestRunRefusesContentsThatAreNotThere(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{config.EnvAddr: freeAddr(t), config.EnvDataDir: dataDir, config.EnvContentDir: contentDir}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := run(ctx, func(k string) string { return env[k] }, io.Discard); !errors.Is(err, content.ErrNoContents) {
+	if err := startAndStop(t, env, io.Discard); !errors.Is(err, content.ErrNoContents) {
 		t.Errorf("run() = %v, want ErrNoContents", err)
 	}
 
@@ -41,9 +78,7 @@ func TestRunRefusesContentsThatAreNotThere(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(contentDir, "video"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := run(ctx, func(k string) string { return env[k] }, io.Discard); err != nil {
+	if err := startAndStop(t, env, io.Discard); err != nil {
 		t.Errorf("run() = %v with an empty video folder", err)
 	}
 }
@@ -55,9 +90,7 @@ func TestRunRefusesContentsItCannotRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{config.EnvAddr: freeAddr(t), config.EnvDataDir: t.TempDir(), config.EnvContentDir: contentDir}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := run(ctx, func(k string) string { return env[k] }, io.Discard); err == nil {
+	if err := startAndStop(t, env, io.Discard); err == nil {
 		t.Error("run() = nil on contents it cannot read")
 	}
 }
@@ -67,10 +100,7 @@ func TestRunRefusesContentsItCannotRead(t *testing.T) {
 func TestRunStartsANewInstallationWithItsOwnContents(t *testing.T) {
 	env := map[string]string{config.EnvAddr: freeAddr(t), config.EnvDataDir: t.TempDir(), config.EnvContentDir: t.TempDir()}
 	for range 2 {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		err := run(ctx, func(k string) string { return env[k] }, io.Discard)
-		cancel()
-		if err != nil {
+		if err := startAndStop(t, env, io.Discard); err != nil {
 			t.Fatalf("run() = %v", err)
 		}
 	}
@@ -96,10 +126,8 @@ func TestRunSaysWhenTheFoldersOfTheVideosAreNotThere(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{config.EnvAddr: freeAddr(t), config.EnvDataDir: dataDir}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 	var log bytes.Buffer
-	if err := run(ctx, func(k string) string { return env[k] }, &log); err != nil {
+	if err := startAndStop(t, env, &log); err != nil {
 		t.Fatalf("run() = %v", err)
 	}
 	if !strings.Contains(log.String(), "folders of videos the content folder does not have") ||

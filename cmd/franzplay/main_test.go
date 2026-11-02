@@ -39,7 +39,8 @@ func freeAddr(t *testing.T) string {
 // waitForHealth polls /api/health until it answers 200 or the deadline passes.
 func waitForHealth(addr string) error {
 	client := &http.Client{Timeout: time.Second}
-	deadline := time.Now().Add(5 * time.Second)
+	// Only a limit: under the race detector the start can take seconds.
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := client.Get("http://" + addr + "/api/health")
 		if err == nil {
