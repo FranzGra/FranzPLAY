@@ -7,11 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
-	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 )
 
@@ -56,23 +55,23 @@ func (a admin) handleOwnClip(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusUnsupportedMediaType, errNotAClip.Error())
 		return
 	}
-	dir := filepath.Join(a.dataDir, media.OwnClipsDir)
-	name, err := media.SaveOwnFile(dir, id, ext, body)
+	name, err := a.saveChosen(r.Context(), id, content.FileOwnClip+ext, body)
 	if maxErr := (*http.MaxBytesError)(nil); errors.As(err, &maxErr) {
 		respond.Error(w, r, a.logger, http.StatusRequestEntityTooLarge, errClipTooLarge.Error())
 		return
 	}
 	if err != nil {
-		respond.InternalError(w, r, a.logger, err)
+		a.choiceFailed(w, r, err)
 		return
 	}
 	old, err := a.store.setClip(r.Context(), id, &name, false, a.now())
 	if err != nil {
-		// Nobody uses the new video: it goes.
-		a.choiceFailed(w, r, errors.Join(err, media.RemoveOwnFile(dir, name)))
+		// The file stays: it is in the folder of its video, and may be the
+		// very one the video had. The next choice writes over it.
+		a.choiceFailed(w, r, err)
 		return
 	}
-	a.chosen(w, r, id, "clip", "video", dir, old)
+	a.chosen(w, r, id, "clip", "video", a.root.OwnClips(), old)
 }
 
 func (a admin) handleRemakeClip(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +94,7 @@ func (a admin) clipChoice(w http.ResponseWriter, r *http.Request, none bool, cho
 		a.choiceFailed(w, r, err)
 		return
 	}
-	a.chosen(w, r, id, "clip", choice, filepath.Join(a.dataDir, media.OwnClipsDir), old)
+	a.chosen(w, r, id, "clip", choice, a.root.OwnClips(), old)
 }
 
 // setClip saves the administrator's choice of clip: a video they uploaded
@@ -134,7 +133,7 @@ func (s store) setClip(ctx context.Context, id int64, own *string, none bool, no
 	if err := jobs.Enqueue(ctx, tx, id, jobs.Clip, false, now); err != nil {
 		return "", err
 	}
-	if oldOwn.Valid && (own == nil || *own != oldOwn.String) {
+	if oldOwn.Valid && (own == nil || !content.SameFile(*own, oldOwn.String)) {
 		old = oldOwn.String
 	}
 	return old, nil

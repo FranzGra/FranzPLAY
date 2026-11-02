@@ -18,8 +18,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
-	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/video"
@@ -51,7 +51,7 @@ func newSite(t *testing.T) *site {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ui := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ui") })
-	s.handler = server.New("test", logger, ui, Routes(db, dataDir, logger))
+	s.handler = server.New("test", logger, ui, Routes(db, content.Root(dataDir), logger))
 	return s
 }
 
@@ -453,7 +453,7 @@ func TestStreamOfMissingVideos(t *testing.T) {
 
 func TestCover(t *testing.T) {
 	s := newSite(t)
-	dir := filepath.Join(s.dataDir, media.CoversDir)
+	dir := content.Root(s.dataDir).Covers()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +534,7 @@ func TestSubtitlesInsideTheVideo(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(s.library, "film.it.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\nCiao\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(s.dataDir, media.SubtitlesDir)
+	dir := content.Root(s.dataDir).Subtitles()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -578,7 +578,7 @@ func TestSubtitlesInsideTheVideo(t *testing.T) {
 func TestSubtitlesMadeByWhisper(t *testing.T) {
 	s := newSite(t)
 	id := s.addVideo(t, "film.mkv", "film", "", 1, true)
-	dir := filepath.Join(s.dataDir, media.AutoSubtitlesDir)
+	dir := content.Root(s.dataDir).AutoSubtitles()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +687,7 @@ func TestPreviews(t *testing.T) {
 		}
 	}
 
-	dir := filepath.Join(s.dataDir, media.PreviewsDir)
+	dir := content.Root(s.dataDir).Previews()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -724,10 +724,10 @@ func TestClips(t *testing.T) {
 	}
 
 	for _, c := range []struct{ folder, address, data string }{
-		{media.ClipsDir, "/api/clips/", "moving"},
-		{media.ClipsHDDir, "/api/clips-hd/", "moving sharply"},
+		{content.Root(s.dataDir).Clips(), "/api/clips/", "moving"},
+		{content.Root(s.dataDir).ClipsHD(), "/api/clips-hd/", "moving sharply"},
 	} {
-		dir := filepath.Join(s.dataDir, c.folder)
+		dir := c.folder
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -1166,7 +1166,7 @@ func TestCategoriesShowThePicturesOfTheirFolders(t *testing.T) {
 
 func TestCategoryPictureIsServed(t *testing.T) {
 	s := newSite(t)
-	dir := filepath.Join(s.dataDir, media.CategoryPicturesDir)
+	dir := content.Root(s.dataDir).CategoryPictures()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}

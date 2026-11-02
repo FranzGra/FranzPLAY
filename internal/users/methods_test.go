@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 )
 
@@ -178,7 +179,7 @@ func TestUnknownNamesGetAStableDecoy(t *testing.T) {
 	}
 	// Same answer after a restart.
 	before := methodOfName(t, b, "Mario")
-	svc, err := NewService(context.Background(), s.db, s.dataDir, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	svc, err := NewService(context.Background(), s.db, content.Root(s.dataDir), false, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +194,7 @@ func TestBlocksSurviveARestart(t *testing.T) {
 	for range passwordPolicy.threshold {
 		login(s.browser(), "Admin", "wrong-password")
 	}
-	svc, err := NewService(context.Background(), s.db, s.dataDir, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	svc, err := NewService(context.Background(), s.db, content.Root(s.dataDir), false, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

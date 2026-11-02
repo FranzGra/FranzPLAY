@@ -141,7 +141,7 @@ func (t *Transcriber) sourceCues(ctx context.Context, videoID int64, file string
 			return nil, "", fmt.Errorf("video %d: %w: %w", videoID, errNoSource, jobs.ErrPermanent)
 		}
 		model = s.model
-		data, err := readSmall(filepath.Join(t.dataDir, AutoSubtitlesDir, s.file))
+		data, err := readSmall(t.root.File(s.file, t.root.AutoSubtitles()))
 		if err != nil {
 			return nil, "", fmt.Errorf("subtitles of video %d: %w", videoID, err)
 		}
@@ -245,7 +245,7 @@ func (t *Transcriber) insideSubtitle(ctx context.Context, videoID int64, lang st
 		if video.MainLang(l) != lang {
 			continue
 		}
-		data, err := readSmall(filepath.Join(t.dataDir, SubtitlesDir, filepath.Base(file)))
+		data, err := readSmall(t.root.File(file, t.root.Subtitles()))
 		if err != nil {
 			return "", fmt.Errorf("read subtitle copy: %w", err)
 		}

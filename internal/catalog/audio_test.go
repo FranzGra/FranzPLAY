@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 )
@@ -46,7 +47,7 @@ func withAudio(t *testing.T, remux Remuxer) *site {
 	s := newSite(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ui := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ui") })
-	s.handler = server.New("test", logger, ui, Routes(s.db, s.dataDir, logger), AudioRoutes(s.db, s.dataDir, remux, logger))
+	s.handler = server.New("test", logger, ui, Routes(s.db, content.Root(s.dataDir), logger), AudioRoutes(s.db, content.Root(s.dataDir), remux, logger))
 	id := s.addVideo(t, "film.mkv", "film", "", 1, true)
 	if _, err := s.db.Exec(`INSERT INTO video_audio (video_id, stream, lang, title, codec, channels, is_default) VALUES
 		(?, 1, 'ita', '', 'ac3', 6, 1), (?, 2, 'eng', 'Commento', 'aac', 2, 0)`, id, id); err != nil {

@@ -5,9 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // confirming is an administrator's fixture with YouTube on and the
@@ -33,7 +34,7 @@ func (fx *adminFixture) proposalPicture(t *testing.T) string {
 
 func exists(t *testing.T, dir, name string) bool {
 	t.Helper()
-	_, err := os.Stat(filepath.Join(dir, Dir, name))
+	_, err := os.Stat(content.Root(dir).File(name, content.Root(dir).OnlineImages()))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
 	}
@@ -67,7 +68,7 @@ func TestConfirmKeepsWhatIsFoundUntilUsed(t *testing.T) {
 	}
 
 	// Cleaning the data folder keeps the picture waiting for a yes.
-	if n, err := RemoveOrphans(context.Background(), fx.db, fx.dataDir); err != nil || n != 0 {
+	if n, err := RemoveOrphans(context.Background(), fx.db, content.Root(fx.dataDir)); err != nil || n != 0 {
 		t.Fatalf("removed %d, %v; want the proposed picture kept", n, err)
 	}
 

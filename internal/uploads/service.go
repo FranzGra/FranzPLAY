@@ -9,42 +9,63 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
-// Folders inside the data folder.
-const (
-	// FolderName holds the finished uploads, one folder per person. The
-	// scanner reads it like a video folder.
-	FolderName = "uploads"
-	// incomingName holds the files still arriving, named <id>.part.
-	incomingName = "incoming"
-)
-
-// Folder returns the absolute path of the uploads folder in dataDir: the
+// Folder returns the absolute path of the uploads folder in root: the
 // same string for the scanner and for this package, since it names the
 // folder in the libraries table.
-func Folder(dataDir string) (string, error) {
-	abs, err := filepath.Abs(filepath.Join(dataDir, FolderName))
+func Folder(root content.Root) (string, error) {
+	abs, err := filepath.Abs(root.Uploads())
 	if err != nil {
 		return "", fmt.Errorf("uploads folder: %w", err)
 	}
 	return abs, nil
 }
 
+// OldFolders returns the old uploads folders the scanner must still read, as
+// absolute paths: where uploads were before they had their own folder, in the
+// content folder and in the data folder if that is another one. After
+// "franzplay migrate-content" there are none: the videos are in the new folder,
+// and the old copies must not be read as other videos.
+func OldFolders(ctx context.Context, db *sql.DB, roots ...content.Root) ([]string, error) {
+	moved, err := content.UploadsMoved(ctx, db)
+	if err != nil || moved {
+		return nil, err
+	}
+	var folders []string
+	for _, root := range roots {
+		abs, err := filepath.Abs(root.OldUploads())
+		if err != nil {
+			return nil, fmt.Errorf("old uploads folder: %w", err)
+		}
+		if info, err := os.Stat(abs); err == nil && info.IsDir() && !slices.Contains(folders, abs) {
+			folders = append(folders, abs)
+		}
+	}
+	return folders, nil
+}
+
 // Service receives the uploads.
 type Service struct {
 	store    store
-	folder   string // finished uploads (absolute)
-	incoming string // files still arriving
-	logger   *slog.Logger
-	now      func() time.Time
+	root     content.Root
+	folder   string   // finished uploads (absolute)
+	old      []string // old folders of finished uploads still in use (absolute)
+	incoming string   // files still arriving
+	// oldIncoming is where the uploads started before they had their own folder
+	// are still arriving.
+	oldIncoming string
+	logger      *slog.Logger
+	now         func() time.Time
 	// account returns the logged-in person: users.FromContext, replaced
 	// only in tests.
 	account func(context.Context) (users.Account, bool)
@@ -57,24 +78,28 @@ type Service struct {
 	busy map[int64]bool // uploads receiving a piece right now
 }
 
-// NewService returns the uploads service for the data folder, creating
+// NewService returns the uploads service for the content folder, creating
 // its folders when needed.
-func NewService(db *sql.DB, dataDir string, logger *slog.Logger) (*Service, error) {
-	folder, err := Folder(dataDir)
+func NewService(db *sql.DB, root content.Root, logger *slog.Logger) (*Service, error) {
+	folder, err := Folder(root)
 	if err != nil {
 		return nil, err
 	}
-	incoming := filepath.Join(dataDir, incomingName)
+	incoming := root.Incoming()
 	for _, dir := range []string{folder, incoming} {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return nil, fmt.Errorf("create folder %q: %w", dir, err)
 		}
 	}
 	return &Service{
-		store: store{db: db}, folder: folder, incoming: incoming, logger: logger,
+		store: store{db: db}, root: root, folder: folder, incoming: incoming, oldIncoming: root.OldIncoming(), logger: logger,
 		now: time.Now, account: users.FromContext, changed: func() {}, busy: map[int64]bool{},
 	}, nil
 }
+
+// KeepOldFolders says which old uploads folders still hold videos (OldFolders):
+// a person may delete those too.
+func (s *Service) KeepOldFolders(folders []string) { s.old = folders }
 
 // OnChange sets what to call when an upload becomes a video, or an
 // uploaded video changes.
@@ -82,6 +107,11 @@ func (s *Service) OnChange(f func()) { s.changed = f }
 
 // partName is the file of an upload still arriving, inside incoming/.
 func partName(id int64) string { return strconv.FormatInt(id, 10) + ".part" }
+
+// partFile is where the file of an upload still arriving is.
+func (s *Service) partFile(id int64) string {
+	return content.Find(s.incoming, s.oldIncoming, partName(id))
+}
 
 // start begins an upload for a person and creates its empty file.
 func (s *Service) start(ctx context.Context, a users.Account, req newUpload) (upload, error) {
@@ -159,7 +189,7 @@ func (s *Service) receive(ctx context.Context, user, id, offset, length int64, b
 // on the disk before the database says it arrived. Anything after offset
 // is dropped first: a piece cut by a dropped connection was never counted.
 func (s *Service) write(id, offset, length int64, body io.Reader) (err error) {
-	f, err := os.OpenFile(filepath.Join(s.incoming, partName(id)), os.O_WRONLY, 0)
+	f, err := os.OpenFile(s.partFile(id), os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("open upload %d: %w", id, err)
 	}
@@ -191,8 +221,8 @@ func (s *Service) write(id, offset, length int64, body io.Reader) (err error) {
 // catalog. A video that is already on FranzPLAY is refused and its file
 // removed.
 func (s *Service) finish(ctx context.Context, u upload) (int64, error) {
-	part := filepath.Join(s.incoming, partName(u.ID))
-	fp, err := library.Fingerprint(os.DirFS(s.incoming), partName(u.ID))
+	part := s.partFile(u.ID)
+	fp, err := library.Fingerprint(os.DirFS(filepath.Dir(part)), partName(u.ID))
 	if err != nil {
 		return 0, err
 	}
@@ -233,6 +263,12 @@ func (s *Service) finish(ctx context.Context, u upload) (int64, error) {
 		// The catalog was not saved: the file goes back to wait.
 		return 0, errors.Join(err, os.Rename(dst, part))
 	}
+	if err == nil {
+		// A private video says so in video.json from the first moment.
+		if err := content.SaveManifest(ctx, s.store.db, s.root, id); err != nil {
+			s.logger.WarnContext(ctx, "write video.json", "video", id, "error", err)
+		}
+	}
 	return id, err
 }
 
@@ -253,7 +289,7 @@ func (s *Service) drop(ctx context.Context, id int64) error {
 	if err := s.store.remove(ctx, id); err != nil {
 		return err
 	}
-	return removeFile(filepath.Join(s.incoming, partName(id)))
+	return errors.Join(removeFile(filepath.Join(s.incoming, partName(id))), removeFile(filepath.Join(s.oldIncoming, partName(id))))
 }
 
 // Clean removes the uploads that received nothing for ForgetAfter, and the
@@ -285,27 +321,36 @@ func (s *Service) Clean(ctx context.Context) (int, error) {
 	if err != nil {
 		return removed, fmt.Errorf("read %s: %w", s.incoming, err)
 	}
+	oldEntries, err := os.ReadDir(s.oldIncoming)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return removed, fmt.Errorf("read %s: %w", s.oldIncoming, err)
+	}
 	known, err := s.store.ids(ctx)
 	if err != nil {
 		return removed, err
 	}
-	for _, e := range entries {
-		if !e.Type().IsRegular() {
-			continue
+	for _, folder := range []struct {
+		dir     string
+		entries []os.DirEntry
+	}{{s.incoming, entries}, {s.oldIncoming, oldEntries}} {
+		for _, e := range folder.entries {
+			if !e.Type().IsRegular() {
+				continue
+			}
+			id, err := strconv.ParseInt(strings.TrimSuffix(e.Name(), ".part"), 10, 64)
+			if err == nil && known[id] {
+				continue
+			}
+			if err := removeFile(filepath.Join(folder.dir, e.Name())); err != nil {
+				return removed, err
+			}
+			removed++
 		}
-		id, err := strconv.ParseInt(strings.TrimSuffix(e.Name(), ".part"), 10, 64)
-		if err == nil && known[id] {
-			continue
-		}
-		if err := removeFile(filepath.Join(s.incoming, e.Name())); err != nil {
-			return removed, err
-		}
-		removed++
 	}
 	return removed, nil
 }
 
-// removeFile removes a file of the data folder; one already gone is fine.
+// removeFile removes a file of the content folder; one already gone is fine.
 func removeFile(path string) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove %s: %w", path, err)

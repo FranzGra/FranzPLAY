@@ -1,7 +1,7 @@
 #!/bin/sh
 # Starts FranzPLAY inside the container as the user chosen with PUID and
-# PGID, never as root. The data folder is made theirs first; the video
-# folders are never touched (they are mounted read-only).
+# PGID, never as root. The data and content folders are made theirs first; the
+# video folders are never touched (they are mounted read-only).
 set -eu
 
 if [ "$(id -u)" = 0 ]; then
@@ -22,8 +22,17 @@ if [ "$(id -u)" = 0 ]; then
 	# Only what is not already theirs: fast when nothing changed.
 	# Some folders shared from Windows or a NAS refuse a new owner: say so,
 	# and try to start anyway.
-	if ! find "$data" \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown "$PUID:$PGID" {} +; then
-		echo "entrypoint: could not give $data to $PUID:$PGID; FranzPLAY may not be able to write there" >&2
+	give() {
+		if ! find "$1" \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown "$PUID:$PGID" {} +; then
+			echo "entrypoint: could not give $1 to $PUID:$PGID; FranzPLAY may not be able to write there" >&2
+		fi
+	}
+	give "$data"
+	# With no content folder chosen, compose mounts the data folder here too:
+	# nothing is left to change then.
+	content="${FRANZPLAY_CONTENT_DIR:-/contenuti}"
+	if [ -d "$content" ]; then
+		give "$content"
 	fi
 	exec su-exec "$PUID:$PGID" "$@"
 fi

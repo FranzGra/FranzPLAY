@@ -8,6 +8,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// FreeSpace says how much is free on the disk that holds dir.
+func FreeSpace(dir string) (uint64, error) {
+	_, free, err := diskSpace(dir)
+	return free, err
+}
+
 // diskSpace reads the size of the disk that holds dir, and how much is free.
 func diskSpace(dir string) (total, free uint64, err error) {
 	var st unix.Statfs_t

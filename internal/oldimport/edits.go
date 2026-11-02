@@ -12,6 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 )
@@ -117,10 +118,10 @@ func (im *importer) categoryNames() error {
 
 // covers brings the covers the administrator chose by hand. The old
 // FranzPLAY kept them inside the video folders: they are only read there,
-// and a copy goes in the data folder, where the new FranzPLAY keeps the
+// and a copy goes in the content folder, where the new FranzPLAY keeps the
 // covers it is given. It runs after the rest is saved: a cover that fails
 // is only reported.
-func (im *importer) covers(dataDir string) error {
+func (im *importer) covers(root content.Root) error {
 	r := &im.report.Covers
 	for _, v := range im.old.videos {
 		if !v.manual {
@@ -140,7 +141,7 @@ func (im *importer) covers(dataDir string) error {
 			r.Added++
 			continue
 		}
-		saved, err := im.saveCover(id, data, ext, dataDir)
+		saved, err := im.saveCover(id, data, ext, root)
 		switch {
 		case err != nil:
 			return err
@@ -179,11 +180,11 @@ func (im *importer) readCover(v oldVideo, id int64) (_ []byte, ext string, err e
 	return data, ext, nil
 }
 
-// saveCover keeps a copy of an old cover in the data folder and makes it
+// saveCover keeps a copy of an old cover in the content folder and makes it
 // the video's cover, unless the video already has one chosen in the new
 // FranzPLAY.
-func (im *importer) saveCover(id int64, data []byte, ext, dataDir string) (saved bool, err error) {
-	dir := filepath.Join(dataDir, media.OwnCoversDir)
+func (im *importer) saveCover(id int64, data []byte, ext string, root content.Root) (saved bool, err error) {
+	dir := root.OwnCovers()
 	name, err := media.SaveOwnFile(dir, id, ext, bytes.NewReader(data))
 	if err != nil {
 		return false, fmt.Errorf("import: cover of video %d: %w", id, err)

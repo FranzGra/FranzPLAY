@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
@@ -21,16 +22,16 @@ const (
 	deleteTranslator = "/api/admin/subtitles/models/translator/"
 )
 
-func (s *site) writeModel(t *testing.T, name, content string) {
+func (s *site) writeModel(t *testing.T, name, text string) {
 	t.Helper()
-	if err := os.WriteFile(media.ModelFile(s.dataDir, name), []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(media.ModelFile(content.Root(s.dataDir), name), []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func (s *site) hasSmall(t *testing.T) bool {
 	t.Helper()
-	models, err := media.Models(s.dataDir)
+	models, err := media.Models(content.Root(s.dataDir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func (s *site) fileOf(t *testing.T, name string) ModelFile {
 func TestDeleteWhisperModel(t *testing.T) {
 	s := newSite(t)
 	s.writeModel(t, "small", "pretend weights")
-	other := media.ModelFile(s.dataDir, "medium")
+	other := media.ModelFile(content.Root(s.dataDir), "medium")
 	if f := s.fileOf(t, "small"); f.Size != int64(len("pretend weights")) || f.Busy != "" {
 		t.Errorf("before: %+v", f)
 	}
@@ -80,11 +81,11 @@ func TestDeleteWhisperModel(t *testing.T) {
 
 func TestDeleteModelRefusesABadName(t *testing.T) {
 	s := newSite(t)
-	s.opts.Downloader = NewDownloader(s.dataDir, "http://unused", func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s.opts.Downloader = NewDownloader(content.Root(s.dataDir), "http://unused", func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	outside := filepath.Join(s.dataDir, "precious.bin")
-	inside := filepath.Join(s.dataDir, media.WhisperDir, "ggml-precious.txt")
-	silero := filepath.Join(s.dataDir, media.WhisperDir, "ggml-silero-v5.bin")
-	folder := filepath.Join(s.dataDir, media.WhisperDir, "ggml-folder.bin")
+	inside := filepath.Join(content.Root(s.dataDir).WhisperModels(), "ggml-precious.txt")
+	silero := filepath.Join(content.Root(s.dataDir).WhisperModels(), "ggml-silero-v5.bin")
+	folder := filepath.Join(content.Root(s.dataDir).WhisperModels(), "ggml-folder.bin")
 	if err := os.Mkdir(folder, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestDeleteModelRefusesABadName(t *testing.T) {
 			s.do(t, "DELETE", deleteWhisper+name, "", http.StatusNotFound)
 		})
 	}
-	for _, name := range []string{outside, inside, silero, folder, media.ModelFile(s.dataDir, "small")} {
+	for _, name := range []string{outside, inside, silero, folder, media.ModelFile(content.Root(s.dataDir), "small")} {
 		if _, err := os.Stat(name); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
@@ -228,9 +229,9 @@ func TestDeletedModelCanBeDownloadedAgain(t *testing.T) {
 	fx.finished(t)
 
 	s := newSite(t)
-	s.dataDir, s.opts.DataDir, s.opts.Downloader = fx.dataDir, fx.dataDir, fx.d
+	s.dataDir, s.opts.Content, s.opts.Downloader = fx.dataDir, content.Root(fx.dataDir), fx.d
 	s.do(t, "DELETE", deleteWhisper+"small", "", http.StatusNoContent)
-	if _, err := os.Stat(media.ModelFile(fx.dataDir, "small")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(media.ModelFile(content.Root(fx.dataDir), "small")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("after deleting: %v", err)
 	}
 	if st := fx.d.Status(); st != nil {

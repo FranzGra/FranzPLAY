@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 func TestCoverSecond(t *testing.T) {
@@ -141,11 +143,10 @@ func TestCoverArgsReadsKeyFramesOnlyForItsOwnMoment(t *testing.T) {
 	}
 }
 
-func TestChosenCoverNameChangesWithTheChoice(t *testing.T) {
-	const fp = "v1:aaaaaaaa11111111"
-	auto := chosenCoverName(7, fp, coverChoice{downloaded: "/data/online/7.img"})
-	if auto != coverName(7, fp) {
-		t.Errorf("FranzPLAY's own cover = %q, want %q", auto, coverName(7, fp))
+func TestCoverVersionChangesWithTheChoice(t *testing.T) {
+	auto := coverChoice{downloaded: "/data/online/7.img"}.tag()
+	if auto != "" {
+		t.Errorf("FranzPLAY's own cover has version %q, want none", auto)
 	}
 	names := map[string]bool{auto: true}
 	for _, choice := range []coverChoice{
@@ -156,9 +157,9 @@ func TestChosenCoverNameChangesWithTheChoice(t *testing.T) {
 		{beside: "/videos/mare.jpg", besideVersion: "abc"},
 		{beside: "/videos/mare.jpg", besideVersion: "abd"},
 	} {
-		name := chosenCoverName(7, fp, choice)
+		name := choice.tag()
 		if names[name] {
-			t.Errorf("name %q used twice", name)
+			t.Errorf("version %q used twice", name)
 		}
 		names[name] = true
 	}
@@ -176,7 +177,7 @@ func newCoverFixture(t *testing.T, root, rel string) *coverFixture {
 	t.Helper()
 	db, id := catalog(t, root, rel)
 	dataDir := t.TempDir()
-	return &coverFixture{db: db, id: id, dataDir: dataDir, c: NewCoverer(db, "ffmpeg", dataDir)}
+	return &coverFixture{db: db, id: id, dataDir: dataDir, c: NewCoverer(db, "ffmpeg", content.Root(dataDir))}
 }
 
 func (fx *coverFixture) cover(t *testing.T) sql.NullString {
@@ -190,15 +191,7 @@ func (fx *coverFixture) cover(t *testing.T) sql.NullString {
 
 func (fx *coverFixture) files(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(fx.dataDir, CoversDir))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return inFolders(t, content.Root(fx.dataDir), content.FileCover)
 }
 
 // fakeFFmpeg pretends to be ffmpeg: it writes content to the output file
@@ -284,7 +277,7 @@ func TestNewCoverReplacesTheOldOne(t *testing.T) {
 		t.Fatalf("cover name did not change: %q", second)
 	}
 	if files := fx.files(t); !slices.Equal(files, []string{second}) {
-		t.Errorf("covers folder = %q, want only %q", files, second)
+		t.Errorf("covers = %q, want only %q", files, second)
 	}
 }
 
@@ -312,22 +305,25 @@ func TestRemoveOrphanCovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	kept := fx.cover(t).String
-	dir := filepath.Join(fx.dataDir, CoversDir)
+	dir := content.Root(fx.dataDir).Covers()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"99-forgotten.jpg", ".new-123.jpg"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	removed, err := RemoveOrphanCovers(context.Background(), fx.db, fx.dataDir)
+	removed, err := RemoveOrphanCovers(context.Background(), fx.db, content.Root(fx.dataDir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if removed != 2 || !slices.Equal(fx.files(t), []string{kept}) {
-		t.Errorf("removed %d, folder now %q; want 2 removed and only %q", removed, fx.files(t), kept)
+	if left := flatFiles(t, dir); removed != 2 || len(left) != 0 || !slices.Equal(fx.files(t), []string{kept}) {
+		t.Errorf("removed %d, left %q, covers %q; want 2 removed and only %q", removed, left, fx.files(t), kept)
 	}
 
-	if n, err := RemoveOrphanCovers(context.Background(), fx.db, t.TempDir()); err != nil || n != 0 {
+	if n, err := RemoveOrphanCovers(context.Background(), fx.db, content.Root(t.TempDir())); err != nil || n != 0 {
 		t.Errorf("data folder with no covers: %d, %v", n, err)
 	}
 }
@@ -379,7 +375,7 @@ func TestCoverWithRealFFmpeg(t *testing.T) {
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if w, h := jpegSize(t, filepath.Join(fx.dataDir, CoversDir, fx.cover(t).String)); w != 640 || h != 360 {
+	if w, h := jpegSize(t, content.Root(fx.dataDir).File(fx.cover(t).String, "")); w != 640 || h != 360 {
 		t.Errorf("cover from a frame is %dx%d, want 640x360", w, h)
 	}
 	if after := listDir(t, root); !slices.Equal(after, libraryBefore) {
@@ -396,7 +392,7 @@ func TestCoverWithRealFFmpeg(t *testing.T) {
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if w, h := jpegSize(t, filepath.Join(fx.dataDir, CoversDir, fx.cover(t).String)); w != 300 || h != 170 {
+	if w, h := jpegSize(t, content.Root(fx.dataDir).File(fx.cover(t).String, "")); w != 300 || h != 170 {
 		t.Errorf("cover from the image is %dx%d, want 300x170", w, h)
 	}
 
@@ -408,7 +404,7 @@ func TestCoverWithRealFFmpeg(t *testing.T) {
 	}
 
 	// An image uploaded by the administrator wins, cut to 16:9.
-	own := filepath.Join(fx.dataDir, OwnCoversDir, "1-0123456789abcdef.png")
+	own := filepath.Join(content.Root(fx.dataDir).OwnCovers(), "1-0123456789abcdef.png")
 	if err := os.MkdirAll(filepath.Dir(own), 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +419,7 @@ func TestCoverWithRealFFmpeg(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 300 wide, and 9/16 of it tall (168.75), rounded to an even number.
-	if w, h := jpegSize(t, filepath.Join(fx.dataDir, CoversDir, fx.cover(t).String)); w != 300 || h < 168 || h > 170 {
+	if w, h := jpegSize(t, content.Root(fx.dataDir).File(fx.cover(t).String, "")); w != 300 || h < 168 || h > 170 {
 		t.Errorf("cover from the uploaded image is %dx%d, want 300x170 or so", w, h)
 	}
 	if files := fx.files(t); len(files) != 1 {

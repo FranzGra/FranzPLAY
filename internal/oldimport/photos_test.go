@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // picture makes a w×h picture, red on the left half and blue on the right.
@@ -72,7 +74,7 @@ func TestImportPhotos(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer f.Close() //nolint:errcheck // read only
-		r, err := Import(context.Background(), db, f, Options{Now: importDay, PhotosDir: photos, DataDir: dataDir})
+		r, err := Import(context.Background(), db, f, Options{Now: importDay, PhotosDir: photos, Content: content.Root(dataDir)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,7 +92,7 @@ func TestImportPhotos(t *testing.T) {
 	if version != importDay.UnixMilli() {
 		t.Errorf("avatar version = %d", version)
 	}
-	f, err := os.Open(filepath.Join(dataDir, "avatars", "1.jpg"))
+	f, err := os.Open(filepath.Join(dataDir, "utenti", "1.jpg"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +119,7 @@ func TestImportPhotosReportsWhatFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close() //nolint:errcheck // read only
-	r, err := Import(context.Background(), db, f, Options{Now: importDay, PhotosDir: photos, DataDir: t.TempDir()})
+	r, err := Import(context.Background(), db, f, Options{Now: importDay, PhotosDir: photos, Content: content.Root(t.TempDir())})
 	if err != nil {
 		t.Fatal(err)
 	}

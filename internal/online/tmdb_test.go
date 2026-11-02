@@ -5,11 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 )
 
@@ -83,7 +83,7 @@ func TestTMDBGivesFilmDetailsAndPicture(t *testing.T) {
 	if got.title != "Il sorpasso" || got.author.String != "Dino Risi" || !got.cover.Valid || got.coverJobs != 1 {
 		t.Fatalf("video = %+v", got)
 	}
-	data, err := os.ReadFile(filepath.Join(fx.dataDir, Dir, got.cover.String))
+	data, err := os.ReadFile(content.Root(fx.dataDir).File(got.cover.String, ""))
 	if err != nil || string(data) != "a film picture" {
 		t.Errorf("picture = %q, %v", data, err)
 	}

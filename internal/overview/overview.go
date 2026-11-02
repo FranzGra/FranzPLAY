@@ -3,7 +3,10 @@
 // a short list of what needs attention. It only reads.
 package overview
 
-import "github.com/FranzGra/FranzPLAY/internal/video"
+import (
+	"github.com/FranzGra/FranzPLAY/internal/content"
+	"github.com/FranzGra/FranzPLAY/internal/video"
+)
 
 // Videos are the numbers about the videos.
 type Videos struct {
@@ -26,11 +29,12 @@ type Jobs struct {
 
 // Disk is the space on the disk that holds one folder.
 type Disk struct {
-	Folder string `json:"folder"` // the folder, as set in the settings
-	Data   bool   `json:"data"`   // it is FranzPLAY's data folder, not a video folder
-	Total  uint64 `json:"total"`  // bytes; 0 if it could not be read
-	Free   uint64 `json:"free"`   // bytes
-	Error  bool   `json:"error"`  // the folder could not be read: not there, or not mounted
+	Folder  string `json:"folder"`  // the folder, as set in the settings
+	Data    bool   `json:"data"`    // it is FranzPLAY's data or content folder, not a video folder
+	Content bool   `json:"content"` // it is the content folder, when that is not the data folder
+	Total   uint64 `json:"total"`   // bytes; 0 if it could not be read
+	Free    uint64 `json:"free"`    // bytes
+	Error   bool   `json:"error"`   // the folder could not be read: not there, or not mounted
 }
 
 // DamagedFile is a file in the video folders FranzPLAY cannot read.
@@ -56,6 +60,10 @@ type Overview struct {
 	Problems   []Problem `json:"problems"`
 	// Damaged are the first files of Videos.Problems, at most maxDamaged.
 	Damaged []DamagedFile `json:"damaged"`
+	// Leftovers are the first folders of contents with no video, at most
+	// maxLeftovers, out of LeftoversTotal. Nothing deletes them by itself.
+	Leftovers      []content.Leftover `json:"leftovers"`
+	LeftoversTotal int                `json:"leftoversTotal"`
 	// InContainer says the paths are the ones seen inside a container, not
 	// the ones of the computer that runs it.
 	InContainer bool `json:"inContainer"`
@@ -64,6 +72,9 @@ type Overview struct {
 // maxDamaged is how many damaged files the summary lists: enough to work
 // through, and the page stays light even with a disk gone bad.
 const maxDamaged = 200
+
+// maxLeftovers is how many folders with no video the summary lists.
+const maxLeftovers = 200
 
 // ProblemKind names something that needs attention. The list is closed:
 // the interface has a sentence and a link for each.

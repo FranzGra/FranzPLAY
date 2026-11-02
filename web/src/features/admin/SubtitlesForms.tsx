@@ -66,10 +66,11 @@ function PutFirst({ checked, onChange }: { checked: boolean; onChange: (first: b
 }
 
 // Seconds of work for each second of video, on a small processor. Measured on
-// a Celeron N3450: base and the turbo model, which took even longer than this.
-// small was not measured: it is an estimate, and the page says so.
-const baseTimes = 4.3;
-const smallTimes = 12;
+// a Celeron N3450: base (a video of 48 minutes in 4 hours and 17, 01-11-2026) and
+// the turbo model, which took even longer than this. small was not measured: it
+// is an estimate, about three times base, and the page says so.
+const baseTimes = 5.3;
+const smallTimes = 15;
 const turboTimes = 20;
 
 // longTime says a long time in words, in round numbers: "2 ore e 20 minuti".

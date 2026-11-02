@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -32,9 +33,9 @@ import (
 //
 // A key is never sent back: the answers only say if there is one.
 // newJobs is called when the change put work in the queue.
-func Routes(db *sql.DB, dataDir string, newJobs func(), logger *slog.Logger) func(mux *http.ServeMux) {
+func Routes(db *sql.DB, root content.Root, newJobs func(), logger *slog.Logger) func(mux *http.ServeMux) {
 	client := &http.Client{Timeout: askTimeout}
-	a := api{db: db, dataDir: dataDir, newJobs: newJobs, logger: logger, now: time.Now, account: users.FromContext,
+	a := api{db: db, root: root, newJobs: newJobs, logger: logger, now: time.Now, account: users.FromContext,
 		tmdb: newTMDB(client), tpdb: newTPDB(client)}
 	return a.routes
 }
@@ -55,7 +56,7 @@ func (a api) routes(mux *http.ServeMux) {
 
 type api struct {
 	db      *sql.DB
-	dataDir string
+	root    content.Root
 	newJobs func()
 	logger  *slog.Logger
 	now     func() time.Time

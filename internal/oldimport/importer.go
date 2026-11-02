@@ -11,6 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/progress"
 	"github.com/FranzGra/FranzPLAY/internal/site"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -29,8 +30,8 @@ type Options struct {
 	// PhotosDir is the old FranzPLAY's folder of profile photos
 	// (App_Data/User_Images); empty leaves the photos out.
 	PhotosDir string
-	// DataDir is the new FranzPLAY's data folder, where photos and covers go.
-	DataDir string
+	// Content is the new FranzPLAY's content folder, where photos and covers go.
+	Content content.Root
 }
 
 // Import reads the old database from an SQL file and adds what it holds
@@ -83,11 +84,11 @@ func Import(ctx context.Context, db *sql.DB, file io.Reader, opt Options) (*Repo
 // covers chosen by hand.
 func (im *importer) files(opt Options) error {
 	if opt.PhotosDir != "" {
-		if err := im.photos(opt.PhotosDir, opt.DataDir); err != nil {
+		if err := im.photos(opt.PhotosDir, opt.Content); err != nil {
 			return err
 		}
 	}
-	return im.covers(opt.DataDir)
+	return im.covers(opt.Content)
 }
 
 type importer struct {

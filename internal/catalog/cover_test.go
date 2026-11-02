@@ -7,13 +7,12 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
 
-	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // A PNG and a JPEG as http.DetectContentType recognizes them.
@@ -68,15 +67,7 @@ func (s *adminSite) coverChoice(t *testing.T, id int64) (own *string, second *in
 
 func (s *adminSite) ownCovers(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(s.dataDir, media.OwnCoversDir))
-	if err != nil && !os.IsNotExist(err) {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return s.chosenFiles(t, content.FileOwnCover)
 }
 
 func TestAdministratorChoosesTheCover(t *testing.T) {
@@ -91,7 +82,7 @@ func TestAdministratorChoosesTheCover(t *testing.T) {
 	if own == nil || second != nil {
 		t.Fatalf("after the image: own %v, second %v", own, second)
 	}
-	if files := s.ownCovers(t); len(files) != 1 || files[0] != *own || filepath.Ext(*own) != ".png" {
+	if files := s.ownCovers(t); len(files) != 1 || files[0] != withoutVersion(*own) || filepath.Ext(withoutVersion(*own)) != ".png" {
 		t.Fatalf("own covers = %q, saved %q", files, *own)
 	}
 	if got := pendingJobs(t, s.db, id); len(got) != 1 || got[0] != "cover" {
@@ -105,7 +96,7 @@ func TestAdministratorChoosesTheCover(t *testing.T) {
 	// Another image replaces the first, which goes.
 	s.putImage(t, id, jpegImage, http.StatusNoContent)
 	own, _ = s.coverChoice(t, id)
-	if files := s.ownCovers(t); len(files) != 1 || files[0] != *own || filepath.Ext(*own) != ".jpg" {
+	if files := s.ownCovers(t); len(files) != 1 || files[0] != withoutVersion(*own) || filepath.Ext(withoutVersion(*own)) != ".jpg" {
 		t.Fatalf("own covers = %q, saved %q", files, *own)
 	}
 

@@ -135,6 +135,18 @@ func Enqueue(ctx context.Context, db execer, videoID int64, kind Kind, onlyIfNot
 	return nil
 }
 
+// MarkDone saves a job as already finished, without running it: its result came
+// with the video, from its folder. It does not show among the jobs just ended.
+func MarkDone(ctx context.Context, db execer, videoID int64, kind Kind, now time.Time) error {
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO jobs (video_id, kind, state, updated_at) VALUES (?, ?, 'done', ?)
+		ON CONFLICT (video_id, kind) DO UPDATE SET state = 'done', updated_at = excluded.updated_at`,
+		videoID, string(kind), now.Unix()); err != nil {
+		return fmt.Errorf("mark %s job done for video %d: %w", kind, videoID, err)
+	}
+	return nil
+}
+
 // FileUnreadable is the one rule, written for a query on "videos v", that
 // says a file is damaged or is not a video: it is in its folder, and FranzPLAY
 // gave up reading it. Attempts still to come do not count, and a file removed

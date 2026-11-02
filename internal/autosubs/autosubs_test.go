@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -52,13 +53,13 @@ func newSite(t *testing.T) *site {
 		}
 	})
 	s := &site{db: db, dataDir: dataDir, library: t.TempDir(), who: users.Account{ID: 1, Name: "Admin", Role: users.Admin}}
-	s.opts = Options{DataDir: dataDir, Whisper: true, Translator: fakeLanguages{known: []string{"en", "it"}}}
+	s.opts = Options{Content: content.Root(dataDir), Whisper: true, Translator: fakeLanguages{known: []string{"en", "it"}}}
 	s.exec(t, `INSERT INTO libraries (id, path) VALUES (1, ?)`, s.library)
-	if err := os.MkdirAll(filepath.Join(dataDir, media.WhisperDir), 0o750); err != nil {
+	if err := os.MkdirAll(content.Root(dataDir).WhisperModels(), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	for _, m := range []string{"small", "medium"} {
-		if err := os.WriteFile(media.ModelFile(dataDir, m), nil, 0o600); err != nil {
+		if err := os.WriteFile(media.ModelFile(content.Root(dataDir), m), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -136,7 +137,7 @@ func TestSetup(t *testing.T) {
 		t.Errorf("translator down: %+v", got)
 	}
 
-	s.opts = Options{DataDir: t.TempDir()}
+	s.opts = Options{Content: content.Root(t.TempDir())}
 	got = decode[Setup](t, s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusOK))
 	if got.Whisper || got.Translator || got.Models == nil || len(got.Models) != 0 {
 		t.Errorf("nothing installed: %+v", got)
@@ -340,7 +341,7 @@ func TestListShowsEverySubtitle(t *testing.T) {
 func TestDeleteMade(t *testing.T) {
 	s := newSite(t)
 	id := s.addVideo(t, "mare.mp4", "Mare")
-	dir := filepath.Join(s.dataDir, media.AutoSubtitlesDir)
+	dir := content.Root(s.dataDir).AutoSubtitles()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +369,7 @@ func TestDownloadRoute(t *testing.T) {
 	}
 
 	// A downloader that is not running is always busy.
-	s.opts.Downloader = NewDownloader(s.dataDir, "http://unused", func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s.opts.Downloader = NewDownloader(content.Root(s.dataDir), "http://unused", func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	s.do(t, "POST", "/api/admin/subtitles/models/small", "", http.StatusConflict)
 	s.do(t, "POST", "/api/admin/subtitles/models/huge", "", http.StatusNotFound)
 	got = decode[Setup](t, s.do(t, "GET", "/api/admin/subtitles/setup", "", http.StatusOK))

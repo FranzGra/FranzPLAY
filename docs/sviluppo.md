@@ -62,7 +62,7 @@ internal/safefile/  mette un file finito al suo posto in modo che resista a un b
 internal/catalog/   l'API dei video: elenco, un video, categorie, copertine, streaming
 internal/users/     utenti, accesso e sessioni; protegge tutta l'API
 internal/channels/  il canale di ogni persona: nome e playlist pubbliche
-internal/uploads/   video caricati dal browser, a pezzi, nella cartella dati
+internal/uploads/   video caricati dal browser, a pezzi, nella cartella dei contenuti
 internal/sharing/   condividere un video o una playlist solo con alcune persone
 internal/online/    fonti su internet (YouTube, TMDB, ThePornDB) per copertine e titoli, spente se l'admin non le accende
 internal/recommend/ i video consigliati: regole semplici a punti, ognuna col suo perché
@@ -151,6 +151,7 @@ Impostazioni:
 |---|---|---|
 | `FRANZPLAY_ADDR` | `:8090` | Indirizzo e porta del sito |
 | `FRANZPLAY_DATA_DIR` | `data` | Cartella dati di FranzPLAY |
+| `FRANZPLAY_CONTENT_DIR` | la cartella dati | Cartella dei contenuti: copertine, anteprime, modelli, video caricati ([0025](decisioni/0025-cartella-contenuti.md)) |
 | `FRANZPLAY_LIBRARIES` | nessuna | Cartelle dei video, in sola lettura (separate da `;` su Windows, `:` altrove) |
 | `FRANZPLAY_FFPROBE` | `ffprobe` | Programma ffprobe (nome nel PATH o percorso completo) |
 | `FRANZPLAY_FFMPEG` | `ffmpeg` | Programma ffmpeg (nome nel PATH o percorso completo) |

@@ -196,8 +196,11 @@
   gap: 12px;
 }
 
+/* align-self keeps the cover 16:9: stretched to the height of a long title
+   beside it, it would turn square. */
 .root[data-layout="row"] .cover {
   flex: none;
+  align-self: flex-start;
   width: 168px;
   margin: 0;
 }

@@ -11,23 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/FranzGra/FranzPLAY/internal/safefile"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
-
-// ClipsDir is the folder, inside the data folder, that holds the clips
-// that play on a video's card when the pointer rests on it.
-const ClipsDir = "clips"
-
-// ClipsHDDir is the folder, inside the data folder, that holds the same
-// clips made sharper, for browsers on a good connection. Each has the
-// same name as its light twin in ClipsDir.
-const ClipsHDDir = "clips-hd"
-
-// OwnClipsDir is the folder, inside the data folder, that holds the
-// videos the administrator uploaded as clips, as they were sent. The clip
-// job turns them into clips like the others: small, silent, quick to load.
-const OwnClipsDir = "own-clips"
 
 // ownClipSeconds is the most of an uploaded video kept in its clip.
 const ownClipSeconds = 15
@@ -40,16 +26,16 @@ const clipFPS = 24
 type Clipper struct {
 	db      *sql.DB
 	ffmpeg  string // program to run
-	dataDir string
+	root    content.Root
 	threads int // how many processor cores ffmpeg may use
 	run     runFunc
 }
 
 // NewClipper returns a clipper that runs the given ffmpeg program and
-// writes clips in dataDir/clips. Like conversions, it leaves half of the
+// writes clips in the folder of each video, in root. Like conversions, it leaves half of the
 // processor free, so the site stays quick on a Raspberry Pi.
-func NewClipper(db *sql.DB, ffmpeg, dataDir string) *Clipper {
-	return &Clipper{db: db, ffmpeg: ffmpeg, dataDir: dataDir, threads: max(1, runtime.NumCPU()/2), run: runInBackground}
+func NewClipper(db *sql.DB, ffmpeg string, root content.Root) *Clipper {
+	return &Clipper{db: db, ffmpeg: ffmpeg, root: root, threads: max(1, runtime.NumCPU()/2), run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Clip. One run of ffmpeg makes both
@@ -66,20 +52,30 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 		Scan(&duration, &old, &oldHD, &own, &noClip); err != nil {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
-	dir := filepath.Join(c.dataDir, ClipsDir)
-	dirHD := filepath.Join(c.dataDir, ClipsHDDir)
+	flat, flatHD := c.root.Clips(), c.root.ClipsHD()
 	if noClip {
 		// The administrator does not want a clip on this video.
 		if _, err := c.db.ExecContext(ctx, `UPDATE videos SET clip = NULL, clip_hd = NULL WHERE id = ?`, videoID); err != nil {
 			return fmt.Errorf("remove clip of video %d: %w", videoID, err)
 		}
-		return errors.Join(removeIfValid(dir, old), removeIfValid(dirHD, oldHD))
+		return errors.Join(c.root.RemoveNotKept(old.String, "", flat), c.root.RemoveNotKept(oldHD.String, "", flatHD))
 	}
-	name := clipName(videoID, fingerprint)
+	code, err := content.EnsureVideoFolder(ctx, c.db, c.root, videoID, fingerprint)
+	if err != nil {
+		return err
+	}
+	work, err := c.root.MakeWork()
+	if err != nil {
+		return err
+	}
+	version := ""
 	var build func(ctx context.Context, out, outHD string) error
 	if own.Valid {
-		uploaded := filepath.Join(c.dataDir, OwnClipsDir, filepath.Base(own.String))
-		name = strings.TrimSuffix(name, ".mp4") + "-o" + ownTag(own.String) + ".mp4"
+		uploaded := c.root.File(own.String, c.root.OwnClips())
+		version = "o" + ownTag(own.String)
+		if v := content.Version(own.String); v != "" {
+			version = "o" + v
+		}
 		build = func(ctx context.Context, out, outHD string) error {
 			_, err := c.run(ctx, c.ffmpeg, ownClipArgs(uploaded, c.threads, out, outHD)...)
 			return err
@@ -90,21 +86,21 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 			return nil // too short to need a clip
 		}
 		build = func(ctx context.Context, out, outHD string) error {
-			return c.fromParts(ctx, file, parts, dir, out, outHD)
+			return c.fromParts(ctx, file, parts, work, out, outHD)
 		}
 	}
 
 	// Rule 6: ffmpeg writes temporary files, renamed only when finished.
-	tmp, err := newTemp(dir)
+	tmp, err := newTemp(work)
 	if err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
 	}
-	defer func() { err = errors.Join(err, removeFile(dir, filepath.Base(tmp))) }()
-	tmpHD, err := newTemp(dirHD)
+	defer func() { err = errors.Join(err, removeFile(work, filepath.Base(tmp))) }()
+	tmpHD, err := newTemp(work)
 	if err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
 	}
-	defer func() { err = errors.Join(err, removeFile(dirHD, filepath.Base(tmpHD))) }()
+	defer func() { err = errors.Join(err, removeFile(work, filepath.Base(tmpHD))) }()
 
 	if err := build(ctx, tmp, tmpHD); err != nil {
 		return fmt.Errorf("clip of video %d: %w", videoID, err)
@@ -115,33 +111,27 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 		}
 	}
 
-	// The sharp clip first: until the database names it, nobody asks for it.
-	if err := safefile.Rename(tmpHD, filepath.Join(dirHD, name)); err != nil {
-		return fmt.Errorf("clip of video %d: %w", videoID, err)
-	}
-	if err := safefile.Rename(tmp, filepath.Join(dir, name)); err != nil {
-		return fmt.Errorf("clip of video %d: %w", videoID, err)
-	}
-	res, err := c.db.ExecContext(ctx, `UPDATE videos SET clip = ?, clip_hd = ? WHERE id = ? AND fingerprint = ?`,
-		name, name, videoID, fingerprint)
+	// Put in place and saved only if the content is still the one we used. The
+	// sharp clip first: until the database names it, nobody asks for it.
+	name := content.Stored(code, content.FileClip, version)
+	nameHD := content.Stored(code, content.FileClipHD, version)
+	same, err := content.IfSame(ctx, c.db, videoID, fingerprint, func(tx *sql.Tx) error {
+		if err := c.root.Put(code, content.FileClipHD, tmpHD); err != nil {
+			return err
+		}
+		if err := c.root.Put(code, content.FileClip, tmp); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE videos SET clip = ?, clip_hd = ? WHERE id = ?`, name, nameHD, videoID)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("save clip of video %d: %w", videoID, err)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("save clip of video %d: %w", videoID, err)
+	if !same {
+		return nil // the file changed meanwhile: these clips belong to nobody
 	}
-	if n == 0 {
-		// The file changed meanwhile: these clips belong to nobody.
-		return errors.Join(removeFile(dir, name), removeFile(dirHD, name))
-	}
-	if old.String == name {
-		old.Valid = false
-	}
-	if oldHD.String == name {
-		oldHD.Valid = false
-	}
-	return errors.Join(removeIfValid(dir, old), removeIfValid(dirHD, oldHD))
+	return errors.Join(c.root.RemoveNotKept(old.String, name, flat), c.root.RemoveNotKept(oldHD.String, nameHD, flatHD))
 }
 
 // newTemp creates dir if needed and an empty temporary clip in it, for
@@ -160,20 +150,6 @@ func newTemp(dir string) (string, error) {
 		return "", errors.Join(err, os.Remove(name))
 	}
 	return name, nil
-}
-
-// removeIfValid removes the file name in dir, if there is a name.
-func removeIfValid(dir string, name sql.NullString) error {
-	if !name.Valid {
-		return nil
-	}
-	return removeFile(dir, name.String)
-}
-
-// clipName is the clip file of a video. Like the cover's, it changes when
-// the content changes, so a browser never plays the clip of the old file.
-func clipName(videoID int64, fingerprint string) string {
-	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") + ".mp4"
 }
 
 // ownTag is a short piece of an uploaded file's name, which is new at
@@ -282,18 +258,18 @@ func clipOutputs(threads int, out, outHD string) []string {
 // RemoveOrphanOwnClips deletes the videos uploaded as clips that no video
 // uses any more. Like RemoveOrphanCovers, it must run before the job
 // worker and the web server start.
-func RemoveOrphanOwnClips(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, OwnClipsDir), "videos", "own_clip")
+func RemoveOrphanOwnClips(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	return removeOrphans(ctx, db, root.OwnClips(), "videos", "own_clip")
 }
 
 // RemoveOrphanClips deletes the files in the two clips folders that no
 // video uses any more, and work left half done. Like RemoveOrphanCovers, it must
 // run before the job worker starts.
-func RemoveOrphanClips(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	removed, err = removeOrphans(ctx, db, filepath.Join(dataDir, ClipsDir), "videos", "clip")
+func RemoveOrphanClips(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	removed, err = removeOrphans(ctx, db, root.Clips(), "videos", "clip")
 	if err != nil {
 		return removed, err
 	}
-	hd, err := removeOrphans(ctx, db, filepath.Join(dataDir, ClipsHDDir), "videos", "clip_hd")
+	hd, err := removeOrphans(ctx, db, root.ClipsHD(), "videos", "clip_hd")
 	return removed + hd, err
 }

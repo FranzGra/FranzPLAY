@@ -15,43 +15,58 @@ import (
 	"sync"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
-	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
-// AutoSubtitlesDir is the folder, inside the data folder, that holds the
-// subtitles written by whisper and their translations.
-const AutoSubtitlesDir = "autosubtitles"
-
-// WhisperDir is the folder, inside the data folder, where the
-// administrator puts whisper's models: ggml-small.bin, ggml-medium.bin…
-const WhisperDir = "whisper"
-
 // ModelFile is where the model with this name is: "small" is
-// whisper/ggml-small.bin. The name must come from Models or be checked
-// with video.WhisperModel first.
-func ModelFile(dataDir, name string) string {
-	return filepath.Join(dataDir, WhisperDir, "ggml-"+name+".bin")
+// modelli/whisper/ggml-small.bin, or whisper/ggml-small.bin if it is only in the
+// old folder. The name must come from Models or be checked with
+// video.WhisperModel first.
+func ModelFile(root content.Root, name string) string {
+	return content.Find(root.WhisperModels(), root.OldWhisperModels(), modelName(name))
 }
 
-// Models lists the names of the models in the whisper folder, in order.
-// No folder means no models.
-func Models(dataDir string) ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(dataDir, WhisperDir))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read whisper models: %w", err)
-	}
-	var names []string
-	for _, e := range entries {
-		if name, ok := video.WhisperModel(e.Name()); ok && e.Type().IsRegular() {
-			names = append(names, name)
+// NewModelFile is where a model with this name is written (see
+// content.WhisperModelsInUse).
+func NewModelFile(root content.Root, name string) string {
+	return filepath.Join(content.WhisperModelsInUse(root), modelName(name))
+}
+
+func modelName(name string) string { return "ggml-" + name + ".bin" }
+
+// RemoveModel deletes a model from both folders. A model already gone is fine.
+func RemoveModel(root content.Root, name string) error {
+	var errs []error
+	for _, dir := range []string{root.WhisperModels(), root.OldWhisperModels()} {
+		if err := os.Remove(filepath.Join(dir, modelName(name))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, err)
 		}
 	}
-	return names, nil
+	return errors.Join(errs...)
+}
+
+// Models lists the names of the models in the whisper folders, in order. No
+// folder means no models.
+func Models(root content.Root) ([]string, error) {
+	var names []string
+	for _, dir := range []string{root.WhisperModels(), root.OldWhisperModels()} {
+		entries, err := os.ReadDir(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read whisper models: %w", err)
+		}
+		for _, e := range entries {
+			if name, ok := video.WhisperModel(e.Name()); ok && e.Type().IsRegular() {
+				names = append(names, name)
+			}
+		}
+	}
+	slices.Sort(names)
+	return slices.Compact(names), nil
 }
 
 // Translator translates the text of subtitles, keeping the times. It says
@@ -91,7 +106,7 @@ type Transcriber struct {
 	db         *sql.DB
 	ffmpeg     string // programs to run
 	whisper    string
-	dataDir    string
+	root       content.Root
 	translator Translator     // nil: no translations
 	picker     *WhisperPicker // nil: whisper is run without looking at the CPU
 	threads    int            // how many processor cores whisper may use
@@ -105,11 +120,11 @@ type Transcriber struct {
 }
 
 // NewTranscriber returns a transcriber that runs the given ffmpeg and
-// whisper programs and writes in dataDir/autosubtitles. translator may be
+// whisper programs and writes in root/autosubtitles. translator may be
 // nil. whisper leaves one processor core free, for the site: the job
 // starts when nothing else needs doing, and then lets new work wait.
-func NewTranscriber(db *sql.DB, ffmpeg, whisper, dataDir string, translator Translator) *Transcriber {
-	return &Transcriber{db: db, ffmpeg: ffmpeg, whisper: whisper, dataDir: dataDir, translator: translator,
+func NewTranscriber(db *sql.DB, ffmpeg, whisper string, root content.Root, translator Translator) *Transcriber {
+	return &Transcriber{db: db, ffmpeg: ffmpeg, whisper: whisper, root: root, translator: translator,
 		threads: max(1, runtime.NumCPU()-1), run: runInBackground, stream: streamInBackground, now: time.Now,
 		changed: func() {}}
 }
@@ -221,7 +236,7 @@ func (t *Transcriber) transcript(ctx context.Context, videoID int64, file, finge
 		return "", false, err
 	}
 	defer t.holdModel(req.model)()
-	modelFile := ModelFile(t.dataDir, req.model)
+	modelFile := ModelFile(t.root, req.model)
 	if _, err := os.Stat(modelFile); err != nil {
 		return "", false, fmt.Errorf("whisper model %q: %w: %w", req.model, err, jobs.ErrPermanent)
 	}
@@ -243,9 +258,9 @@ func (t *Transcriber) listen(ctx context.Context, videoID int64, file, modelFile
 	if err != nil {
 		return "", nil, err
 	}
-	dir := filepath.Join(t.dataDir, AutoSubtitlesDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return "", nil, fmt.Errorf("create subtitles folder: %w", err)
+	dir, err := t.root.MakeWork()
+	if err != nil {
+		return "", nil, err
 	}
 	// The sound of a film is a few hundred megabytes: it lives in a
 	// temporary folder, deleted when whisper has finished.
@@ -368,6 +383,9 @@ func (t *Transcriber) made(ctx context.Context, videoID int64, fingerprint strin
 			return nil, fmt.Errorf("subtitles of video %d: %w", videoID, err)
 		}
 		s.madeAt = time.Unix(at, 0)
+		if _, err := os.Stat(t.root.File(s.file, t.root.AutoSubtitles())); errors.Is(err, fs.ErrNotExist) {
+			continue // its file is gone: they are to make again
+		}
 		made[s.lang] = s
 	}
 	if err := rows.Err(); err != nil {
@@ -392,37 +410,45 @@ func (t *Transcriber) saveTranslation(ctx context.Context, videoID int64, finger
 	return t.save(ctx, videoID, fingerprint, model, lang, from, cues, false)
 }
 
-// save writes subtitles to their file, then records them. With replaceAll
-// every other subtitle made for the video goes. Nothing is recorded if
-// the content changed while whisper listened.
+// save puts the file of some subtitles in place and records them, in one
+// transaction: the row is saved only with its file there, and what is asked back
+// or arrives too late writes neither, leaving the file in use alone. A crash
+// before the end leaves at most a file the row does not name yet, and the job
+// runs again. With replaceAll every other subtitle made for the video goes.
+// Nothing is written if the content changed while whisper listened.
 func (t *Transcriber) save(ctx context.Context, videoID int64, fingerprint, model, lang, from string,
 	cues []video.Cue, replaceAll bool,
 ) (err error) {
-	dir := filepath.Join(t.dataDir, AutoSubtitlesDir)
-	name := autoSubtitleName(videoID, fingerprint, lang, t.now())
-	if err := writeAtomic(dir, name, []byte(video.WebVTT(cues))); err != nil {
-		return fmt.Errorf("subtitles of video %d: %w", videoID, err)
-	}
-	old, saved, err := t.record(ctx, videoID, fingerprint, model, lang, from, name, replaceAll)
-	if errors.Is(err, errTakenBack) {
-		return errors.Join(err, removeFile(dir, name))
-	}
-	if err != nil || !saved {
-		err = errors.Join(err, removeFile(dir, name))
-		if err == nil {
-			err = fmt.Errorf("video %d: %w: %w", videoID, errVideoChanged, jobs.ErrPermanent)
-		}
+	code, err := content.EnsureVideoFolder(ctx, t.db, t.root, videoID, fingerprint)
+	if err != nil {
 		return err
 	}
-	return removeAll(dir, slices.DeleteFunc(old, func(f string) bool { return f == name }))
+	file := content.AutoSubtitleFile(lang)
+	name := content.Stored(code, file, "")
+	old, saved, err := t.record(ctx, videoID, fingerprint, model, lang, from, name, replaceAll, func() error {
+		return t.root.PutBytes(code, file, []byte(video.WebVTT(cues)))
+	})
+	if err != nil {
+		return err
+	}
+	if !saved {
+		return fmt.Errorf("video %d: %w: %w", videoID, errVideoChanged, jobs.ErrPermanent)
+	}
+	errs := make([]error, 0, len(old)+1)
+	for _, f := range old {
+		errs = append(errs, t.root.RemoveNotKept(f, name, t.root.AutoSubtitles()))
+	}
+	errs = append(errs, content.SaveManifest(ctx, t.db, t.root, videoID))
+	return errors.Join(errs...)
 }
 
-// record saves one subtitle's row and returns the files of the rows it
-// replaced. saved is false when the video's content is not fingerprint
-// any more; nothing is saved either, with errTakenBack, when the request
-// is gone: whisper's or, for a translation, its own.
+// record saves one subtitle's row, puts its file in place with put before the
+// row is committed, and returns the files of the rows it replaced. saved is false
+// when the video's content is not fingerprint any more; nothing is saved either,
+// with errTakenBack, when the request is gone: whisper's or, for a translation,
+// its own. If put fails, the row is not saved.
 func (t *Transcriber) record(ctx context.Context, videoID int64, fingerprint, model, lang, from, name string,
-	replaceAll bool,
+	replaceAll bool, put func() error,
 ) (old []string, saved bool, err error) {
 	tx, err := t.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -472,6 +498,9 @@ func (t *Transcriber) record(ctx context.Context, videoID int64, fingerprint, mo
 		(video_id, lang, translated_from, model, fingerprint, file, made_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		videoID, lang, from, model, fingerprint, name, t.now().Unix()); err != nil {
 		return nil, false, fmt.Errorf("save subtitles of video %d: %w", videoID, err)
+	}
+	if err := put(); err != nil {
+		return nil, false, fmt.Errorf("subtitles of video %d: %w", videoID, err)
 	}
 	return old, true, nil
 }
@@ -589,14 +618,6 @@ func wavSeconds(name string) float64 {
 	return float64(info.Size()-44) / (16000 * 2)
 }
 
-// autoSubtitleName is the file of a subtitle made for a video at a time.
-// Like the covers, it changes when the video's content changes; the time
-// keeps a new file from ever replacing one still in use.
-func autoSubtitleName(videoID int64, fingerprint, lang string, at time.Time) string {
-	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") + "-" + lang + "-" +
-		strconv.FormatInt(at.UnixMilli(), 36) + ".vtt"
-}
-
 // maxTranscript is the biggest file of whisper's read back: the JSON of a
 // two-hour film is about a megabyte.
 const maxTranscript = 32 << 20
@@ -623,33 +644,9 @@ func readSmall(name string) (_ []byte, err error) {
 	return data, nil
 }
 
-// writeAtomic writes a file of the data folder all at once (rule 6): a
-// temporary file, renamed when complete.
-func writeAtomic(dir, name string, data []byte) (err error) {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".new-*")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, os.Remove(tmp.Name()))
-		}
-	}()
-	if _, err := tmp.Write(data); err != nil {
-		return errors.Join(err, tmp.Close())
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return safefile.Rename(tmp.Name(), filepath.Join(dir, name))
-}
-
 // RemoveOrphanAutoSubtitles deletes the files in the autosubtitles folder
 // that no subtitle uses any more, and work left half done. Like the
 // others, it must run before the job worker starts.
-func RemoveOrphanAutoSubtitles(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, AutoSubtitlesDir), "auto_subtitles", "file")
+func RemoveOrphanAutoSubtitles(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	return removeOrphans(ctx, db, root.AutoSubtitles(), "auto_subtitles", "file")
 }

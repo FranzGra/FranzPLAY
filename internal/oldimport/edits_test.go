@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 func TestCoverPath(t *testing.T) {
@@ -85,14 +85,14 @@ func TestImportCovers(t *testing.T) {
 	dataDir := t.TempDir()
 	run := func(try bool) *Report {
 		t.Helper()
-		r, err := Import(context.Background(), db, strings.NewReader(dump), Options{Try: try, Now: importDay, DataDir: dataDir})
+		r, err := Import(context.Background(), db, strings.NewReader(dump), Options{Try: try, Now: importDay, Content: content.Root(dataDir)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
 	ownCovers := func() []os.DirEntry {
-		entries, err := os.ReadDir(filepath.Join(dataDir, media.OwnCoversDir))
+		entries, err := os.ReadDir(content.Root(dataDir).OwnCovers())
 		if err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
 		}
@@ -112,7 +112,7 @@ func TestImportCovers(t *testing.T) {
 	if err := db.QueryRow(`SELECT own_cover FROM videos WHERE id = 2`).Scan(&own); err != nil {
 		t.Fatal(err)
 	}
-	copied, err := os.ReadFile(filepath.Join(dataDir, media.OwnCoversDir, own))
+	copied, err := os.ReadFile(filepath.Join(content.Root(dataDir).OwnCovers(), own))
 	if err != nil || string(copied) != aCover || !strings.HasSuffix(own, ".jpg") {
 		t.Errorf("copy %s = %q, %v", own, copied, err)
 	}

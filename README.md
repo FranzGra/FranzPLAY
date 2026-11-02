@@ -89,6 +89,7 @@ Full guide (in Italian): [`docs/copertine-e-anteprime.md`](docs/copertine-e-ante
 |---|---|---|
 | `FRANZPLAY_ADDR` | `:8090` | Address and port of the web server |
 | `FRANZPLAY_DATA_DIR` | `data` | FranzPLAY's own data folder |
+| `FRANZPLAY_CONTENT_DIR` | the data folder | Covers, previews, models, uploads, photos |
 | `FRANZPLAY_LIBRARIES` | none | Video folders, read-only (separated by `;` on Windows, `:` elsewhere) |
 | `FRANZPLAY_FFPROBE` | `ffprobe` | ffprobe program (a name in PATH or a full path) |
 | `FRANZPLAY_FFMPEG` | `ffmpeg` | ffmpeg program (a name in PATH or a full path) |

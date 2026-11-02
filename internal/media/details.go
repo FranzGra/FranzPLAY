@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -19,12 +20,13 @@ import (
 // like the .info.json yt-dlp writes or the .nfo of Kodi and Jellyfin. It only reads: nothing is written
 // next to the videos (rule 1).
 type Detailer struct {
-	db *sql.DB
+	db   *sql.DB
+	root content.Root
 }
 
 // NewDetailer returns a detailer for the catalog in db.
-func NewDetailer(db *sql.DB) *Detailer {
-	return &Detailer{db: db}
+func NewDetailer(db *sql.DB, root content.Root) *Detailer {
+	return &Detailer{db: db, root: root}
 }
 
 // Handle is the job handler for jobs.Details. With no details file the
@@ -47,7 +49,7 @@ func (d *Detailer) Handle(ctx context.Context, videoID int64) error {
 	if err != nil {
 		return fmt.Errorf("save details of video %d: %w", videoID, err)
 	}
-	return nil
+	return content.SaveManifest(ctx, d.db, d.root, videoID)
 }
 
 // errDetailsTooBig means a details file is far bigger than one should be.

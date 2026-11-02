@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 )
 
@@ -102,7 +103,7 @@ func TestTPDBGivesDetailsAndPicture(t *testing.T) {
 	if got.title != "Una scena" || got.author.String != "Uno Studio" || !got.cover.Valid || got.coverJobs != 1 {
 		t.Fatalf("video = %+v", got)
 	}
-	data, err := os.ReadFile(filepath.Join(fx.dataDir, Dir, got.cover.String))
+	data, err := os.ReadFile(content.Root(fx.dataDir).File(got.cover.String, ""))
 	if err != nil || string(data) != "a scene picture" {
 		t.Errorf("picture = %q, %v", data, err)
 	}

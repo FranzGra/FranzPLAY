@@ -8,6 +8,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // ForgetAfter is how long a missing video stays in the catalog, with its
@@ -46,6 +48,8 @@ type Scanner struct {
 	// categories that are new or changed.
 	categoryPictures func(context.Context)
 	scanning         func(bool)
+	scanned          func(ctx context.Context, moved, replaced []int64)
+	reuse            func(ctx context.Context, fingerprints []string) (map[string]*content.Reused, error)
 	asked            chan struct{} // a scan asked for by the administrator
 
 	mu     sync.Mutex
@@ -77,7 +81,7 @@ const retryUnreadable = time.Hour
 // NewScanner returns a scanner for the given video folders.
 func NewScanner(db *sql.DB, libraries []string, logger *slog.Logger) *Scanner {
 	return &Scanner{
-		store:            store{db: db},
+		store:            store{db: db, logger: logger},
 		libraries:        libraries,
 		logger:           logger,
 		now:              time.Now,
@@ -86,6 +90,8 @@ func NewScanner(db *sql.DB, libraries []string, logger *slog.Logger) *Scanner {
 		changed:          func() {},
 		categoryPictures: func(context.Context) {},
 		scanning:         func(bool) {},
+		scanned:          func(context.Context, []int64, []int64) {},
+		reuse:            func(context.Context, []string) (map[string]*content.Reused, error) { return nil, nil },
 		asked:            make(chan struct{}, 1),
 		status:           Status{Folders: map[string]FolderState{}},
 	}
@@ -99,6 +105,18 @@ func (s *Scanner) OnNewJobs(f func()) { s.newJobs = f }
 // categories that are new or changed: it makes their light copies, and
 // the scan waits for it. A few pictures take well under a second.
 func (s *Scanner) OnCategoryPictures(f func(context.Context)) { s.categoryPictures = f }
+
+// OnScanned sets what to call after every scan that saved its result, with the
+// videos it found moved and the ones whose file has new content. It runs at
+// every scan, so what it could not do can be tried again.
+func (s *Scanner) OnScanned(f func(ctx context.Context, moved, replaced []int64)) { s.scanned = f }
+
+// ReuseFrom sets where a scan asks what is already made for the videos it finds
+// new, by fingerprint: those videos are not worked on again. It is asked once per
+// scan, and only when there are new videos.
+func (s *Scanner) ReuseFrom(f func(ctx context.Context, fingerprints []string) (map[string]*content.Reused, error)) {
+	s.reuse = f
+}
 
 // OnChange sets what to call when a scan changes the list of videos,
 // usually telling the open pages.
@@ -294,7 +312,21 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 		return ok || !configured
 	})
 	now := s.now()
-	if err := s.store.apply(ctx, ch, now); err != nil {
+	var reused map[string]*content.Reused
+	if len(ch.added) > 0 {
+		fingerprints := make([]string, 0, len(ch.added))
+		for _, f := range ch.added {
+			fingerprints = append(fingerprints, f.fingerprint)
+		}
+		// Contents that cannot be read cannot say which new videos are hidden:
+		// none is added until they can.
+		var err error
+		if reused, err = s.reuse(ctx, fingerprints); err != nil {
+			return report, err
+		}
+	}
+	adopted, err := s.store.apply(ctx, ch, reused, now)
+	if err != nil {
 		return report, err
 	}
 	newCovers := 0
@@ -342,7 +374,18 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	report.Missing = len(ch.gone)
 	report.Duplicates = len(ch.duplicates)
 	report.Forgotten = int(forgotten)
+	// A video put back counts as moved: its video.json says where it is now, and
+	// the name of its folder follows its file.
+	movedIDs := adopted
+	var replacedIDs []int64
 	for _, u := range ch.updates {
+		switch u.kind {
+		case moved:
+			movedIDs = append(movedIDs, u.id)
+		case replaced:
+			replacedIDs = append(replacedIDs, u.id)
+		case touched:
+		}
 		switch {
 		case u.wasMissing:
 			report.Restored++
@@ -352,6 +395,7 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 			report.Updated++
 		}
 	}
+	s.scanned(ctx, movedIDs, replacedIDs)
 	if report.Changed() || picturesGone {
 		s.changed()
 	}

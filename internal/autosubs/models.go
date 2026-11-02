@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/safefile"
@@ -87,9 +88,9 @@ var errCanceled = errors.New("download canceled")
 const tellEvery = 500 * time.Millisecond
 
 // Downloader downloads one model at a time into the whisper folder of
-// the data folder. Run does the work; Start asks for it.
+// the content folder. Run does the work; Start asks for it.
 type Downloader struct {
-	dataDir string
+	root    content.Root
 	baseURL string
 	client  *http.Client
 	logger  *slog.Logger
@@ -105,9 +106,9 @@ type Downloader struct {
 	told   time.Time               // when the pages last heard of it
 }
 
-// NewDownloader returns a downloader into dataDir/whisper. changed is
+// NewDownloader returns a downloader into root/whisper. changed is
 // called as the download goes on.
-func NewDownloader(dataDir, baseURL string, changed func(), logger *slog.Logger) *Downloader {
+func NewDownloader(root content.Root, baseURL string, changed func(), logger *slog.Logger) *Downloader {
 	dialer := &net.Dialer{Timeout: connectTimeout}
 	client := &http.Client{Transport: &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
@@ -115,7 +116,7 @@ func NewDownloader(dataDir, baseURL string, changed func(), logger *slog.Logger)
 		TLSHandshakeTimeout:   connectTimeout,
 		ResponseHeaderTimeout: connectTimeout,
 	}}
-	return &Downloader{dataDir: dataDir, baseURL: baseURL, client: client, logger: logger,
+	return &Downloader{root: root, baseURL: baseURL, client: client, logger: logger,
 		changed: changed, models: Models, stall: stallTimeout, clock: time.Now, start: make(chan Model)}
 }
 
@@ -273,7 +274,8 @@ func (d *Downloader) download(parent context.Context, m Model) (err error) {
 	}
 	d.update(func(s *Download) { s.Total = max(resp.ContentLength, 0) })
 
-	dir := filepath.Join(d.dataDir, media.WhisperDir)
+	// Next to where it goes, so the last step is a rename.
+	dir := filepath.Dir(media.NewModelFile(d.root, m.Name))
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
@@ -294,7 +296,7 @@ func (d *Downloader) download(parent context.Context, m Model) (err error) {
 	if got := hex.EncodeToString(sum.Sum(nil)); got != m.sha1 {
 		return fmt.Errorf("the file is not the right one (checksum %s)", got)
 	}
-	return safefile.Rename(tmp.Name(), media.ModelFile(d.dataDir, m.Name))
+	return safefile.Rename(tmp.Name(), media.NewModelFile(d.root, m.Name))
 }
 
 // failure says to people why a download stopped. Without internet it
@@ -349,19 +351,22 @@ func (d *Downloader) update(f func(*Download)) {
 	}
 }
 
-// removeUnfinished deletes downloads left half done.
+// removeUnfinished deletes downloads left half done, in both folders.
 func (d *Downloader) removeUnfinished() error {
-	entries, err := os.ReadDir(filepath.Join(d.dataDir, media.WhisperDir))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
 	var errs []error
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".new-") && e.Type().IsRegular() {
-			errs = append(errs, os.Remove(filepath.Join(d.dataDir, media.WhisperDir, e.Name())))
+	for _, dir := range []string{d.root.WhisperModels(), d.root.OldWhisperModels()} {
+		entries, err := os.ReadDir(dir)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".new-") && e.Type().IsRegular() {
+				errs = append(errs, os.Remove(filepath.Join(dir, e.Name())))
+			}
 		}
 	}
 	return errors.Join(errs...)

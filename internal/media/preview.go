@@ -8,29 +8,24 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
-	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
-// PreviewsDir is the folder, inside the data folder, that holds the
-// previews shown over the player's timeline.
-const PreviewsDir = "previews"
-
 // Previewer makes the previews with ffmpeg.
 type Previewer struct {
-	db      *sql.DB
-	ffmpeg  string // program to run
-	dataDir string
-	run     runFunc
+	db     *sql.DB
+	ffmpeg string // program to run
+	root   content.Root
+	run    runFunc
 }
 
 // NewPreviewer returns a previewer that runs the given ffmpeg program and
-// writes previews in dataDir/previews.
-func NewPreviewer(db *sql.DB, ffmpeg, dataDir string) *Previewer {
-	return &Previewer{db: db, ffmpeg: ffmpeg, dataDir: dataDir, run: runInBackground}
+// writes previews in the folder of each video, in root.
+func NewPreviewer(db *sql.DB, ffmpeg string, root content.Root) *Previewer {
+	return &Previewer{db: db, ffmpeg: ffmpeg, root: root, run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Preview. It works in two steps:
@@ -55,9 +50,13 @@ func (p *Previewer) Handle(ctx context.Context, videoID int64) (err error) {
 		return nil // too short to need previews
 	}
 
-	dir := filepath.Join(p.dataDir, PreviewsDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("create previews folder: %w", err)
+	code, err := content.EnsureVideoFolder(ctx, p.db, p.root, videoID, fingerprint)
+	if err != nil {
+		return err
+	}
+	dir, err := p.root.MakeWork()
+	if err != nil {
+		return err
 	}
 	// Rule 6: everything is made in a temporary folder, and the finished
 	// image is moved out only at the end.
@@ -86,41 +85,35 @@ func (p *Previewer) Handle(ctx context.Context, videoID int64) (err error) {
 		return errors.Join(fmt.Errorf("previews of video %d: ffmpeg wrote no image", videoID), err)
 	}
 
-	name := previewName(videoID, fingerprint)
-	if err := safefile.Rename(sprite, filepath.Join(dir, name)); err != nil {
-		return fmt.Errorf("previews of video %d: %w", videoID, err)
-	}
-	res, err := p.db.ExecContext(ctx, `UPDATE videos
-		SET preview = ?, preview_gap = ?, preview_count = ?, preview_width = ?, preview_height = ?
-		WHERE id = ? AND fingerprint = ?`,
-		name, gap, count, video.PreviewWidth, video.PreviewHeight, videoID, fingerprint)
+	// Put in place and saved only if the content is still the one we used.
+	name := content.Stored(code, content.FileTimeline, previewVersion())
+	same, err := content.IfSame(ctx, p.db, videoID, fingerprint, func(tx *sql.Tx) error {
+		if err := p.root.Put(code, content.FileTimeline, sprite); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE videos
+			SET preview = ?, preview_gap = ?, preview_count = ?, preview_width = ?, preview_height = ?
+			WHERE id = ?`,
+			name, gap, count, video.PreviewWidth, video.PreviewHeight, videoID)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("save previews of video %d: %w", videoID, err)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("save previews of video %d: %w", videoID, err)
+	if !same {
+		return nil // the file changed meanwhile: these previews belong to nobody
 	}
-	if n == 0 {
-		// The file changed meanwhile: these previews belong to nobody.
-		return removeFile(dir, name)
-	}
-	if old.Valid && old.String != name {
-		return removeFile(dir, old.String)
-	}
-	return nil
+	return errors.Join(p.root.RemoveNotKept(old.String, name, p.root.Previews()),
+		content.SaveManifest(ctx, p.db, p.root, videoID))
 }
 
-// previewName is the file name of the previews of a video: like its cover,
-// it changes with the content, and also with the size of the frames. The
-// browser keeps these images for a year, so an image made again at a new
-// size needs a new name, or the player would cut the old one wrong.
-// The "t" after the width says the frames are the real ones of their
-// moment: the images made before, from key frames only, had other
-// pictures under the name without it.
-func previewName(videoID int64, fingerprint string) string {
-	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") +
-		"-w" + strconv.Itoa(video.PreviewWidth) + "t.jpg"
+// previewVersion is the version of the previews in their address: it changes
+// with the size of the frames. The browser keeps these images for a year, so
+// an image made again at a new size needs a new address, or the player would
+// cut the old one wrong. The "t" after the width says the frames are the real
+// ones of their moment, as in the names of the old flat folder.
+func previewVersion() string {
+	return "w" + strconv.Itoa(video.PreviewWidth) + "t"
 }
 
 // frameCount is how many frames a video of duration seconds has, one
@@ -203,6 +196,6 @@ func joinArgs(work string, count int, out string) []string {
 // RemoveOrphanPreviews deletes the files in the previews folder that no
 // video uses any more, and work left half done. Like RemoveOrphanCovers,
 // it must run before the job worker starts.
-func RemoveOrphanPreviews(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, PreviewsDir), "videos", "preview")
+func RemoveOrphanPreviews(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	return removeOrphans(ctx, db, root.Previews(), "videos", "preview")
 }

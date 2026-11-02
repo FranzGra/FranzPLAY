@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"path/filepath"
 	"strconv"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/video"
@@ -42,10 +42,10 @@ type audioStart struct {
 }
 
 type audioHandlers struct {
-	store        store
-	convertedDir string  // the copies of the videos not every browser plays
-	remux        Remuxer // nil when ffmpeg is not installed
-	logger       *slog.Logger
+	store  store
+	root   content.Root
+	remux  Remuxer // nil when ffmpeg is not installed
+	logger *slog.Logger
 }
 
 // sound is the sound track to play and where it is: in the file, or in
@@ -64,9 +64,8 @@ type sound struct {
 //	GET /api/videos/{id}/audio/{stream}/stream    the video with that sound (?at=)
 //
 // Without remux (no ffmpeg), there is never a choice.
-func AudioRoutes(db *sql.DB, dataDir string, remux Remuxer, logger *slog.Logger) func(mux *http.ServeMux) {
-	h := audioHandlers{store: store{db: db}, convertedDir: filepath.Join(dataDir, media.ConvertedDir),
-		remux: remux, logger: logger}
+func AudioRoutes(db *sql.DB, root content.Root, remux Remuxer, logger *slog.Logger) func(mux *http.ServeMux) {
+	h := audioHandlers{store: store{db: db}, root: root, remux: remux, logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos/{id}/audio", h.list)
 		mux.HandleFunc("GET /api/videos/{id}/audio/{stream}", h.start)
@@ -121,7 +120,7 @@ func (h audioHandlers) track(w http.ResponseWriter, r *http.Request) (sound, int
 		respond.Error(w, r, h.logger, http.StatusNotFound, "sound track not found")
 		return sound{}, 0, false
 	}
-	file, isCopy, err := h.store.played(r.Context(), id, h.convertedDir, false)
+	file, isCopy, err := h.store.played(r.Context(), id, h.root, false)
 	if err != nil {
 		h.fail(w, r, err)
 		return sound{}, 0, false

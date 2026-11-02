@@ -54,6 +54,7 @@ import {
   workNumbers,
   workPercent,
 } from "./jobText";
+import { OwnerChoice } from "./OwnerChoice";
 import { compatibility, qualityLabel } from "./quality";
 import { Card, Chip, Empty, Loading, SettingSwitch, Unavailable, ui, useToast } from "./ui";
 
@@ -409,6 +410,18 @@ function Detail({
           <div data-order="4">
             <Card title="Chi lo vede" icon="eye">
               <Audience video={video} />
+              {video.private && !video.uploader && !video.missing && (
+                <OwnerChoice
+                  video={video}
+                  onDone={(message) => {
+                    say(message);
+                    fetchAdminVideo(video.id)
+                      .then(setVideo)
+                      .catch((error: unknown) => console.error(error));
+                  }}
+                  onFailed={() => say(failed, true)}
+                />
+              )}
               <div className={ui.settingList}>
                 <SettingSwitch
                   label="Nascosto"
@@ -749,7 +762,9 @@ function Audience({ video }: { video: AdminVideo }) {
       <p className={ui.hint}>
         {video.uploader
           ? `Lo sceglie ${video.uploader.name}, che l'ha caricato.`
-          : "I video delle cartelle li vedono tutti quelli che hanno un account."}
+          : video.private
+            ? "Lo sceglie chi l'ha caricato: ora non ha un proprietario."
+            : "I video delle cartelle li vedono tutti quelli che hanno un account."}
         {video.tooShort && " È più corto del minimo scelto per le cartelle: per ora non compare."}
       </p>
     </div>

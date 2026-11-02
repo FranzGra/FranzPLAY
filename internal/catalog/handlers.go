@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 )
 
@@ -29,10 +29,8 @@ import (
 //	GET /api/previews/{name}              the frames shown over the timeline
 //	GET /api/clips/{name}                 the seconds that play on a video's card
 //	GET /api/clips-hd/{name}              the same seconds, sharper, for a good connection
-func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
-	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir),
-		autoSubtitlesDir: filepath.Join(dataDir, media.AutoSubtitlesDir),
-		convertedDir:     filepath.Join(dataDir, media.ConvertedDir), logger: logger}
+func Routes(db *sql.DB, root content.Root, logger *slog.Logger) func(mux *http.ServeMux) {
+	h := handlers{store: store{db: db}, root: root, logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/videos", h.list)
 		mux.HandleFunc("GET /api/videos/{id}", h.get)
@@ -40,22 +38,19 @@ func Routes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.Serv
 		mux.HandleFunc("GET /api/videos/{id}/subtitles", h.subtitles)
 		mux.HandleFunc("GET /api/videos/{id}/subtitles/{key}", h.subtitle)
 		mux.HandleFunc("GET /api/categories", h.categories)
-		mux.HandleFunc("GET /api/category-images/{name}", h.image(filepath.Join(dataDir, CategoryImagesDir)))
-		mux.HandleFunc("GET /api/category-pictures/{name}", h.image(filepath.Join(dataDir, media.CategoryPicturesDir)))
-		mux.HandleFunc("GET /api/covers/{name}", h.image(filepath.Join(dataDir, media.CoversDir)))
-		mux.HandleFunc("GET /api/previews/{name}", h.image(filepath.Join(dataDir, media.PreviewsDir)))
-		mux.HandleFunc("GET /api/clips/{name}", h.made(filepath.Join(dataDir, media.ClipsDir), ".mp4", "video/mp4"))
-		mux.HandleFunc("GET /api/clips-hd/{name}", h.made(filepath.Join(dataDir, media.ClipsHDDir), ".mp4", "video/mp4"))
+		mux.HandleFunc("GET /api/category-images/{name}", h.image(root.CategoryImages(), root.OldCategoryImages()))
+		mux.HandleFunc("GET /api/category-pictures/{name}", h.image(root.CategoryPictures(), root.OldCategoryPictures()))
+		mux.HandleFunc("GET /api/covers/{name}", h.videoImage(root.Covers(), content.FileCover))
+		mux.HandleFunc("GET /api/previews/{name}", h.videoImage(root.Previews(), content.FileTimeline))
+		mux.HandleFunc("GET /api/clips/{name}", h.made(root.Clips(), content.FileClip, ".mp4", "video/mp4"))
+		mux.HandleFunc("GET /api/clips-hd/{name}", h.made(root.ClipsHD(), content.FileClipHD, ".mp4", "video/mp4"))
 	}
 }
 
 type handlers struct {
-	store        store
-	subtitlesDir string // the copies of the subtitles inside the videos
-	// autoSubtitlesDir holds the subtitles written by whisper.
-	autoSubtitlesDir string
-	convertedDir     string // the copies of the videos not every browser plays
-	logger           *slog.Logger
+	store  store
+	root   content.Root
+	logger *slog.Logger
 }
 
 // listResponse is the body of GET /api/videos.
@@ -118,7 +113,7 @@ func (h handlers) stream(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
 		return
 	}
-	name, _, err := h.store.played(r.Context(), id, h.convertedDir, r.URL.Query().Get("original") == "1")
+	name, _, err := h.store.played(r.Context(), id, h.root, r.URL.Query().Get("original") == "1")
 	if errors.Is(err, errNotFound) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
 		return
@@ -154,22 +149,40 @@ func (h handlers) stream(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", info.ModTime(), file)
 }
 
-// image serves the JPEG images FranzPLAY made in dir: covers or previews.
-func (h handlers) image(dir string) http.HandlerFunc {
-	return h.made(dir, ".jpg", "image/jpeg")
+// image serves the JPEG images FranzPLAY made in dir, with nothing in the
+// folders of the videos: the pictures of the categories.
+func (h handlers) image(dir, old string) http.HandlerFunc {
+	newer, older := h.made(dir, "", ".jpg", "image/jpeg"), h.made(old, "", ".jpg", "image/jpeg")
+	return func(w http.ResponseWriter, r *http.Request) {
+		if content.Find(dir, old, r.PathValue("name")) == filepath.Join(dir, r.PathValue("name")) {
+			newer(w, r)
+			return
+		}
+		older(w, r)
+	}
 }
 
-// made serves the files FranzPLAY made in dir, all ending in ext: images,
-// or the clips that play on the cards. Their names change with the
-// content, so the browser may keep them for a year without asking again.
-func (h handlers) made(dir, ext, contentType string) http.HandlerFunc {
+// videoImage serves a JPEG image of a video: its cover or its previews.
+func (h handlers) videoImage(dir, inFolder string) http.HandlerFunc {
+	return h.made(dir, inFolder, ".jpg", "image/jpeg")
+}
+
+// made serves the files FranzPLAY made, all ending in ext: images, or the
+// clips that play on the cards. An address with a code is the file inFolder of
+// the folder of a video; any other is a file of the old flat folder dir. Their
+// addresses change with the content, so the browser may keep them for a year
+// without asking again.
+func (h handlers) made(dir, inFolder, ext, contentType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
-		if !validMadeName(name, ext) {
+		where := filepath.Join(dir, name)
+		if code, ok := content.CodeOfAddress(name, ext); ok && inFolder != "" {
+			where = h.root.FileIn(code, inFolder)
+		} else if !validMadeName(name, ext) {
 			respond.Error(w, r, h.logger, http.StatusNotFound, "file not found")
 			return
 		}
-		file, err := os.Open(filepath.Join(dir, name))
+		file, err := os.Open(where)
 		if errors.Is(err, fs.ErrNotExist) {
 			respond.Error(w, r, h.logger, http.StatusNotFound, "file not found")
 			return

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/autosubs"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -48,7 +49,7 @@ var languages = []string{english, "it", "es", "fr", "de"}
 // runs at a time.
 type Engine struct {
 	program string // the path of translator-cli
-	dataDir string
+	root    content.Root
 	records string // where the list of the models is
 	client  *http.Client
 	changed func() // tells the pages how a download goes
@@ -58,10 +59,10 @@ type Engine struct {
 	now *download // the download going on; nil: none
 }
 
-// New returns an engine using a program and the models in dataDir. changed
+// New returns an engine using a program and the models in root. changed
 // is called as a download goes on.
-func New(program, dataDir string, changed func(), logger *slog.Logger) *Engine {
-	return &Engine{program: program, dataDir: dataDir, records: RecordsURL,
+func New(program string, root content.Root, changed func(), logger *slog.Logger) *Engine {
+	return &Engine{program: program, root: root, records: RecordsURL,
 		client: &http.Client{Timeout: downloadTimeout}, changed: changed, logger: logger}
 }
 
@@ -110,7 +111,7 @@ func (e *Engine) run(ctx context.Context, pair string, lines []string) ([]string
 	if len(lines) == 0 {
 		return nil, nil
 	}
-	cmd := exec.CommandContext(ctx, e.program, "--model-config-paths", configFile(e.dataDir, pair), "--cpu-threads", "1")
+	cmd := exec.CommandContext(ctx, e.program, "--model-config-paths", configFile(e.root, pair), "--cpu-threads", "1")
 	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n") + "\n")
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr

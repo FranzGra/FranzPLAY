@@ -11,10 +11,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 )
@@ -23,10 +23,6 @@ import (
 // image, as in the old FranzPLAY. The category stays what the folders (or
 // the administrator, video by video) say: only what people see changes.
 // Giving two categories the same name shows them as one.
-
-// CategoryImagesDir is the folder, inside the data folder, that holds the
-// images of the categories.
-const CategoryImagesDir = "category-images"
 
 // maxCategoryImage is the largest image accepted for a category. The page
 // sends a JPEG of 1280 × 720, far smaller.
@@ -113,6 +109,7 @@ func (a admin) handleCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	who, _ := a.account(r.Context())
 	a.logger.InfoContext(r.Context(), "category changed", "category", name, "by", who.Name)
+	a.saveCategories(r)
 	a.changed()
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -137,7 +134,7 @@ func (a admin) handleCategoryImage(w http.ResponseWriter, r *http.Request) {
 		a.categoryFailed(w, r, err)
 		return
 	}
-	dir := filepath.Join(a.dataDir, CategoryImagesDir)
+	dir := a.root.CategoryImages()
 	file, err := media.SaveOwnFile(dir, id, ".jpg", bytes.NewReader(data))
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
@@ -148,7 +145,7 @@ func (a admin) handleCategoryImage(w http.ResponseWriter, r *http.Request) {
 		a.categoryFailed(w, r, errors.Join(err, media.RemoveOwnFile(dir, file)))
 		return
 	}
-	a.categoryImageChanged(w, r, name, dir, old)
+	a.categoryImageChanged(w, r, name, old)
 }
 
 func (a admin) handleRemoveCategoryImage(w http.ResponseWriter, r *http.Request) {
@@ -163,20 +160,30 @@ func (a admin) handleRemoveCategoryImage(w http.ResponseWriter, r *http.Request)
 		a.categoryFailed(w, r, err)
 		return
 	}
-	a.categoryImageChanged(w, r, name, filepath.Join(a.dataDir, CategoryImagesDir), old)
+	a.categoryImageChanged(w, r, name, old)
 }
 
-func (a admin) categoryImageChanged(w http.ResponseWriter, r *http.Request, name, dir, old string) {
+func (a admin) categoryImageChanged(w http.ResponseWriter, r *http.Request, name, old string) {
 	if old != "" {
-		if err := media.RemoveOwnFile(dir, old); err != nil {
+		err := errors.Join(media.RemoveOwnFile(a.root.CategoryImages(), old), media.RemoveOwnFile(a.root.OldCategoryImages(), old))
+		if err != nil {
 			// The change is saved; the old image is removed at the next start.
 			a.logger.WarnContext(r.Context(), "remove old category image", "category", name, "error", err)
 		}
 	}
 	who, _ := a.account(r.Context())
 	a.logger.InfoContext(r.Context(), "category image changed", "category", name, "by", who.Name)
+	a.saveCategories(r)
 	a.changed()
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// saveCategories writes what was chosen in categorie.json, so that a database
+// lost finds it there. If it fails the next scan tries again.
+func (a admin) saveCategories(r *http.Request) {
+	if err := content.SaveCategories(r.Context(), a.store.db, a.root); err != nil {
+		a.logger.WarnContext(r.Context(), "write "+content.FileCategories, "error", err)
+	}
 }
 
 func (a admin) categoryFailed(w http.ResponseWriter, r *http.Request, err error) {
@@ -295,10 +302,20 @@ func (s store) setCategoryImage(ctx context.Context, id int64, image *string) (o
 }
 
 // RemoveOrphanCategoryImages deletes the files in the category images
-// folder that no category uses, and uploads left half done. It must run
+// folders that no category uses, and uploads left half done. It must run
 // before the web server starts.
-func RemoveOrphanCategoryImages(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	dir := filepath.Join(dataDir, CategoryImagesDir)
+func RemoveOrphanCategoryImages(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	for _, dir := range []string{root.CategoryImages(), root.OldCategoryImages()} {
+		n, err := removeOrphanImages(ctx, db, dir)
+		removed += n
+		if err != nil {
+			return removed, err
+		}
+	}
+	return removed, nil
+}
+
+func removeOrphanImages(ctx context.Context, db *sql.DB, dir string) (removed int, err error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil

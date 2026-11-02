@@ -142,7 +142,7 @@ func (p page) whisperFiles(ctx context.Context, models []string) ([]ModelFile, e
 	}
 	files := make([]ModelFile, 0, len(models))
 	for _, name := range models {
-		info, err := os.Stat(media.ModelFile(p.opts.DataDir, name))
+		info, err := os.Stat(media.ModelFile(p.opts.Content, name))
 		if errors.Is(err, fs.ErrNotExist) {
 			continue // deleted just now
 		}
@@ -190,7 +190,7 @@ func (p page) holdingQueue(ctx context.Context, f func(tx *sql.Tx) error) (err e
 // a model's name are there, so a name cannot lead anywhere else (rule 8). The
 // subtitles already written with it stay.
 func (p page) deleteWhisperModel(ctx context.Context, name string) error {
-	models, err := media.Models(p.opts.DataDir)
+	models, err := media.Models(p.opts.Content)
 	if err != nil {
 		return err
 	}
@@ -205,7 +205,7 @@ func (p page) deleteWhisperModel(ctx context.Context, name string) error {
 		if busy := p.whisperBusy(name, use[name]); busy != "" {
 			return modelBusy(busy)
 		}
-		if err := os.Remove(media.ModelFile(p.opts.DataDir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := media.RemoveModel(p.opts.Content, name); err != nil {
 			return fmt.Errorf("delete whisper model %s: %w", name, err)
 		}
 		return nil

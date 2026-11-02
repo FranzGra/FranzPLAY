@@ -10,6 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 )
 
@@ -100,6 +101,9 @@ func (a admin) handleDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = a.store.setDetails(r.Context(), id, title, category)
+	if err == nil {
+		a.videoJSONAfterEdit(r, id)
+	}
 	if errors.Is(err, errNotFound) {
 		respond.Error(w, r, a.logger, http.StatusNotFound, err.Error())
 		return
@@ -129,4 +133,12 @@ func (s store) setDetails(ctx context.Context, id int64, title, category *string
 		return errNotFound
 	}
 	return nil
+}
+
+// videoJSONAfterEdit keeps the video.json of a video in line with its details.
+// The change is saved already: a problem here is only told.
+func (a admin) videoJSONAfterEdit(r *http.Request, id int64) {
+	if err := content.SaveManifest(r.Context(), a.store.db, a.root, id); err != nil {
+		a.logger.WarnContext(r.Context(), "write video.json", "video", id, "error", err)
+	}
 }

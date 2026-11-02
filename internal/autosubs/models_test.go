@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 )
 
@@ -45,7 +46,7 @@ func newDownloadFixture(t *testing.T, files map[string]string, models []Model) *
 	}))
 	t.Cleanup(srv.Close)
 	dataDir := t.TempDir()
-	d := NewDownloader(dataDir, srv.URL, func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d := NewDownloader(content.Root(dataDir), srv.URL, func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	d.models = models
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -93,11 +94,11 @@ func TestDownloadModel(t *testing.T) {
 	if got.Error != "" || got.Done != int64(len(model)) || got.Total != int64(len(model)) {
 		t.Errorf("status = %+v", got)
 	}
-	data, err := os.ReadFile(media.ModelFile(fx.dataDir, "small"))
+	data, err := os.ReadFile(media.ModelFile(content.Root(fx.dataDir), "small"))
 	if err != nil || string(data) != model {
 		t.Errorf("model file = %q, %v", data, err)
 	}
-	names, err := media.Models(fx.dataDir)
+	names, err := media.Models(content.Root(fx.dataDir))
 	if err != nil || len(names) != 1 || names[0] != "small" {
 		t.Errorf("Models = %v, %v", names, err)
 	}
@@ -117,7 +118,7 @@ func TestDownloadRefusesAWrongFile(t *testing.T) {
 			if got := fx.finished(t); !strings.HasPrefix(got.Error, "Non sono riuscito") {
 				t.Errorf("status = %+v", got)
 			}
-			entries, err := os.ReadDir(filepath.Join(fx.dataDir, media.WhisperDir))
+			entries, err := os.ReadDir(content.Root(fx.dataDir).WhisperModels())
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				t.Fatal(err)
 			}
@@ -137,7 +138,7 @@ func TestDownloadUnknownModel(t *testing.T) {
 
 func TestDownloadCleansUnfinishedWork(t *testing.T) {
 	dataDir := t.TempDir()
-	dir := filepath.Join(dataDir, media.WhisperDir)
+	dir := content.Root(dataDir).WhisperModels()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +147,7 @@ func TestDownloadCleansUnfinishedWork(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	d := NewDownloader(dataDir, "http://unused", func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d := NewDownloader(content.Root(dataDir), "http://unused", func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	d.Run(ctx)
@@ -186,7 +187,7 @@ func TestDownloadWithoutInternet(t *testing.T) {
 	for name, url := range map[string]string{"stops halfway": stalled.URL, "no server": closed.URL} {
 		t.Run(name, func(t *testing.T) {
 			dataDir := t.TempDir()
-			d := NewDownloader(dataDir, url, func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			d := NewDownloader(content.Root(dataDir), url, func() {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 			d.models = []Model{{Name: "small", sha1: checksum("the real one")}}
 			d.stall = 50 * time.Millisecond
 			ctx, cancel := context.WithCancel(context.Background())
@@ -200,7 +201,7 @@ func TestDownloadWithoutInternet(t *testing.T) {
 			if got := fx.finished(t); !strings.HasPrefix(got.Error, "Non c'è connessione a internet") {
 				t.Errorf("error = %q", got.Error)
 			}
-			entries, err := os.ReadDir(filepath.Join(dataDir, media.WhisperDir))
+			entries, err := os.ReadDir(content.Root(dataDir).WhisperModels())
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				t.Fatal(err)
 			}

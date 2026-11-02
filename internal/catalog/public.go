@@ -7,10 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"strconv"
 
-	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/sharing"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -101,12 +100,10 @@ type PublicVideo struct {
 //	GET /api/public/{key}/subtitles/{sub}       one subtitle
 //	GET /api/public/{key}/cover                 its cover
 //	GET /api/public/{key}/preview               the frames over its timeline
-func PublicRoutes(db *sql.DB, dataDir string, logger *slog.Logger) func(mux *http.ServeMux) {
-	h := handlers{store: store{db: db}, subtitlesDir: filepath.Join(dataDir, media.SubtitlesDir),
-		autoSubtitlesDir: filepath.Join(dataDir, media.AutoSubtitlesDir),
-		convertedDir:     filepath.Join(dataDir, media.ConvertedDir), logger: logger}
-	covers := h.image(filepath.Join(dataDir, media.CoversDir))
-	previews := h.image(filepath.Join(dataDir, media.PreviewsDir))
+func PublicRoutes(db *sql.DB, root content.Root, logger *slog.Logger) func(mux *http.ServeMux) {
+	h := handlers{store: store{db: db}, root: root, logger: logger}
+	covers := h.videoImage(root.Covers(), content.FileCover)
+	previews := h.videoImage(root.Previews(), content.FileTimeline)
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("GET /api/public/{key}", h.public(h.publicVideo))
 		mux.HandleFunc("GET /api/public/{key}/stream", h.public(h.stream))
@@ -209,7 +206,7 @@ func (h handlers) publicImage(column string, serve http.HandlerFunc) http.Handle
 			respond.InternalError(w, r, h.logger, fmt.Errorf("find public %s: %w", column, err))
 			return
 		}
-		r.SetPathValue("name", name.String)
+		r.SetPathValue("name", content.AddressName(name.String, ".jpg"))
 		serve(w, r)
 	}
 }

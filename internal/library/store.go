@@ -5,16 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 )
 
 // store reads and writes the catalog tables. All the decisions are made
 // elsewhere (reconcile.go); the store only carries them out.
 type store struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *slog.Logger
 	// batch is how many videos one transaction adds or forgets at most
 	// (defaultBatch when zero). A long transaction would make everyone
 	// else's writes wait: likes, progress, the job queue.
@@ -81,19 +84,23 @@ func (s store) knownVideos(ctx context.Context) (_ []known, err error) {
 // one transaction: if anything fails, they stay exactly as they were. New
 // videos are then added a batch at a time, so a first scan of 50,000 videos
 // does not hold the database for a minute; if a batch fails, the next scan
-// finds the videos still missing from the catalog and adds them.
-func (s store) apply(ctx context.Context, ch changes, now time.Time) error {
+// finds the videos still missing from the catalog and adds them. reuse says, by
+// fingerprint, what the folders already hold for the new videos; adopted are the
+// ones it gave back.
+func (s store) apply(ctx context.Context, ch changes, reuse map[string]*content.Reused, now time.Time) (adopted []int64, err error) {
 	if err := s.applyChanges(ctx, ch, now); err != nil {
-		return err
+		return nil, err
 	}
 	for added := ch.added; len(added) > 0; {
 		n := min(len(added), s.batchSize())
-		if err := s.add(ctx, added[:n], now); err != nil {
-			return err
+		ids, err := s.add(ctx, added[:n], reuse, now)
+		if err != nil {
+			return adopted, err
 		}
+		adopted = append(adopted, ids...)
 		added = added[n:]
 	}
-	return nil
+	return adopted, nil
 }
 
 // applyChanges saves the videos gone missing and the ones that changed.
@@ -108,6 +115,7 @@ func (s store) applyChanges(ctx context.Context, ch changes, now time.Time) (err
 	defer func() { err = finish(tx, err) }()
 
 	stamp := now.Unix()
+	retireAt := now.Add(ForgetAfter).Unix()
 	for _, id := range ch.gone {
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE videos SET missing_since = ? WHERE id = ? AND missing_since IS NULL`, stamp, id); err != nil {
@@ -118,6 +126,17 @@ func (s store) applyChanges(ctx context.Context, ch changes, now time.Time) (err
 	// Videos that change place first leave their old place, so that two
 	// videos can swap names without ever being in the same place.
 	for _, u := range ch.updates {
+		if u.kind == replaced {
+			// The folder of the old content is kept as long as a missing video
+			// would be: the old file may come back. The new content gets its own.
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO retired_folders (fingerprint, remove_after)
+				SELECT fingerprint, ? FROM videos WHERE id = ? AND fingerprint != ?
+				ON CONFLICT (fingerprint) DO UPDATE SET remove_after = excluded.remove_after`,
+				retireAt, u.id, u.file.fingerprint); err != nil {
+				return fmt.Errorf("update video %d: %w", u.id, err)
+			}
+		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE videos SET missing_since = ? WHERE id = ?`, stamp, u.id); err != nil {
 			return fmt.Errorf("update video %d: %w", u.id, err)
@@ -159,11 +178,12 @@ func (s store) applyChanges(ctx context.Context, ch changes, now time.Time) (err
 	return nil
 }
 
-// add puts new videos in the catalog, in one transaction.
-func (s store) add(ctx context.Context, added []identified, now time.Time) (err error) {
+// add puts new videos in the catalog, in one transaction. It returns the ones
+// that got back what their folder holds.
+func (s store) add(ctx context.Context, added []identified, reuse map[string]*content.Reused, now time.Time) (adopted []int64, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("save new videos: begin: %w", err)
+		return nil, fmt.Errorf("save new videos: begin: %w", err)
 	}
 	defer func() { err = finish(tx, err) }()
 
@@ -175,19 +195,45 @@ func (s store) add(ctx context.Context, added []identified, now time.Time) (err 
 			f.fingerprint, f.loc.library, f.loc.path, f.size, f.modTime,
 			titleOf(f.loc.path), categoryOf(f.loc.path), stamp)
 		if err != nil {
-			return fmt.Errorf("add video %s: %w", f.loc.path, err)
+			return adopted, fmt.Errorf("add video %s: %w", f.loc.path, err)
 		}
 		id, err := res.LastInsertId()
 		if err != nil {
-			return fmt.Errorf("add video %s: %w", f.loc.path, err)
+			return adopted, fmt.Errorf("add video %s: %w", f.loc.path, err)
+		}
+		u := reuse[f.fingerprint]
+		if u != nil && u.Unreadable {
+			// Nobody can say whether this video was hidden or private: it stays
+			// closed until the administrator decides, never open by accident.
+			if _, err := tx.ExecContext(ctx, `UPDATE videos SET hidden_at = ? WHERE id = ?`, stamp, id); err != nil {
+				return adopted, fmt.Errorf("add video %s: %w", f.loc.path, err)
+			}
+			s.logger.WarnContext(ctx, "video hidden until an administrator shows it: its folder cannot be read",
+				"path", f.loc.path, "folder", u.Folder)
+			u = nil
+		}
+		if u != nil {
+			if err := restoreAccess(ctx, tx, id, u); err != nil {
+				return adopted, err
+			}
+			err := adopt(ctx, tx, id, u, now)
+			if err == nil {
+				s.logger.InfoContext(ctx, "video put back from its folder", "path", f.loc.path, "folder", u.Folder, "not_usable", u.Skipped)
+				adopted = append(adopted, id)
+				continue
+			}
+			if ctx.Err() != nil {
+				return adopted, err
+			}
+			s.logger.WarnContext(ctx, "folder of a video not reused: the video counts as new", "folder", u.Folder, "error", err)
 		}
 		for _, k := range []jobs.Kind{jobs.Probe, jobs.Details, jobs.Online} {
 			if err := jobs.Enqueue(ctx, tx, id, k, false, now); err != nil {
-				return err
+				return adopted, err
 			}
 		}
 	}
-	return nil
+	return adopted, nil
 }
 
 // syncCoverImages saves the version of the picture next to each video of

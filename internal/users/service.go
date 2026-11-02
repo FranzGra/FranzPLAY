@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // Errors shown to people, in the API's answers.
@@ -31,10 +33,10 @@ const maxHashing = 2
 
 // Service holds everything about users and sessions.
 type Service struct {
-	store   store
-	dataDir string // FranzPLAY's data folder, where profile photos live
-	logger  *slog.Logger
-	now     func() time.Time
+	store  store
+	root   content.Root // the content folder, where profile photos live
+	logger *slog.Logger
+	now    func() time.Time
 	// registrations counts the accounts people make by themselves.
 	registrations *registrations
 	hashing       chan struct{} // one slot per password check in progress
@@ -76,14 +78,14 @@ type Service struct {
 // FranzPLAY writes in the log: only someone who can read the log (the
 // person who installed it) can then create the administrator. It is for
 // servers reachable from the internet before the first setup.
-func NewService(ctx context.Context, db *sql.DB, dataDir string, requireSetupCode bool, logger *slog.Logger) (*Service, error) {
+func NewService(ctx context.Context, db *sql.DB, root content.Root, requireSetupCode bool, logger *slog.Logger) (*Service, error) {
 	dummy, err := hashPassword("not a real password")
 	if err != nil {
 		return nil, err
 	}
 	s := &Service{
 		store:         store{db: db},
-		dataDir:       dataDir,
+		root:          root,
 		logger:        logger,
 		now:           time.Now,
 		registrations: newRegistrations(),

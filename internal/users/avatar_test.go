@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 func TestCheckAvatar(t *testing.T) {
@@ -98,7 +100,7 @@ func TestProfilePhoto(t *testing.T) {
 	expect(t, admin.send([]byte("not a picture")), http.StatusBadRequest)
 	expect(t, admin.send(picture(t, 300, 200, "jpeg")), http.StatusBadRequest)
 	expect(t, admin.send(make([]byte, maxAvatarBytes+1)), http.StatusRequestEntityTooLarge)
-	if _, err := os.Stat(filepath.Join(s.dataDir, avatarDir, "1.jpg")); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(content.Root(s.dataDir).Avatars(), "1.jpg")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("a refused photo was saved: %v", err)
 	}
 
@@ -166,7 +168,7 @@ func TestDeletedAccountsLeaveNoPhoto(t *testing.T) {
 	}
 	expect(t, admin.do("DELETE", "/api/users/"+strconv.FormatInt(marco, 10), nil), http.StatusNoContent)
 
-	entries, err := os.ReadDir(filepath.Join(s.dataDir, avatarDir))
+	entries, err := os.ReadDir(content.Root(s.dataDir).Avatars())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,14 +183,14 @@ func TestImportAvatar(t *testing.T) {
 	ctx := t.Context()
 	img := image.NewRGBA(image.Rect(0, 0, 128, 128))
 
-	if _, err := ImportAvatar(ctx, s.db, s.dataDir, 1, image.NewRGBA(image.Rect(0, 0, 128, 100)), s.now); !errors.Is(err, errBadAvatar) {
+	if _, err := ImportAvatar(ctx, s.db, content.Root(s.dataDir), 1, image.NewRGBA(image.Rect(0, 0, 128, 100)), s.now); !errors.Is(err, errBadAvatar) {
 		t.Fatalf("not square: err = %v", err)
 	}
-	added, err := ImportAvatar(ctx, s.db, s.dataDir, 1, img, s.now)
+	added, err := ImportAvatar(ctx, s.db, content.Root(s.dataDir), 1, img, s.now)
 	if err != nil || !added {
 		t.Fatalf("ImportAvatar = %v, %v", added, err)
 	}
-	if _, err := os.Stat(filepath.Join(s.dataDir, avatarDir, "1.jpg")); err != nil {
+	if _, err := os.Stat(filepath.Join(content.Root(s.dataDir).Avatars(), "1.jpg")); err != nil {
 		t.Fatal(err)
 	}
 	var version int64
@@ -196,7 +198,7 @@ func TestImportAvatar(t *testing.T) {
 		t.Fatalf("avatar = %d, %v", version, err)
 	}
 	// A person who has a photo keeps it.
-	if added, err := ImportAvatar(ctx, s.db, s.dataDir, 1, img, s.now.Add(time.Hour)); err != nil || added {
+	if added, err := ImportAvatar(ctx, s.db, content.Root(s.dataDir), 1, img, s.now.Add(time.Hour)); err != nil || added {
 		t.Fatalf("second ImportAvatar = %v, %v", added, err)
 	}
 }

@@ -28,6 +28,7 @@ type Worker struct {
 	now      func() time.Time
 	wake     chan struct{}
 	changed  func()
+	jobDone  func(ctx context.Context, videoID int64)
 	live     *live // the jobs running now and how far they are
 }
 
@@ -41,6 +42,7 @@ func NewWorker(db *sql.DB, handlers map[Kind]Handler, logger *slog.Logger) *Work
 		now:      time.Now,
 		wake:     make(chan struct{}, 1),
 		changed:  func() {},
+		jobDone:  func(context.Context, int64) {},
 	}
 	w.live = newLive(func() time.Time { return w.now() })
 	return w
@@ -53,6 +55,10 @@ func (w *Worker) OnChange(f func()) {
 	w.changed = f
 	w.live.changed = f
 }
+
+// OnJobDone sets a function called after a job succeeded and was saved as done.
+// Call it before Run.
+func (w *Worker) OnJobDone(f func(ctx context.Context, videoID int64)) { w.jobDone = f }
 
 // Running returns the jobs running now, with how far they are.
 func (w *Worker) Running() []Running {
@@ -187,7 +193,11 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	if runErr == nil {
 		w.logger.InfoContext(ctx, "job done", "kind", j.kind, "video", j.videoID,
 			"duration", time.Since(start).Round(time.Millisecond))
-		return true, w.finish(ctx, j, done, w.now(), "")
+		if err := w.finish(ctx, j, done, w.now(), ""); err != nil {
+			return true, err
+		}
+		w.jobDone(ctx, j.videoID)
+		return true, nil
 	}
 
 	attempts := j.attempts + 1

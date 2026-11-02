@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -54,7 +55,7 @@ func newSite(t *testing.T) *site {
 		VALUES (1, 'Giulia', 'x', 'user', 1), (2, 'Marco', 'x', 'user', 1)`); err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(db, data, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service, err := NewService(db, content.Root(data), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,10 +93,10 @@ func (s *site) start(t *testing.T, who users.Account, name, title string, size i
 }
 
 // piece sends bytes of an upload, starting at offset.
-func (s *site) piece(t *testing.T, who users.Account, id int64, offset int, content string) *httptest.ResponseRecorder {
+func (s *site) piece(t *testing.T, who users.Account, id int64, offset int, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	return s.do(t, who, "PUT", "/api/uploads/"+strconv.FormatInt(id, 10)+"?offset="+strconv.Itoa(offset),
-		strings.NewReader(content))
+		strings.NewReader(body))
 }
 
 func expect(t *testing.T, rec *httptest.ResponseRecorder, want int) {
@@ -116,16 +117,16 @@ func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 
 func TestUploadArrivesInPiecesAndBecomesAVideo(t *testing.T) {
 	s := newSite(t)
-	content := "una gita al mare, in tre pezzi"
-	rec := s.start(t, giulia, "mare.MP4", "Al mare", len(content))
+	body := "una gita al mare, in tre pezzi"
+	rec := s.start(t, giulia, "mare.MP4", "Al mare", len(body))
 	expect(t, rec, http.StatusCreated)
 	u := decode[upload](t, rec)
-	if u.Title != "Al mare" || u.Size != int64(len(content)) || u.Received != 0 {
+	if u.Title != "Al mare" || u.Size != int64(len(body)) || u.Received != 0 {
 		t.Fatalf("new upload = %+v", u)
 	}
 
-	expect(t, s.piece(t, giulia, u.ID, 0, content[:10]), http.StatusOK)
-	got := decode[upload](t, s.piece(t, giulia, u.ID, 10, content[10:20]))
+	expect(t, s.piece(t, giulia, u.ID, 0, body[:10]), http.StatusOK)
+	got := decode[upload](t, s.piece(t, giulia, u.ID, 10, body[10:20]))
 	if got.Received != 20 || got.Video != 0 {
 		t.Fatalf("after two pieces = %+v", got)
 	}
@@ -133,7 +134,7 @@ func TestUploadArrivesInPiecesAndBecomesAVideo(t *testing.T) {
 		t.Error("a video was announced before the last piece")
 	}
 
-	rec = s.piece(t, giulia, u.ID, 20, content[20:])
+	rec = s.piece(t, giulia, u.ID, 20, body[20:])
 	expect(t, rec, http.StatusOK)
 	done := decode[upload](t, rec)
 	if done.Video == 0 || done.Received != done.Size {
@@ -144,15 +145,15 @@ func TestUploadArrivesInPiecesAndBecomesAVideo(t *testing.T) {
 	}
 
 	// The file is in the uploads folder, in Giulia's folder, whole.
-	folder, err := Folder(s.data)
+	folder, err := Folder(content.Root(s.data))
 	if err != nil {
 		t.Fatal(err)
 	}
 	saved, err := os.ReadFile(filepath.Join(folder, "1", strconv.FormatInt(u.ID, 10)+".mp4"))
-	if err != nil || string(saved) != content {
+	if err != nil || string(saved) != body {
 		t.Fatalf("saved file = %q, %v; want the whole video", saved, err)
 	}
-	if left, _ := os.ReadDir(filepath.Join(s.data, incomingName)); len(left) != 0 {
+	if left, _ := os.ReadDir(content.Root(s.data).Incoming()); len(left) != 0 {
 		t.Errorf("incoming/ still has %d files", len(left))
 	}
 
@@ -181,21 +182,21 @@ func TestUploadArrivesInPiecesAndBecomesAVideo(t *testing.T) {
 
 	// The upload itself is over.
 	if list := decode[mine](t, s.do(t, giulia, "GET", "/api/uploads", nil)); len(list.Uploads) != 0 ||
-		list.Space.Used != int64(len(content)) {
+		list.Space.Used != int64(len(body)) {
 		t.Errorf("after the upload: %+v", list)
 	}
 }
 
 func TestUploadGoesOnAfterADroppedConnection(t *testing.T) {
 	s := newSite(t)
-	content := "0123456789abcdefghij"
-	u := decode[upload](t, s.start(t, giulia, "a.mp4", "", len(content)))
-	expect(t, s.piece(t, giulia, u.ID, 0, content[:8]), http.StatusOK)
+	body := "0123456789abcdefghij"
+	u := decode[upload](t, s.start(t, giulia, "a.mp4", "", len(body)))
+	expect(t, s.piece(t, giulia, u.ID, 0, body[:8]), http.StatusOK)
 
 	// The connection drops in the middle of the second piece: the server
 	// gets fewer bytes than announced and counts none of them.
 	req := httptest.NewRequest("PUT", "/api/uploads/"+strconv.FormatInt(u.ID, 10)+"?offset=8",
-		io.MultiReader(strings.NewReader(content[8:11]), failing{}))
+		io.MultiReader(strings.NewReader(body[8:11]), failing{}))
 	req.ContentLength = 8
 	req = req.WithContext(context.WithValue(req.Context(), userKey{}, giulia))
 	rec := httptest.NewRecorder()
@@ -210,16 +211,16 @@ func TestUploadGoesOnAfterADroppedConnection(t *testing.T) {
 		t.Fatalf("after the cut: %+v, want 8 bytes received", list.Uploads)
 	}
 	// A piece sent again from the wrong place is refused.
-	expect(t, s.piece(t, giulia, u.ID, 0, content[:8]), http.StatusConflict)
-	expect(t, s.piece(t, giulia, u.ID, 8, content[8:]), http.StatusOK)
+	expect(t, s.piece(t, giulia, u.ID, 0, body[:8]), http.StatusConflict)
+	expect(t, s.piece(t, giulia, u.ID, 8, body[8:]), http.StatusOK)
 
-	folder, err := Folder(s.data)
+	folder, err := Folder(content.Root(s.data))
 	if err != nil {
 		t.Fatal(err)
 	}
 	saved, err := os.ReadFile(filepath.Join(folder, "1", strconv.FormatInt(u.ID, 10)+".mp4"))
-	if err != nil || string(saved) != content {
-		t.Errorf("saved file = %q, %v; want %q", saved, err, content)
+	if err != nil || string(saved) != body {
+		t.Errorf("saved file = %q, %v; want %q", saved, err, body)
 	}
 }
 
@@ -279,7 +280,7 @@ func TestUploadsNeverShareAFile(t *testing.T) {
 	}
 	expect(t, s.piece(t, giulia, second.ID, 0, "second"), http.StatusOK)
 
-	folder, err := Folder(s.data)
+	folder, err := Folder(content.Root(s.data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +295,7 @@ func TestUploadsNeverShareAFile(t *testing.T) {
 func TestUploadNeverReplacesAFile(t *testing.T) {
 	s := newSite(t)
 	u := decode[upload](t, s.start(t, giulia, "a.mp4", "", 3))
-	folder, err := Folder(s.data)
+	folder, err := Folder(content.Root(s.data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +338,7 @@ func TestUploadOfAVideoAlreadyThere(t *testing.T) {
 	if len(list.Uploads) != 0 || list.Space.Reserved != 0 {
 		t.Errorf("after the copy: %+v", list)
 	}
-	if left, _ := os.ReadDir(filepath.Join(s.data, incomingName)); len(left) != 0 {
+	if left, _ := os.ReadDir(content.Root(s.data).Incoming()); len(left) != 0 {
 		t.Errorf("incoming/ still has %d files", len(left))
 	}
 }
@@ -348,7 +349,7 @@ func TestCancelAnUpload(t *testing.T) {
 	expect(t, s.piece(t, giulia, u.ID, 0, "01234"), http.StatusOK)
 
 	expect(t, s.do(t, giulia, "DELETE", "/api/uploads/"+strconv.FormatInt(u.ID, 10), nil), http.StatusNoContent)
-	if left, _ := os.ReadDir(filepath.Join(s.data, incomingName)); len(left) != 0 {
+	if left, _ := os.ReadDir(content.Root(s.data).Incoming()); len(left) != 0 {
 		t.Errorf("incoming/ still has %d files", len(left))
 	}
 	expect(t, s.piece(t, giulia, u.ID, 5, "56789"), http.StatusNotFound)
@@ -360,7 +361,7 @@ func TestCleanForgetsAbandonedUploads(t *testing.T) {
 	s.clock = s.clock.Add(ForgetAfter / 2)
 	recent := decode[upload](t, s.start(t, giulia, "recent.mp4", "", 10))
 	// A file nobody waits for, like the one of a person who was removed.
-	incoming := filepath.Join(s.data, incomingName)
+	incoming := content.Root(s.data).Incoming()
 	if err := os.WriteFile(filepath.Join(incoming, "999.part"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}

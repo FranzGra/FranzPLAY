@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // subtitleFixture is a catalog with one video and a subtitler on a temp
@@ -22,7 +24,7 @@ type subtitleFixture struct {
 func newSubtitleFixture(t *testing.T, probe string) *subtitleFixture {
 	t.Helper()
 	pf := newPreviewFixture(t, "/videos", "film.mkv", 60)
-	sf := &subtitleFixture{fx: pf, s: NewTracker(pf.db, "ffprobe", "ffmpeg", pf.dataDir)}
+	sf := &subtitleFixture{fx: pf, s: NewTracker(pf.db, "ffprobe", "ffmpeg", content.Root(pf.dataDir))}
 	sf.s.run = func(_ context.Context, program string, args ...string) ([]byte, error) {
 		if program == "ffprobe" {
 			return []byte(probe), nil
@@ -75,15 +77,7 @@ func (sf *subtitleFixture) saved(t *testing.T) []savedSubtitle {
 
 func (sf *subtitleFixture) files(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(sf.fx.dataDir, SubtitlesDir))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return subtitlesInFolders(t, content.Root(sf.fx.dataDir))
 }
 
 const twoSubtitles = `{"streams": [
@@ -100,14 +94,21 @@ func TestSubtitlesSaved(t *testing.T) {
 	if err := sf.s.Handle(context.Background(), sf.fx.id); err != nil {
 		t.Fatal(err)
 	}
-	want := []savedSubtitle{
-		{stream: 2, lang: "ita", file: "1-fp-2.vtt"},
-		{stream: 4, lang: "eng", title: "Forced", forced: true, file: "1-fp-4.vtt"},
+	got := sf.saved(t)
+	if len(got) == 0 {
+		t.Fatal("nothing saved")
 	}
-	if got := sf.saved(t); !slices.Equal(got, want) {
+	code := content.CodeOf(got[0].file)
+	second := content.Stored(code, content.InsideSubtitleFile(2), "")
+	fourth := content.Stored(code, content.InsideSubtitleFile(4), "")
+	want := []savedSubtitle{
+		{stream: 2, lang: "ita", file: second},
+		{stream: 4, lang: "eng", title: "Forced", forced: true, file: fourth},
+	}
+	if !slices.Equal(got, want) {
 		t.Errorf("saved %+v\nwant  %+v", got, want)
 	}
-	if files := sf.files(t); !slices.Equal(files, []string{"1-fp-2.vtt", "1-fp-4.vtt"}) {
+	if files := sf.files(t); !slices.Equal(files, []string{second, fourth}) {
 		t.Errorf("files = %q", files)
 	}
 	if sf.ffmpegs != 1 {
@@ -187,11 +188,16 @@ func TestNewSubtitlesReplaceTheOldOnes(t *testing.T) {
 	if err := sf.s.Handle(context.Background(), sf.fx.id); err != nil {
 		t.Fatal(err)
 	}
-	want := []savedSubtitle{{stream: 4, lang: "eng", file: "1-v1:new-4.vtt"}}
-	if got := sf.saved(t); !slices.Equal(got, want) {
+	got := sf.saved(t)
+	if len(got) != 1 {
+		t.Fatalf("saved %+v, want one subtitle", got)
+	}
+	file := content.Stored(content.CodeOf(got[0].file), content.InsideSubtitleFile(4), "")
+	want := []savedSubtitle{{stream: 4, lang: "eng", file: file}}
+	if !slices.Equal(got, want) {
 		t.Errorf("saved %+v, want %+v", got, want)
 	}
-	if files := sf.files(t); !slices.Equal(files, []string{"1-v1:new-4.vtt"}) {
+	if files := sf.files(t); !slices.Equal(files, []string{file}) {
 		t.Errorf("files = %q, want only the new copy", files)
 	}
 }
@@ -239,19 +245,22 @@ func TestRemoveOrphanSubtitles(t *testing.T) {
 	if err := sf.s.Handle(context.Background(), sf.fx.id); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(sf.fx.dataDir, SubtitlesDir)
+	dir := content.Root(sf.fx.dataDir).Subtitles()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "99-forgotten-2.vtt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, ".new-1"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	removed, err := RemoveOrphanSubtitles(context.Background(), sf.fx.db, sf.fx.dataDir)
+	removed, err := RemoveOrphanSubtitles(context.Background(), sf.fx.db, content.Root(sf.fx.dataDir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"1-fp-2.vtt", "1-fp-4.vtt"}; removed != 2 || !slices.Equal(sf.files(t), want) {
-		t.Errorf("removed %d, folder now %q; want 2 removed and %q", removed, sf.files(t), want)
+	if left := flatFiles(t, dir); removed != 2 || len(left) != 0 || len(sf.files(t)) != 2 {
+		t.Errorf("removed %d, left %q, copies %q; want 2 removed and the two copies", removed, left, sf.files(t))
 	}
 }
 
@@ -282,7 +291,7 @@ func TestTracksWithRealFFmpeg(t *testing.T) {
 		t.Fatal(err)
 	}
 	pf := newPreviewFixture(t, root, "film: uno.mkv", 2)
-	s := NewTracker(pf.db, ffprobe, ffmpeg, pf.dataDir)
+	s := NewTracker(pf.db, ffprobe, ffmpeg, content.Root(pf.dataDir))
 	libraryBefore := listDir(t, root)
 
 	if err := s.Handle(context.Background(), pf.id); err != nil {
@@ -296,7 +305,7 @@ func TestTracksWithRealFFmpeg(t *testing.T) {
 	if audio := sf.audio(t); len(audio) != 1 || audio[0].lang != "eng" || audio[0].codec != "opus" {
 		t.Errorf("sound tracks %+v, want one English opus track", audio)
 	}
-	data, err := os.ReadFile(filepath.Join(pf.dataDir, SubtitlesDir, saved[0].file))
+	data, err := os.ReadFile(content.Root(pf.dataDir).File(saved[0].file, ""))
 	if err != nil {
 		t.Fatal(err)
 	}

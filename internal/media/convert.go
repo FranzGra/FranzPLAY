@@ -15,14 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
-	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
-
-// ConvertedDir is the folder, inside the data folder, that holds the
-// copies of the videos that not every browser plays.
-const ConvertedDir = "converted"
 
 // convertedName is the copy of a video. Like the cover's, it changes when
 // the content changes.
@@ -30,17 +26,17 @@ func convertedName(videoID int64, fingerprint string) string {
 	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") + ".mp4"
 }
 
-// progressName is the file, in the converted folder, where ffmpeg writes
+// progressName is the file, in the work folder, where ffmpeg writes
 // how far the copy of a video is, while it makes it.
 func progressName(videoID int64) string {
 	return ".progress-" + strconv.FormatInt(videoID, 10) + ".txt"
 }
 
 // ConvertedSoFar returns how many seconds of a video ffmpeg has put in its
-// copy, while it makes it, from the progress file in dataDir/converted.
+// copy, while it makes it, from the progress file in the work folder.
 // ok is false when no copy is being made.
-func ConvertedSoFar(dataDir string, videoID int64) (seconds float64, ok bool, err error) {
-	f, err := os.Open(filepath.Join(dataDir, ConvertedDir, progressName(videoID)))
+func ConvertedSoFar(root content.Root, videoID int64) (seconds float64, ok bool, err error) {
+	f, err := os.Open(filepath.Join(root.Work(), progressName(videoID)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, false, nil
 	}
@@ -84,16 +80,16 @@ type Converter struct {
 	db      *sql.DB
 	ffmpeg  string // program to run
 	ffprobe string // program that reads the picture of videos read before pixel formats were kept
-	dataDir string
+	root    content.Root
 	threads int // how many processor cores ffmpeg may use
 	run     runFunc
 }
 
 // NewConverter returns a converter that runs the given ffmpeg and ffprobe
-// programs and writes in dataDir/converted. ffmpeg uses half the
+// programs and writes in the folder of each video, in root. ffmpeg uses half the
 // processor cores, so the site stays quick while a film is being encoded.
-func NewConverter(db *sql.DB, ffmpeg, ffprobe, dataDir string) *Converter {
-	return &Converter{db: db, ffmpeg: ffmpeg, ffprobe: ffprobe, dataDir: dataDir,
+func NewConverter(db *sql.DB, ffmpeg, ffprobe string, root content.Root) *Converter {
+	return &Converter{db: db, ffmpeg: ffmpeg, ffprobe: ffprobe, root: root,
 		threads: max(1, runtime.NumCPU()/2), run: runInBackground}
 }
 
@@ -119,47 +115,56 @@ func (c *Converter) Handle(ctx context.Context, videoID int64) (err error) {
 	}
 	plan := video.PlanConversion(filepath.Ext(file), video.Info{
 		VideoCodec: videoCodec.String, AudioCodec: audioCodec.String, PixelFormat: pixels.String})
-	dir := filepath.Join(c.dataDir, ConvertedDir)
-	name := ""
-	if plan.Needed {
-		name = convertedName(videoID, fingerprint)
-	}
-	if old.Valid && old.String == name {
-		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+	flat := c.root.Converted()
+	if old.Valid && plan.Needed && c.isCopyOf(old.String, videoID, fingerprint) {
+		if _, err := os.Stat(c.root.File(old.String, flat)); err == nil {
 			return nil // already made, for this very content
 		}
 	}
+	// Put in place and saved only if the content is still the one we used.
+	code, name := "", ""
+	save := func(tmp string) (bool, error) {
+		same, err := content.IfSame(ctx, c.db, videoID, fingerprint, func(tx *sql.Tx) error {
+			var saved any // NULL: no copy needed
+			if tmp != "" {
+				if err := c.root.Put(code, content.FileConverted, tmp); err != nil {
+					return err
+				}
+				saved = name
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE videos SET converted = ? WHERE id = ?`, saved, videoID)
+			return err
+		})
+		if err != nil {
+			return false, fmt.Errorf("save copy of video %d: %w", videoID, err)
+		}
+		return same, nil
+	}
+	var same bool
 	if plan.Needed {
-		if err := c.convert(ctx, videoID, file, plan, dir, name); err != nil {
+		if code, err = content.EnsureVideoFolder(ctx, c.db, c.root, videoID, fingerprint); err != nil {
 			return err
 		}
+		name = content.Stored(code, content.FileConverted, "")
+		same, err = c.convert(ctx, videoID, file, plan, save)
+	} else {
+		same, err = save("")
 	}
+	if err != nil || !same {
+		return err // if the file changed meanwhile, this copy belongs to nobody
+	}
+	return c.root.RemoveNotKept(old.String, name, flat)
+}
 
-	// Saved only if the content is still the one we used.
-	var saved any // NULL: no copy needed
-	if name != "" {
-		saved = name
+// isCopyOf reports whether a value of the database names the copy of this very
+// content: in its folder, or in the old flat folder, where it is just as good.
+// A film takes hours to make again.
+func (c *Converter) isCopyOf(value string, videoID int64, fingerprint string) bool {
+	if value == convertedName(videoID, fingerprint) {
+		return true
 	}
-	res, err := c.db.ExecContext(ctx, `UPDATE videos SET converted = ? WHERE id = ? AND fingerprint = ?`,
-		saved, videoID, fingerprint)
-	if err != nil {
-		return fmt.Errorf("save copy of video %d: %w", videoID, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("save copy of video %d: %w", videoID, err)
-	}
-	if n == 0 {
-		// The file changed meanwhile: this copy belongs to nobody.
-		if name == "" {
-			return nil
-		}
-		return removeFile(dir, name)
-	}
-	if old.Valid && old.String != name {
-		return removeFile(dir, old.String)
-	}
-	return nil
+	code, ok, err := c.root.FolderOf(fingerprint)
+	return err == nil && ok && content.SameFile(value, content.Stored(code, content.FileConverted, ""))
 }
 
 // readPixelFormat asks ffprobe how the picture of a video read before
@@ -180,23 +185,26 @@ func (c *Converter) readPixelFormat(ctx context.Context, videoID int64, file, fi
 	return info.PixelFormat, nil
 }
 
-// convert runs ffmpeg into a temporary file, renamed to name only when
-// complete (rule 6).
-func (c *Converter) convert(ctx context.Context, videoID int64, file string, plan video.ConvertPlan, dir, name string) (err error) {
+// convert runs ffmpeg into a temporary file, given to save only when complete
+// (rule 6). It returns what save says.
+func (c *Converter) convert(ctx context.Context, videoID int64, file string, plan video.ConvertPlan,
+	save func(tmp string) (bool, error),
+) (same bool, err error) {
 	sounds, err := c.soundCodecs(ctx, videoID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("create converted folder: %w", err)
+	dir, err := c.root.MakeWork()
+	if err != nil {
+		return false, err
 	}
 	tmp, err := os.CreateTemp(dir, ".new-*.mp4")
 	if err != nil {
-		return fmt.Errorf("convert video %d: %w", videoID, err)
+		return false, fmt.Errorf("convert video %d: %w", videoID, err)
 	}
 	tmpName := tmp.Name()
 	if err := tmp.Close(); err != nil {
-		return errors.Join(fmt.Errorf("convert video %d: %w", videoID, err), os.Remove(tmpName))
+		return false, errors.Join(fmt.Errorf("convert video %d: %w", videoID, err), os.Remove(tmpName))
 	}
 	defer func() {
 		// Left over only when something failed; after success it was renamed.
@@ -215,19 +223,16 @@ func (c *Converter) convert(ctx context.Context, videoID int64, file string, pla
 	_, err = c.run(ctx, c.ffmpeg, convertArgs(file, plan, sounds, c.threads, progress, tmpName)...)
 	stopFollowing()
 	if err != nil {
-		return fmt.Errorf("convert video %d: %w", videoID, err)
+		return false, fmt.Errorf("convert video %d: %w", videoID, err)
 	}
 	info, err := os.Stat(tmpName)
 	if err != nil {
-		return fmt.Errorf("convert video %d: %w", videoID, err)
+		return false, fmt.Errorf("convert video %d: %w", videoID, err)
 	}
 	if info.Size() == 0 {
-		return fmt.Errorf("convert video %d: ffmpeg wrote nothing", videoID)
+		return false, fmt.Errorf("convert video %d: ffmpeg wrote nothing", videoID)
 	}
-	if err := safefile.Rename(tmpName, filepath.Join(dir, name)); err != nil {
-		return fmt.Errorf("convert video %d: %w", videoID, err)
-	}
-	return nil
+	return save(tmpName)
 }
 
 // followEvery is how often a conversion tells the queue how far it is:
@@ -257,7 +262,7 @@ func (c *Converter) follow(ctx context.Context, videoID int64) (stop func()) {
 				return
 			case <-ticker.C:
 			}
-			if done, ok, err := ConvertedSoFar(c.dataDir, videoID); err == nil && ok {
+			if done, ok, err := ConvertedSoFar(c.root, videoID); err == nil && ok {
 				done = min(done, total)
 				jobs.Report(ctx, jobs.Progress{Percent: done * 100 / total, Done: done, Total: total})
 			}
@@ -339,6 +344,6 @@ func convertArgs(file string, plan video.ConvertPlan, sounds []string, threads i
 // RemoveOrphanConverted deletes the files in the converted folder that no
 // video uses any more, and conversions left half done. It must run before
 // the job worker starts, so it never sees a copy being made.
-func RemoveOrphanConverted(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, ConvertedDir), "videos", "converted")
+func RemoveOrphanConverted(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	return removeOrphans(ctx, db, root.Converted(), "videos", "converted")
 }

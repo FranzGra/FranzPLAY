@@ -9,16 +9,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 )
 
 // The administrator can choose the cover of a video: an image of their
-// own, or a moment of the video. The image is kept in the data folder
+// own, or a moment of the video. The image is kept in the content folder
 // (rule 1: nothing is written next to the video); the cover job then makes
 // the cover from it, so the choice survives every new reading of the
 // folders and every search on the internet.
@@ -76,20 +76,42 @@ func (a admin) handleOwnCover(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusUnsupportedMediaType, errNotAnImage.Error())
 		return
 	}
-	dir := filepath.Join(a.dataDir, media.OwnCoversDir)
-	name, err := media.SaveOwnFile(dir, id, ext, bytes.NewReader(data))
+	name, err := a.saveChosen(r.Context(), id, content.FileOwnCover+ext, bytes.NewReader(data))
 	if err != nil {
-		respond.InternalError(w, r, a.logger, err)
+		a.choiceFailed(w, r, err)
 		return
 	}
 	old, err := a.store.setCover(r.Context(), id, &name, nil, a.now())
 	if err != nil {
-		// Nobody uses the new image: it goes.
-		err = errors.Join(err, media.RemoveOwnFile(dir, name))
+		// The file stays: it is in the folder of its video, and may be the
+		// very one the video had. The next choice writes over it.
 		a.choiceFailed(w, r, err)
 		return
 	}
-	a.chosen(w, r, id, "cover", "image", dir, old)
+	a.chosen(w, r, id, "cover", "image", a.root.OwnCovers(), old)
+}
+
+// saveChosen keeps a file the administrator chose in the folder of its video.
+// A video that is not there, or not on the disk, gets no folder.
+func (a admin) saveChosen(ctx context.Context, id int64, file string, body io.Reader) (string, error) {
+	var fingerprint string
+	var missing bool
+	err := a.store.db.QueryRowContext(ctx, `SELECT fingerprint, missing_since IS NOT NULL FROM videos WHERE id = ?`, id).
+		Scan(&fingerprint, &missing)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", errNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("choose file of video %d: %w", id, err)
+	}
+	if missing {
+		return "", errFileMissing
+	}
+	code, err := content.EnsureVideoFolder(ctx, a.store.db, a.root, id, fingerprint)
+	if err != nil {
+		return "", err
+	}
+	return media.SaveChosenFile(a.root, code, file, body)
 }
 
 func (a admin) handleCoverSecond(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +132,7 @@ func (a admin) handleCoverSecond(w http.ResponseWriter, r *http.Request) {
 		a.choiceFailed(w, r, err)
 		return
 	}
-	a.chosen(w, r, id, "cover", "moment", filepath.Join(a.dataDir, media.OwnCoversDir), old)
+	a.chosen(w, r, id, "cover", "moment", a.root.OwnCovers(), old)
 }
 
 func (a admin) handleResetCover(w http.ResponseWriter, r *http.Request) {
@@ -124,17 +146,20 @@ func (a admin) handleResetCover(w http.ResponseWriter, r *http.Request) {
 		a.choiceFailed(w, r, err)
 		return
 	}
-	a.chosen(w, r, id, "cover", "automatic", filepath.Join(a.dataDir, media.OwnCoversDir), old)
+	a.chosen(w, r, id, "cover", "automatic", a.root.OwnCovers(), old)
 }
 
 // chosen finishes a change of cover or clip: the file uploaded before
 // goes, the job worker and the pages are told. what is "cover" or "clip".
 func (a admin) chosen(w http.ResponseWriter, r *http.Request, id int64, what, choice, dir, old string) {
 	if old != "" {
-		if err := media.RemoveOwnFile(dir, old); err != nil {
+		if err := a.root.Remove(old, dir); err != nil {
 			// The choice is saved; the old file is removed at the next start.
 			a.logger.WarnContext(r.Context(), "remove old uploaded file", "video", id, "what", what, "error", err)
 		}
+	}
+	if err := content.SaveManifest(r.Context(), a.store.db, a.root, id); err != nil {
+		a.logger.WarnContext(r.Context(), "write video.json", "video", id, "error", err)
 	}
 	who, _ := a.account(r.Context())
 	a.logger.InfoContext(r.Context(), what+" chosen", "video", id, "choice", choice, "by", who.Name)
@@ -203,7 +228,7 @@ func (s store) setCover(ctx context.Context, id int64, own *string, second *int6
 	if err := jobs.Enqueue(ctx, tx, id, jobs.Cover, false, now); err != nil {
 		return "", err
 	}
-	if oldOwn.Valid && (own == nil || *own != oldOwn.String) {
+	if oldOwn.Valid && (own == nil || !content.SameFile(*own, oldOwn.String)) {
 		old = oldOwn.String
 	}
 	return old, nil

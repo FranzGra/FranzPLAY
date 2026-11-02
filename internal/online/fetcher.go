@@ -9,17 +9,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
-	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
-
-// Dir is the folder, inside the data folder, that holds the pictures
-// downloaded from the internet. The cover job turns them into covers.
-const Dir = "online"
 
 // askTimeout is how long one question to a source may take.
 const askTimeout = 20 * time.Second
@@ -27,19 +22,19 @@ const askTimeout = 20 * time.Second
 // Fetcher is the job handler that asks the sources turned on.
 type Fetcher struct {
 	db      *sql.DB
-	dataDir string
+	root    content.Root
 	youtube youTube
 	tmdb    tmdb
 	tpdb    tpdb
 	now     func() time.Time
 }
 
-// NewFetcher returns a fetcher that writes pictures in dataDir/online.
-func NewFetcher(db *sql.DB, dataDir string) *Fetcher {
+// NewFetcher returns a fetcher that writes pictures in root/online.
+func NewFetcher(db *sql.DB, root content.Root) *Fetcher {
 	client := &http.Client{Timeout: askTimeout}
 	return &Fetcher{
 		db:      db,
-		dataDir: dataDir,
+		root:    root,
 		youtube: youTube{client: client, oEmbed: "https://www.youtube.com/oembed", images: "https://i.ytimg.com/vi"},
 		tmdb:    newTMDB(client),
 		tpdb:    newTPDB(client),
@@ -186,45 +181,66 @@ func osHash(file string) (_ string, err error) {
 	return video.OSHash(r, info.Size())
 }
 
-// save writes what was found: the picture in the data folder, the rest in
+// save writes what was found: the picture in the content folder, the rest in
 // the catalog, and asks for a new cover when the picture changed.
 func (f *Fetcher) save(ctx context.Context, videoID int64, fingerprint, oldImage string, what found) (err error) {
-	dir := filepath.Join(f.dataDir, Dir)
+	dir := f.root.OnlineImages()
 	image := ""
 	if what.image != nil {
-		image = imageName(videoID, fingerprint)
-		if err := writeAtomically(dir, image, what.image); err != nil {
+		same := false
+		if image, same, err = f.writePicture(ctx, videoID, fingerprint, content.FileOnlineImage, what.image); err != nil {
 			return fmt.Errorf("picture of video %d: %w", videoID, err)
+		}
+		if !same {
+			return nil // the file changed meanwhile: nothing is written
 		}
 	}
 	saved, err := f.record(ctx, videoID, fingerprint, what.details, image, image != "" || oldImage != "")
 	if err != nil {
-		return errors.Join(err, removeNew(dir, image, oldImage))
+		return errors.Join(err, f.removeNew(image, oldImage))
 	}
 	if !saved {
-		// The file changed meanwhile: this picture belongs to nobody.
-		return removeNew(dir, image, oldImage)
+		// The file changed in the instant since: the picture stays in the folder of
+		// the content it was found for, which another copy may use.
+		return nil
 	}
-	if oldImage != "" && oldImage != image {
-		return removeFile(dir, oldImage)
+	return errors.Join(f.root.RemoveNotKept(oldImage, image, dir), content.SaveManifest(ctx, f.db, f.root, videoID))
+}
+
+// writePicture writes a picture in the folder of a video, all or nothing, and
+// returns what the database saves for it. If the video has another content now,
+// it writes nothing and same is false.
+func (f *Fetcher) writePicture(ctx context.Context, videoID int64, fingerprint, file string, data []byte) (_ string, same bool, err error) {
+	code, err := content.EnsureVideoFolder(ctx, f.db, f.root, videoID, fingerprint)
+	if err != nil {
+		return "", false, err
 	}
-	return nil
+	same, err = content.IfSame(ctx, f.db, videoID, fingerprint, func(*sql.Tx) error {
+		return f.root.PutBytes(code, file, data)
+	})
+	if err != nil || !same {
+		return "", same, err
+	}
+	return content.Stored(code, file, ""), true, nil
 }
 
 // propose keeps what a source found as a proposal for the administrator,
-// in place of the one the video had: the picture in the data folder, the
+// in place of the one the video had: the picture in the content folder, the
 // rest in the catalog. The details used until now do not change.
 func (f *Fetcher) propose(ctx context.Context, videoID int64, fingerprint, source string, what found) error {
 	old, err := f.proposalImage(ctx, videoID)
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(f.dataDir, Dir)
+	dir := f.root.OnlineImages()
 	image := ""
 	if what.image != nil {
-		image = proposalName(videoID, fingerprint)
-		if err := writeAtomically(dir, image, what.image); err != nil {
+		same := false
+		if image, same, err = f.writePicture(ctx, videoID, fingerprint, content.FileProposalImage, what.image); err != nil {
 			return fmt.Errorf("proposed picture of video %d: %w", videoID, err)
+		}
+		if !same {
+			return nil // the file changed meanwhile: nothing is written
 		}
 	}
 	d := what.details
@@ -241,17 +257,15 @@ func (f *Fetcher) propose(ctx context.Context, videoID int64, fingerprint, sourc
 	if err == nil {
 		var n int64
 		if n, err = res.RowsAffected(); err == nil && n == 0 {
-			// The file changed meanwhile: this picture belongs to nobody.
-			return removeNew(dir, image, old)
+			// The file changed in the instant since: the picture stays in the
+			// folder of the content it was found for, which another copy may use.
+			return nil
 		}
 	}
 	if err != nil {
-		return errors.Join(fmt.Errorf("save proposal for video %d: %w", videoID, err), removeNew(dir, image, old))
+		return errors.Join(fmt.Errorf("save proposal for video %d: %w", videoID, err), f.removeNew(image, old))
 	}
-	if old != "" && old != image {
-		return removeFile(dir, old)
-	}
-	return nil
+	return f.root.RemoveNotKept(old, image, dir)
 }
 
 // proposalImage is the picture of the proposal waiting for a video, ""
@@ -267,11 +281,8 @@ func (f *Fetcher) proposalImage(ctx context.Context, videoID int64) (string, err
 
 // removeNew removes a picture just written, unless it is the old one
 // rewritten in place.
-func removeNew(dir, image, oldImage string) error {
-	if image == "" || image == oldImage {
-		return nil
-	}
-	return removeFile(dir, image)
+func (f *Fetcher) removeNew(image, oldImage string) error {
+	return f.root.RemoveNotKept(image, oldImage, f.root.OnlineImages())
 }
 
 // record writes the details in the catalog, if the video still has the
@@ -315,43 +326,7 @@ func (f *Fetcher) record(ctx context.Context, videoID int64, fingerprint string,
 	return true, nil
 }
 
-// imageName is the picture file of a video. It changes when the content
-// changes, like the cover's.
-func imageName(videoID int64, fingerprint string) string {
-	tail := fingerprint[max(0, len(fingerprint)-8):]
-	return strconv.FormatInt(videoID, 10) + "-" + tail + ".img"
-}
-
-// proposalName is the picture file of a proposal: never the one in use.
-func proposalName(videoID int64, fingerprint string) string {
-	return "proposal-" + imageName(videoID, fingerprint)
-}
-
-// writeAtomically writes a file of the data folder all or nothing (rule 6):
-// a temporary file, renamed only once complete.
-func writeAtomically(dir, name string, data []byte) (err error) {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".new-*")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, os.Remove(tmp.Name()))
-		}
-	}()
-	if _, err := tmp.Write(data); err != nil {
-		return errors.Join(err, tmp.Close())
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return safefile.Rename(tmp.Name(), filepath.Join(dir, name))
-}
-
-// removeFile deletes a file of the data folder; a file already gone is fine.
+// removeFile deletes a file of the content folder; a file already gone is fine.
 func removeFile(dir, name string) error {
 	if err := os.Remove(filepath.Join(dir, filepath.Base(name))); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove old %s: %w", name, err)
@@ -368,10 +343,10 @@ func orNull(s string) any {
 }
 
 // RemoveOrphans deletes the pictures no video uses any more, and work left
-// half done by a crash. It only ever looks inside the data folder's online
+// half done by a crash. It only ever looks inside the content folder's online
 // folder, and must run before the job worker starts.
-func RemoveOrphans(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	dir := filepath.Join(dataDir, Dir)
+func RemoveOrphans(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	dir := root.OnlineImages()
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil

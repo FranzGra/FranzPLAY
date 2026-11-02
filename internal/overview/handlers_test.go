@@ -9,11 +9,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -190,5 +193,117 @@ func TestDiskSpaceOfARealFolder(t *testing.T) {
 	}
 	if _, _, err := diskSpace("/questa/cartella/non/esiste"); err == nil {
 		t.Error("no error for a folder that does not exist")
+	}
+}
+
+func TestContentFolderHasItsOwnLineOnlyWhenItIsAnother(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    []Disk
+	}{
+		{"not set", "", []Disk{{Folder: "/dati", Data: true}, {Folder: "/video"}}},
+		{"the same folder", "/dati", []Disk{{Folder: "/dati", Data: true}, {Folder: "/video"}}},
+		{"another folder", "/contenuti", []Disk{{Folder: "/dati", Data: true}, {Folder: "/contenuti", Data: true, Content: true}, {Folder: "/video"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := api{logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+				settings: Settings{DataDir: "/dati", ContentDir: tt.content, Libraries: []string{"/video"}},
+				disk:     func(string) (uint64, uint64, error) { return 0, 0, nil }}
+			if got := a.disks(context.Background()); !slices.Equal(got, tt.want) {
+				t.Errorf("disks = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A folder nobody knows and one with a damaged video.json are shown, and left
+// as they are: reading the summary changes nothing on the disk.
+func TestOverviewListsTheFoldersWithNoVideo(t *testing.T) {
+	db, err := database.Open(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	root := content.Root(t.TempDir())
+	foreign := filepath.Join(root.VideoFolders(), "Roba mia")
+	damaged := filepath.Join(root.VideoFolders(), "Rotta [11112222]")
+	titled := filepath.Join(root.VideoFolders(), "Il mare [a1b2c3d4]")
+	for path, data := range map[string]string{
+		filepath.Join(foreign, "appunti.txt"): "12345",
+		filepath.Join(damaged, "video.json"):  "{ rotto",
+		filepath.Join(titled, "video.json"): `{"version":1,"fingerprint":"` +
+			"a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4" + `","title":"Il mare"}`,
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := api{db: db, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		settings: Settings{DataDir: "/dati", Content: root},
+		account:  func(context.Context) (users.Account, bool) { return users.Account{ID: 1, Role: users.Admin}, true },
+		disk:     func(string) (uint64, uint64, error) { return 1000, 600, nil }}
+	mux := http.NewServeMux()
+	a.routes(mux)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/overview", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET = %d %s", rec.Code, rec.Body)
+	}
+	var o Overview
+	if err := json.Unmarshal(rec.Body.Bytes(), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.LeftoversTotal != 3 || len(o.Leftovers) != 3 {
+		t.Fatalf("leftovers = %d %+v, want 3", o.LeftoversTotal, o.Leftovers)
+	}
+	byPath := map[string]content.Leftover{}
+	for _, l := range o.Leftovers {
+		byPath[l.Path] = l
+	}
+	if l := byPath[foreign]; l.Size != 5 || l.Title != "" {
+		t.Errorf("foreign folder = %+v", l)
+	}
+	if l := byPath[damaged]; l.Size != 7 || l.Title != "" {
+		t.Errorf("damaged folder = %+v", l)
+	}
+	if l := byPath[titled]; l.Title != "Il mare" {
+		t.Errorf("folder with a title = %+v", l)
+	}
+	if data, err := os.ReadFile(filepath.Join(damaged, "video.json")); err != nil || string(data) != "{ rotto" {
+		t.Errorf("damaged video.json = %q, %v: it must stay as it is", data, err)
+	}
+}
+
+// A database with no videos, however, must not make the list too long: it stops
+// at the limit and still says how many there are.
+func TestLeftoversStopAtTheLimit(t *testing.T) {
+	db, err := database.Open(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	root := content.Root(t.TempDir())
+	for i := range maxLeftovers + 5 {
+		if err := os.MkdirAll(filepath.Join(root.VideoFolders(), "cartella "+strconv.Itoa(i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := api{db: db, logger: slog.New(slog.NewTextHandler(io.Discard, nil)), settings: Settings{Content: root}}
+	list, total := a.listLeftovers(context.Background())
+	if len(list) != maxLeftovers || total != maxLeftovers+5 {
+		t.Errorf("list %d, total %d, want %d and %d", len(list), total, maxLeftovers, maxLeftovers+5)
 	}
 }

@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 func TestCleanColor(t *testing.T) {
@@ -49,7 +51,7 @@ func (s *adminSite) putCategoryImage(t *testing.T, name string, data []byte, wan
 
 func (s *adminSite) categoryImages(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(s.dataDir, CategoryImagesDir))
+	entries, err := os.ReadDir(content.Root(s.dataDir).CategoryImages())
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
@@ -173,13 +175,13 @@ func TestRemoveOrphanCategoryImages(t *testing.T) {
 	s.addVideo(t, "Viaggi/mare.mp4", "sea", "Viaggi", 100, true)
 	s.putCategoryImage(t, "Viaggi", jpegImage, http.StatusNoContent)
 	kept := s.categoryImages(t)
-	dir := filepath.Join(s.dataDir, CategoryImagesDir)
+	dir := content.Root(s.dataDir).CategoryImages()
 	for _, name := range []string{"1-old.jpg", ".new-123"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	n, err := RemoveOrphanCategoryImages(context.Background(), s.db, s.dataDir)
+	n, err := RemoveOrphanCategoryImages(context.Background(), s.db, content.Root(s.dataDir))
 	if err != nil || n != 2 {
 		t.Fatalf("removed %d, %v; want 2", n, err)
 	}

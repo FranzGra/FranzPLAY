@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/FranzGra/FranzPLAY/internal/config"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/oldimport"
 )
@@ -60,7 +61,7 @@ func importOld(ctx context.Context, args []string, getenv func(string) string, o
 		}
 	}()
 
-	report, err := oldimport.Import(ctx, db, file, oldimport.Options{Try: *try, PhotosDir: *photos, DataDir: cfg.DataDir})
+	report, err := oldimport.Import(ctx, db, file, oldimport.Options{Try: *try, PhotosDir: *photos, Content: content.Root(cfg.ContentDir)})
 	if err != nil {
 		return fmt.Errorf("import: %w", err)
 	}

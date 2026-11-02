@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
@@ -315,7 +316,7 @@ func TestVideoByLink(t *testing.T) {
 func TestDeleteMyVideo(t *testing.T) {
 	s := newSite(t)
 	id := s.uploadVideo(t, "mare.mp4", "sea")
-	folder, err := Folder(s.data)
+	folder, err := Folder(content.Root(s.data))
 	if err != nil {
 		t.Fatal(err)
 	}

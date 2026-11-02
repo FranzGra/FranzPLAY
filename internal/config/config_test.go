@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -210,5 +211,70 @@ func TestTrustedProxies(t *testing.T) {
 	env[EnvProxies] = "proxy.local"
 	if _, err := Load(func(k string) string { return env[k] }); err == nil {
 		t.Fatal("a name instead of an address was accepted")
+	}
+}
+
+func TestLoadContentDirIsTheDataFolderUnlessSet(t *testing.T) {
+	cfg, err := Load(fakeEnv(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ContentDir != cfg.DataDir || cfg.DataDir != DefaultDataDir {
+		t.Errorf("defaults: ContentDir = %q, DataDir = %q", cfg.ContentDir, cfg.DataDir)
+	}
+	cfg, err = Load(fakeEnv(map[string]string{EnvDataDir: "dati/", EnvContentDir: "  "}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DataDir != "dati" || cfg.ContentDir != "dati" {
+		t.Errorf("blank: ContentDir = %q, DataDir = %q", cfg.ContentDir, cfg.DataDir)
+	}
+	cfg, err = Load(fakeEnv(map[string]string{EnvDataDir: "dati", EnvContentDir: " contenuti/ "}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DataDir != "dati" || cfg.ContentDir != "contenuti" {
+		t.Errorf("set: ContentDir = %q, DataDir = %q", cfg.ContentDir, cfg.DataDir)
+	}
+}
+
+func TestLoadRefusesAContentDirThatOverlapsALibrary(t *testing.T) {
+	root := t.TempDir()
+	videos := filepath.Join(root, "videos")
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"the library itself", videos},
+		{"inside a library", filepath.Join(videos, "contenuti")},
+		{"around a library", root},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(fakeEnv(map[string]string{
+				EnvLibraries:  videos,
+				EnvDataDir:    filepath.Join(t.TempDir(), "dati"),
+				EnvContentDir: tt.content,
+			}))
+			if !errors.Is(err, ErrInvalidConfig) || !strings.Contains(err.Error(), EnvContentDir) {
+				t.Errorf("Load() error = %v, want %v about %s", err, ErrInvalidConfig, EnvContentDir)
+			}
+		})
+	}
+}
+
+func TestLoadAcceptsAContentDirBesideALibrary(t *testing.T) {
+	root := t.TempDir()
+	// "videos-contenuti" starts with "videos" but is not inside it.
+	cfg, err := Load(fakeEnv(map[string]string{
+		EnvLibraries:  filepath.Join(root, "videos"),
+		EnvDataDir:    filepath.Join(root, "dati"),
+		EnvContentDir: filepath.Join(root, "videos-contenuti"),
+	}))
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+	if cfg.ContentDir != filepath.Join(root, "videos-contenuti") {
+		t.Errorf("ContentDir = %q", cfg.ContentDir)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 )
 
@@ -73,7 +74,7 @@ func runImport(t *testing.T, db *sql.DB, try bool) *Report {
 		t.Fatal(err)
 	}
 	defer f.Close() //nolint:errcheck // read only
-	r, err := Import(context.Background(), db, f, Options{Try: try, Now: importDay, DataDir: t.TempDir()})
+	r, err := Import(context.Background(), db, f, Options{Try: try, Now: importDay, Content: content.Root(t.TempDir())})
 	if err != nil {
 		t.Fatal(err)
 	}

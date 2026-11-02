@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
@@ -65,7 +66,7 @@ type TranslatorHelp struct {
 
 // Options are the parts of the machine the page depends on.
 type Options struct {
-	DataDir string
+	Content content.Root
 	Whisper bool // whisper.cpp and ffmpeg were found: subtitles can be made
 	// WhisperStatus says whether it really runs on this CPU; nil: not known.
 	WhisperStatus func(context.Context) media.WhisperStatus
@@ -150,7 +151,7 @@ type Setup struct {
 	WhisperBuild   string   `json:"whisperBuild"`
 	WhisperProblem string   `json:"whisperProblem"`
 	SlowCPU        bool     `json:"slowCpu"`
-	Models         []string `json:"models"` // the models in the data folder: "small", "medium"
+	Models         []string `json:"models"` // the models in the content folder: "small", "medium"
 	// ModelFiles are the same models, with their sizes and whether they can be
 	// deleted now.
 	ModelFiles []ModelFile `json:"modelFiles"`
@@ -178,12 +179,12 @@ type Setup struct {
 const translatorTimeout = 5 * time.Second
 
 func (p page) handleSetup(w http.ResponseWriter, r *http.Request) {
-	models, err := media.Models(p.opts.DataDir)
+	models, err := media.Models(p.opts.Content)
 	if err != nil {
 		respond.InternalError(w, r, p.logger, err)
 		return
 	}
-	folder, err := filepath.Abs(filepath.Join(p.opts.DataDir, media.WhisperDir))
+	folder, err := filepath.Abs(content.WhisperModelsInUse(p.opts.Content))
 	if err != nil {
 		respond.InternalError(w, r, p.logger, err)
 		return
@@ -295,7 +296,7 @@ func (p page) check(ctx context.Context, b askBody) error {
 	if b.Spoken != spokenUnknown && !video.IsAutoLanguage(b.Spoken) {
 		return fmt.Errorf("%w: unknown spoken language %q", errBadRequest, b.Spoken)
 	}
-	models, err := media.Models(p.opts.DataDir)
+	models, err := media.Models(p.opts.Content)
 	if err != nil {
 		return err
 	}
@@ -390,7 +391,7 @@ func (p page) ask(ctx context.Context, id int64, b askBody) (err error) {
 	}
 	// Looked at again with the queue held: the model may have been deleted
 	// since the check at the door, and a job without it could only fail.
-	if _, err := os.Stat(media.ModelFile(p.opts.DataDir, b.Model)); errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(media.ModelFile(p.opts.Content, b.Model)); errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("%w: no model %q in the whisper folder", errBadRequest, b.Model)
 	}
 	for _, lang := range b.Translate {
@@ -489,7 +490,7 @@ func (p page) handleDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // delete forgets subtitles whisper made, then deletes their file from the
-// data folder. Only files FranzPLAY made can go: never a file next to a
+// content folder. Only files FranzPLAY made can go: never a file next to a
 // video (rule 1).
 func (p page) delete(ctx context.Context, id int64, lang string) error {
 	var file string
@@ -501,11 +502,10 @@ func (p page) delete(ctx context.Context, id int64, lang string) error {
 	if err != nil {
 		return fmt.Errorf("delete subtitles %s of video %d: %w", lang, id, err)
 	}
-	name := filepath.Join(p.opts.DataDir, media.AutoSubtitlesDir, filepath.Base(file))
-	if err := os.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := p.opts.Content.Remove(file, p.opts.Content.AutoSubtitles()); err != nil {
 		return fmt.Errorf("delete subtitles %s of video %d: %w", lang, id, err)
 	}
-	return nil
+	return content.SaveManifest(ctx, p.db, p.opts.Content, id)
 }
 
 // validLang accepts a language code as whisper writes it: "it", "haw".

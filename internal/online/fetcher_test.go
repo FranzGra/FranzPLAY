@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 )
@@ -93,7 +94,7 @@ func newFixture(t *testing.T, file string, youtubeOn bool) *fixture {
 	server := httptest.NewServer(yt)
 	t.Cleanup(server.Close)
 	dataDir := t.TempDir()
-	f := NewFetcher(db, dataDir)
+	f := NewFetcher(db, content.Root(dataDir))
 	f.youtube.oEmbed = server.URL + "/oembed"
 	f.youtube.images = server.URL + "/vi"
 	tm := newFakeTMDB()
@@ -149,7 +150,7 @@ func TestYouTubeGivesTitleAuthorAndPicture(t *testing.T) {
 	if got.coverJobs != 1 {
 		t.Errorf("cover jobs = %d, want the cover made again from the picture", got.coverJobs)
 	}
-	data, err := os.ReadFile(filepath.Join(fx.dataDir, Dir, got.cover.String))
+	data, err := os.ReadFile(content.Root(fx.dataDir).File(got.cover.String, ""))
 	if err != nil || string(data) != "a jpeg" {
 		t.Errorf("picture = %q, %v", data, err)
 	}
@@ -195,7 +196,7 @@ func TestYouTubeNoLongerKnowsTheVideo(t *testing.T) {
 	if got.title != "dal nome" || got.author.Valid || got.cover.Valid || got.coverJobs != 1 {
 		t.Errorf("video = %+v, want back to the name's title and a cover made again", got)
 	}
-	if _, err := os.Stat(filepath.Join(fx.dataDir, Dir, before.cover.String)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(content.Root(fx.dataDir).File(before.cover.String, "")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("old picture still there: %v", err)
 	}
 }
@@ -257,18 +258,24 @@ func TestRemoveOrphans(t *testing.T) {
 	if err := fx.f.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(fx.dataDir, Dir)
+	dir := content.Root(fx.dataDir).OnlineImages()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"99-old.img", ".new-123"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	n, err := RemoveOrphans(context.Background(), fx.db, fx.dataDir)
+	n, err := RemoveOrphans(context.Background(), fx.db, content.Root(fx.dataDir))
 	if err != nil || n != 2 {
 		t.Fatalf("removed %d, %v; want 2", n, err)
 	}
 	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) != 1 || entries[0].Name() != fx.read(t).cover.String {
-		t.Errorf("left %v, %v; want only the picture in use", entries, err)
+	if err != nil || len(entries) != 0 {
+		t.Errorf("left %v, %v; want nothing in the old folder", entries, err)
+	}
+	if _, err := os.Stat(content.Root(fx.dataDir).File(fx.read(t).cover.String, dir)); err != nil {
+		t.Errorf("the picture in use: %v", err)
 	}
 }

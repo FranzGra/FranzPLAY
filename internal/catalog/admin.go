@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/library"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
@@ -27,6 +28,13 @@ import (
 
 // errFileMissing means the video's file was not found at the last scan.
 var errFileMissing = errors.New("the video file is not in its folder")
+
+// errHasOwner refuses to choose who sees a video that is not private or has an
+// owner: that is the choice of who uploaded it.
+var errHasOwner = errors.New("only a private video with no owner")
+
+// errNoSuchPerson is an owner that is not on FranzPLAY.
+var errNoSuchPerson = errors.New("no such person")
 
 // AdminVideo is a video as the administrator sees it: also the hidden ones
 // and the ones whose file is not found, with where the file is.
@@ -108,15 +116,15 @@ const (
 //
 // changed tells the open pages the list of videos changed; queued tells
 // the job worker (and the pages) that there is new work.
-func AdminRoutes(db *sql.DB, dataDir string, changed, queued func(), logger *slog.Logger) func(mux *http.ServeMux) {
-	a := admin{store: store{db: db}, dataDir: dataDir, changed: changed, queued: queued, logger: logger,
+func AdminRoutes(db *sql.DB, root content.Root, changed, queued func(), logger *slog.Logger) func(mux *http.ServeMux) {
+	a := admin{store: store{db: db}, root: root, changed: changed, queued: queued, logger: logger,
 		now: time.Now, account: users.FromContext}
 	return a.routes
 }
 
 type admin struct {
 	store   store
-	dataDir string // FranzPLAY's data folder, for the uploaded covers
+	root    content.Root // the content folder, for the uploaded covers
 	changed func()
 	queued  func()
 	logger  *slog.Logger
@@ -128,6 +136,7 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/videos", a.only(a.handleList))
 	mux.HandleFunc("GET /api/admin/videos/{id}", a.only(a.handleOne))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/hidden", a.only(a.handleHidden))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/audience", a.only(a.handleAudience))
 	mux.HandleFunc("POST /api/admin/videos/{id}/refresh", a.only(a.handleRefresh))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/details", a.only(a.handleDetails))
 	mux.HandleFunc("PUT /api/admin/videos/{id}/cover", a.only(a.handleOwnCover))
@@ -258,8 +267,58 @@ func (a admin) handleHidden(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
+	// In video.json too: a hidden video stays hidden if the database is lost.
+	if err := content.SaveAccess(r.Context(), a.store.db, a.root, id); err != nil {
+		a.logger.WarnContext(r.Context(), "write video.json", "video", id, "error", err)
+	}
 	who, _ := a.account(r.Context())
 	a.logger.InfoContext(r.Context(), "video visibility changed", "video", id, "hidden", *req.Hidden, "by", who.Name)
+	a.changed()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleAudience says who sees a private video with no owner: its owner did not
+// come back with it, from a database lost or an account gone, so nobody sees it.
+// The body gives it an owner, {"owner": id}, who sees it alone and may share it,
+// or opens it to everybody, {"everyone": true}.
+func (a admin) handleAudience(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r.PathValue("id"))
+	if !ok {
+		respond.Error(w, r, a.logger, http.StatusNotFound, errNotFound.Error())
+		return
+	}
+	var req struct {
+		Owner    int64 `json:"owner"`
+		Everyone bool  `json:"everyone"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil || req.Owner < 0 || (req.Owner > 0) == req.Everyone {
+		respond.Error(w, r, a.logger, http.StatusBadRequest, `the body must be {"owner": id} or {"everyone": true}`)
+		return
+	}
+	err := a.store.setAudience(r.Context(), id, req.Owner)
+	switch {
+	case errors.Is(err, errNotFound):
+		respond.Error(w, r, a.logger, http.StatusNotFound, err.Error())
+		return
+	case errors.Is(err, errHasOwner):
+		respond.Error(w, r, a.logger, http.StatusConflict, err.Error())
+		return
+	case errors.Is(err, errNoSuchPerson):
+		respond.Error(w, r, a.logger, http.StatusBadRequest, err.Error())
+		return
+	case err != nil:
+		respond.InternalError(w, r, a.logger, err)
+		return
+	}
+	// In video.json too, or the next restore closes it again.
+	if err := content.SaveAccess(r.Context(), a.store.db, a.root, id); err != nil {
+		a.logger.WarnContext(r.Context(), "write video.json", "video", id, "error", err)
+	}
+	who, _ := a.account(r.Context())
+	a.logger.InfoContext(r.Context(), "owner of a video chosen", "video", id, "owner", req.Owner,
+		"everyone", req.Everyone, "by", who.Name)
 	a.changed()
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -407,6 +466,55 @@ func (s store) setHidden(ctx context.Context, id int64, hidden bool, now time.Ti
 		return fmt.Errorf("hide video %d: %w", id, err)
 	} else if n == 0 {
 		return errNotFound
+	}
+	return nil
+}
+
+// setAudience gives a private video with no owner the owner given, or opens it
+// to everybody when owner is 0. The link and the people it was shared with go
+// with the open video: they were chosen by somebody who is no longer its owner.
+func (s store) setAudience(ctx context.Context, id, owner int64) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("owner of video %d: %w", id, err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+	var orphan bool
+	err = tx.QueryRowContext(ctx, `SELECT private = 1 AND uploaded_by IS NULL FROM videos WHERE id = ?`, id).Scan(&orphan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("owner of video %d: %w", id, err)
+	}
+	if !orphan {
+		return errHasOwner
+	}
+	if owner > 0 {
+		res, err := tx.ExecContext(ctx, `UPDATE videos SET uploaded_by = ? WHERE id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ?)`,
+			owner, id, owner)
+		if err != nil {
+			return fmt.Errorf("owner of video %d: %w", id, err)
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return fmt.Errorf("owner of video %d: %w", id, err)
+		} else if n == 0 {
+			return errNoSuchPerson
+		}
+	} else {
+		if _, err := tx.ExecContext(ctx, `UPDATE videos SET private = 0, link_key = NULL WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("open video %d: %w", id, err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM video_shares WHERE video_id = ?`, id); err != nil {
+			return fmt.Errorf("open video %d: %w", id, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("owner of video %d: %w", id, err)
 	}
 	return nil
 }

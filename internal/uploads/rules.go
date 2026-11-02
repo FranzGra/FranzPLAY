@@ -3,7 +3,7 @@
 //
 // A video arrives in pieces: if the connection drops, the browser asks how
 // much arrived and goes on from there, so a big file never starts over and
-// never has to fit in memory. The file grows in the data folder's incoming/
+// never has to fit in memory. The file grows in the content folder's incoming/
 // folder; when the last piece arrives it moves, in one step, to the data
 // folder's uploads/ folder, one folder per person. The video folders are
 // never touched (rule 1).

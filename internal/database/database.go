@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -28,6 +30,72 @@ var ErrBadPath = errors.New("path must not contain \"?\"")
 // migrations. The caller must Close the returned database.
 func Open(ctx context.Context, dataDir string) (*sql.DB, error) {
 	return open(ctx, filepath.Join(dataDir, FileName), migrationsFS())
+}
+
+// OpenToRead opens the database in dataDir without changing anything, not even the
+// files SQLite keeps next to it, and without applying migrations. It refuses a
+// database older than minimum or newer than this program. What a stop by power cut
+// left in the journal is not seen: the caller may say so with HasJournal.
+func OpenToRead(ctx context.Context, dataDir string, minimum int) (_ *sql.DB, err error) {
+	all, err := loadMigrations(migrationsFS())
+	if err != nil {
+		return nil, err
+	}
+	file := filepath.Join(dataDir, FileName)
+	if strings.Contains(file, "?") {
+		return nil, fmt.Errorf("database path %q: %w", file, ErrBadPath)
+	}
+	address, err := readOnlyAddress(file)
+	if err != nil {
+		return nil, fmt.Errorf("open database %q: %w", file, err)
+	}
+	db, err := sql.Open("sqlite", address)
+	if err != nil {
+		return nil, fmt.Errorf("open database %q: %w", file, err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, db.Close())
+		}
+	}()
+	var version int
+	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		return nil, fmt.Errorf("open database %q: %w", file, err)
+	}
+	if version > len(all) {
+		return nil, fmt.Errorf("%w: it is at version %d, this program knows up to %d", ErrDatabaseTooNew, version, len(all))
+	}
+	if version < minimum {
+		return nil, fmt.Errorf("database %q is at version %d: start this FranzPLAY once, stop it, and run this again", file, version)
+	}
+	return db, nil
+}
+
+// readOnlyAddress is the address that opens a database file only to read, leaving
+// no file next to it. It works with a relative path too.
+func readOnlyAddress(file string) (string, error) {
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		return "", err
+	}
+	return fileURI(filepath.ToSlash(abs)), nil
+}
+
+// fileURI writes an absolute path with forward slashes as SQLite wants it. A
+// Windows path, C:/data, needs the third slash too: file:///C:/data.
+func fileURI(path string) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	address := url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro&immutable=1"}
+	return address.String()
+}
+
+// HasJournal reports whether changes wait next to the database: it was not closed
+// properly.
+func HasJournal(dataDir string) bool {
+	info, err := os.Stat(filepath.Join(dataDir, FileName+"-wal"))
+	return err == nil && info.Size() > 0
 }
 
 func migrationsFS() fs.FS {

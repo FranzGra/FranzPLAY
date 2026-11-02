@@ -391,6 +391,41 @@ func (ts *testScanner) jobs(t *testing.T, kind string) map[string]string {
 	return out
 }
 
+func TestScanSaysWhatMovedAndWhatHasNewContent(t *testing.T) {
+	lib := t.TempDir()
+	writeFile(t, lib, "a.mp4", "a")
+	writeFile(t, lib, "b.mp4", "b")
+	writeFile(t, lib, "c.mp4", "c")
+	ts := newTestScanner(t, lib)
+	calls := 0
+	var moved, replaced []int64
+	ts.OnScanned(func(_ context.Context, m, r []int64) {
+		calls++
+		moved, replaced = m, r
+	})
+	ts.scan(t, Report{Added: 3})
+	if calls != 1 || len(moved) != 0 || len(replaced) != 0 {
+		t.Errorf("first scan: %d calls, moved %v, replaced %v", calls, moved, replaced)
+	}
+	ids := ts.videos(t)
+
+	writeFile(t, lib, "a.mp4", "a, new version")
+	move(t, lib, "b.mp4", "Viaggi/b.mp4")
+	ts.scan(t, Report{Moved: 1, Updated: 1, Unchanged: 1})
+	if len(moved) != 1 || moved[0] != ids["b.mp4"].id {
+		t.Errorf("moved %v, want %d", moved, ids["b.mp4"].id)
+	}
+	if len(replaced) != 1 || replaced[0] != ids["a.mp4"].id {
+		t.Errorf("replaced %v, want %d", replaced, ids["a.mp4"].id)
+	}
+
+	// Also a scan with nothing new calls it: what failed is tried again.
+	ts.scan(t, Report{Unchanged: 3})
+	if calls != 3 || len(moved) != 0 || len(replaced) != 0 {
+		t.Errorf("last scan: %d calls, moved %v, replaced %v", calls, moved, replaced)
+	}
+}
+
 func TestScanAsksToReadNewAndChangedVideos(t *testing.T) {
 	lib := t.TempDir()
 	writeFile(t, lib, "a.mp4", "a")

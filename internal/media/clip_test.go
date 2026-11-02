@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // clipFixture is a catalog with one video of the given duration and a
@@ -30,7 +32,7 @@ func newClipFixture(t *testing.T, root, rel string, duration int64) *clipFixture
 		t.Fatal(err)
 	}
 	dataDir := t.TempDir()
-	return &clipFixture{db: db, id: id, dataDir: dataDir, c: NewClipper(db, "ffmpeg", dataDir)}
+	return &clipFixture{db: db, id: id, dataDir: dataDir, c: NewClipper(db, "ffmpeg", content.Root(dataDir))}
 }
 
 // saved returns the light clip saved in the database.
@@ -54,29 +56,16 @@ func (fx *clipFixture) savedIn(t *testing.T, column string) sql.NullString {
 	return name
 }
 
-// files returns what is in the folder of the light clips.
+// files returns the light clips in the folders of the videos.
 func (fx *clipFixture) files(t *testing.T) []string {
 	t.Helper()
-	return fx.filesIn(t, ClipsDir)
+	return inFolders(t, content.Root(fx.dataDir), content.FileClip)
 }
 
-// filesHD returns what is in the folder of the sharp clips.
+// filesHD returns the sharp clips in the folders of the videos.
 func (fx *clipFixture) filesHD(t *testing.T) []string {
 	t.Helper()
-	return fx.filesIn(t, ClipsHDDir)
-}
-
-func (fx *clipFixture) filesIn(t *testing.T, folder string) []string {
-	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(fx.dataDir, folder))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return inFolders(t, content.Root(fx.dataDir), content.FileClipHD)
 }
 
 // fakeClipFFmpeg pretends to be ffmpeg: it writes data in each file it
@@ -114,18 +103,23 @@ func TestClipSaved(t *testing.T) {
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if s := fx.saved(t); s.String != "1-fp.mp4" {
-		t.Errorf("saved %+v, want 1-fp.mp4", s)
+	s := fx.saved(t)
+	if content.FileOf(s.String) != content.FileClip || content.Version(s.String) != "" {
+		t.Errorf("saved %+v, want the clip in the folder of the video", s)
 	}
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp.mp4"}) {
-		t.Errorf("clips folder = %q, want the clip and no work files", files)
+	if files := fx.files(t); !slices.Equal(files, []string{s.String}) {
+		t.Errorf("clips = %q, want the clip", files)
 	}
-	// The sharp twin, made by the same run of ffmpeg, with the same name.
-	if s := fx.savedHD(t); s.String != "1-fp.mp4" {
-		t.Errorf("saved sharp %+v, want 1-fp.mp4", s)
+	if work := flatFiles(t, content.Root(fx.dataDir).Work()); len(work) != 0 {
+		t.Errorf("work files left: %q", work)
 	}
-	if files := fx.filesHD(t); !slices.Equal(files, []string{"1-fp.mp4"}) {
-		t.Errorf("sharp clips folder = %q", files)
+	// The sharp twin, made by the same run of ffmpeg, in the same folder.
+	hd := fx.savedHD(t)
+	if content.FileOf(hd.String) != content.FileClipHD || content.CodeOf(hd.String) != content.CodeOf(s.String) {
+		t.Errorf("saved sharp %+v, next to %+v", hd, s)
+	}
+	if files := fx.filesHD(t); !slices.Equal(files, []string{hd.String}) {
+		t.Errorf("sharp clips = %q", files)
 	}
 	if len(calls) != 4 {
 		t.Fatalf("ffmpeg ran %d times, want one per moment and one to join them", len(calls))
@@ -170,14 +164,14 @@ func TestClipFollowsTheAdministratorsChoice(t *testing.T) {
 	}
 
 	// A video of their own: its first seconds, made like the others, with
-	// a new name so browsers do not keep the old clip.
+	// a new address so browsers do not keep the old clip.
 	if _, err := fx.db.Exec(`UPDATE videos SET own_clip = '1-0123456789abcdef.webm' WHERE id = ?`, fx.id); err != nil {
 		t.Fatal(err)
 	}
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	uploaded := "file:" + filepath.Join(fx.dataDir, OwnClipsDir, "1-0123456789abcdef.webm")
+	uploaded := "file:" + filepath.Join(content.Root(fx.dataDir).OwnClips(), "1-0123456789abcdef.webm")
 	joined := strings.Join(got, " ")
 	for _, want := range []string{"-t 15 -i " + uploaded, "min(720,ih)", "scale=-2:360", "-an", "+faststart"} {
 		if !strings.Contains(joined, want) {
@@ -187,14 +181,15 @@ func TestClipFollowsTheAdministratorsChoice(t *testing.T) {
 	if strings.Contains(joined, "/videos/a.mp4") {
 		t.Errorf("the clip still comes from the video: %q", joined)
 	}
-	if s := fx.saved(t); s.String != "1-fp-o89abcdef.mp4" {
-		t.Errorf("saved %+v, want 1-fp-o89abcdef.mp4", s)
+	s := fx.saved(t)
+	if content.FileOf(s.String) != content.FileClip || content.Version(s.String) != "o89abcdef" {
+		t.Errorf("saved %+v, want version o89abcdef", s)
 	}
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-o89abcdef.mp4"}) {
-		t.Errorf("clips folder = %q, want only the new clip", files)
+	if files := fx.files(t); !slices.Equal(files, []string{noVersion(s.String)}) {
+		t.Errorf("clips = %q, want only the new clip", files)
 	}
-	if files := fx.filesHD(t); !slices.Equal(files, []string{"1-fp-o89abcdef.mp4"}) {
-		t.Errorf("sharp clips folder = %q, want only the new clip", files)
+	if files := fx.filesHD(t); !slices.Equal(files, []string{noVersion(fx.savedHD(t).String)}) {
+		t.Errorf("sharp clips = %q, want only the new clip", files)
 	}
 
 	// No clip at all: the clip goes, and ffmpeg is not even run.
@@ -254,8 +249,8 @@ func TestClipFailuresLeaveNothingBehind(t *testing.T) {
 
 func TestClipReplacesTheOldOne(t *testing.T) {
 	fx := newClipFixture(t, "/videos", "a.mp4", 60)
-	for _, folder := range []string{ClipsDir, ClipsHDDir} {
-		dir := filepath.Join(fx.dataDir, folder)
+	for _, folder := range []string{content.Root(fx.dataDir).Clips(), content.Root(fx.dataDir).ClipsHD()} {
+		dir := folder
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -270,11 +265,18 @@ func TestClipReplacesTheOldOne(t *testing.T) {
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp.mp4"}) {
-		t.Errorf("clips folder = %q, want only the new clip", files)
+	root := content.Root(fx.dataDir)
+	if files := fx.files(t); !slices.Equal(files, []string{fx.saved(t).String}) {
+		t.Errorf("clips = %q, want only the new clip", files)
 	}
-	if files := fx.filesHD(t); !slices.Equal(files, []string{"1-fp.mp4"}) {
-		t.Errorf("sharp clips folder = %q, want only the new clip", files)
+	if files := fx.filesHD(t); !slices.Equal(files, []string{fx.savedHD(t).String}) {
+		t.Errorf("sharp clips = %q, want only the new clip", files)
+	}
+	if flat := flatFiles(t, root.Clips()); len(flat) != 0 {
+		t.Errorf("clips folder = %q, want the one it replaces gone", flat)
+	}
+	if flat := flatFiles(t, root.ClipsHD()); len(flat) != 0 {
+		t.Errorf("sharp clips folder = %q, want the one it replaces gone", flat)
 	}
 }
 
@@ -291,10 +293,11 @@ func TestClipMadeAgainKeepsItsName(t *testing.T) {
 	if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	for _, folder := range []string{ClipsDir, ClipsHDDir} {
-		data, err := os.ReadFile(filepath.Join(fx.dataDir, folder, "1-fp.mp4"))
+	root := content.Root(fx.dataDir)
+	for _, value := range []string{fx.saved(t).String, fx.savedHD(t).String} {
+		data, err := os.ReadFile(root.File(value, ""))
 		if err != nil || string(data) != "second" {
-			t.Errorf("%s/1-fp.mp4 = %q (%v), want the second clip", folder, data, err)
+			t.Errorf("%s = %q (%v), want the second clip", value, data, err)
 		}
 	}
 }
@@ -323,19 +326,24 @@ func TestRemoveOrphanClips(t *testing.T) {
 	}
 	kept := fx.saved(t).String
 	// In both folders, a forgotten clip and one left half made by a crash.
-	for _, folder := range []string{ClipsDir, ClipsHDDir} {
+	for _, folder := range []string{content.Root(fx.dataDir).Clips(), content.Root(fx.dataDir).ClipsHD()} {
+		if err := os.MkdirAll(folder, 0o750); err != nil {
+			t.Fatal(err)
+		}
 		for _, name := range []string{"99-forgotten.mp4", ".new-123.mp4"} {
-			if err := os.WriteFile(filepath.Join(fx.dataDir, folder, name), []byte("x"), 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(folder, name), []byte("x"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
-	removed, err := RemoveOrphanClips(context.Background(), fx.db, fx.dataDir)
+	removed, err := RemoveOrphanClips(context.Background(), fx.db, content.Root(fx.dataDir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if removed != 4 || !slices.Equal(fx.files(t), []string{kept}) || !slices.Equal(fx.filesHD(t), []string{kept}) {
-		t.Errorf("removed %d, folders now %q and %q; want 4 removed and only %q", removed, fx.files(t), fx.filesHD(t), kept)
+	root := content.Root(fx.dataDir)
+	left := append(flatFiles(t, root.Clips()), flatFiles(t, root.ClipsHD())...)
+	if removed != 4 || len(left) != 0 || !slices.Equal(fx.files(t), []string{kept}) || len(fx.filesHD(t)) != 1 {
+		t.Errorf("removed %d, left %q, clips %q and %q; want 4 removed and only %q", removed, left, fx.files(t), fx.filesHD(t), kept)
 	}
 }
 
@@ -379,7 +387,7 @@ func TestClipWithRealFFmpeg(t *testing.T) {
 			if err := fx.c.Handle(context.Background(), fx.id); err != nil {
 				t.Fatal(err)
 			}
-			clip := filepath.Join(fx.dataDir, ClipsDir, fx.saved(t).String)
+			clip := content.Root(fx.dataDir).File(fx.saved(t).String, "")
 			out, err := run(context.Background(), ffprobe, "-v", "error",
 				"-show_entries", "stream=codec_type,width,height:format=duration", "-of", "flat", clip)
 			if err != nil {
@@ -401,7 +409,7 @@ func TestClipWithRealFFmpeg(t *testing.T) {
 			}
 			hd, err := run(context.Background(), ffprobe, "-v", "error", "-select_streams", "v:0",
 				"-show_entries", "stream=width,height", "-of", "csv=s=x:p=0",
-				filepath.Join(fx.dataDir, ClipsHDDir, fx.savedHD(t).String))
+				content.Root(fx.dataDir).File(fx.savedHD(t).String, ""))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -427,7 +435,7 @@ func TestOwnClipWithRealFFmpeg(t *testing.T) {
 	fx := newClipFixture(t, t.TempDir(), "a.mp4", 600)
 	fx.c.ffmpeg = ffmpeg
 	// A 20-second video with sound, uploaded by the administrator.
-	own := filepath.Join(fx.dataDir, OwnClipsDir, "1-0123456789abcdef.mp4")
+	own := filepath.Join(content.Root(fx.dataDir).OwnClips(), "1-0123456789abcdef.mp4")
 	if err := os.MkdirAll(filepath.Dir(own), 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +453,7 @@ func TestOwnClipWithRealFFmpeg(t *testing.T) {
 	}
 	out, err := run(context.Background(), ffprobe, "-v", "error",
 		"-show_entries", "stream=codec_type,height:format=duration", "-of", "flat",
-		filepath.Join(fx.dataDir, ClipsDir, fx.saved(t).String))
+		content.Root(fx.dataDir).File(fx.saved(t).String, ""))
 	if err != nil {
 		t.Fatal(err)
 	}

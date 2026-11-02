@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
@@ -34,12 +34,11 @@ type prepareResponse struct {
 }
 
 type prepareHandlers struct {
-	store        store
-	dataDir      string
-	convertedDir string
-	hurried      func() // the queue changed: wake the worker, tell the pages
-	now          func() time.Time
-	logger       *slog.Logger
+	store   store
+	root    content.Root
+	hurried func() // the queue changed: wake the worker, tell the pages
+	now     func() time.Time
+	logger  *slog.Logger
 }
 
 // PrepareRoutes adds the API a player calls when the device cannot play
@@ -48,9 +47,8 @@ type prepareHandlers struct {
 //	POST /api/videos/{id}/prepare   make its copy before every other job; answers where it is
 //
 // Calling it again only answers where the copy is.
-func PrepareRoutes(db *sql.DB, dataDir string, hurried func(), logger *slog.Logger) func(mux *http.ServeMux) {
-	h := prepareHandlers{store: store{db: db}, dataDir: dataDir, convertedDir: filepath.Join(dataDir, media.ConvertedDir),
-		hurried: hurried, now: time.Now, logger: logger}
+func PrepareRoutes(db *sql.DB, root content.Root, hurried func(), logger *slog.Logger) func(mux *http.ServeMux) {
+	h := prepareHandlers{store: store{db: db}, root: root, hurried: hurried, now: time.Now, logger: logger}
 	return func(mux *http.ServeMux) {
 		mux.HandleFunc("POST /api/videos/{id}/prepare", h.prepare)
 	}
@@ -63,7 +61,7 @@ func (h prepareHandlers) prepare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Only a video the person may watch.
-	_, isCopy, err := h.store.played(r.Context(), id, h.convertedDir, false)
+	_, isCopy, err := h.store.played(r.Context(), id, h.root, false)
 	if errors.Is(err, errNotFound) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "video not found")
 		return
@@ -115,7 +113,7 @@ func (h prepareHandlers) copyState(r *http.Request, id int64) (prepareResponse, 
 		return prepareResponse{State: copyNone}, nil
 	}
 	answer := prepareResponse{State: copyWorking}
-	done, ok, err := media.ConvertedSoFar(h.dataDir, id)
+	done, ok, err := media.ConvertedSoFar(h.root, id)
 	if err != nil {
 		return prepareResponse{}, err
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -36,7 +37,7 @@ func TestDetailsFromTheFileOfYtDlp(t *testing.T) {
 	writeTestFile(t, root, "gita [abc123].info.json",
 		`{"title": "Gita in montagna", "description": "Che giornata!", "channel": "Famiglia Rossi", "upload_date": "20190315"}`)
 	db, id := catalog(t, root, "gita [abc123].mp4")
-	d := NewDetailer(db)
+	d := NewDetailer(db, content.Root(t.TempDir()))
 	before := listDir(t, root)
 
 	if err := d.Handle(context.Background(), id); err != nil {
@@ -79,7 +80,7 @@ func TestDetailsFileThatCannotBeRead(t *testing.T) {
 			writeTestFile(t, root, "a.mp4", "video")
 			writeTestFile(t, root, tt.file, tt.content)
 			db, id := catalog(t, root, "a.mp4")
-			err := NewDetailer(db).Handle(context.Background(), id)
+			err := NewDetailer(db, content.Root(t.TempDir())).Handle(context.Background(), id)
 			if !errors.Is(err, jobs.ErrPermanent) {
 				t.Errorf("error = %v, want a permanent failure", err)
 			}
@@ -102,7 +103,7 @@ func TestDetailsFromTheFileOfKodi(t *testing.T) {
 	db, id := catalog(t, root, "viaggio.mkv")
 	before := listDir(t, root)
 
-	if err := NewDetailer(db).Handle(context.Background(), id); err != nil {
+	if err := NewDetailer(db, content.Root(t.TempDir())).Handle(context.Background(), id); err != nil {
 		t.Fatal(err)
 	}
 	got := readShown(t, db, id)
@@ -122,7 +123,7 @@ func TestDetailsFromBothFiles(t *testing.T) {
 	writeTestFile(t, root, "gita.nfo", `<episodedetails><title>Dal file di Kodi</title><showtitle>Famiglia Rossi</showtitle></episodedetails>`)
 	db, id := catalog(t, root, "gita.mp4")
 
-	if err := NewDetailer(db).Handle(context.Background(), id); err != nil {
+	if err := NewDetailer(db, content.Root(t.TempDir())).Handle(context.Background(), id); err != nil {
 		t.Fatal(err)
 	}
 	// yt-dlp's file comes first; Kodi's fills what it does not say.

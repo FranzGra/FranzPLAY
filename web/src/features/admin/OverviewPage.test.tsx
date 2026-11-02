@@ -23,6 +23,14 @@ const overview = {
   jobs: { waiting: 0, failed: 2 },
   disks: [
     { folder: "/dati", data: true, total: 100 * gb, free: 60 * gb, error: false },
+    {
+      folder: "/contenuti",
+      data: true,
+      content: true,
+      total: 100 * gb,
+      free: 50 * gb,
+      error: false,
+    },
     { folder: "/mnt/usb", data: false, total: 0, free: 0, error: true },
   ],
   problems: [
@@ -31,6 +39,8 @@ const overview = {
     { kind: "missing_videos", severity: "warning", count: 3 },
   ],
   damaged: [],
+  leftovers: [],
+  leftoversTotal: 0,
   inContainer: false,
 };
 
@@ -96,6 +106,41 @@ describe("administration summary", () => {
     expect(card).not.toHaveTextContent("visti dentro il container");
   });
 
+  it("says in one line when every folder of contents has its video", async () => {
+    renderApp("/admin/riepilogo", { ...signedIn(), "GET /api/overview": { body: overview } });
+    const card = await screen.findByRole("region", { name: /Contenuti senza video/ });
+    expect(card).toHaveTextContent("Ogni cartella dei contenuti ha il suo video");
+    expect(within(card).queryByRole("list")).not.toBeInTheDocument();
+  });
+
+  it("shows the folders of contents with no video, and deletes nothing", async () => {
+    renderApp("/admin/riepilogo", {
+      ...signedIn(),
+      "GET /api/overview": {
+        body: {
+          ...overview,
+          leftovers: [
+            { path: "/contenuti/video/Il mare [a1b2c3d4]", title: "Il mare", size: 2048 },
+            { path: "/contenuti/video/Rotta [11112222]", title: "", size: 0, unreadable: true },
+          ],
+          leftoversTotal: 250,
+          inContainer: true,
+        },
+      },
+    });
+    const card = await screen.findByRole("region", { name: /Contenuti senza video/ });
+    const list = within(card).getByRole("list", { name: "Contenuti senza video" });
+    expect(list).toHaveTextContent("/contenuti/video/Il mare [a1b2c3d4]");
+    expect(list).toHaveTextContent("Il mare");
+    expect(list).toHaveTextContent("2 KB");
+    expect(list).toHaveTextContent("Titolo non leggibile");
+    expect(list).toHaveTextContent("resta nascosto finché non lo mostri tu");
+    expect(card).toHaveTextContent("FranzPLAY non cancella queste cartelle");
+    expect(card).toHaveTextContent("Sono le prime 2 di 250");
+    expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(card).queryByRole("link")).not.toBeInTheDocument();
+  });
+
   it("opens first in the administration", async () => {
     renderApp("/admin", { ...signedIn(), "GET /api/overview": { body: overview } });
     const sections = await screen.findByRole("navigation", {
@@ -135,6 +180,9 @@ describe("administration summary", () => {
     expect(disks).toHaveTextContent("60 GB liberi su 100 GB");
     expect(
       within(disks).getByRole("meter", { name: "Cartella dati di FranzPLAY: 40% usato" }),
+    ).toBeInTheDocument();
+    expect(
+      within(disks).getByRole("meter", { name: "Cartella dei contenuti: 50% usato" }),
     ).toBeInTheDocument();
     expect(disks).toHaveTextContent("Non si legge");
     expect(screen.getByRole("region", { name: "Il sito" })).toHaveTextContent("1.2.3");

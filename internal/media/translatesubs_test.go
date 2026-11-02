@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -91,10 +92,10 @@ func TestTranslationFromFileNextToTheVideo(t *testing.T) {
 
 func TestTranslationFromInsideTheVideo(t *testing.T) {
 	fx := newTranscribeFixture(t)
-	if err := os.MkdirAll(filepath.Join(fx.dataDir, SubtitlesDir), 0o750); err != nil {
+	if err := os.MkdirAll(content.Root(fx.dataDir).Subtitles(), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(fx.dataDir, SubtitlesDir, "x.vtt"), []byte(someVTT), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(content.Root(fx.dataDir).Subtitles(), "x.vtt"), []byte(someVTT), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := fx.db.Exec(`INSERT INTO video_subtitles (video_id, stream, lang, title, forced, file)
@@ -237,7 +238,7 @@ func TestTranslatorGetsReadyBeforeTranslating(t *testing.T) {
 	fx := newTranscribeFixture(t)
 	fx.heardOnce(t)
 	p := &preparingTranslator{}
-	tr := NewTranscriber(fx.db, "", "", fx.dataDir, p)
+	tr := NewTranscriber(fx.db, "", "", content.Root(fx.dataDir), p)
 	fx.askTranslation(t, FromWhisper, "it", "en", false, 1_800_000_100)
 	if err := tr.HandleTranslation(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
@@ -263,7 +264,7 @@ func TestTranslatorThatCannotGetReady(t *testing.T) {
 			fx := newTranscribeFixture(t)
 			fx.heardOnce(t)
 			p := &preparingTranslator{prepare: c.err}
-			tr := NewTranscriber(fx.db, "", "", fx.dataDir, p)
+			tr := NewTranscriber(fx.db, "", "", content.Root(fx.dataDir), p)
 			fx.askTranslation(t, FromWhisper, "it", "en", false, 1_800_000_100)
 			err := tr.HandleTranslation(context.Background(), fx.id)
 			if !errors.Is(err, c.err) || errors.Is(err, jobs.ErrPermanent) != c.permanent {

@@ -29,7 +29,14 @@ export type Problem = {
   folder: string; // "" when it does not apply
 };
 
-export type Disk = { folder: string; data: boolean; total: number; free: number; error: boolean };
+export type Disk = {
+  folder: string;
+  data: boolean;
+  content: boolean; // the content folder, when it is not the data folder
+  total: number;
+  free: number;
+  error: boolean;
+};
 
 export type DamagedFile = {
   id: number;
@@ -38,6 +45,14 @@ export type DamagedFile = {
   size: number; // bytes
   kind: Exclude<FileProblem, "">;
   detail: string; // the error of the tool
+};
+
+// Leftover is a folder of contents with no video in the database.
+export type Leftover = {
+  path: string; // the whole path, as FranzPLAY sees it
+  title: string; // from its video.json; "" if it cannot be read
+  size: number; // bytes
+  unreadable: boolean; // its video.json cannot be read: its video will stay hidden
 };
 
 export type Overview = {
@@ -61,6 +76,8 @@ export type Overview = {
   disks: Disk[];
   problems: Problem[];
   damaged: DamagedFile[]; // the first ones of videos.problems
+  leftovers: Leftover[]; // the first ones of leftoversTotal
+  leftoversTotal: number;
   inContainer: boolean; // the paths are the ones seen inside a container
 };
 
@@ -100,6 +117,7 @@ function parseDisk(data: unknown): Disk {
   return {
     folder: o.folder,
     data: o.data,
+    content: o.content === true,
     total: count(o, "total"),
     free: count(o, "free"),
     error: o.error,
@@ -119,13 +137,27 @@ function parseDamaged(data: unknown): DamagedFile {
   return { id, title, path, size: count(o, "size"), kind, detail };
 }
 
+function parseLeftover(data: unknown): Leftover {
+  const o = object(data, "folder with no video");
+  const { path, title } = o;
+  if (typeof path !== "string" || typeof title !== "string") {
+    throw new Error("overview: bad folder with no video");
+  }
+  return { path, title, size: count(o, "size"), unreadable: o.unreadable === true };
+}
+
 // parseOverview checks the summary sent by the server, once, at the edge.
 export function parseOverview(data: unknown): Overview {
   const o = object(data, "answer");
   const v = object(o.videos, "videos");
   const j = object(o.jobs, "jobs");
   if (typeof o.version !== "string") throw new Error("overview: bad version");
-  if (!Array.isArray(o.disks) || !Array.isArray(o.problems) || !Array.isArray(o.damaged)) {
+  if (
+    !Array.isArray(o.disks) ||
+    !Array.isArray(o.problems) ||
+    !Array.isArray(o.damaged) ||
+    !Array.isArray(o.leftovers)
+  ) {
     throw new Error("overview: bad lists");
   }
   if (typeof o.inContainer !== "boolean") throw new Error("overview: bad inContainer");
@@ -150,6 +182,8 @@ export function parseOverview(data: unknown): Overview {
     disks: o.disks.map(parseDisk),
     problems: o.problems.map(parseProblem),
     damaged: o.damaged.map(parseDamaged),
+    leftovers: o.leftovers.map(parseLeftover),
+    leftoversTotal: count(o, "leftoversTotal"),
     inContainer: o.inContainer,
   };
 }

@@ -238,12 +238,13 @@ a.kpi:hover {
   border-top: 1px solid var(--color-border);
 }
 
+/* The name and its folder on top, the free space under them: a long folder
+   does not push the numbers to a line of their own in one row and not in the next. */
 .diskHead {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   margin: 0 0 12px;
 }
 
@@ -254,7 +255,9 @@ a.kpi:hover {
 }
 
 .diskName code {
-  margin-left: 8px;
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
   color: var(--color-text-muted);
   font-family: var(--mono);
   font-size: 13px;

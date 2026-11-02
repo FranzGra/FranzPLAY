@@ -17,12 +17,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/safefile"
 )
-
-// avatarDir is the folder of profile photos, inside the data folder.
-const avatarDir = "avatars"
 
 // The limits of a profile photo. The interface crops it square and small
 // before sending it; these only stop what a browser would never send.
@@ -49,9 +47,13 @@ func checkAvatar(c image.Config, format string) error {
 	return nil
 }
 
-// avatarFile is the path of a user's photo.
+// avatarName is the name of a user's photo, in its folder.
+func avatarName(id int64) string { return strconv.FormatInt(id, 10) + ".jpg" }
+
+// avatarFile is the path of a user's photo: a photo not yet transferred is
+// still in the old folder.
 func (s *Service) avatarFile(id int64) string {
-	return filepath.Join(s.dataDir, avatarDir, strconv.FormatInt(id, 10)+".jpg")
+	return content.Find(s.root.Avatars(), s.root.OldAvatars(), avatarName(id))
 }
 
 // setAvatar checks a picture and keeps it as the user's photo. It is
@@ -73,7 +75,7 @@ func (s *Service) setAvatar(ctx context.Context, a Account, data []byte) (Accoun
 	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: avatarQuality}); err != nil {
 		return Account{}, fmt.Errorf("encode photo: %w", err)
 	}
-	if err := writeAtomically(filepath.Dir(s.avatarFile(a.ID)), filepath.Base(s.avatarFile(a.ID)), out.Bytes()); err != nil {
+	if err := writeAtomically(s.root.Avatars(), avatarName(a.ID), out.Bytes()); err != nil {
 		return Account{}, fmt.Errorf("save photo: %w", err)
 	}
 	version := s.now().UnixMilli()
@@ -106,8 +108,10 @@ func (s *Service) removeAvatar(ctx context.Context, a Account) (Account, error) 
 
 // removeAvatarFile deletes a photo file; one already gone is fine.
 func (s *Service) removeAvatarFile(id int64) error {
-	if err := os.Remove(s.avatarFile(id)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("remove photo: %w", err)
+	for _, dir := range []string{s.root.Avatars(), s.root.OldAvatars()} {
+		if err := os.Remove(filepath.Join(dir, avatarName(id))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("remove photo: %w", err)
+		}
 	}
 	return nil
 }
@@ -117,11 +121,11 @@ func (s *Service) removeAvatarFile(id int64) error {
 // in the log for the administrator, not answered as a failure.
 func (s *Service) forgetAvatar(ctx context.Context, id int64) {
 	if err := s.removeAvatarFile(id); err != nil {
-		s.logger.ErrorContext(ctx, "photo of a deleted account left in the data folder", "id", id, "err", err)
+		s.logger.ErrorContext(ctx, "photo of a deleted account left in the content folder", "id", id, "err", err)
 	}
 }
 
-// writeAtomically writes a file of the data folder all or nothing (rule 6):
+// writeAtomically writes a file of the content folder all or nothing (rule 6):
 // a temporary file, renamed only once complete.
 func writeAtomically(dir, name string, data []byte) (err error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -220,7 +224,7 @@ func (s *Service) handleAvatar(w http.ResponseWriter, r *http.Request) {
 // import from the old FranzPLAY. img must be square and from 64 to 1024
 // pixels a side, like a photo sent by the interface. It reports false,
 // changing nothing, when the user already has a photo.
-func ImportAvatar(ctx context.Context, db *sql.DB, dataDir string, id int64, img image.Image, now time.Time) (bool, error) {
+func ImportAvatar(ctx context.Context, db *sql.DB, root content.Root, id int64, img image.Image, now time.Time) (bool, error) {
 	b := img.Bounds()
 	if err := checkAvatar(image.Config{Width: b.Dx(), Height: b.Dy()}, "jpeg"); err != nil {
 		return false, err
@@ -236,7 +240,7 @@ func ImportAvatar(ctx context.Context, db *sql.DB, dataDir string, id int64, img
 	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: avatarQuality}); err != nil {
 		return false, fmt.Errorf("encode photo: %w", err)
 	}
-	if err := writeAtomically(filepath.Join(dataDir, avatarDir), strconv.FormatInt(id, 10)+".jpg", out.Bytes()); err != nil {
+	if err := writeAtomically(root.Avatars(), avatarName(id), out.Bytes()); err != nil {
 		return false, fmt.Errorf("save photo: %w", err)
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE users SET avatar = ? WHERE id = ?`, now.UnixMilli(), id); err != nil {

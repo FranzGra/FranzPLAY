@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/video"
@@ -63,7 +64,7 @@ func fakeEngine(t *testing.T, mode string) *Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(program, t.TempDir(), nil, slog.New(slog.DiscardHandler))
+	return New(program, content.Root(t.TempDir()), nil, slog.New(slog.DiscardHandler))
 }
 
 func cuesOf(texts ...string) []video.Cue {
@@ -136,7 +137,7 @@ func TestBetweenTwoOtherLanguagesItGoesThroughEnglish(t *testing.T) {
 }
 
 func TestOnlyMarksNeedNoProgram(t *testing.T) {
-	e := New(filepath.Join(t.TempDir(), "none"), t.TempDir(), nil, slog.New(slog.DiscardHandler))
+	e := New(filepath.Join(t.TempDir(), "none"), content.Root(t.TempDir()), nil, slog.New(slog.DiscardHandler))
 	got, err := e.Cues(context.Background(), cuesOf("♪♪", "<i>...</i>"), "en", "it")
 	if err != nil {
 		t.Fatal(err)
@@ -259,12 +260,12 @@ func TestPrepareDownloadsTheModelOnce(t *testing.T) {
 	if info := e.ModelInfo(); info.Name != "" || !slices.Equal(info.Have, []string{"en-it"}) {
 		t.Errorf("after the download: %+v", info)
 	}
-	config, err := os.ReadFile(configFile(e.dataDir, "en-it"))
+	config, err := os.ReadFile(configFile(e.root, "en-it"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(config), "ssplit-mode: sentence") ||
-		!strings.Contains(string(config), filepath.ToSlash(filepath.Join(e.dataDir, folder, "en-it", "model.bin"))) {
+		!strings.Contains(string(config), filepath.ToSlash(filepath.Join(e.root.TranslatorModels(), "en-it", "model.bin"))) {
 		t.Errorf("config:\n%s", config)
 	}
 	first := calls
@@ -293,7 +294,7 @@ func TestPrepareRefusesAFileThatIsNotTheOneOnTheList(t *testing.T) {
 	if got := e.Models(); len(got) != 0 {
 		t.Errorf("models %v", got)
 	}
-	left, err := filepath.Glob(filepath.Join(e.dataDir, folder, "*"))
+	left, err := filepath.Glob(filepath.Join(e.root.TranslatorModels(), "*"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,8 +317,8 @@ func TestDeleteModel(t *testing.T) {
 	}
 
 	// Only a model that is here: no other name leads anywhere.
-	root := filepath.Join(e.dataDir, folder)
-	keep := filepath.Join(e.dataDir, "keep.txt")
+	root := e.root.TranslatorModels()
+	keep := filepath.Join(string(e.root), "keep.txt")
 	if err := os.WriteFile(keep, []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}

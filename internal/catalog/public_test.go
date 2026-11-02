@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
@@ -23,7 +23,7 @@ func newPublicSite(t *testing.T) *site {
 	s := newSite(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ui := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ui") })
-	s.handler = server.New("test", logger, ui, Routes(s.db, s.dataDir, logger), PublicRoutes(s.db, s.dataDir, logger))
+	s.handler = server.New("test", logger, ui, Routes(s.db, content.Root(s.dataDir), logger), PublicRoutes(s.db, content.Root(s.dataDir), logger))
 	return s
 }
 
@@ -49,10 +49,10 @@ func TestPublicLinkOpensOnlyItsVideo(t *testing.T) {
 		id, key, giulia); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(s.dataDir, media.CoversDir), 0o750); err != nil {
+	if err := os.MkdirAll(content.Root(s.dataDir).Covers(), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(s.dataDir, media.CoversDir, "1-abc.jpg"), []byte("jpeg"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(content.Root(s.dataDir).Covers(), "1-abc.jpg"), []byte("jpeg"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

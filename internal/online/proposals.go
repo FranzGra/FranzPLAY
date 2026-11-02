@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -121,7 +120,7 @@ func (a api) handleProposalPicture(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	file, err := os.Open(filepath.Join(a.dataDir, Dir, filepath.Base(p.image)))
+	file, err := os.Open(a.root.File(p.image, a.root.OnlineImages()))
 	if err != nil {
 		respond.InternalError(w, r, a.logger, fmt.Errorf("open proposed picture: %w", err))
 		return
@@ -151,7 +150,7 @@ func (a api) handleAccept(w http.ResponseWriter, r *http.Request) {
 	}
 	what := found{details: p.details}
 	if p.image != "" {
-		if what.image, err = os.ReadFile(filepath.Join(a.dataDir, Dir, filepath.Base(p.image))); err != nil {
+		if what.image, err = os.ReadFile(a.root.File(p.image, a.root.OnlineImages())); err != nil {
 			respond.InternalError(w, r, a.logger, fmt.Errorf("read proposed picture: %w", err))
 			return
 		}
@@ -162,7 +161,7 @@ func (a api) handleAccept(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, a.logger, fmt.Errorf("read video %d: %w", id, err))
 		return
 	}
-	f := &Fetcher{db: a.db, dataDir: a.dataDir, now: a.now}
+	f := &Fetcher{db: a.db, root: a.root, now: a.now}
 	if err := f.save(r.Context(), id, p.fingerprint, oldImage.String, what); err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
@@ -199,7 +198,7 @@ func (a api) handleDiscard(w http.ResponseWriter, r *http.Request) {
 
 // dismiss removes the proposal of a video and its picture.
 func (a api) dismiss(ctx context.Context, videoID int64) error {
-	f := &Fetcher{db: a.db}
+	f := &Fetcher{db: a.db, root: a.root}
 	image, err := f.proposalImage(ctx, videoID)
 	if err != nil {
 		return err
@@ -210,5 +209,5 @@ func (a api) dismiss(ctx context.Context, videoID int64) error {
 	if image == "" {
 		return nil
 	}
-	return removeFile(filepath.Join(a.dataDir, Dir), image)
+	return a.root.Remove(image, a.root.OnlineImages())
 }

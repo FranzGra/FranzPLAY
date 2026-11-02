@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/autosubs"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 )
@@ -29,8 +30,6 @@ import (
 const RecordsURL = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
 
 const (
-	// folder is where the models go, inside the data folder.
-	folder = "translator"
 	// partial starts the name of a folder still being downloaded.
 	partial = ".partial-"
 	// StageModel is the stage of a translation downloading what it needs.
@@ -60,27 +59,36 @@ type record struct {
 	} `json:"attachment"`
 }
 
-// configFile is the settings of a model for the program.
-func configFile(dataDir, pair string) string {
-	return filepath.Join(dataDir, folder, pair, "config.yml")
+// configFile is the settings of a model for the program: in the new folder, or
+// in the old one if it is only there.
+func configFile(root content.Root, pair string) string {
+	return content.Find(root.TranslatorModels(), root.OldTranslatorModels(), filepath.Join(pair, "config.yml"))
+}
+
+// newConfigFile is where the settings of a model being downloaded will be.
+func newConfigFile(root content.Root, pair string) string {
+	return filepath.Join(root.TranslatorModels(), pair, "config.yml")
 }
 
 // Models lists the models on this machine, like "en-it", in order.
 func (e *Engine) Models() []string {
-	entries, err := os.ReadDir(filepath.Join(e.dataDir, folder))
-	if err != nil {
-		return []string{} // none yet
-	}
 	out := []string{}
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), partial) {
-			continue
+	for _, dir := range []string{e.root.TranslatorModels(), e.root.OldTranslatorModels()} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue // none yet
 		}
-		if _, err := os.Stat(configFile(e.dataDir, entry.Name())); err == nil {
-			out = append(out, entry.Name())
+		for _, entry := range entries {
+			if !entry.IsDir() || strings.HasPrefix(entry.Name(), partial) {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(dir, entry.Name(), "config.yml")); err == nil {
+				out = append(out, entry.Name())
+			}
 		}
 	}
-	return out
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // ModelInfo says which models are here and how the download going on goes.
@@ -99,7 +107,7 @@ func (e *Engine) ModelInfo() autosubs.ModelInfo {
 
 // modelSize adds up the files of a model: what deleting it frees.
 func (e *Engine) modelSize(pair string) int64 {
-	entries, err := os.ReadDir(filepath.Dir(configFile(e.dataDir, pair)))
+	entries, err := os.ReadDir(filepath.Dir(configFile(e.root, pair)))
 	if err != nil {
 		return 0
 	}
@@ -120,16 +128,21 @@ func (e *Engine) DeleteModel(pair string) error {
 	if !slices.Contains(e.Models(), pair) {
 		return fmt.Errorf("delete translation model %q: %w", pair, fs.ErrNotExist)
 	}
-	root := filepath.Join(e.dataDir, folder)
-	gone := filepath.Join(root, partial+"deleted-"+pair)
-	if err := os.RemoveAll(gone); err != nil {
-		return fmt.Errorf("delete translation model %s: %w", pair, err)
-	}
-	if err := os.Rename(filepath.Join(root, pair), gone); err != nil {
-		return fmt.Errorf("delete translation model %s: %w", pair, err)
-	}
-	if err := os.RemoveAll(gone); err != nil {
-		return fmt.Errorf("delete translation model %s: %w", pair, err)
+	for _, root := range []string{e.root.TranslatorModels(), e.root.OldTranslatorModels()} {
+		gone := filepath.Join(root, partial+"deleted-"+pair)
+		if err := os.RemoveAll(gone); err != nil {
+			return fmt.Errorf("delete translation model %s: %w", pair, err)
+		}
+		err := os.Rename(filepath.Join(root, pair), gone)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("delete translation model %s: %w", pair, err)
+		}
+		if err := os.RemoveAll(gone); err != nil {
+			return fmt.Errorf("delete translation model %s: %w", pair, err)
+		}
 	}
 	e.logger.Info("translation model deleted", "model", pair)
 	return nil
@@ -146,7 +159,7 @@ type download struct {
 func (e *Engine) Prepare(ctx context.Context, from, to string) error {
 	var missing []string
 	for _, pair := range route(from, to) {
-		if _, err := os.Stat(configFile(e.dataDir, pair)); errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(configFile(e.root, pair)); errors.Is(err, os.ErrNotExist) {
 			missing = append(missing, pair)
 		} else if err != nil {
 			return fmt.Errorf("translation model %s: %w", pair, err)
@@ -155,7 +168,7 @@ func (e *Engine) Prepare(ctx context.Context, from, to string) error {
 	if len(missing) == 0 {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Join(e.dataDir, folder), 0o750); err != nil {
+	if err := os.MkdirAll(e.root.TranslatorModels(), 0o750); err != nil {
 		return fmt.Errorf("translation model: %w", err)
 	}
 	e.removePartial()
@@ -173,7 +186,7 @@ func (e *Engine) Prepare(ctx context.Context, from, to string) error {
 
 // removePartial removes what a download that stopped halfway has left.
 func (e *Engine) removePartial() {
-	dirs, err := filepath.Glob(filepath.Join(e.dataDir, folder, partial+"*"))
+	dirs, err := filepath.Glob(filepath.Join(e.root.TranslatorModels(), partial+"*"))
 	if err != nil {
 		return
 	}
@@ -289,7 +302,7 @@ func (e *Engine) download(ctx context.Context, records []record, pair string) (e
 	if err != nil {
 		return err
 	}
-	dir, err := os.MkdirTemp(filepath.Join(e.dataDir, folder), partial+"*")
+	dir, err := os.MkdirTemp(e.root.TranslatorModels(), partial+"*")
 	if err != nil {
 		return err
 	}
@@ -312,10 +325,10 @@ func (e *Engine) download(ctx context.Context, records []record, pair string) (e
 			return err
 		}
 	}
-	if err := writeConfig(dir, configFile(e.dataDir, pair)); err != nil {
+	if err := writeConfig(dir, newConfigFile(e.root, pair)); err != nil {
 		return err
 	}
-	if err := os.Rename(dir, filepath.Dir(configFile(e.dataDir, pair))); err != nil {
+	if err := os.Rename(dir, filepath.Dir(newConfigFile(e.root, pair))); err != nil {
 		return err
 	}
 	e.logger.InfoContext(ctx, "translation model downloaded", "model", pair)

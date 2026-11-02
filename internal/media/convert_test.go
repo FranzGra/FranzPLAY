@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
 
@@ -33,7 +34,7 @@ func newConvertFixture(t *testing.T, rel, videoCodec, audioCodec string) *conver
 		t.Fatal(err)
 	}
 	dataDir := t.TempDir()
-	return &convertFixture{db: db, id: id, dataDir: dataDir, c: NewConverter(db, "ffmpeg", "ffprobe", dataDir)}
+	return &convertFixture{db: db, id: id, dataDir: dataDir, c: NewConverter(db, "ffmpeg", "ffprobe", content.Root(dataDir))}
 }
 
 func (fx *convertFixture) converted(t *testing.T) sql.NullString {
@@ -47,15 +48,7 @@ func (fx *convertFixture) converted(t *testing.T) sql.NullString {
 
 func (fx *convertFixture) files(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(fx.dataDir, ConvertedDir))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return inFolders(t, content.Root(fx.dataDir), content.FileConverted)
 }
 
 func TestConvertArgs(t *testing.T) {
@@ -95,7 +88,7 @@ func TestConvertSkipsVideosThatPlayAsTheyAre(t *testing.T) {
 
 func TestConvertWaitsForFFprobe(t *testing.T) {
 	db, id := catalog(t, "/videos", "a.mkv")
-	c := NewConverter(db, "ffmpeg", "ffprobe", t.TempDir())
+	c := NewConverter(db, "ffmpeg", "ffprobe", content.Root(t.TempDir()))
 	if err := c.Handle(context.Background(), id); err == nil {
 		t.Error("converted a video whose formats are not known")
 	}
@@ -221,18 +214,21 @@ func TestRemoveOrphanConverted(t *testing.T) {
 		t.Fatal(err)
 	}
 	kept := fx.converted(t).String
-	dir := filepath.Join(fx.dataDir, ConvertedDir)
+	dir := content.Root(fx.dataDir).Converted()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"99-forgotten.mp4", ".new-123.mp4"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	removed, err := RemoveOrphanConverted(context.Background(), fx.db, fx.dataDir)
+	removed, err := RemoveOrphanConverted(context.Background(), fx.db, content.Root(fx.dataDir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if removed != 2 || !slices.Equal(fx.files(t), []string{kept}) {
-		t.Errorf("removed %d, folder now %q; want 2 removed and only %q", removed, fx.files(t), kept)
+	if left := flatFiles(t, dir); removed != 2 || len(left) != 0 || !slices.Equal(fx.files(t), []string{kept}) {
+		t.Errorf("removed %d, left %q, copies %q; want 2 removed and only %q", removed, left, fx.files(t), kept)
 	}
 }
 
@@ -296,18 +292,18 @@ func TestConvertWithRealFFmpeg(t *testing.T) {
 				}
 			}
 			dataDir := t.TempDir()
-			if err := NewConverter(db, ffmpeg, ffprobe, dataDir).Handle(context.Background(), id); err != nil {
+			if err := NewConverter(db, ffmpeg, ffprobe, content.Root(dataDir)).Handle(context.Background(), id); err != nil {
 				t.Fatal(err)
 			}
 			var name string
 			if err := db.QueryRow(`SELECT converted FROM videos WHERE id = ?`, id).Scan(&name); err != nil {
 				t.Fatal(err)
 			}
-			if left, err := os.ReadDir(filepath.Join(dataDir, ConvertedDir)); err != nil || len(left) != 1 {
-				t.Errorf("converted folder holds %v (%v), want only the copy", left, err)
+			if left := inFolders(t, content.Root(dataDir), content.FileConverted); !slices.Equal(left, []string{name}) {
+				t.Errorf("copies %q, want only %q", left, name)
 			}
 			out, err := run(context.Background(), ffprobe, "-v", "error", "-show_entries",
-				"stream=codec_name,pix_fmt,width,height", "-of", "json", filepath.Join(dataDir, ConvertedDir, name))
+				"stream=codec_name,pix_fmt,width,height", "-of", "json", content.Root(dataDir).File(name, ""))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -346,10 +342,10 @@ func firstOf(list []string) string {
 
 func TestConvertedSoFar(t *testing.T) {
 	dataDir := t.TempDir()
-	if _, ok, err := ConvertedSoFar(dataDir, 4); ok || err != nil {
+	if _, ok, err := ConvertedSoFar(content.Root(dataDir), 4); ok || err != nil {
 		t.Errorf("no copy being made: ok %v, %v", ok, err)
 	}
-	dir := filepath.Join(dataDir, ConvertedDir)
+	dir := content.Root(dataDir).Work()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -359,14 +355,14 @@ func TestConvertedSoFar(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, progressName(4)), []byte(progress), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok, err := ConvertedSoFar(dataDir, 4); got != 12.5 || !ok || err != nil {
+	if got, ok, err := ConvertedSoFar(content.Root(dataDir), 4); got != 12.5 || !ok || err != nil {
 		t.Errorf("ConvertedSoFar = %v, %v, %v; want 12.5", got, ok, err)
 	}
 	// Just started: no time yet (ffmpeg writes N/A at first).
 	if err := os.WriteFile(filepath.Join(dir, progressName(4)), []byte("out_time_us=N/A\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := ConvertedSoFar(dataDir, 4); ok || err != nil {
+	if _, ok, err := ConvertedSoFar(content.Root(dataDir), 4); ok || err != nil {
 		t.Errorf("no time yet: ok %v, %v", ok, err)
 	}
 }

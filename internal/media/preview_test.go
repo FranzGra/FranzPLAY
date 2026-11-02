@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // previewFixture is a catalog with one video of the given duration and a
@@ -32,7 +34,7 @@ func newPreviewFixture(t *testing.T, root, rel string, duration int64) *previewF
 		t.Fatal(err)
 	}
 	dataDir := t.TempDir()
-	return &previewFixture{db: db, id: id, dataDir: dataDir, p: NewPreviewer(db, "ffmpeg", dataDir)}
+	return &previewFixture{db: db, id: id, dataDir: dataDir, p: NewPreviewer(db, "ffmpeg", content.Root(dataDir))}
 }
 
 type savedPreview struct {
@@ -52,15 +54,7 @@ func (fx *previewFixture) saved(t *testing.T) savedPreview {
 
 func (fx *previewFixture) files(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(fx.dataDir, PreviewsDir))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return inFolders(t, content.Root(fx.dataDir), content.FileTimeline)
 }
 
 // fakeFFmpegFrames pretends to be ffmpeg on a video of length seconds:
@@ -112,15 +106,16 @@ func TestPreviewsSaved(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := fx.saved(t)
-	if s.name.String != "1-fp-w480t.jpg" || s.gap.Int64 != 3 || s.count.Int64 != 84 ||
+	if content.FileOf(s.name.String) != content.FileTimeline || content.Version(s.name.String) != "w480t" ||
+		s.gap.Int64 != 3 || s.count.Int64 != 84 ||
 		s.width.Int64 != 480 || s.height.Int64 != 270 {
 		t.Errorf("saved %+v, want 84 frames of 480x270 every 3 seconds", s)
 	}
 	if !slices.Contains(joined, "tile=10x9") {
 		t.Errorf("join command %q, want a 10x9 grid", joined)
 	}
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480t.jpg"}) {
-		t.Errorf("previews folder = %q", files)
+	if files := fx.files(t); !slices.Equal(files, []string{noVersion(s.name.String)}) {
+		t.Errorf("previews = %q", files)
 	}
 	if n := len(fake.calls); n != 85 || fake.calls[n-1] != "join" {
 		t.Errorf("ffmpeg ran %d times (%q…), want 84 frames then join", n, fake.calls[:min(n, 3)])
@@ -178,7 +173,7 @@ func TestFrameCount(t *testing.T) {
 // one under a new name, so no browser keeps showing the old one.
 func TestPreviewsMadeAgainReplaceTheOldImage(t *testing.T) {
 	fx := newPreviewFixture(t, "/videos", "a.mp4", 600)
-	dir := filepath.Join(fx.dataDir, PreviewsDir)
+	dir := content.Root(fx.dataDir).Previews()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -195,13 +190,17 @@ func TestPreviewsMadeAgainReplaceTheOldImage(t *testing.T) {
 	if err := fx.p.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	if s := fx.saved(t); s.name.String != "1-fp-w480t.jpg" || s.width.Int64 != 480 || s.height.Int64 != 270 {
+	s := fx.saved(t)
+	if content.Version(s.name.String) != "w480t" || s.width.Int64 != 480 || s.height.Int64 != 270 {
 		t.Errorf("saved %+v, want the new image with 480x270 frames", s)
 	}
 	// The image of an even older version is not anybody's any more: the
 	// cleaning at start removes it (TestRemoveOrphanPreviews).
-	if files := fx.files(t); !slices.Equal(files, []string{"1-fp-w480t.jpg", "1-fp.jpg"}) {
-		t.Errorf("previews folder = %q, want the new image instead of the one it replaces", files)
+	if files := flatFiles(t, dir); !slices.Equal(files, []string{"1-fp.jpg"}) {
+		t.Errorf("previews folder = %q, want the one it replaces gone", files)
+	}
+	if files := fx.files(t); !slices.Equal(files, []string{noVersion(s.name.String)}) {
+		t.Errorf("previews = %q, want the new image", files)
 	}
 }
 
@@ -269,7 +268,10 @@ func TestRemoveOrphanPreviews(t *testing.T) {
 		t.Fatal(err)
 	}
 	kept := fx.saved(t).name.String
-	dir := filepath.Join(fx.dataDir, PreviewsDir)
+	dir := content.Root(fx.dataDir).Previews()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "99-forgotten.jpg"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -280,12 +282,13 @@ func TestRemoveOrphanPreviews(t *testing.T) {
 		}
 	}
 
-	removed, err := RemoveOrphanPreviews(context.Background(), fx.db, fx.dataDir)
+	removed, err := RemoveOrphanPreviews(context.Background(), fx.db, content.Root(fx.dataDir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{kept, "someone-else"}; removed != 2 || !slices.Equal(fx.files(t), want) {
-		t.Errorf("removed %d, folder now %q; want 2 removed and %q", removed, fx.files(t), want)
+	if want := []string{"someone-else"}; removed != 2 || !slices.Equal(flatFiles(t, dir), want) ||
+		!slices.Equal(fx.files(t), []string{noVersion(kept)}) {
+		t.Errorf("removed %d, folder now %q, previews %q; want 2 removed, %q and %q", removed, flatFiles(t, dir), fx.files(t), want, kept)
 	}
 }
 
@@ -327,7 +330,7 @@ func TestPreviewsWithRealFFmpeg(t *testing.T) {
 			}
 			columns := min(s.count.Int64, 10)
 			rows := (s.count.Int64 + columns - 1) / columns
-			w, h := jpegSize(t, filepath.Join(fx.dataDir, PreviewsDir, s.name.String))
+			w, h := jpegSize(t, content.Root(fx.dataDir).File(s.name.String, ""))
 			if int64(w) != columns*480 || int64(h) != rows*270 {
 				t.Errorf("image is %dx%d, want %dx%d", w, h, columns*480, rows*270)
 			}

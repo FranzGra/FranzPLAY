@@ -12,18 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/FranzGra/FranzPLAY/internal/online"
-	"github.com/FranzGra/FranzPLAY/internal/safefile"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
-
-// CoversDir is the folder, inside the data folder, that holds the covers.
-const CoversDir = "covers"
-
-// OwnCoversDir is the folder, inside the data folder, that holds the
-// images the administrator uploaded as covers, as they were sent. The
-// cover job turns them into covers like any other picture.
-const OwnCoversDir = "own-covers"
 
 // coverWidth is the width of every cover. 640 pixels look sharp on a phone
 // and in the grid on a computer, and weigh about 30-60 KB.
@@ -49,6 +40,7 @@ func coverName(videoID int64, fingerprint string) string {
 // coverChoice is where a cover comes from, besides the video itself.
 type coverChoice struct {
 	own           string        // image uploaded by the administrator (full path), "" if none
+	ownVersion    string        // changes with that image; "" when its name does
 	second        sql.NullInt64 // moment of the video chosen by the administrator
 	beside        string        // picture next to the video, with its name (full path), "" if none
 	besideVersion string        // changes when that picture is replaced
@@ -62,6 +54,9 @@ type coverChoice struct {
 func (c coverChoice) tag() string {
 	switch {
 	case c.own != "":
+		if c.ownVersion != "" {
+			return "o" + c.ownVersion
+		}
 		return "o" + ownTag(c.own)
 	case c.second.Valid:
 		return "s" + strconv.FormatInt(c.second.Int64, 10)
@@ -72,27 +67,18 @@ func (c coverChoice) tag() string {
 	}
 }
 
-// chosenCoverName is coverName, plus the tag of the administrator's choice.
-func chosenCoverName(videoID int64, fingerprint string, choice coverChoice) string {
-	name := coverName(videoID, fingerprint)
-	if tag := choice.tag(); tag != "" {
-		name = strings.TrimSuffix(name, ".jpg") + "-" + tag + ".jpg"
-	}
-	return name
-}
-
 // Coverer makes the covers with ffmpeg.
 type Coverer struct {
-	db      *sql.DB
-	ffmpeg  string // program to run
-	dataDir string
-	run     runFunc
+	db     *sql.DB
+	ffmpeg string // program to run
+	root   content.Root
+	run    runFunc
 }
 
 // NewCoverer returns a coverer that runs the given ffmpeg program and
-// writes covers in dataDir/covers.
-func NewCoverer(db *sql.DB, ffmpeg, dataDir string) *Coverer {
-	return &Coverer{db: db, ffmpeg: ffmpeg, dataDir: dataDir, run: runInBackground}
+// writes covers in the folder of each video, in root.
+func NewCoverer(db *sql.DB, ffmpeg string, root content.Root) *Coverer {
+	return &Coverer{db: db, ffmpeg: ffmpeg, root: root, run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Cover.
@@ -109,13 +95,17 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
 
-	dir := filepath.Join(c.dataDir, CoversDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("create covers folder: %w", err)
+	code, err := content.EnsureVideoFolder(ctx, c.db, c.root, videoID, fingerprint)
+	if err != nil {
+		return err
+	}
+	work, err := c.root.MakeWork()
+	if err != nil {
+		return err
 	}
 
 	// Rule 6: ffmpeg writes a temporary file, renamed only when complete.
-	tmp, err := os.CreateTemp(dir, ".new-*.jpg")
+	tmp, err := os.CreateTemp(work, ".new-*.jpg")
 	if err != nil {
 		return fmt.Errorf("cover of video %d: %w", videoID, err)
 	}
@@ -132,13 +122,14 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 
 	choice := coverChoice{second: chosenSecond}
 	if ownImage.Valid {
-		choice.own = filepath.Join(c.dataDir, OwnCoversDir, filepath.Base(ownImage.String))
+		choice.own = c.root.File(ownImage.String, c.root.OwnCovers())
+		choice.ownVersion = content.Version(ownImage.String)
 	}
 	if choice.beside, choice.besideVersion, err = findBesideImage(file); err != nil {
 		return fmt.Errorf("cover of video %d: %w", videoID, err)
 	}
 	if onlineImage.Valid {
-		choice.downloaded = filepath.Join(c.dataDir, online.Dir, filepath.Base(onlineImage.String))
+		choice.downloaded = c.root.File(onlineImage.String, c.root.OnlineImages())
 	}
 	// A frame picked by FranzPLAY is first looked for among the key frames
 	// only. Some videos have no key frame after the moment (a screen
@@ -160,29 +151,22 @@ func (c *Coverer) Handle(ctx context.Context, videoID int64) (err error) {
 		return fmt.Errorf("cover of video %d: ffmpeg wrote no image", videoID)
 	}
 
-	name := chosenCoverName(videoID, fingerprint, choice)
-	if err := safefile.Rename(tmpName, filepath.Join(dir, name)); err != nil {
-		return fmt.Errorf("cover of video %d: %w", videoID, err)
-	}
-
-	// Saved only if the content is still the one we used.
-	res, err := c.db.ExecContext(ctx, `UPDATE videos SET cover = ? WHERE id = ? AND fingerprint = ?`,
-		name, videoID, fingerprint)
+	// Put in place and saved only if the content is still the one we used.
+	name := content.Stored(code, content.FileCover, choice.tag())
+	same, err := content.IfSame(ctx, c.db, videoID, fingerprint, func(tx *sql.Tx) error {
+		if err := c.root.Put(code, content.FileCover, tmpName); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE videos SET cover = ? WHERE id = ?`, name, videoID)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("save cover of video %d: %w", videoID, err)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("save cover of video %d: %w", videoID, err)
+	if !same {
+		return nil // the file changed meanwhile: this cover belongs to nobody
 	}
-	if n == 0 {
-		// The file changed meanwhile: this cover belongs to nobody.
-		return removeFile(dir, name)
-	}
-	if oldCover.Valid && oldCover.String != name {
-		return removeFile(dir, oldCover.String)
-	}
-	return nil
+	return c.root.RemoveNotKept(oldCover.String, name, c.root.Covers())
 }
 
 // coverArgs builds the ffmpeg command. The administrator's choice comes
@@ -262,7 +246,7 @@ func findBesideImage(file string) (image, version string, err error) {
 	return image, video.ImageVersion(name, info.Size(), info.ModTime().UnixNano()), nil
 }
 
-// removeFile deletes a file of the data folder, like a cover. A file
+// removeFile deletes a file of the content folder, like a cover. A file
 // already gone is fine.
 func removeFile(dir, name string) error {
 	if err := os.Remove(filepath.Join(dir, filepath.Base(name))); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -273,17 +257,17 @@ func removeFile(dir, name string) error {
 
 // RemoveOrphanCovers deletes the files in the covers folder that no video
 // uses any more (videos forgotten after being missing for a long time).
-// It only ever looks inside the covers folder of the data folder. It must
+// It only ever looks inside the covers folder of the content folder. It must
 // run before the job worker starts, so it never sees a cover being made.
-func RemoveOrphanCovers(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, CoversDir), "videos", "cover")
+func RemoveOrphanCovers(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	return removeOrphans(ctx, db, root.Covers(), "videos", "cover")
 }
 
 // RemoveOrphanOwnCovers deletes the images uploaded as covers that no
 // video uses any more. Like RemoveOrphanCovers, it must run before the
 // job worker and the web server start.
-func RemoveOrphanOwnCovers(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, OwnCoversDir), "videos", "own_cover")
+func RemoveOrphanOwnCovers(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	return removeOrphans(ctx, db, root.OwnCovers(), "videos", "own_cover")
 }
 
 // removeOrphans deletes what is in dir and not named in the given column

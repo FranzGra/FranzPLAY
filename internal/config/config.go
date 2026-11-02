@@ -19,6 +19,7 @@ import (
 const (
 	EnvAddr         = "FRANZPLAY_ADDR"
 	EnvDataDir      = "FRANZPLAY_DATA_DIR"
+	EnvContentDir   = "FRANZPLAY_CONTENT_DIR"
 	EnvLibraries    = "FRANZPLAY_LIBRARIES"
 	EnvFFprobe      = "FRANZPLAY_FFPROBE"
 	EnvFFmpeg       = "FRANZPLAY_FFMPEG"
@@ -48,9 +49,12 @@ var ErrInvalidConfig = errors.New("invalid configuration")
 type Config struct {
 	// Addr is the address the web server listens on, like ":8090" or "127.0.0.1:8090".
 	Addr string
-	// DataDir is FranzPLAY's own folder: database, covers, previews, backups.
-	// Nothing outside this folder is ever written.
+	// DataDir is FranzPLAY's own folder: the database in use and its lock.
 	DataDir string
+	// ContentDir is the folder of what FranzPLAY makes and what people give it:
+	// covers, previews, copies, subtitles, models, uploads, photos. It is the
+	// data folder unless set. Nothing outside these two folders is ever written.
+	ContentDir string
 	// Libraries are the video folders, as absolute paths. FranzPLAY only
 	// reads them: it never creates, renames or deletes anything inside.
 	Libraries []string
@@ -102,6 +106,7 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %s=%q: %w", ErrInvalidConfig, EnvAddr, cfg.Addr, err)
 	}
 	cfg.DataDir = filepath.Clean(cfg.DataDir)
+	cfg.ContentDir = filepath.Clean(valueOr(getenv(EnvContentDir), cfg.DataDir))
 	if err := checkURL(cfg.TranslateURL); err != nil {
 		return Config{}, fmt.Errorf("%w: %s=%q: %w", ErrInvalidConfig, EnvTranslate, cfg.TranslateURL, err)
 	}
@@ -125,6 +130,9 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %s: %w", ErrInvalidConfig, EnvLibraries, err)
 	}
 	cfg.Libraries = libraries
+	if err := checkContentDir(cfg.ContentDir, libraries); err != nil {
+		return Config{}, fmt.Errorf("%w: %s: %w", ErrInvalidConfig, EnvContentDir, err)
+	}
 
 	return cfg, nil
 }
@@ -183,6 +191,21 @@ func parseLibraries(value, dataDir string) ([]string, error) {
 		libraries = append(libraries, dir)
 	}
 	return libraries, nil
+}
+
+// checkContentDir refuses a content folder that overlaps a library, for the
+// same reasons as the data folder: see parseLibraries.
+func checkContentDir(contentDir string, libraries []string) error {
+	abs, err := filepath.Abs(contentDir)
+	if err != nil {
+		return fmt.Errorf("content folder %q: %w", contentDir, err)
+	}
+	for _, dir := range libraries {
+		if within(dir, abs) || within(abs, dir) {
+			return fmt.Errorf("folder %q and the content folder %q must be separate, one cannot contain the other", dir, abs)
+		}
+	}
+	return nil
 }
 
 // within reports whether path is dir itself or somewhere inside it.

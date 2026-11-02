@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
@@ -20,8 +21,8 @@ func withPrepare(t *testing.T, hurried *int) *site {
 	s := newSite(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ui := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ui") })
-	s.handler = server.New("test", logger, ui, Routes(s.db, s.dataDir, logger),
-		PrepareRoutes(s.db, s.dataDir, func() { *hurried++ }, logger))
+	s.handler = server.New("test", logger, ui, Routes(s.db, content.Root(s.dataDir), logger),
+		PrepareRoutes(s.db, content.Root(s.dataDir), func() { *hurried++ }, logger))
 	return s
 }
 
@@ -69,7 +70,7 @@ func TestPrepareHurriesTheCopy(t *testing.T) {
 		t.Errorf("state %q, want working", got)
 	}
 	// ffmpeg is a third of the way through the 90 seconds.
-	dir := filepath.Join(s.dataDir, "converted")
+	dir := content.Root(s.dataDir).Work()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}

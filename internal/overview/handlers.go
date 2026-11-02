@@ -10,7 +10,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
+	"sync"
+	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/users"
@@ -19,17 +23,20 @@ import (
 
 // Settings are what the summary needs to know about this FranzPLAY.
 type Settings struct {
-	Version   string
-	DataDir   string
-	Libraries []string
-	Tools     bool // ffmpeg and ffprobe were found
+	Version    string
+	DataDir    string
+	ContentDir string // only when it is not the data folder does it get its own line
+	Content    content.Root
+	Libraries  []string
+	Tools      bool // ffmpeg and ffprobe were found
 }
 
 // Routes adds the summary for administrators:
 //
 //	GET /api/overview   numbers, disks and what needs attention
 func Routes(db *sql.DB, s Settings, logger *slog.Logger) func(mux *http.ServeMux) {
-	a := api{db: db, settings: s, logger: logger, account: users.FromContext, disk: diskSpace, inContainer: inContainer()}
+	a := api{db: db, settings: s, logger: logger, account: users.FromContext, disk: diskSpace, inContainer: inContainer(),
+		leftovers: &leftoverList{}}
 	return a.routes
 }
 
@@ -45,6 +52,44 @@ type api struct {
 	disk     func(dir string) (total, free uint64, err error)
 	// inContainer: the paths of the video folders are the container's.
 	inContainer bool
+	leftovers   *leftoverList // nil: read them at every request
+}
+
+// leftoverList remembers the folders with no video for a while. The page asks for
+// the summary every few seconds, and adding up the size of a folder means opening
+// all of it: on a slow disk it must not happen that often.
+type leftoverList struct {
+	mu     sync.Mutex
+	readAt time.Time
+	list   []content.Leftover
+	total  int
+}
+
+// leftoversFor is how long the list is remembered.
+const leftoversFor = time.Minute
+
+// listLeftovers returns the folders with no video. If they cannot be read this is
+// logged and the list is empty: the summary is still worth showing.
+func (a api) listLeftovers(ctx context.Context) ([]content.Leftover, int) {
+	if a.settings.Content == "" {
+		return []content.Leftover{}, 0
+	}
+	if a.leftovers != nil {
+		a.leftovers.mu.Lock()
+		defer a.leftovers.mu.Unlock()
+		if a.leftovers.list != nil && time.Since(a.leftovers.readAt) < leftoversFor {
+			return a.leftovers.list, a.leftovers.total
+		}
+	}
+	list, total, err := content.Leftovers(ctx, a.db, a.settings.Content, maxLeftovers)
+	if err != nil {
+		a.logger.WarnContext(ctx, "list folders with no video", "error", err)
+		return []content.Leftover{}, 0
+	}
+	if a.leftovers != nil {
+		a.leftovers.list, a.leftovers.total, a.leftovers.readAt = list, total, time.Now()
+	}
+	return list, total
 }
 
 // inContainer says FranzPLAY runs in a container, by the files Docker and
@@ -86,6 +131,7 @@ func (a api) build(ctx context.Context) (Overview, error) {
 	if o.Damaged, err = damagedFiles(ctx, a.db); err != nil {
 		return Overview{}, err
 	}
+	o.Leftovers, o.LeftoversTotal = a.listLeftovers(ctx)
 	err = a.db.QueryRowContext(ctx, `
 		SELECT
 			(SELECT count(DISTINCT coalesce(c.label, v.category)) FROM videos v
@@ -103,14 +149,19 @@ func (a api) build(ctx context.Context) (Overview, error) {
 	return o, nil
 }
 
-// disks reads the space of the data folder and of each video folder. A
+// disks reads the space of the data folder, of the content folder when it is
+// another one, and of each video folder. A
 // folder that cannot be read is told, not hidden: it may be a disk that
 // is not mounted.
 func (a api) disks(ctx context.Context) []Disk {
-	folders := append([]string{a.settings.DataDir}, a.settings.Libraries...)
+	own := []string{a.settings.DataDir}
+	if c := a.settings.ContentDir; c != "" && c != a.settings.DataDir {
+		own = append(own, c)
+	}
+	folders := append(slices.Clone(own), a.settings.Libraries...)
 	out := make([]Disk, 0, len(folders))
 	for i, f := range folders {
-		d := Disk{Folder: f, Data: i == 0}
+		d := Disk{Folder: f, Data: i < len(own), Content: i == 1 && len(own) == 2}
 		total, free, err := a.disk(f)
 		if err != nil {
 			a.logger.WarnContext(ctx, "read disk space", "folder", f, "error", err)

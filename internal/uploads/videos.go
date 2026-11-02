@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/sharing"
 )
@@ -123,6 +125,10 @@ func (s *Service) handleChange(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err) // the people chosen, or an internal error
 		return
 	}
+	// In video.json too: a private video stays private if the database is lost.
+	if err := content.SaveAccess(r.Context(), s.store.db, s.root, id); err != nil {
+		s.logger.WarnContext(r.Context(), "write video.json", "video", id, "error", err)
+	}
 	s.changed() // the lists show the change
 	respond.JSON(w, r, s.logger, http.StatusOK, v)
 }
@@ -137,7 +143,7 @@ func (s *Service) handleDeleteVideo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := s.store.deleteVideo(r.Context(), a.ID, id, s.folder)
+	err := s.store.deleteVideo(r.Context(), a.ID, id, append([]string{s.folder}, s.old...))
 	if errors.Is(err, errVideoNotFound) {
 		respond.Error(w, r, s.logger, http.StatusNotFound, err.Error())
 		return
@@ -208,7 +214,7 @@ func scanMyVideo(row rowScanner) (myVideo, error) {
 	v.SharedWith = []sharing.Person{}
 	v.AddedAt = time.Unix(added, 0).UTC()
 	if cover.Valid {
-		address := "/api/covers/" + cover.String
+		address := content.Address("/api/covers/", cover.String, ".jpg")
 		v.Cover = &address
 	}
 	return v, nil
@@ -365,7 +371,7 @@ func (s store) openLink(ctx context.Context, user, id int64, key string) error {
 // The file goes before the row is saved as gone: if it cannot be
 // removed, nothing changes; covers and the rest are cleaned at the next
 // start, like for any video FranzPLAY forgets.
-func (s store) deleteVideo(ctx context.Context, user, id int64, uploads string) (err error) {
+func (s store) deleteVideo(ctx context.Context, user, id int64, uploads []string) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("delete video %d: %w", id, err)
@@ -381,14 +387,18 @@ func (s store) deleteVideo(ctx context.Context, user, id int64, uploads string) 
 	if err != nil {
 		return fmt.Errorf("delete video %d: %w", id, err)
 	}
-	if root != uploads {
+	if !slices.Contains(uploads, root) {
 		return fmt.Errorf("delete video %d: its file is in %q, not in the uploads folder: refused", id, root)
 	}
 	file := filepath.Join(root, filepath.FromSlash(rel))
-	if !strings.HasPrefix(file, uploads+string(filepath.Separator)) {
+	if !strings.HasPrefix(file, root+string(filepath.Separator)) {
 		return fmt.Errorf("delete video %d: %q is outside the uploads folder: refused", id, file)
 	}
 	if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("delete video %d: %w", id, err)
+	}
+	// The person wants it gone: the old copy a transfer left goes with it.
+	if err := content.ForgetMoved(ctx, tx, file); err != nil {
 		return fmt.Errorf("delete video %d: %w", id, err)
 	}
 	return nil

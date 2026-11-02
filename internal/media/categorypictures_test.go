@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // pictureRow is what the catalog says about a category picture.
@@ -72,7 +74,7 @@ func TestCategoryPicturesWithRealFFmpeg(t *testing.T) {
 	addPicture(t, db, "Viaggi/cover.jpg", 1, 1)
 	before := listDir(t, root)
 	dataDir := t.TempDir()
-	m := NewCategoryPictureMaker(db, ffmpeg, dataDir)
+	m := NewCategoryPictureMaker(db, ffmpeg, content.Root(dataDir))
 
 	changed, err := m.Make(context.Background())
 	if err == nil {
@@ -81,7 +83,7 @@ func TestCategoryPicturesWithRealFFmpeg(t *testing.T) {
 	if changed != 2 {
 		t.Errorf("Make changed %d copies, want 2", changed)
 	}
-	dir := filepath.Join(dataDir, CategoryPicturesDir)
+	dir := content.Root(dataDir).CategoryPictures()
 	for _, tt := range []struct {
 		path string
 		w, h int64
@@ -133,7 +135,7 @@ func TestCategoryPicturesWithRealFFmpeg(t *testing.T) {
 	if _, err := db.Exec(`DELETE FROM category_pictures WHERE path = 'Viaggi/fanart.jpg'`); err != nil {
 		t.Fatal(err)
 	}
-	if removed, err := RemoveOrphanCategoryPictures(context.Background(), db, dataDir); err != nil || removed != 1 {
+	if removed, err := RemoveOrphanCategoryPictures(context.Background(), db, content.Root(dataDir)); err != nil || removed != 1 {
 		t.Errorf("RemoveOrphanCategoryPictures = %d, %v; want 1, nil", removed, err)
 	}
 	if r := readPicture(t, db, "Viaggi/cover.jpg"); !r.pending {
@@ -147,7 +149,7 @@ func TestCategoryPictureChangedMeanwhileIsDropped(t *testing.T) {
 	db, _ := catalog(t, "/videos", "Viaggi/mare.mp4")
 	addPicture(t, db, "Viaggi/poster.jpg", 1, 1)
 	dataDir := t.TempDir()
-	m := NewCategoryPictureMaker(db, "ffmpeg", dataDir)
+	m := NewCategoryPictureMaker(db, "ffmpeg", content.Root(dataDir))
 	m.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		addPicture(t, db, "Viaggi/poster.jpg", 2, 2) // replaced meanwhile
 		return nil, writeTinyJPEG(args[len(args)-1][len("file:"):])
@@ -158,7 +160,7 @@ func TestCategoryPictureChangedMeanwhileIsDropped(t *testing.T) {
 	if r := readPicture(t, db, "Viaggi/poster.jpg"); !r.pending || r.file.Valid {
 		t.Errorf("poster.jpg = %+v, want still waiting", r)
 	}
-	entries, err := os.ReadDir(filepath.Join(dataDir, CategoryPicturesDir))
+	entries, err := os.ReadDir(content.Root(dataDir).CategoryPictures())
 	if err != nil {
 		t.Fatal(err)
 	}

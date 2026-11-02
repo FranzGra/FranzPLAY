@@ -14,25 +14,38 @@ seguire il lavoro in **Amministrazione › Lavori**.
 ## Dove finiscono
 
 **Mai nella cartella dei video**: FranzPLAY non scrive niente lì dentro. Tutto va nella
+**cartella dei contenuti** (`FRANZPLAY_CONTENT_DIR`), se l'hai scelta, altrimenti nella
 **cartella dati** (`FRANZPLAY_DATA_DIR`):
 
 - sul PC, avviato con `make run`: la cartella `data/` del progetto;
 - con Docker: `/data` dentro il contenitore, cioè la cartella `./data` accanto a `compose.yaml`
-  (o quella che hai scritto in `FRANZPLAY_DATA_FOLDER` nel file `.env`).
+  (o quella che hai scritto in `FRANZPLAY_DATA_FOLDER` nel file `.env`), oppure `/contenuti` se in
+  `.env` hai scritto `FRANZPLAY_CONTENT_FOLDER`.
+
+Ogni video ha una cartella sua, con il suo nome e un codice:
 
 ```
-data/
-├── covers/       le copertine
-├── own-covers/   le immagini che hai caricato tu come copertina
-├── clips/        le anteprime leggere (360p)
-├── clips-hd/     le stesse anteprime, nitide (720p)
-├── own-clips/    i video che hai caricato tu come anteprima
-├── previews/     i fotogrammi della timeline
-└── category-pictures/  le copie leggere delle immagini delle categorie
+video/
+└── Nome del video [a1b2c3d4]/
+    ├── video.json        cosa c'è qui, per ritrovarlo anche senza database
+    ├── copertina.jpg     la copertina
+    ├── copertina-scelta.png   l'immagine che hai caricato tu come copertina
+    ├── anteprima.mp4     l'anteprima leggera (360p)
+    ├── anteprima-hd.mp4  la stessa anteprima, nitida (720p)
+    ├── anteprima-scelta.mp4   il video che hai caricato tu come anteprima
+    ├── timeline.jpg      i fotogrammi della timeline
+    └── sottotitoli/      i sottotitoli
+categorie/copie/          le copie leggere delle immagini delle categorie
 ```
 
-Il nome di ogni file cambia quando cambia il video, così il browser non mostra mai quello vecchio.
-I file che nessun video usa più vengono tolti da soli al successivo avvio.
+I file fatti da una versione vecchia possono stare ancora nelle cartelle piatte di prima (`covers/`,
+`clips/`, `previews/`…): continuano a funzionare, e li porti qui con
+[`migrate-content`](docker.md#portare-i-file-di-un-franzplay-già-in-uso).
+
+Quando un file cambia, cambia la sua versione nell'indirizzo, così il browser non mostra mai quello
+vecchio. Se cambia il nome del video, cambia anche il nome della sua cartella. Le cartelle senza video
+non si cancellano da sole: stanno in **Riepilogo › Contenuti senza video**. Perché così:
+[decisione 0025](decisioni/0025-cartella-contenuti.md).
 
 ## La copertina
 

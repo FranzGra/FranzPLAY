@@ -793,3 +793,38 @@ func BenchmarkClaim(b *testing.B) {
 		}
 	}
 }
+
+func TestMarkDoneSkipsTheJob(t *testing.T) {
+	fx := newFixture(t, 1)
+	video := fx.videos[0]
+	if err := MarkDone(context.Background(), fx.db, video, Cover, time.Unix(50, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if j := fx.job(t, video, Cover); j.state != done {
+		t.Errorf("job = %+v, want done", j)
+	}
+	w := fx.worker(map[Kind]Handler{Cover: func(context.Context, int64) error {
+		t.Error("a job marked done ran")
+		return nil
+	}})
+	if runNext(t, w) {
+		t.Error("a job marked done was taken")
+	}
+}
+
+func TestOnJobDoneIsCalledOnlyAfterASuccess(t *testing.T) {
+	fx := newFixture(t, 2)
+	fx.enqueue(t, fx.videos[0], Probe)
+	fx.enqueue(t, fx.videos[1], Cover)
+	w := fx.worker(map[Kind]Handler{
+		Probe: func(context.Context, int64) error { return nil },
+		Cover: func(context.Context, int64) error { return fmt.Errorf("no: %w", ErrPermanent) },
+	})
+	var got []int64
+	w.OnJobDone(func(_ context.Context, id int64) { got = append(got, id) })
+	for runNext(t, w) {
+	}
+	if len(got) != 1 || got[0] != fx.videos[0] {
+		t.Errorf("called for %v, want only video %d", got, fx.videos[0])
+	}
+}

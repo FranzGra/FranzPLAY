@@ -11,13 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/FranzGra/FranzPLAY/internal/safefile"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
-
-// SubtitlesDir is the folder, inside the data folder, that holds the
-// copies of the subtitles found inside the video files.
-const SubtitlesDir = "subtitles"
 
 // Tracker reads the sound tracks and the subtitles inside the video
 // files, and copies the text subtitles to WebVTT files the browser can show.
@@ -25,14 +21,14 @@ type Tracker struct {
 	db      *sql.DB
 	ffprobe string // programs to run
 	ffmpeg  string
-	dataDir string
+	root    content.Root
 	run     runFunc
 }
 
 // NewTracker returns a tracker that runs the given ffprobe and ffmpeg
-// programs and writes in dataDir/subtitles.
-func NewTracker(db *sql.DB, ffprobe, ffmpeg, dataDir string) *Tracker {
-	return &Tracker{db: db, ffprobe: ffprobe, ffmpeg: ffmpeg, dataDir: dataDir, run: runInBackground}
+// programs and writes in the folder of each video, in root.
+func NewTracker(db *sql.DB, ffprobe, ffmpeg string, root content.Root) *Tracker {
+	return &Tracker{db: db, ffprobe: ffprobe, ffmpeg: ffmpeg, root: root, run: runInBackground}
 }
 
 // Handle is the job handler for jobs.Tracks. ffprobe lists the tracks of
@@ -53,28 +49,39 @@ func (t *Tracker) Handle(ctx context.Context, videoID int64) (err error) {
 		return fmt.Errorf("tracks of video %d: %w", videoID, err)
 	}
 
-	// A copy's name changes with the content: one already there is right.
-	dir := filepath.Join(t.dataDir, SubtitlesDir)
+	// A copy's place changes with the content: one already there is right,
+	// also in the old flat folder.
+	dir := t.root.Subtitles()
+	code := ""
 	names := make([]string, len(tracks.Subtitles)) // the copies, in the order of the subtitles
 	var toCopy []video.EmbeddedSubtitle
 	for i, sub := range tracks.Subtitles {
 		names[i] = subtitleName(videoID, fingerprint, sub.Stream)
-		if _, err := os.Stat(filepath.Join(dir, names[i])); err != nil {
+		if _, err := os.Stat(filepath.Join(dir, names[i])); err == nil {
+			continue
+		}
+		if code == "" {
+			if code, err = content.EnsureVideoFolder(ctx, t.db, t.root, videoID, fingerprint); err != nil {
+				return err
+			}
+		}
+		names[i] = content.Stored(code, content.InsideSubtitleFile(sub.Stream), "")
+		if _, err := os.Stat(t.root.File(names[i], dir)); err != nil {
 			toCopy = append(toCopy, sub)
 		}
 	}
-	made, err := t.copySubtitles(ctx, videoID, file, fingerprint, toCopy)
+	made, err := t.copySubtitles(ctx, videoID, file, code, toCopy)
 	if err != nil {
 		return err
 	}
 
 	old, saved, err := t.save(ctx, videoID, fingerprint, tracks, names)
 	if err != nil {
-		return errors.Join(err, removeAll(dir, made))
+		return errors.Join(err, t.removeAll(made))
 	}
 	if !saved {
 		// The file changed meanwhile: these copies belong to nobody.
-		return removeAll(dir, made)
+		return t.removeAll(made)
 	}
 	var stale []string
 	for _, name := range old {
@@ -82,20 +89,20 @@ func (t *Tracker) Handle(ctx context.Context, videoID int64) (err error) {
 			stale = append(stale, name)
 		}
 	}
-	return removeAll(dir, stale)
+	return errors.Join(t.removeAll(stale), content.SaveManifest(ctx, t.db, t.root, videoID))
 }
 
 // copySubtitles copies subs out of the file with one ffmpeg run and
-// returns the names of the copies.
-func (t *Tracker) copySubtitles(ctx context.Context, videoID int64, file, fingerprint string,
+// returns what the database saves for the copies.
+func (t *Tracker) copySubtitles(ctx context.Context, videoID int64, file, code string,
 	subs []video.EmbeddedSubtitle,
 ) (made []string, err error) {
 	if len(subs) == 0 {
 		return nil, nil
 	}
-	dir := filepath.Join(t.dataDir, SubtitlesDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return nil, fmt.Errorf("create subtitles folder: %w", err)
+	dir, err := t.root.MakeWork()
+	if err != nil {
+		return nil, err
 	}
 	// Rule 6: ffmpeg writes in a temporary folder; the copies move out
 	// only when all of them are finished.
@@ -112,11 +119,11 @@ func (t *Tracker) copySubtitles(ctx context.Context, videoID int64, file, finger
 		return nil, fmt.Errorf("subtitles of video %d: %w", videoID, err)
 	}
 	for _, sub := range subs {
-		name := subtitleName(videoID, fingerprint, sub.Stream)
-		if err := safefile.Rename(filepath.Join(work, strconv.Itoa(sub.Stream)+".vtt"), filepath.Join(dir, name)); err != nil {
-			return nil, errors.Join(fmt.Errorf("subtitles of video %d: %w", videoID, err), removeAll(dir, made))
+		name := content.InsideSubtitleFile(sub.Stream)
+		if err := t.root.Put(code, name, filepath.Join(work, strconv.Itoa(sub.Stream)+".vtt")); err != nil {
+			return nil, errors.Join(fmt.Errorf("subtitles of video %d: %w", videoID, err), t.removeAll(made))
 		}
-		made = append(made, name)
+		made = append(made, content.Stored(code, name, ""))
 	}
 	return made, nil
 }
@@ -187,17 +194,16 @@ func extractArgs(file string, subs []video.EmbeddedSubtitle, work string) []stri
 	return args
 }
 
-// subtitleName is the copy of a subtitle. Like the covers, it changes
-// when the video's content changes.
+// subtitleName is the copy of a subtitle in the old flat folder.
 func subtitleName(videoID int64, fingerprint string, stream int) string {
 	return strings.TrimSuffix(coverName(videoID, fingerprint), ".jpg") + "-" + strconv.Itoa(stream) + ".vtt"
 }
 
-// removeAll deletes files of the data folder, going on after an error.
-func removeAll(dir string, names []string) error {
+// removeAll deletes copies of subtitles, going on after an error.
+func (t *Tracker) removeAll(names []string) error {
 	var errs []error
 	for _, name := range names {
-		errs = append(errs, removeFile(dir, name))
+		errs = append(errs, t.root.Remove(name, t.root.Subtitles()))
 	}
 	return errors.Join(errs...)
 }
@@ -205,6 +211,6 @@ func removeAll(dir string, names []string) error {
 // RemoveOrphanSubtitles deletes the files in the subtitles folder that no
 // video uses any more, and work left half done. Like RemoveOrphanCovers,
 // it must run before the job worker starts.
-func RemoveOrphanSubtitles(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
-	return removeOrphans(ctx, db, filepath.Join(dataDir, SubtitlesDir), "video_subtitles", "file")
+func RemoveOrphanSubtitles(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
+	return removeOrphans(ctx, db, root.Subtitles(), "video_subtitles", "file")
 }

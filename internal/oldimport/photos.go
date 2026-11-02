@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
@@ -34,7 +35,7 @@ var errUnsupportedPhoto = errors.New("not a JPEG or PNG picture (WEBP photos mus
 // photos brings the profile photos, from the old FranzPLAY's folder
 // App_Data/User_Images, to the people who have none in the new one. It
 // runs after the rest is saved: a photo that fails is only reported.
-func (im *importer) photos(dir, dataDir string) error {
+func (im *importer) photos(dir string, root content.Root) error {
 	r := &im.report.Photos
 	for _, u := range im.old.users {
 		id, ok := im.userOf[u.id]
@@ -52,7 +53,7 @@ func (im *importer) photos(dir, dataDir string) error {
 			r.Added++
 			continue
 		}
-		added, err := users.ImportAvatar(im.ctx, im.db, dataDir, id, squarePhoto(img), im.now)
+		added, err := users.ImportAvatar(im.ctx, im.db, root, id, squarePhoto(img), im.now)
 		switch {
 		case err != nil:
 			return err

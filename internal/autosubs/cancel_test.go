@@ -8,15 +8,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
-	"github.com/FranzGra/FranzPLAY/internal/media"
 )
 
 // slowFixture is a downloader against a server that sends a big model
@@ -46,7 +45,7 @@ func newSlowFixture(t *testing.T) *slowFixture {
 		}
 	}))
 	fx := &slowFixture{dataDir: t.TempDir()}
-	fx.d = NewDownloader(fx.dataDir, srv.URL, func() { fx.told.Add(1) }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	fx.d = NewDownloader(content.Root(fx.dataDir), srv.URL, func() { fx.told.Add(1) }, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	fx.d.models = []Model{{Name: "base", sha1: "x"}}
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -97,7 +96,7 @@ func TestDownloadCanBeCanceled(t *testing.T) {
 	if !s.Canceled || s.Error != "Download annullato." || s.EndedAt == nil || s.Speed <= 0 {
 		t.Errorf("after canceling: %+v", s)
 	}
-	entries, err := os.ReadDir(filepath.Join(fx.dataDir, media.WhisperDir))
+	entries, err := os.ReadDir(content.Root(fx.dataDir).WhisperModels())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,9 +8,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
-	"github.com/FranzGra/FranzPLAY/internal/media"
+	"github.com/FranzGra/FranzPLAY/internal/content"
 )
 
 // The start of an MP4 and of a WebM, as http.DetectContentType knows them.
@@ -40,15 +41,37 @@ func (s *adminSite) clipChoice(t *testing.T, id int64) (own *string, none bool) 
 
 func (s *adminSite) ownClips(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(s.dataDir, media.OwnClipsDir))
+	return s.chosenFiles(t, content.FileOwnClip)
+}
+
+// chosenFiles lists the files the administrator chose in the folders of the
+// videos, the way the database saves them with no version.
+func (s *adminSite) chosenFiles(t *testing.T, prefix string) []string {
+	t.Helper()
+	root := content.Root(s.dataDir)
+	folders, err := os.ReadDir(root.VideoFolders())
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
+	for _, folder := range folders {
+		entries, err := os.ReadDir(filepath.Join(root.VideoFolders(), folder.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, code, _ := strings.Cut(strings.TrimSuffix(folder.Name(), "]"), " [")
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), prefix) {
+				names = append(names, content.Stored(code, e.Name(), ""))
+			}
+		}
 	}
 	return names
+}
+
+// withoutVersion is a value of the database without its version.
+func withoutVersion(value string) string {
+	return content.Stored(content.CodeOf(value), content.FileOf(value), "")
 }
 
 func TestAdministratorChoosesTheClip(t *testing.T) {
@@ -63,10 +86,10 @@ func TestAdministratorChoosesTheClip(t *testing.T) {
 	// A video of their own, kept in the data folder.
 	s.putClip(t, id, mp4Video, http.StatusNoContent)
 	own, none := s.clipChoice(t, id)
-	if own == nil || none || filepath.Ext(*own) != ".mp4" {
+	if own == nil || none || filepath.Ext(withoutVersion(*own)) != ".mp4" {
 		t.Fatalf("after the upload: own %v, none %v", own, none)
 	}
-	if files := s.ownClips(t); !slices.Equal(files, []string{*own}) {
+	if files := s.ownClips(t); !slices.Equal(files, []string{withoutVersion(*own)}) {
 		t.Errorf("own clips = %q, saved %q", files, *own)
 	}
 	if got := pendingJobs(t, s.db, id); !slices.Equal(got, []string{"clip"}) {
@@ -79,7 +102,7 @@ func TestAdministratorChoosesTheClip(t *testing.T) {
 	// Another one replaces it.
 	s.putClip(t, id, webmVideo, http.StatusNoContent)
 	own, _ = s.clipChoice(t, id)
-	if files := s.ownClips(t); !slices.Equal(files, []string{*own}) || filepath.Ext(*own) != ".webm" {
+	if files := s.ownClips(t); !slices.Equal(files, []string{withoutVersion(*own)}) || filepath.Ext(withoutVersion(*own)) != ".webm" {
 		t.Errorf("own clips = %q, saved %q", files, *own)
 	}
 

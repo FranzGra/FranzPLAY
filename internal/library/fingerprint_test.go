@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// content returns n bytes that differ from one position to the next.
-func content(n int) []byte {
+// someBytes returns n bytes that differ from one position to the next.
+func someBytes(n int) []byte {
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = byte(i * 7 % 251)
@@ -29,7 +29,7 @@ func fp(t *testing.T, b []byte) string {
 }
 
 func TestFingerprintIsStableAndVersioned(t *testing.T) {
-	b := content(1 << 20)
+	b := someBytes(1 << 20)
 	first, second := fp(t, b), fp(t, b)
 	if first != second {
 		t.Errorf("same content, different fingerprints: %s and %s", first, second)
@@ -40,7 +40,7 @@ func TestFingerprintIsStableAndVersioned(t *testing.T) {
 }
 
 func TestFingerprintSeesChanges(t *testing.T) {
-	big := content(1 << 20)
+	big := someBytes(1 << 20)
 	base := fp(t, big)
 	tests := map[string]func([]byte) []byte{
 		"change at the start":  func(b []byte) []byte { b[0]++; return b },
@@ -59,7 +59,7 @@ func TestFingerprintSeesChanges(t *testing.T) {
 
 func TestFingerprintReadsSmallFilesWhole(t *testing.T) {
 	// 150 KiB is read whole: a change anywhere must be seen.
-	small := content(150 << 10)
+	small := someBytes(150 << 10)
 	base := fp(t, small)
 	changed := bytes.Clone(small)
 	changed[100<<10]++
@@ -75,7 +75,7 @@ func TestFingerprintEmptyFile(t *testing.T) {
 }
 
 func TestFingerprintFileShorterThanItsSize(t *testing.T) {
-	_, err := fingerprintReader(bytes.NewReader(content(10)), 1<<20)
+	_, err := fingerprintReader(bytes.NewReader(someBytes(10)), 1<<20)
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Errorf("error = %v, want io.ErrUnexpectedEOF", err)
 	}
@@ -83,7 +83,7 @@ func TestFingerprintFileShorterThanItsSize(t *testing.T) {
 
 func TestFingerprintFile(t *testing.T) {
 	name := filepath.Join(t.TempDir(), "video.mp4")
-	b := content(500 << 10)
+	b := someBytes(500 << 10)
 	if err := os.WriteFile(name, b, 0o600); err != nil {
 		t.Fatal(err)
 	}

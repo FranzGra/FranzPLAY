@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
@@ -549,7 +550,7 @@ func (a admin) listFrom(ctx context.Context, from, where string, args ...any) (_
 			}
 		}
 		if cover.Valid {
-			j.Cover = new("/api/covers/" + cover.String)
+			j.Cover = new(content.Address("/api/covers/", cover.String, ".jpg"))
 		}
 		if duration.Valid {
 			j.Duration = new(duration.Int64)

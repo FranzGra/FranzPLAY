@@ -442,7 +442,7 @@ describe("subtitles page", () => {
     const form = screen.getByRole("form", { name: "Trascrivi Mare 2024" });
     expect(within(form).getByRole("combobox", { name: "Modello" })).toHaveTextContent("base");
     expect(
-      within(form).getByText(/base è il modello giusto: circa 4 ore e 20 minuti/),
+      within(form).getByText(/base è il modello giusto: circa 5 ore e 20 minuti/),
     ).toBeVisible();
 
     // A heavier model can still be chosen: it is only advice.

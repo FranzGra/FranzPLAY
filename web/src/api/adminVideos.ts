@@ -157,6 +157,15 @@ export async function setVideoHidden(id: number, hidden: boolean): Promise<void>
   await request(`/api/admin/videos/${id}/hidden`, { method: "PUT", body: { hidden } });
 }
 
+// setVideoAudience says who sees a private video with no owner: an owner, or
+// everybody with an account.
+export async function setVideoAudience(
+  id: number,
+  change: { owner: number } | { everyone: true },
+): Promise<void> {
+  await request(`/api/admin/videos/${id}/audience`, { method: "PUT", body: change });
+}
+
 // refreshVideo asks FranzPLAY to read the video again and remake its cover
 // and previews.
 export async function refreshVideo(id: number): Promise<void> {

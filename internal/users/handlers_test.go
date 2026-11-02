@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/database"
 	"github.com/FranzGra/FranzPLAY/internal/server"
 )
@@ -51,7 +52,7 @@ func newSiteWith(t *testing.T, requireSetupCode bool) *site {
 	})
 	s := &site{t: t, db: db, now: time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC), logs: &bytes.Buffer{}, dataDir: dataDir}
 	logger := slog.New(slog.NewTextHandler(s.logs, nil))
-	s.svc, err = NewService(context.Background(), db, s.dataDir, requireSetupCode, logger)
+	s.svc, err = NewService(context.Background(), db, content.Root(s.dataDir), requireSetupCode, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +242,7 @@ func TestNoSetupCodeWhenUsersExist(t *testing.T) {
 	s.setUp()
 	for _, requireCode := range []bool{false, true} {
 		var logs bytes.Buffer
-		again, err := NewService(context.Background(), s.db, s.dataDir, requireCode, slog.New(slog.NewTextHandler(&logs, nil)))
+		again, err := NewService(context.Background(), s.db, content.Root(s.dataDir), requireCode, slog.New(slog.NewTextHandler(&logs, nil)))
 		if err != nil {
 			t.Fatal(err)
 		}

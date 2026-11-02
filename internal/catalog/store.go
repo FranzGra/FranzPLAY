@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/sharing"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 	"github.com/FranzGra/FranzPLAY/internal/video"
@@ -242,23 +243,23 @@ func scanVideo(row rowScanner) (Video, error) {
 		v.Width, v.Height = &w, &h
 	}
 	if cover.Valid {
-		address := "/api/covers/" + cover.String
+		address := content.Address("/api/covers/", cover.String, ".jpg")
 		v.Cover = &address
 	}
 	if preview.Valid && previewGap.Valid && previewCount.Valid && previewWidth.Valid && previewHeight.Valid {
 		count := int(previewCount.Int64)
 		columns, _ := video.PreviewGrid(count)
 		v.Preview = &Preview{
-			Src: "/api/previews/" + preview.String, Gap: previewGap.Int64, Count: count, Columns: columns,
+			Src: content.Address("/api/previews/", preview.String, ".jpg"), Gap: previewGap.Int64, Count: count, Columns: columns,
 			Width: int(previewWidth.Int64), Height: int(previewHeight.Int64),
 		}
 	}
 	if clip.Valid {
-		address := "/api/clips/" + clip.String
+		address := content.Address("/api/clips/", clip.String, ".mp4")
 		v.Clip = &address
 	}
 	if clipHD.Valid {
-		address := "/api/clips-hd/" + clipHD.String
+		address := content.Address("/api/clips-hd/", clipHD.String, ".mp4")
 		v.ClipHD = &address
 	}
 	if uploaderID.Valid && uploaderName.Valid {
@@ -467,7 +468,7 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 			c.Image = categoryImageURL(image.String)
 		}
 		if cover.Valid {
-			address := "/api/covers/" + cover.String
+			address := content.Address("/api/covers/", cover.String, ".jpg")
 			c.Cover = &address
 		}
 		out = append(out, c)
@@ -571,9 +572,8 @@ func (s store) file(ctx context.Context, id int64) (string, error) {
 }
 
 // played returns the file the browser gets for a video: the copy made for
-// the browsers, in convertedDir, when there is one and original is false;
-// else the file itself.
-func (s store) played(ctx context.Context, id int64, convertedDir string, original bool) (name string, isCopy bool, err error) {
+// the browsers, when there is one and original is false; else the file itself.
+func (s store) played(ctx context.Context, id int64, made content.Root, original bool) (name string, isCopy bool, err error) {
 	var root, rel string
 	var converted sql.NullString
 	err = s.db.QueryRowContext(ctx, `
@@ -586,7 +586,7 @@ func (s store) played(ctx context.Context, id int64, convertedDir string, origin
 		return "", false, fmt.Errorf("find video %d: %w", id, err)
 	}
 	if converted.Valid && !original {
-		return filepath.Join(convertedDir, filepath.Base(converted.String)), true, nil
+		return made.File(converted.String, made.Converted()), true, nil
 	}
 	return filepath.Join(root, filepath.FromSlash(rel)), false, nil
 }
@@ -594,7 +594,7 @@ func (s store) played(ctx context.Context, id int64, convertedDir string, origin
 // embeddedSubtitle is a subtitle inside a video file, with its copy.
 type embeddedSubtitle struct {
 	video.EmbeddedSubtitle
-	file string // the copy, in the data folder's subtitles/
+	file string // the copy, as the database names it
 }
 
 // embedded returns the subtitles inside a video file that were copied
@@ -638,7 +638,7 @@ func (s store) embeddedFile(ctx context.Context, id int64, stream int) (string, 
 type autoSubtitle struct {
 	lang string // "it"
 	from string // for a translation, the language it was translated from
-	file string // in the data folder's autosubtitles/
+	file string // as the database names it
 }
 
 // auto returns the automatic subtitles made from the video's current

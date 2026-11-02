@@ -12,13 +12,10 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/safefile"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
-
-// CategoryPicturesDir is the folder, inside the data folder, that holds
-// the light copies of the pictures found in the folders of the categories.
-const CategoryPicturesDir = "category-pictures"
 
 // categoryPictureSide is the longest side of a copy. A category card is at
 // most about 600 points wide on a computer, and the screens of a Mac have
@@ -29,16 +26,16 @@ const categoryPictureSide = 1280
 // categories (category_pictures), with ffmpeg. The picture itself is only
 // read (rule 1).
 type CategoryPictureMaker struct {
-	db      *sql.DB
-	ffmpeg  string // program to run
-	dataDir string
-	run     runFunc
+	db     *sql.DB
+	ffmpeg string // program to run
+	root   content.Root
+	run    runFunc
 }
 
 // NewCategoryPictureMaker returns a maker that runs the given ffmpeg
-// program and writes in dataDir/category-pictures.
-func NewCategoryPictureMaker(db *sql.DB, ffmpeg, dataDir string) *CategoryPictureMaker {
-	return &CategoryPictureMaker{db: db, ffmpeg: ffmpeg, dataDir: dataDir, run: runInBackground}
+// program and writes in root/categorie/copie.
+func NewCategoryPictureMaker(db *sql.DB, ffmpeg string, root content.Root) *CategoryPictureMaker {
+	return &CategoryPictureMaker{db: db, ffmpeg: ffmpeg, root: root, run: runInBackground}
 }
 
 // pendingPicture is a picture whose copy is still to make.
@@ -61,7 +58,7 @@ func (m *CategoryPictureMaker) Make(ctx context.Context) (changed int, err error
 	if err != nil {
 		return 0, err
 	}
-	dir := filepath.Join(m.dataDir, CategoryPicturesDir)
+	dir := m.root.CategoryPictures()
 	if len(pending) > 0 {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return 0, fmt.Errorf("create category pictures folder: %w", err)
@@ -200,7 +197,8 @@ func (m *CategoryPictureMaker) save(ctx context.Context, dir string, p pendingPi
 		return false, removeNamed(dir, name)
 	}
 	if p.oldCopy.Valid && p.oldCopy.String != name {
-		if err := removeFile(dir, p.oldCopy.String); err != nil {
+		err := errors.Join(removeFile(dir, p.oldCopy.String), removeFile(m.root.OldCategoryPictures(), p.oldCopy.String))
+		if err != nil {
 			return true, err
 		}
 	}
@@ -219,9 +217,14 @@ func removeNamed(dir, name string) error {
 // that no picture uses any more (a picture taken away from its folder),
 // and asks again for the copies that could not be made: the reason may be
 // gone. Like RemoveOrphanCovers, it must run before the scanner starts.
-func RemoveOrphanCategoryPictures(ctx context.Context, db *sql.DB, dataDir string) (removed int, err error) {
+func RemoveOrphanCategoryPictures(ctx context.Context, db *sql.DB, root content.Root) (removed int, err error) {
 	if _, err := db.ExecContext(ctx, `UPDATE category_pictures SET pending = 1 WHERE file IS NULL`); err != nil {
 		return 0, fmt.Errorf("ask again for category pictures: %w", err)
 	}
-	return removeOrphans(ctx, db, filepath.Join(dataDir, CategoryPicturesDir), "category_pictures", "file")
+	removed, err = removeOrphans(ctx, db, root.CategoryPictures(), "category_pictures", "file")
+	if err != nil {
+		return removed, err
+	}
+	n, err := removeOrphans(ctx, db, root.OldCategoryPictures(), "category_pictures", "file")
+	return removed + n, err
 }

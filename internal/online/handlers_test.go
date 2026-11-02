@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/users"
 )
 
@@ -28,7 +29,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 		VALUES ('fingerprint-2', 1, 'via.mp4', 1, 1, 'via', 1, 5)`); err != nil {
 		t.Fatal(err)
 	}
-	a := api{db: fx.db, dataDir: fx.dataDir, newJobs: func() { fx.woken++ }, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	a := api{db: fx.db, root: content.Root(fx.dataDir), newJobs: func() { fx.woken++ }, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		now:     func() time.Time { return time.Unix(1000, 0) },
 		account: func(context.Context) (users.Account, bool) { return fx.who, true },
 		tmdb:    fx.f.tmdb, tpdb: fx.f.tpdb}

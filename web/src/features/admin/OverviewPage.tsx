@@ -2,7 +2,7 @@ import { type CSSProperties, useState } from "react";
 import { Link } from "react-router";
 import { retryFailedJobs } from "../../api/jobs";
 import { scanLibrary } from "../../api/library";
-import type { DamagedFile, Disk, Problem } from "../../api/overview";
+import type { DamagedFile, Disk, Leftover, Problem } from "../../api/overview";
 import { useAccount } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { formatBytes } from "../../lib/format";
@@ -160,6 +160,8 @@ export function OverviewPage() {
 
           <DamagedFiles files={o.damaged} total={v.problems} inContainer={o.inContainer} />
 
+          <Leftovers folders={o.leftovers} total={o.leftoversTotal} inContainer={o.inContainer} />
+
           <Card title="Spazio sui dischi" icon="disk">
             {o.disks.length === 0 ? (
               <p className={ui.cardText}>Nessun disco da mostrare.</p>
@@ -224,6 +226,67 @@ export function OverviewPage() {
       </div>
       {toast}
     </>
+  );
+}
+
+// Leftovers lists the folders of contents with no video: copied by hand, damaged,
+// or waiting for a video that has not arrived. It only shows them: they hold
+// work that may take hours to make again, so nobody deletes them from here.
+function Leftovers({
+  folders,
+  total,
+  inContainer,
+}: {
+  folders: Leftover[];
+  total: number;
+  inContainer: boolean;
+}) {
+  return (
+    <Card
+      title="Contenuti senza video"
+      icon="info"
+      sub={<span className={ui.chip}>{n(total)}</span>}
+    >
+      {total === 0 ? (
+        <p className={ui.cardText}>Ogni cartella dei contenuti ha il suo video.</p>
+      ) : (
+        <>
+          <p className={ui.cardText}>
+            FranzPLAY non cancella queste cartelle: se arriva il loro video, le riusa. Se non ti
+            servono, cancellale a mano sul disco.
+          </p>
+          {inContainer && (
+            <p className={ui.cardText}>
+              I percorsi sono quelli visti dentro il container: <code>/contenuti</code> è la
+              cartella del computer collegata nel file <code>compose.yaml</code>.
+            </p>
+          )}
+          {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the keyboard must be able to scroll it */}
+          <ul className={screens.damagedList} aria-label="Contenuti senza video" tabIndex={0}>
+            {folders.map((f) => (
+              <li key={f.path} className={screens.damagedFile}>
+                <code className={screens.damagedPath}>{f.path}</code>
+                <p className={screens.damagedWhy}>{f.title || "Titolo non leggibile"}</p>
+                {f.unreadable && (
+                  <p className={screens.damagedWhy}>
+                    Il suo video.json non si legge: è rovinato, o di una versione più nuova. Il suo
+                    video, se arriva, resta nascosto finché non lo mostri tu.
+                  </p>
+                )}
+                <p className={screens.damagedMeta}>
+                  <span>{formatBytes(f.size)}</span>
+                </p>
+              </li>
+            ))}
+          </ul>
+          {folders.length < total && (
+            <p className={ui.cardText}>
+              Sono le prime {n(folders.length)} di {n(total)}.
+            </p>
+          )}
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -297,7 +360,11 @@ function DamagedFiles({
 // DiskRow is one disk: what it holds, how much is free in big, and a
 // thick bar of what is used.
 function DiskRow({ disk }: { disk: Disk }) {
-  const what = disk.data ? "Cartella dati di FranzPLAY" : "Cartella dei video";
+  const what = disk.content
+    ? "Cartella dei contenuti"
+    : disk.data
+      ? "Cartella dati di FranzPLAY"
+      : "Cartella dei video";
   if (disk.error) {
     return (
       <div className={screens.disk}>

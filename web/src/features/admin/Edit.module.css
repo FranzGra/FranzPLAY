@@ -679,6 +679,22 @@
   margin-bottom: 8px;
 }
 
+.ownerChoice {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+}
+
+.ownerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .confirm {
   display: flex;
   flex-wrap: wrap;

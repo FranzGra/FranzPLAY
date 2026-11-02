@@ -18,7 +18,8 @@ services:
     # Se non si riesce a scaricarla, Docker la costruisce da qui (Dockerfile).
     image: ghcr.io/franzgra/franzplay:${FRANZPLAY_IMAGE_TAG:-latest}
     build: .
-    container_name: franzplay
+    # Il nome del contenitore: si cambia in .env solo per una seconda istanza.
+    container_name: ${FRANZPLAY_CONTAINER_NAME:-franzplay}
     restart: unless-stopped
 
     ports:
@@ -34,6 +35,10 @@ services:
       # Le cartelle dei video DENTRO il contenitore. Per aggiungerne una,
       # vedi "volumes" qui sotto e scrivila anche qui: /videos:/videos2
       FRANZPLAY_LIBRARIES: /videos
+      # La cartella dei contenuti DENTRO il contenitore: /contenuti se in .env hai
+      # scritto FRANZPLAY_CONTENT_FOLDER. Altrimenti resta vuota, e i contenuti
+      # stanno nella cartella dati come sempre.
+      FRANZPLAY_CONTENT_DIR: ${FRANZPLAY_CONTENT_FOLDER:+/contenuti}
       # Traduzione dei sottotitoli: FranzPLAY traduce da solo. Queste due servono
       # solo a chi preferisce LibreTranslate: vedi .env.example.
       FRANZPLAY_TRANSLATE_URL: ${FRANZPLAY_TRANSLATE_URL:-}
@@ -45,9 +50,13 @@ services:
 
     volumes:
       # La cartella dati di FranzPLAY: database, copertine, anteprime, video caricati.
-      # È l'unica dove FranzPLAY scrive. Per spostare FranzPLAY basta copiare questa.
+      # FranzPLAY scrive solo qui e, se la scegli, nella cartella dei contenuti.
+      # Per spostare FranzPLAY basta copiare queste.
       # Su Windows e Mac usa "franzplay-data" (vedi .env.example).
       - ${FRANZPLAY_DATA_FOLDER:-./data}:/data
+      # La cartella dei contenuti, facoltativa (vedi .env.example). Se non la scegli,
+      # qui c'è di nuovo la cartella dati, e FranzPLAY da questo lato non la guarda.
+      - ${FRANZPLAY_CONTENT_FOLDER:-${FRANZPLAY_DATA_FOLDER:-./data}}:/contenuti
       # I tuoi video, in SOLA LETTURA (":ro"): FranzPLAY non può toccarli.
       - ${FRANZPLAY_VIDEO_FOLDER:?scrivi in .env la cartella dei tuoi video (FRANZPLAY_VIDEO_FOLDER)}:/videos:ro
       # Un'altra cartella di video? Togli il # alla riga sotto, cambia il percorso
@@ -86,7 +95,7 @@ services:
   libretranslate:
     profiles: [traduzioni]
     image: libretranslate/libretranslate:v1.9.6
-    container_name: franzplay-libretranslate
+    container_name: ${FRANZPLAY_CONTAINER_NAME:-franzplay}-libretranslate
     restart: unless-stopped
     environment:
       # Solo le lingue che ti servono: meno memoria e meno da scaricare.

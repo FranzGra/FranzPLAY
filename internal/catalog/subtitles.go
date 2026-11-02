@@ -191,7 +191,7 @@ func (h handlers) insideSubtitle(w http.ResponseWriter, r *http.Request, stream 
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	data, err := readSmall(filepath.Join(h.subtitlesDir, filepath.Base(name)), maxSubtitleSize)
+	data, err := readSmall(h.root.File(name, h.root.Subtitles()), maxSubtitleSize)
 	if errors.Is(err, fs.ErrNotExist) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "subtitle not found")
 		return
@@ -219,7 +219,7 @@ func (h handlers) autoSubtitle(w http.ResponseWriter, r *http.Request, lang stri
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	data, err := readSmall(filepath.Join(h.autoSubtitlesDir, filepath.Base(name)), maxSubtitleSize)
+	data, err := readSmall(h.root.File(name, h.root.AutoSubtitles()), maxSubtitleSize)
 	if errors.Is(err, fs.ErrNotExist) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, "subtitle not found")
 		return

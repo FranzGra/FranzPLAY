@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/media"
 	"github.com/FranzGra/FranzPLAY/internal/respond"
@@ -280,7 +281,7 @@ func (p page) videos(ctx context.Context, q string) (_ []candidate, err error) {
 			return nil, fmt.Errorf("list videos: %w", err)
 		}
 		if cover != nil {
-			address := "/api/covers/" + *cover
+			address := content.Address("/api/covers/", *cover, ".jpg")
 			c.Cover = &address
 		}
 		c.file = filepath.Join(root, filepath.FromSlash(rel))

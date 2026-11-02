@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -61,7 +62,7 @@ func newTranscribeFixture(t *testing.T) *transcribeFixture {
 	t.Helper()
 	db, id := catalog(t, "/videos", "film.mkv")
 	fx := &transcribeFixture{db: db, id: id, dataDir: t.TempDir(), tl: &fakeTranslator{}, heard: heardItalian}
-	fx.tr = NewTranscriber(db, "ffmpeg", "whisper-cli", fx.dataDir, fx.tl)
+	fx.tr = NewTranscriber(db, "ffmpeg", "whisper-cli", content.Root(fx.dataDir), fx.tl)
 	fx.tr.now = func() time.Time { return time.Unix(1_800_000_000, 0) }
 	fx.tr.run = func(_ context.Context, program string, args ...string) ([]byte, error) {
 		if program == fx.fail {
@@ -95,10 +96,10 @@ func newTranscribeFixture(t *testing.T) *transcribeFixture {
 
 func (fx *transcribeFixture) model(t *testing.T, name string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Join(fx.dataDir, WhisperDir), 0o750); err != nil {
+	if err := os.MkdirAll(content.Root(fx.dataDir).WhisperModels(), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(ModelFile(fx.dataDir, name), []byte("model"), 0o600); err != nil {
+	if err := os.WriteFile(ModelFile(content.Root(fx.dataDir), name), []byte("model"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -132,7 +133,7 @@ func (fx *transcribeFixture) made(t *testing.T) (got []string, files map[string]
 			t.Fatal(err)
 		}
 		got = append(got, lang+"<-"+from)
-		data, err := os.ReadFile(filepath.Join(fx.dataDir, AutoSubtitlesDir, file))
+		data, err := os.ReadFile(content.Root(fx.dataDir).File(file, content.Root(fx.dataDir).AutoSubtitles()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -144,18 +145,10 @@ func (fx *transcribeFixture) made(t *testing.T) (got []string, files map[string]
 	return got, files
 }
 
-// files lists what is in the autosubtitles folder.
+// files lists the subtitles in the folders of the videos.
 func (fx *transcribeFixture) files(t *testing.T) []string {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(fx.dataDir, AutoSubtitlesDir))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return subtitlesInFolders(t, content.Root(fx.dataDir))
 }
 
 func (fx *transcribeFixture) stage(t *testing.T) string {
@@ -241,7 +234,7 @@ func TestTranscribeAndTranslate(t *testing.T) {
 	if want := []string{"audio", "transcribe", ""}; !reflect.DeepEqual(stages, want) {
 		t.Errorf("stages %v, want %v", stages, want)
 	}
-	if args := fx.whisper[0]; args[slices.Index(args, "-l")+1] != "auto" || args[slices.Index(args, "-m")+1] != ModelFile(fx.dataDir, "small") {
+	if args := fx.whisper[0]; args[slices.Index(args, "-l")+1] != "auto" || args[slices.Index(args, "-m")+1] != ModelFile(content.Root(fx.dataDir), "small") {
 		t.Errorf("whisper %v", args)
 	}
 	if args := fx.ffmpeg[0]; args[slices.Index(args, "-map")+1] != "0:a:0" || args[4] != "file:/videos/film.mkv" {
@@ -393,18 +386,18 @@ func TestTranscribeNothingAsked(t *testing.T) {
 
 func TestModels(t *testing.T) {
 	dir := t.TempDir()
-	if got, err := Models(dir); err != nil || got != nil {
+	if got, err := Models(content.Root(dir)); err != nil || got != nil {
 		t.Errorf("no folder: %v, %v", got, err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, WhisperDir, "ggml-dir.bin"), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Join(content.Root(dir).WhisperModels(), "ggml-dir.bin"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"ggml-small.bin", "ggml-medium.bin", "ggml-silero-v5.1.2.bin", "notes.txt"} {
-		if err := os.WriteFile(filepath.Join(dir, WhisperDir, name), nil, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(content.Root(dir).WhisperModels(), name), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	got, err := Models(dir)
+	got, err := Models(content.Root(dir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,13 +412,16 @@ func TestRemoveOrphanAutoSubtitles(t *testing.T) {
 	if err := fx.tr.Handle(context.Background(), fx.id); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(fx.dataDir, AutoSubtitlesDir)
+	dir := content.Root(fx.dataDir).AutoSubtitles()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"old.vtt", ".new-123"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	n, err := RemoveOrphanAutoSubtitles(context.Background(), fx.db, fx.dataDir)
+	n, err := RemoveOrphanAutoSubtitles(context.Background(), fx.db, content.Root(fx.dataDir))
 	if err != nil || n != 2 {
 		t.Errorf("removed %d, %v; want 2", n, err)
 	}
