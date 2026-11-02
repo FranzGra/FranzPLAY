@@ -588,8 +588,10 @@ export function Player({
     }
   }, []);
 
+  // run does what an action asks and shows the controls; a double tap
+  // passes reveal false, so only the jump icon appears, as with the mouse.
   const run = useCallback(
-    (action: Action) => {
+    (action: Action, reveal = true) => {
       const v = video.current;
       if (!v) return;
       switch (action.kind) {
@@ -635,7 +637,7 @@ export function Player({
           }
           break;
       }
-      showControls();
+      if (reveal) showControls();
     },
     [
       seekTo,
@@ -731,23 +733,25 @@ export function Player({
       if (zone === "middle") {
         toggleFullscreen();
       } else {
-        run({ kind: "seek-by", seconds: zone === "back" ? -skip : skip });
+        run({ kind: "seek-by", seconds: zone === "back" ? -skip : skip }, false);
       }
       lastTap.current = 0;
       return;
     }
     lastTap.current = now;
-    if (active && started && playing) {
-      // A tap on visible controls hides them, but only once it is clear it
-      // is not the first half of a double tap.
-      window.clearTimeout(tapTimer.current);
-      tapTimer.current = window.setTimeout(() => {
+    // A lone tap hides visible controls or shows hidden ones, but only once
+    // it is clear it is not the first half of a double tap: a double tap
+    // shows just the jump icon, never the whole controls in between.
+    const hide = active && started && playing;
+    window.clearTimeout(tapTimer.current);
+    tapTimer.current = window.setTimeout(() => {
+      if (hide) {
         window.clearTimeout(hideTimer.current);
         setActive(false);
-      }, doubleTapWithin);
-    } else {
-      showControls();
-    }
+      } else {
+        showControls();
+      }
+    }, doubleTapWithin);
   }
 
   // A double click of the mouse only goes full screen. If it was slower
