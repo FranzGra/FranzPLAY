@@ -18,6 +18,7 @@ import {
   setVideoDetails,
   setVideoHidden,
 } from "../../api/adminVideos";
+import { languageName } from "../../api/autosubs";
 import { ApiError } from "../../api/client";
 import { onServerEvent } from "../../api/events";
 import { fetchVideoQueue, type Job, retryJob, setVideoPriority } from "../../api/jobs";
@@ -56,6 +57,7 @@ import {
 } from "./jobText";
 import { OwnerChoice } from "./OwnerChoice";
 import { compatibility, qualityLabel } from "./quality";
+import { SubtitleImport } from "./SubtitleImport";
 import { Card, Chip, Empty, Loading, SettingSwitch, Unavailable, ui, useToast } from "./ui";
 
 type State =
@@ -450,6 +452,9 @@ function Detail({
           </div>
           <div data-order="7">
             <FileCard video={video} say={say} />
+          </div>
+          <div data-order="8">
+            <SubtitlesCard video={video} say={say} />
           </div>
         </div>
       </div>
@@ -1048,6 +1053,44 @@ function VideoJobs({
         <Icon name="refresh" size={16} />
         Rileggi il video
       </button>
+    </Card>
+  );
+}
+
+// SubtitlesCard brings a subtitle file for the video: an .srt or .vtt kept
+// as the subtitles of one language, like the ones whisper writes. The
+// player above shows them as soon as they are saved.
+function SubtitlesCard({ video, say }: { video: AdminVideo; say: Say }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card title="Sottotitoli" icon="subtitles">
+      {open ? (
+        <SubtitleImport
+          videoId={video.id}
+          title={video.title}
+          onDone={(lang) => {
+            setOpen(false);
+            say(`Sottotitoli importati: ${languageName(lang).toLowerCase()}.`);
+          }}
+          onCancel={() => setOpen(false)}
+        />
+      ) : (
+        <>
+          <p className={ui.cardText}>
+            Hai già un file di sottotitoli per questo video? Importalo: si vede nel lettore come
+            quelli scritti da Whisper, e si può tradurre.
+          </p>
+          <span className={ui.chips}>
+            <button type="button" className={ui.btn} onClick={() => setOpen(true)}>
+              <Icon name="upload" size={16} />
+              Importa sottotitoli
+            </button>
+            <Link to="/admin/sottotitoli" className={`${ui.btn} ${ui.ghost}`}>
+              Tutti i sottotitoli
+            </Link>
+          </span>
+        </>
+      )}
     </Card>
   );
 }

@@ -9,7 +9,13 @@ import {
   saveServerMethods,
 } from "../../api/auth";
 import { ApiError } from "../../api/client";
-import { type Look, lookProblem, saveLook } from "../../api/site";
+import {
+  type CategoryShape,
+  categoryShapes,
+  type Look,
+  lookProblem,
+  saveLook,
+} from "../../api/site";
 import { useSite } from "../../app/site";
 import { Icon } from "../../components/Icon";
 import { LookFields } from "./LookFields";
@@ -25,11 +31,12 @@ export function SitePage() {
     <div className={ui.ui}>
       <PageHeader
         title="Sito"
-        description="Le impostazioni di tutto FranzPLAY: come si chiama, il suo colore, chi può entrare e come, e il controllo delle nuove versioni."
+        description="Le impostazioni di tutto FranzPLAY: come si chiama, il suo colore, la forma delle copertine delle categorie, chi può entrare e come, e il controllo delle nuove versioni."
       />
       <div className={ui.grid}>
         <div className={`${ui.span7} ${ui.stack}`}>
           <LookSettings />
+          <CategoryShapeSettings />
         </div>
         <div className={`${ui.span5} ${ui.stack}`}>
           <Card title="Chi può entrare" icon="lock">
@@ -68,7 +75,8 @@ function LookForm() {
     setBusy(true);
     setProblem("");
     setDone("");
-    saveLook(look)
+    // The shape of the covers is saved by its own card: kept as it is now.
+    saveLook({ ...look, categoryShape: site.look.categoryShape })
       .then((saved) => {
         site.changed(saved);
         setDone("Salvato. Tutti vedono il nome e il colore nuovi.");
@@ -296,5 +304,60 @@ function LoginMethodSettings() {
         </p>
       )}
     </div>
+  );
+}
+
+// CategoryShapeSettings chooses the shape of the covers of every category,
+// on the Categories page and in the administrator's preview. It is saved
+// at once, like the other choices of the site, and everybody sees it.
+function CategoryShapeSettings() {
+  const site = useSite();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  const shape = site.look.categoryShape;
+
+  const choose = (next: CategoryShape) => {
+    if (next === shape || busy) return;
+    setBusy(true);
+    setProblem("");
+    saveLook({ ...site.look, categoryShape: next })
+      .then((saved) => site.changed(saved))
+      .catch((error: unknown) => {
+        console.error(error);
+        setProblem("Non si è riusciti a salvare. Riprova tra poco.");
+      })
+      .finally(() => setBusy(false));
+  };
+
+  if (!site.ready) return null;
+  return (
+    <Card title="Copertine delle categorie" icon="categories">
+      <p className={ui.cardText}>
+        La forma di tutte le copertine delle categorie. Le immagini si adattano tagliando i bordi,
+        senza deformarsi.
+      </p>
+      <fieldset className={ui.segmented} disabled={busy} aria-busy={busy || undefined}>
+        <legend className="visually-hidden">Forma delle copertine</legend>
+        {categoryShapes.map((s) => (
+          <label key={s.id} className={ui.segment}>
+            <input
+              type="radio"
+              name="category-shape"
+              className="visually-hidden"
+              value={s.id}
+              checked={shape === s.id}
+              onChange={() => choose(s.id)}
+            />
+            <span className={pages.shapeIcon} data-shape={s.id} aria-hidden="true" />
+            {s.label} ({s.ratio})
+          </label>
+        ))}
+      </fieldset>
+      {problem && (
+        <p role="alert" className={ui.problem}>
+          {problem}
+        </p>
+      )}
+    </Card>
   );
 }

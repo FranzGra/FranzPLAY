@@ -16,6 +16,9 @@ import { LiveDot } from "../../components/ProgressBar";
 import { formatDuration } from "../../lib/format";
 import { usePresence } from "../../lib/presence";
 import { richMotion } from "../../lib/richMotion";
+import { loadSetting, saveSetting } from "../../lib/storage";
+import { VideoCard as HomeVideoCard } from "../videos/VideoCard";
+import grid from "../videos/VideoGrid.module.css";
 import type { ListState } from "./AdminVideoPage";
 import { useActivity } from "./activity";
 import { kindShort } from "./jobText";
@@ -48,6 +51,13 @@ const otherPills: Pill[] = [
 ];
 
 const pills = [...mainPills, ...otherPills];
+
+// View is how the videos are shown: the table, with the preview beside it,
+// or the cards of the Home, each a link to the page of its video. This
+// browser remembers the choice.
+type View = "table" | "cards";
+const viewKey = "adminVideosView";
+const parseView = (data: unknown): View => (data === "cards" ? "cards" : "table");
 
 // PillSentence says what the videos of a pill are; the others need no words.
 function PillSentence({ show, minDuration }: { show: AdminShow; minDuration: number }) {
@@ -134,6 +144,14 @@ export function VideosPage() {
   const { jobs } = useActivity();
   const [toast, say] = useToast();
   const [scanning, setScanning] = useState(false);
+  const [view, setView] = useState<View>(() => loadSetting(viewKey, parseView, "table"));
+  // The same "now" for every card, as on the Home.
+  const [now] = useState(() => new Date());
+  const chooseView = (next: View) => {
+    setView(next);
+    saveSetting(viewKey, next);
+    if (next === "cards") setChosen(null);
+  };
 
   const load = useCallback(
     (limit: number, signal?: AbortSignal) => {
@@ -283,9 +301,12 @@ export function VideosPage() {
       <PageHeader
         title="Video"
         description={
-          counts?.[""] !== undefined
-            ? `${n(counts[""])} video dalle cartelle e dai caricamenti. Scegli un video per l'anteprima, il suo titolo per cambiarlo.`
-            : "Scegli un video per l'anteprima, il suo titolo per cambiarlo."
+          (counts?.[""] !== undefined
+            ? `${n(counts[""])} video dalle cartelle e dai caricamenti. `
+            : "") +
+          (view === "cards"
+            ? "Scegli un video per cambiarlo."
+            : "Scegli un video per l'anteprima, il suo titolo per cambiarlo.")
         }
         actions={
           <>
@@ -319,6 +340,27 @@ export function VideosPage() {
             </label>
           </form>
         </search>
+        <fieldset className={ui.segmented}>
+          <legend className="visually-hidden">Vista</legend>
+          <button
+            type="button"
+            className={ui.segment}
+            aria-pressed={view === "table"}
+            onClick={() => chooseView("table")}
+          >
+            <Icon name="menu" size={18} />
+            Tabella
+          </button>
+          <button
+            type="button"
+            className={ui.segment}
+            aria-pressed={view === "cards"}
+            onClick={() => chooseView("cards")}
+          >
+            <Icon name="categories" size={18} />
+            Card
+          </button>
+        </fieldset>
       </div>
 
       <fieldset className={ui.filters}>
@@ -367,7 +409,24 @@ export function VideosPage() {
             : "Aggiungi una cartella con dei video, o caricane uno."}
         </Empty>
       )}
-      {state.kind === "ready" && list.length > 0 && (
+      {state.kind === "ready" && list.length > 0 && view === "cards" && (
+        <>
+          <ul className={`stagger ${grid.grid}`} aria-label="Video">
+            {list.map((video) => (
+              <li key={video.id}>
+                <HomeVideoCard
+                  video={video}
+                  now={now}
+                  to={`/admin/video/${video.id}`}
+                  state={{ ids } satisfies ListState}
+                />
+              </li>
+            ))}
+          </ul>
+          <MoreVideos shown={list.length} total={state.total} onMore={more} />
+        </>
+      )}
+      {state.kind === "ready" && list.length > 0 && view === "table" && (
         <div
           ref={(element) => {
             stage.current = element;
@@ -432,14 +491,7 @@ export function VideosPage() {
                 ))}
               </ul>
 
-              {list.length < state.total && list.length < 200 && (
-                <button type="button" className={`${ui.btn} ${videos.more}`} onClick={more}>
-                  Mostra altri ({n(state.total - list.length)})
-                </button>
-              )}
-              {list.length >= 200 && list.length < state.total && (
-                <p className={ui.cardText}>Per trovare gli altri, usa la ricerca.</p>
-              )}
+              <MoreVideos shown={list.length} total={state.total} onMore={more} />
             </div>
             <div className={videos.previewSlot} data-open={(beside && isOpen) || undefined}>
               {beside && preview.shown && inspector(preview.shown, false)}
@@ -450,6 +502,30 @@ export function VideosPage() {
       {toast}
     </>
   );
+}
+
+// MoreVideos asks for the next videos of the list, the same for the table
+// and the cards: up to 200, then the search finds the others.
+function MoreVideos({
+  shown,
+  total,
+  onMore,
+}: {
+  shown: number;
+  total: number;
+  onMore: () => void;
+}) {
+  if (shown < total && shown < 200) {
+    return (
+      <button type="button" className={`${ui.btn} ${videos.more}`} onClick={onMore}>
+        Mostra altri ({n(total - shown)})
+      </button>
+    );
+  }
+  if (shown >= 200 && shown < total) {
+    return <p className={ui.cardText}>Per trovare gli altri, usa la ricerca.</p>;
+  }
+  return null;
 }
 
 // videoState is the one state worth seeing first: a problem, the work

@@ -46,8 +46,11 @@ func categoryImageURL(name string) *string {
 // AdminCategory is a category as the administrator sees it: as the videos
 // have it, with what people see instead.
 type AdminCategory struct {
-	Name  string  `json:"name"`  // as the videos have it
-	Label string  `json:"label"` // the name people see; "" = Name itself
+	Name  string `json:"name"`  // as the videos have it: the path of its folder, or the one given to a video
+	Label string `json:"label"` // the name the administrator chose; "" = none
+	// Found is the name people see without a label: the one the scan gave
+	// its folder ("Stagione 1" for "Serie A/Stagione 1"), else Name.
+	Found string  `json:"found"`
 	Color string  `json:"color"` // "" = none
 	Image *string `json:"image"` // address of the image; nil = none
 	// FolderImage and Poster are the pictures found in its folder: they do
@@ -198,10 +201,11 @@ func (a admin) categoryFailed(w http.ResponseWriter, r *http.Request, err error)
 // as the videos have it, by name.
 func (s store) adminCategories(ctx context.Context) (_ []AdminCategory, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT v.category, coalesce(c.label, ''), coalesce(c.color, ''), c.image, count(*)
+		SELECT v.category, coalesce(c.label, ''), coalesce(f.shown, v.category), coalesce(c.color, ''), c.image, count(*)
 		FROM videos v LEFT JOIN categories c ON c.name = v.category
+		LEFT JOIN folder_categories f ON f.name = v.category
 		WHERE v.category != ''
-		GROUP BY v.category ORDER BY v.category COLLATE NOCASE`)
+		GROUP BY v.category ORDER BY coalesce(c.label, f.shown, v.category) COLLATE NOCASE, v.category`)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
@@ -210,7 +214,7 @@ func (s store) adminCategories(ctx context.Context) (_ []AdminCategory, err erro
 	for rows.Next() {
 		var c AdminCategory
 		var image sql.NullString
-		if err := rows.Scan(&c.Name, &c.Label, &c.Color, &image, &c.Videos); err != nil {
+		if err := rows.Scan(&c.Name, &c.Label, &c.Found, &c.Color, &image, &c.Videos); err != nil {
 			return nil, fmt.Errorf("list categories: %w", err)
 		}
 		if image.Valid {
@@ -229,7 +233,7 @@ func (s store) adminCategories(ctx context.Context) (_ []AdminCategory, err erro
 		c := &out[i]
 		shown := c.Label
 		if shown == "" {
-			shown = c.Name
+			shown = c.Found
 		}
 		c.FolderImage, c.Poster = found[shown].wide, found[shown].poster
 	}

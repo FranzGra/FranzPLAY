@@ -103,9 +103,9 @@ export function CategoriesAdminPage() {
                     )}
                   </span>
                   <span className={pages.pickText}>
-                    <b>{c.label || c.name}</b>
+                    <b>{c.label || c.found}</b>
                     <span>
-                      {c.label ? `Cartella: ${c.name} · ` : ""}
+                      {c.label || c.found !== c.name ? `Cartella: ${c.name} · ` : ""}
                       {formatVideos(c.videos)}
                     </span>
                   </span>
@@ -190,9 +190,9 @@ function CategoryEditor({
   };
 
   const changed = label.trim() !== category.label || color !== category.color;
-  const shown = label.trim() || category.name;
+  const shown = label.trim() || category.found;
   return (
-    <Card title={category.label || category.name} icon="edit" sub={formatVideos(category.videos)}>
+    <Card title={category.label || category.found} icon="edit" sub={formatVideos(category.videos)}>
       <form className={pages.editor} onSubmit={send} aria-label={`Categoria ${category.name}`}>
         <div className={preview.preview} aria-label="Come la vedono tutti" role="img">
           <CategoryTile
@@ -210,12 +210,13 @@ function CategoryEditor({
             className={ui.input}
             value={label}
             maxLength={maxLabel}
-            placeholder={category.name}
+            placeholder={category.found}
             onChange={(e) => setLabel(e.target.value)}
           />
           <span className={ui.hint}>
-            Vuoto: si vede il nome della cartella, «{category.name}». Due categorie con lo stesso
-            nome si vedono come una sola.
+            Vuoto: si vede il nome della cartella, «{category.found}»
+            {category.found !== category.name ? ` (cartella ${category.name})` : ""}. Due categorie
+            con lo stesso nome si vedono come una sola.
           </span>
         </label>
 

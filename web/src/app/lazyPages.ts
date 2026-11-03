@@ -82,6 +82,9 @@ export const CategoriesAdminPage = page(() =>
 export const SubtitlesPage = page(() =>
   import("../features/admin/SubtitlesPage").then((m) => m.SubtitlesPage),
 );
+export const TitleRulesPage = page(() =>
+  import("../features/admin/TitleRulesPage").then((m) => m.TitleRulesPage),
+);
 export const CommentsPage = page(() =>
   import("../features/admin/CommentsPage").then((m) => m.CommentsPage),
 );

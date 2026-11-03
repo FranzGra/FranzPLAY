@@ -39,6 +39,7 @@ import (
 	"github.com/FranzGra/FranzPLAY/internal/server"
 	"github.com/FranzGra/FranzPLAY/internal/sharing"
 	"github.com/FranzGra/FranzPLAY/internal/site"
+	"github.com/FranzGra/FranzPLAY/internal/titles"
 	"github.com/FranzGra/FranzPLAY/internal/translate"
 	"github.com/FranzGra/FranzPLAY/internal/updates"
 	"github.com/FranzGra/FranzPLAY/internal/uploads"
@@ -345,6 +346,7 @@ func run(ctx context.Context, getenv func(string) string, logOut io.Writer) (err
 		uploader.Routes,
 		online.Routes(db, root, func() { worker.Wake(); hub.Publish(events.Jobs) }, logger),
 		site.Routes(db, logger),
+		titles.Routes(db, scanner.Retitle, logger),
 		overview.Routes(db, overview.Settings{Version: version, DataDir: cfg.DataDir, ContentDir: cfg.ContentDir, Content: root,
 			Libraries: cfg.Libraries, Tools: available[jobs.Probe] && available[jobs.Cover]}, logger),
 		updater.Routes(logger),

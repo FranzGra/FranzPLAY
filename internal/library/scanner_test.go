@@ -106,7 +106,7 @@ func TestScanAddsVideos(t *testing.T) {
 	ts.scan(t, Report{Added: 2})
 
 	got := ts.videos(t)
-	if v := got["Viaggi/2025/Sardegna.mkv"]; v.title != "Sardegna" || v.category != "Viaggi" || v.missing {
+	if v := got["Viaggi/2025/Sardegna.mkv"]; v.title != "Sardegna" || v.category != "Viaggi/2025" || v.missing {
 		t.Errorf("Sardegna = %+v", v)
 	}
 	if v := got["mare.mp4"]; v.title != "mare" || v.category != "" {

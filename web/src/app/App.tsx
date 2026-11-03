@@ -32,6 +32,7 @@ import {
   SharedPage,
   SitePage,
   SubtitlesPage,
+  TitleRulesPage,
   UploadPage,
   VideoPage,
   VideosPage,
@@ -111,6 +112,7 @@ function Pages() {
           <Route path="video/:id" element={<AdminVideoPage />} />
           <Route path="categorie" element={<CategoriesAdminPage />} />
           <Route path="sottotitoli" element={<SubtitlesPage />} />
+          <Route path="regole-titoli" element={<TitleRulesPage />} />
           <Route path="commenti" element={<CommentsPage />} />
           <Route path="cartelle" element={<FoldersPage />} />
           <Route path="internet" element={<OnlinePage />} />

@@ -377,6 +377,47 @@ describe("videos page", () => {
     );
     expect(within(crumb).getByText("Mare 2024")).toHaveAttribute("aria-current", "page");
   });
+
+  it("shows the cards of the Home on choice, each opening the page of its video", async () => {
+    const { user } = renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
+      "GET /api/admin/videos/7": { body: adminVideo() },
+    });
+    await screen.findByRole("table", { name: "Video" });
+    expect(screen.getByRole("button", { name: "Tabella" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "Card" }));
+    expect(screen.getByRole("button", { name: "Card" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("table")).toBeNull();
+    const card = within(screen.getByRole("list", { name: "Video" })).getByRole("link", {
+      name: /Mare 2024/,
+    });
+    // The card of the Home, but it opens the page of the video, not the player.
+    expect(card).toHaveAttribute("data-layout", "grid");
+    expect(card).toHaveAttribute("href", "/admin/video/7");
+    // This browser remembers the choice.
+    expect(window.localStorage.getItem("franzplay.adminVideosView")).toBe('"cards"');
+
+    await user.click(card);
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens on the cards when this browser chose them", async () => {
+    window.localStorage.setItem("franzplay.adminVideosView", '"cards"');
+    renderApp("/admin/video", {
+      ...signedIn(),
+      "GET /api/admin/videos": { body: { videos: [adminVideo()], total: 1 } },
+    });
+    const list = await screen.findByRole("list", { name: "Video" });
+    expect(within(list).getByRole("link", { name: /Mare 2024/ })).toHaveAttribute(
+      "href",
+      "/admin/video/7",
+    );
+    expect(screen.queryByRole("table")).toBeNull();
+  });
 });
 
 // detail renders the page of one video.

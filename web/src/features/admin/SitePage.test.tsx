@@ -33,7 +33,8 @@ describe("site name and color", () => {
 
     await user.click(within(form).getByRole("button", { name: "Salva nome e colore" }));
     expect(await within(form).findByRole("status")).toHaveTextContent("Salvato");
-    expect(await server.requests.at(-1)?.json()).toEqual(saved);
+    // The shape of the category covers goes too, as it was.
+    expect(await server.requests.at(-1)?.json()).toEqual({ ...saved, categoryShape: "landscape" });
     // The logo at the top and the color of the page follow.
     expect(screen.getByRole("link", { name: "CasaRossi" })).toBeInTheDocument();
     expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#dc2626");

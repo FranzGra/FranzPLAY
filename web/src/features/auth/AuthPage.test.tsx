@@ -336,7 +336,8 @@ describe("first setup", () => {
 
     expect(await screen.findByRole("link", { name: "CasaRossi" })).toBeInTheDocument();
     const sent = server.requests.find((r) => r.url.endsWith("/api/site") && r.method === "PUT");
-    expect(await sent?.json()).toEqual(chosen);
+    // The shape of the category covers goes too, as it was: the default.
+    expect(await sent?.json()).toEqual({ ...chosen, categoryShape: "landscape" });
   });
 
   it("does not ask the server when the passwords differ", async () => {

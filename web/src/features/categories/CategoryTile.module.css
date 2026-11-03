@@ -191,3 +191,40 @@
     font-size: 22px;
   }
 }
+
+/* The shape the administrator chose for every category (Sito › Copertine
+   delle categorie). The first one, 16:9, is the rule above. */
+.tile[data-shape="portrait"] {
+  aspect-ratio: 2 / 3;
+  min-height: 0;
+}
+
+.tile[data-shape="square"] {
+  aspect-ratio: 1;
+  min-height: 0;
+}
+
+.tile:is([data-shape="portrait"], [data-shape="square"]) .name {
+  font-size: 22px;
+}
+
+/* On a phone, two tall or square cards per line: smaller words. */
+@media (max-width: 599px) {
+  .tile:is([data-shape="portrait"], [data-shape="square"]) {
+    padding: 14px;
+  }
+
+  .tile:is([data-shape="portrait"], [data-shape="square"]) .name {
+    font-size: 17px;
+  }
+
+  .tile:is([data-shape="portrait"], [data-shape="square"]) .count {
+    --inset: 8px;
+    padding: 3px 8px;
+  }
+
+  .tile:is([data-shape="portrait"], [data-shape="square"]) .folder svg {
+    width: 110px;
+    height: 110px;
+  }
+}

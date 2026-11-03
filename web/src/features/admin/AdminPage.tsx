@@ -81,6 +81,12 @@ export const groups: { title: string; sections: Section[] }[] = [
         count: (o) => o.categories,
       },
       {
+        to: "regole-titoli",
+        label: "Regole titoli",
+        icon: "sliders",
+        hint: "Come i nomi dei file diventano titoli",
+      },
+      {
         to: "sottotitoli",
         label: "Sottotitoli",
         icon: "subtitles",
@@ -115,7 +121,7 @@ export const groups: { title: string; sections: Section[] }[] = [
         to: "sito",
         label: "Sito",
         icon: "settings",
-        hint: "Nome, colore, registrazione e aggiornamenti",
+        hint: "Nome, colore, copertine, registrazione e aggiornamenti",
       },
     ],
   },

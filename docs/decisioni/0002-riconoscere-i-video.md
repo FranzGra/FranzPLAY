@@ -36,6 +36,12 @@ ogni scansione la cartella sia identica a prima.
   resta lo stesso video, con la sua storia.
 - **Cartelle ignorate**: quelle nascoste (che iniziano con `.`) e quelle dei NAS o di Windows
   (`@eaDir`, `#recycle`, `$RECYCLE.BIN`…). Anche i collegamenti (symlink) si ignorano.
-- **Categorie**: la prima sottocartella. `Viaggi/2025/mare.mp4` è nella categoria "Viaggi".
+- **Categorie**: ogni cartella che contiene direttamente almeno un video, a qualsiasi
+  profondità. Le cartelle che contengono solo altre cartelle (i «raccoglitori») non sono categorie.
+  `Viaggi/2025/mare.mp4` è nella categoria "2025" (il nome della sua cartella). Se due categorie
+  hanno lo stesso nome, si aggiunge la cartella sopra: "Viaggi › 2025" e "Lavoro › 2025".
+  Dentro, la categoria si riconosce dal percorso (`Viaggi/2025`). Prima di novembre 2026 la
+  categoria era la prima sottocartella: al primo controllo dopo l'aggiornamento i video passano
+  alla regola nuova, senza perdere nulla.
 - Non si possono indicare cartelle una dentro l'altra, né la cartella dati dentro una cartella
   dei video: FranzPLAY si rifiuta di partire e spiega perché.

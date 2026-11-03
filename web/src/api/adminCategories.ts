@@ -4,8 +4,9 @@
 import { request } from "./client";
 
 export type AdminCategory = {
-  name: string; // as the videos have it: the folder's name, or the one given to a video
-  label: string; // the name people see; "" = name itself
+  name: string; // as the videos have it: the path of its folder ("Serie A/Stagione 1"), or the one given to a video
+  label: string; // the name the administrator chose; "" = the found one
+  found: string; // the name people see without a label: the last folder, more when two are the same
   color: string; // like "#2997ff"; "" = none
   image: string | null; // address of the image the administrator chose; null = none
   // The pictures found in its folder, which the card people see also shows.
@@ -52,6 +53,8 @@ export function parseAdminCategories(data: unknown): AdminCategory[] {
     return {
       name: c.name,
       label: c.label,
+      // An older server sends no found name: the category itself.
+      found: typeof c.found === "string" && c.found !== "" ? c.found : c.name,
       color: c.color,
       image: c.image,
       folderImage: folderPicture(c.folderImage),

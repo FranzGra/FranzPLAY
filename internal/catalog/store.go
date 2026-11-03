@@ -187,9 +187,12 @@ func viewer(ctx context.Context) int64 {
 }
 
 // shownCategory is the category people see for the video v: the name the
-// administrator gave it in the categories table, or the category itself.
-// Two categories given the same name show as one.
-const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name = v.category), v.category)`
+// administrator gave it in the categories table, else the name the scan
+// gave its folder (folder_categories: "Stagione 1" for the folder "Serie
+// A/Stagione 1"), else the category itself. Two categories given the same
+// name show as one.
+const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name = v.category),
+	(SELECT f.shown FROM folder_categories f WHERE f.name = v.category), v.category)`
 
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
@@ -441,7 +444,7 @@ func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 // the cover of the newest video that has one.
 func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT coalesce(c.label, g.category) AS shown, sum(g.videos), coalesce(max(c.color), ''), max(c.image),
+		SELECT coalesce(c.label, f.shown, g.category) AS seen_as, sum(g.videos), coalesce(max(c.color), ''), max(c.image),
 			max(g.cover)
 		FROM (
 			-- Counted first by the folder name, then joined to the names the
@@ -452,7 +455,8 @@ func (s store) categories(ctx context.Context) (_ []Category, err error) {
 			FROM videos v
 			WHERE v.visible AND v.category != '' GROUP BY v.category
 		) g LEFT JOIN categories c ON c.name = g.category
-		GROUP BY shown ORDER BY shown COLLATE NOCASE`)
+		LEFT JOIN folder_categories f ON f.name = g.category
+		GROUP BY seen_as ORDER BY seen_as COLLATE NOCASE`)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
@@ -502,8 +506,9 @@ type folderPictures struct {
 // by the name people see.
 func (s store) categoryPictures(ctx context.Context) (_ map[string]folderPictures, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT coalesce(c.label, p.category), p.path, p.file, p.width, p.height
+		SELECT coalesce(c.label, f.shown, p.category), p.path, p.file, p.width, p.height
 		FROM category_pictures p LEFT JOIN categories c ON c.name = p.category
+		LEFT JOIN folder_categories f ON f.name = p.category
 		WHERE p.file IS NOT NULL ORDER BY p.library_id, p.id`)
 	if err != nil {
 		return nil, fmt.Errorf("list category pictures: %w", err)

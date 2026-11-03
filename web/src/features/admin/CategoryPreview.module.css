@@ -2,3 +2,12 @@
 .preview {
   max-width: 420px;
 }
+
+/* A tall or square card is narrower, so it is not too high. */
+.preview:has([data-shape="portrait"]) {
+  max-width: 240px;
+}
+
+.preview:has([data-shape="square"]) {
+  max-width: 300px;
+}

@@ -191,6 +191,10 @@
   .layout > .column > [data-order="7"] {
     order: 7;
   }
+
+  .layout > .column > [data-order="8"] {
+    order: 8;
+  }
 }
 
 /* ---------- The video ---------- */

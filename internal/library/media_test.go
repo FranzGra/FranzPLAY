@@ -50,7 +50,8 @@ func TestTitleAndCategory(t *testing.T) {
 	}{
 		{"mare.mp4", "mare", ""},
 		{"Viaggi/Sardegna 2025.mp4", "Sardegna 2025", "Viaggi"},
-		{"Viaggi/2025/agosto/mare.mkv", "mare", "Viaggi"},
+		{"Viaggi/2025/agosto/mare.mkv", "mare", "Viaggi/2025/agosto"},
+		{"Raccoglitore/Categoria 1/a.mp4", "a", "Raccoglitore/Categoria 1"},
 		{"Corsi/Go. Lezione 3.mp4", "Go. Lezione 3", "Corsi"},
 	}
 	for _, tt := range tests {

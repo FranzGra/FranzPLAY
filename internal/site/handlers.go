@@ -15,9 +15,10 @@ import (
 
 // The keys of the settings table. A key never saved takes its value from Default.
 const (
-	keyNameFirst  = "site.name_first"
-	keyNameSecond = "site.name_second"
-	keyColor      = "site.color"
+	keyNameFirst     = "site.name_first"
+	keyNameSecond    = "site.name_second"
+	keyColor         = "site.color"
+	keyCategoryShape = "site.category_shape"
 )
 
 // maxBody is the largest request body accepted.
@@ -26,7 +27,7 @@ const maxBody = 4 << 10
 // Routes adds the API of the site's look:
 //
 //	GET /api/site   name and color, for everybody, even before logging in
-//	PUT /api/site   administrators only {nameFirst, nameSecond, color}
+//	PUT /api/site   administrators only {nameFirst, nameSecond, color, categoryShape}
 func Routes(db *sql.DB, logger *slog.Logger) func(mux *http.ServeMux) {
 	a := api{db: db, logger: logger, account: users.FromContext}
 	return a.routes
@@ -49,8 +50,8 @@ func Load(ctx context.Context, db *sql.DB) (Look, error) { return load(ctx, db) 
 // load reads the look; what was never saved comes from Default.
 func load(ctx context.Context, db *sql.DB) (l Look, err error) {
 	l = Default
-	rows, err := db.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (?, ?, ?)`,
-		keyNameFirst, keyNameSecond, keyColor)
+	rows, err := db.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)`,
+		keyNameFirst, keyNameSecond, keyColor, keyCategoryShape)
 	if err != nil {
 		return Look{}, fmt.Errorf("read site look: %w", err)
 	}
@@ -65,6 +66,8 @@ func load(ctx context.Context, db *sql.DB) (l Look, err error) {
 			l.NameFirst = value
 		case keyNameSecond:
 			l.NameSecond = value
+		case keyCategoryShape:
+			l.CategoryShape = value
 		case keyColor:
 			l.Color = value
 		}
@@ -86,7 +89,7 @@ func save(ctx context.Context, db *sql.DB, l Look) (err error) {
 			err = errors.Join(err, tx.Rollback())
 		}
 	}()
-	for _, kv := range [][2]string{{keyNameFirst, l.NameFirst}, {keyNameSecond, l.NameSecond}, {keyColor, l.Color}} {
+	for _, kv := range [][2]string{{keyNameFirst, l.NameFirst}, {keyNameSecond, l.NameSecond}, {keyColor, l.Color}, {keyCategoryShape, l.CategoryShape}} {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO settings (key, value) VALUES (?, ?)
 			ON CONFLICT (key) DO UPDATE SET value = excluded.value`, kv[0], kv[1]); err != nil {
@@ -125,6 +128,16 @@ func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusBadRequest, "the request is not valid JSON with the expected fields")
 		return
 	}
+	if next.CategoryShape == "" {
+		// Who sends only the name and color (the first setup, an older
+		// page) keeps the shape of the category covers as it is.
+		now, err := load(r.Context(), a.db)
+		if err != nil {
+			respond.InternalError(w, r, a.logger, err)
+			return
+		}
+		next.CategoryShape = now.CategoryShape
+	}
 	clean, err := next.Clean()
 	if err != nil {
 		respond.Error(w, r, a.logger, http.StatusBadRequest, err.Error())
@@ -135,6 +148,6 @@ func (a api) handlePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.logger.InfoContext(r.Context(), "site look changed", "name_first", clean.NameFirst,
-		"name_second", clean.NameSecond, "color", clean.Color, "by", who.Name)
+		"name_second", clean.NameSecond, "color", clean.Color, "category_shape", clean.CategoryShape, "by", who.Name)
 	respond.JSON(w, r, a.logger, http.StatusOK, clean)
 }

@@ -939,3 +939,22 @@
   font-size: 13px;
   line-height: 1.4;
 }
+
+/* A small outline of each cover shape, next to its name. */
+.shapeIcon {
+  flex: none;
+  width: 14px;
+  aspect-ratio: 2 / 3;
+  border: 2px solid currentcolor;
+  border-radius: 3px;
+}
+
+.shapeIcon[data-shape="square"] {
+  width: 18px;
+  aspect-ratio: 1;
+}
+
+.shapeIcon[data-shape="landscape"] {
+  width: 24px;
+  aspect-ratio: 16 / 9;
+}

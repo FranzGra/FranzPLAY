@@ -201,3 +201,35 @@ func TestCategoryWithASlashInItsName(t *testing.T) {
 		t.Errorf("categories = %+v", got)
 	}
 }
+
+// TestDeepCategoriesShowTheirFolderName: a category is the path of its
+// folder; people see the name the scan gave it, and the administrator
+// still renames it by its path, with its "/" in the address.
+func TestDeepCategoriesShowTheirFolderName(t *testing.T) {
+	s := newAdminSite(t)
+	uno := s.addVideo(t, "Raccoglitore/Categoria 1/a.mp4", "a", "Raccoglitore/Categoria 1", 100, true)
+	s.addVideo(t, "Categoria 4/b.mp4", "b", "Categoria 4", 200, true)
+	if _, err := s.db.Exec(`INSERT INTO folder_categories (name, shown) VALUES
+		('Raccoglitore/Categoria 1', 'Categoria 1'), ('Categoria 4', 'Categoria 4')`); err != nil {
+		t.Fatal(err)
+	}
+	got := decode[[]Category](t, s.get(t, "/api/categories"))
+	if len(got) != 2 || got[0].Name != "Categoria 1" || got[1].Name != "Categoria 4" {
+		t.Fatalf("categories = %+v", got)
+	}
+	if v := decode[Video](t, s.get(t, "/api/videos/"+strconv.FormatInt(uno, 10))); v.Category != "Categoria 1" {
+		t.Errorf("video category = %q", v.Category)
+	}
+	if list := decode[listResponse](t, s.get(t, "/api/videos?category="+url.QueryEscape("Categoria 1"))); list.Total != 1 {
+		t.Errorf("videos of Categoria 1: %d", list.Total)
+	}
+
+	s.do(t, "PUT", categoryAddress("Raccoglitore/Categoria 1"), `{"label": "Prima", "color": ""}`, http.StatusNoContent)
+	admin := decode[[]AdminCategory](t, s.do(t, "GET", "/api/admin/categories", "", http.StatusOK))
+	if len(admin) != 2 || admin[1].Name != "Raccoglitore/Categoria 1" || admin[1].Label != "Prima" || admin[1].Found != "Categoria 1" {
+		t.Errorf("admin categories = %+v", admin)
+	}
+	if got := decode[[]Category](t, s.get(t, "/api/categories")); len(got) != 2 || got[1].Name != "Prima" {
+		t.Errorf("after the new name: %+v", got)
+	}
+}
