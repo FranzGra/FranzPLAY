@@ -481,9 +481,10 @@
 }
 
 /* The administration is a console with its own menus (see the admin's
-   Console.module.css): on a computer the app's top bar and side menu step
-   aside and the page takes the whole window, edge to edge. On a phone the
-   app's bars stay and the page takes the whole width. */
+   Console.module.css): the app's side menu and phone bar are not there
+   (Layout), and on a computer the top bar steps aside too, so the page
+   takes the whole window, edge to edge. On a phone the top bar stays and
+   the page takes the whole width. */
 .shell[data-console] .page {
   max-width: none;
 }
@@ -495,12 +496,19 @@ html:has(.shell[data-console]) {
 }
 
 @media (min-width: 900px) {
-  .shell[data-console] .header,
-  .shell[data-console] .sidebar {
+  .shell[data-console] .header {
     display: none;
   }
 
   .shell[data-console] .main {
     padding: 0;
+  }
+}
+
+/* On a phone there is no phone bar in the console: the page ends with
+   only the room of the rounded corners of the screen. */
+@media (max-width: 899px) {
+  .shell[data-console] .main {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
   }
 }

@@ -83,9 +83,10 @@ export function Layout() {
   // the videos beside it get the room. The ☰ button brings it back in its
   // usual place, and the page makes room for it.
   const drawer = pathname.startsWith("/video/");
-  // The administration is a console with its own menus: on a computer the
-  // app's top bar and side menu step aside and the console takes the
-  // whole window. On a phone the app's bars stay.
+  // The administration is a console with its own menus: the app's side
+  // menu and phone bar are not there, its own menu has "Torna al sito".
+  // On a computer the top bar steps aside too and the console takes the
+  // whole window; on a phone the top bar stays, its logo leads home.
   const inConsole = account.role === "admin" && underAdmin(pathname);
   const menu = useDrawer(pathname);
   const [width, setWidth] = useState<PageWidth>("normal");
@@ -154,40 +155,42 @@ export function Layout() {
       </header>
 
       <div className={styles.body} data-width={width} data-drawer={drawer || undefined}>
-        <nav
-          id="menu-principale"
-          className={styles.sidebar}
-          aria-label="Menu principale"
-          data-open={(drawer && menu.open) || undefined}
-        >
-          {sideLinks(account.id).map((link) => (
-            <NavLink key={link.to} to={link.to} end className={styles.sideLink}>
-              <Icon name={link.icon} size={20} />
-              {link.label}
-            </NavLink>
-          ))}
-          <div className={styles.sideHeading}>Le tue playlist</div>
-          {later.map((list) => (
-            <PlaylistLink key={list.id} list={list} />
-          ))}
-          <NavLink to="/playlist" end className={styles.sideLink}>
-            <Icon name="playlist" size={20} />
-            Tutte le playlist
-          </NavLink>
-          {mine.map((list) => (
-            <PlaylistLink key={list.id} list={list} />
-          ))}
-          {account.role === "admin" && (
-            <>
-              <div className={styles.sideHeading}>Gestione</div>
-              <NavLink to="/admin" className={styles.sideLink}>
-                <Icon name="shield" size={20} />
-                Amministrazione
+        {!inConsole && (
+          <nav
+            id="menu-principale"
+            className={styles.sidebar}
+            aria-label="Menu principale"
+            data-open={(drawer && menu.open) || undefined}
+          >
+            {sideLinks(account.id).map((link) => (
+              <NavLink key={link.to} to={link.to} end className={styles.sideLink}>
+                <Icon name={link.icon} size={20} />
+                {link.label}
               </NavLink>
-            </>
-          )}
-          {newVersion && <UpdatePill updates={newVersion} onOpen={updateWindow.show} />}
-        </nav>
+            ))}
+            <div className={styles.sideHeading}>Le tue playlist</div>
+            {later.map((list) => (
+              <PlaylistLink key={list.id} list={list} />
+            ))}
+            <NavLink to="/playlist" end className={styles.sideLink}>
+              <Icon name="playlist" size={20} />
+              Tutte le playlist
+            </NavLink>
+            {mine.map((list) => (
+              <PlaylistLink key={list.id} list={list} />
+            ))}
+            {account.role === "admin" && (
+              <>
+                <div className={styles.sideHeading}>Gestione</div>
+                <NavLink to="/admin" className={styles.sideLink}>
+                  <Icon name="shield" size={20} />
+                  Amministrazione
+                </NavLink>
+              </>
+            )}
+            {newVersion && <UpdatePill updates={newVersion} onOpen={updateWindow.show} />}
+          </nav>
+        )}
 
         <main className={styles.main}>
           <div ref={page} className={styles.page}>
@@ -204,19 +207,21 @@ export function Layout() {
         <UpdateDialog updates={newVersion} onClose={updateWindow.close} />
       )}
 
-      <nav className={`glass ${styles.tabbar}`} aria-label="Menu del telefono">
-        {tabs.map((tab, i) => (
-          <Link
-            key={tab.to}
-            to={tab.to}
-            className={styles.tab}
-            aria-current={currentTab === i ? "page" : undefined}
-          >
-            <Icon name={tab.icon} size={26} />
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      {!inConsole && (
+        <nav className={`glass ${styles.tabbar}`} aria-label="Menu del telefono">
+          {tabs.map((tab, i) => (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              className={styles.tab}
+              aria-current={currentTab === i ? "page" : undefined}
+            >
+              <Icon name={tab.icon} size={26} />
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }

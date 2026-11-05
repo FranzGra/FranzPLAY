@@ -1,10 +1,9 @@
-/* The console of the administration: a narrow bar of the app's icons, the
-   administration's own menu, and the open page at full width with a bar on
-   top that says where you are and what FranzPLAY is doing. Every page of
-   the administration is built from the pieces below. */
+/* The console of the administration: its own menu against the left edge
+   (with the logo and "Torna al sito" on top), and the open page at full
+   width with a bar on top that says where you are and what FranzPLAY is
+   doing. Every page of the administration is built from the pieces below. */
 
 .console {
-  --rail: 68px;
   --nav: 264px;
   --gutter: clamp(20px, 2.4vw, 48px);
   --faint: #8b8b94;
@@ -12,7 +11,7 @@
   --info: #93c5fd;
   --info-bg: rgb(59 130 246 / 0.14);
   display: grid;
-  grid-template-columns: var(--rail) var(--nav) minmax(0, 1fr);
+  grid-template-columns: var(--nav) minmax(0, 1fr);
   min-height: 100dvh;
 }
 
@@ -20,97 +19,6 @@
   .console {
     --nav: 228px;
   }
-}
-
-/* ---------- The bar of the app's icons ---------- */
-
-.rail {
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  height: 100dvh;
-  padding: 16px 0;
-  border-right: 1px solid var(--color-border);
-  background: #0b0b0e;
-}
-
-.railLogo {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-bottom: 14px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--color-accent-light), var(--color-accent));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.35),
-    0 4px 14px rgb(var(--color-accent-rgb) / 0.35);
-  color: var(--color-on-accent);
-}
-
-.railLink {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  color: var(--color-text-muted);
-  transition:
-    background-color var(--duration-fast),
-    color var(--duration-fast);
-}
-
-.railLink:hover {
-  background: rgb(255 255 255 / 0.06);
-  color: var(--color-text);
-}
-
-.railLink[data-here] {
-  background: rgb(var(--color-accent-rgb) / 0.16);
-  color: var(--color-text);
-}
-
-/* The name of an icon appears beside it under the mouse. */
-.railTip {
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 50%;
-  z-index: 30;
-  padding: 5px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: #18181b;
-  color: var(--color-text);
-  font-size: 13px;
-  font-weight: 550;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  translate: -4px -50%;
-  transition:
-    opacity var(--duration-fast),
-    translate var(--duration-fast) var(--ease-out);
-}
-
-.railLink:hover .railTip,
-.railLink:focus-visible .railTip {
-  opacity: 1;
-  translate: 0 -50%;
-}
-
-.railSpacer {
-  flex: 1;
-}
-
-.railAvatar {
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--color-text);
 }
 
 /* ---------- The administration's menu ---------- */
@@ -131,10 +39,88 @@
 
 .navSite {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0 0 14px;
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  color: var(--color-text);
+}
+
+.navSite:hover {
+  color: var(--color-text);
+}
+
+.navSiteText {
+  display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 4px 10px 16px;
   min-width: 0;
+}
+
+/* The logo of the site, as in the top bar: it leads home and tilts
+   playfully under the mouse. */
+.navLogo {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--color-accent-light), var(--color-accent));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 4px 14px rgb(var(--color-accent-rgb) / 0.35);
+  color: var(--color-on-accent);
+  transition:
+    scale var(--duration-normal) var(--ease-spring),
+    rotate var(--duration-normal) var(--ease-spring);
+}
+
+.navSite:hover .navLogo {
+  scale: 1.08;
+  rotate: -8deg;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navLogo {
+    transition: none;
+  }
+}
+
+/* "Torna al sito": out of the administration, to the Home. */
+.back {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin: 0 0 8px;
+  padding: 0 12px 0 8px;
+  border-radius: var(--radius-s);
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 550;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
+.backArrow {
+  display: flex;
+  flex: none;
+  transition: translate var(--duration-normal) var(--ease-out);
+}
+
+.back:hover {
+  background: rgb(255 255 255 / 0.05);
+  color: var(--color-text);
+}
+
+/* The arrow steps a little to the left under the mouse. */
+.back:hover .backArrow {
+  translate: -2px 0;
 }
 
 .navSiteName {
@@ -457,19 +443,27 @@
     min-height: 0;
   }
 
-  .rail,
   .nav,
   .topbar {
     display: none;
   }
 
-  /* The sections as a strip of chips that scrolls sideways, and the work
-     in progress just under it. */
+  /* "Torna al sito" on top, the sections as a strip of chips that
+     scrolls sideways, and the work in progress just under it. */
   .phoneBar {
     display: flex;
     flex-direction: column;
     gap: 12px;
     margin: 0 calc(-1 * var(--page-side, 16px)) 4px;
+  }
+
+  .phoneBack {
+    display: flex;
+    padding: 0 var(--page-side, 16px);
+  }
+
+  .phoneBack .back {
+    margin: 0 0 0 -8px;
   }
 
   .chips {
