@@ -1,10 +1,20 @@
-import { type FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useSearchParams } from "react-router";
 import {
   type AdminCounts,
+  type AdminFilters,
   type AdminShow,
   type AdminVideo,
   fetchAdminVideos,
+  noFilters,
   setVideoHidden,
 } from "../../api/adminVideos";
 import { onServerEvent } from "../../api/events";
@@ -24,6 +34,14 @@ import { useActivity } from "./activity";
 import { kindShort } from "./jobText";
 import { compatibility, qualityLabel } from "./quality";
 import { Chip, Empty, Loading, n, PageHeader, type Tone, Unavailable, ui, useToast } from "./ui";
+import {
+  activeFilters,
+  FilterChips,
+  FiltersButton,
+  readFilters,
+  useCategories,
+  writeFilters,
+} from "./VideoFilters";
 import videos from "./Videos.module.css";
 
 export const adminPageSize = 50;
@@ -134,6 +152,13 @@ export function VideosPage() {
   const show = pill?.show ?? "eligible";
   const [query, setQuery] = useState(q);
   useEffect(() => setQuery(q), [q]); // the back button brings the search back too
+  // The administrator's own filters, in the address too. The key keeps the
+  // same filters the same object, so the list is not asked again for nothing.
+  const filterKey = writeFilters(new URLSearchParams(), readFilters(params)).toString();
+  const filters = useMemo(() => readFilters(new URLSearchParams(filterKey)), [filterKey]);
+  const active = activeFilters(filters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [categories, retryCategories] = useCategories(filtersOpen || filters.categories.length > 0);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [counts, setCounts] = useState<AdminCounts | undefined>(undefined);
   const [chosen, setChosen] = useState<number | null>(null);
@@ -155,7 +180,7 @@ export function VideosPage() {
 
   const load = useCallback(
     (limit: number, signal?: AbortSignal) => {
-      fetchAdminVideos({ q, show, limit }, signal)
+      fetchAdminVideos({ q, show, filters, limit }, signal)
         .then(({ videos: list, total, counts: c, minDuration }) => {
           setState({ kind: "ready", videos: list, total, minDuration });
           setCounts(c);
@@ -166,7 +191,7 @@ export function VideosPage() {
           setState((s) => (s.kind === "ready" ? s : { kind: "error" }));
         });
     },
-    [q, show],
+    [q, show, filters],
   );
 
   useEffect(() => {
@@ -190,6 +215,11 @@ export function VideosPage() {
     }
     setParams(p, { replace });
   };
+
+  // A filter replaces the address, as the search does: the boxes of the
+  // panel would fill the back button's history otherwise.
+  const changeFilters = (next: AdminFilters) =>
+    setParams(writeFilters(params, next), { replace: true });
 
   const search = (event: FormEvent) => {
     event.preventDefault();
@@ -301,9 +331,11 @@ export function VideosPage() {
       <PageHeader
         title="Video"
         description={
-          (counts?.[""] !== undefined
-            ? `${n(counts[""])} video dalle cartelle e dai caricamenti. `
-            : "") +
+          (counts?.[""] === undefined
+            ? ""
+            : active > 0
+              ? `${n(counts[""])} video con questi filtri. `
+              : `${n(counts[""])} video dalle cartelle e dai caricamenti. `) +
           (view === "cards"
             ? "Scegli un video per cambiarlo."
             : "Scegli un video per l'anteprima, il suo titolo per cambiarlo.")
@@ -323,14 +355,14 @@ export function VideosPage() {
       />
 
       <div className={ui.toolbar}>
-        <search className={ui.search}>
+        <search className={`${ui.search} ${videos.search}`}>
           <form onSubmit={search}>
             <label className={ui.searchBox}>
               <Icon name="search" size={18} />
               <span className="visually-hidden">Cerca tra i video</span>
               <input
                 type="search"
-                placeholder="Titolo, categoria o nome del file"
+                placeholder="Titolo, categoria o file"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -361,7 +393,16 @@ export function VideosPage() {
             Card
           </button>
         </fieldset>
+        <FiltersButton
+          filters={filters}
+          categories={categories}
+          onRetry={retryCategories}
+          open={filtersOpen}
+          onOpen={setFiltersOpen}
+          onChange={changeFilters}
+        />
       </div>
+      <FilterChips filters={filters} categories={categories} onChange={changeFilters} />
 
       <fieldset className={ui.filters}>
         <legend className="visually-hidden">Mostra</legend>
@@ -377,16 +418,22 @@ export function VideosPage() {
         <Empty
           icon="film"
           title={
-            q
-              ? "Nessun video con queste parole"
-              : show === "problems"
-                ? "Nessun file con problemi"
-                : show === "short"
-                  ? "Nessun video scartato"
-                  : "Nessun video qui"
+            active > 0
+              ? "Nessun video con questi filtri"
+              : q
+                ? "Nessun video con queste parole"
+                : show === "problems"
+                  ? "Nessun file con problemi"
+                  : show === "short"
+                    ? "Nessun video scartato"
+                    : "Nessun video qui"
           }
           action={
-            q || param ? (
+            active > 0 ? (
+              <button type="button" className={ui.btn} onClick={() => changeFilters(noFilters)}>
+                Azzera i filtri
+              </button>
+            ) : q || param ? (
               <button
                 type="button"
                 className={ui.btn}
@@ -404,9 +451,11 @@ export function VideosPage() {
             )
           }
         >
-          {q || param
-            ? "Prova un'altra ricerca, o togli il filtro."
-            : "Aggiungi una cartella con dei video, o caricane uno."}
+          {active > 0
+            ? "Togli qualche filtro, o prova un'altra ricerca."
+            : q || param
+              ? "Prova un'altra ricerca, o togli il filtro."
+              : "Aggiungi una cartella con dei video, o caricane uno."}
         </Empty>
       )}
       {state.kind === "ready" && list.length > 0 && view === "cards" && (
@@ -523,7 +572,7 @@ function MoreVideos({
     );
   }
   if (shown >= 200 && shown < total) {
-    return <p className={ui.cardText}>Per trovare gli altri, usa la ricerca.</p>;
+    return <p className={ui.cardText}>Per trovare gli altri, usa la ricerca o i filtri.</p>;
   }
   return null;
 }

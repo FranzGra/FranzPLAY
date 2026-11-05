@@ -1,0 +1,375 @@
+/* The administrator's filters on the videos page: the button with how many
+   are on, its panel (on a phone a sheet over the whole screen), and the
+   chips of the filters on. The buttons, pills and chips are the console's
+   own (Ui.module.css); only the panel and its lists are drawn here. */
+
+.button[aria-expanded="true"] {
+  border-color: var(--color-text);
+}
+
+/* How many filters are on: a small round badge inside the button. */
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-right: -6px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- The chips of the filters on ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: -4px 0 16px;
+}
+
+.chips ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  min-height: 32px;
+  padding: 2px 8px 2px 12px;
+  border: 1px solid rgb(var(--color-accent-rgb) / 0.4);
+  background: rgb(var(--color-accent-rgb) / 0.12);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* A long path of folders stays on one line in its chip. */
+.chipText {
+  max-width: min(320px, 60vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: rgb(var(--color-accent-rgb) / 0.2);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.chip svg {
+  color: var(--color-text-muted);
+}
+
+.chips > button {
+  font-size: 14px;
+}
+
+/* ---------- The panel ---------- */
+
+/* On a computer: a small window hanging from the button, at the end of
+   the page (a portal) so no column can cover it. Its place is measured
+   from the button (lib/anchored). */
+.panel {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface);
+  box-shadow: var(--glass-shadow);
+  transform-origin: top left;
+  animation: var(--motion-pop-in);
+}
+
+.panel[data-above] {
+  transform-origin: bottom left;
+}
+
+.panel[data-right] {
+  transform-origin: top right;
+}
+
+.panel[data-above][data-right] {
+  transform-origin: bottom right;
+}
+
+.panel[data-leaving] {
+  animation: var(--motion-pop-out);
+  pointer-events: none;
+}
+
+.panel:focus,
+.sheet:focus {
+  outline: none;
+}
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 4px 18px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+/* Only the filters scroll; the title and the buttons stay. */
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 18px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.group {
+  min-width: 0;
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.group:first-child {
+  border-top: 0;
+}
+
+.legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.legendCount {
+  color: var(--color-text-muted);
+  font-weight: 550;
+}
+
+.options {
+  display: flex;
+  clear: both;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.option {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.note {
+  clear: both;
+  margin: 8px 0 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.foot {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ---------- The categories ---------- */
+
+.find {
+  display: flex;
+  clear: both;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin: 0 0 8px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  color: var(--color-text-muted);
+}
+
+.find:focus-within {
+  border-color: rgb(var(--color-accent-rgb) / 0.6);
+  box-shadow: 0 0 0 3px rgb(var(--color-accent-rgb) / 0.2);
+}
+
+.find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.categories {
+  clear: both;
+  max-height: 240px;
+  margin: 0 -8px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--touch);
+  padding: 4px 8px;
+  border-radius: var(--radius-s);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.check:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+/* The real checkbox stays for keyboards and screen readers; a nicer box is
+   drawn, as in the playlists. */
+.check input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.box {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--check-size, 20px);
+  height: var(--check-size, 20px);
+  border: 2px solid var(--color-text-muted);
+  border-radius: 6px;
+  color: transparent;
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
+.check input:checked + .box {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.check input:focus-visible + .box {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.checkText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.checkName,
+.checkPath {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkPath {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.checkCount {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- On a phone: a sheet over the whole screen ---------- */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  background: var(--color-bg);
+  --check-size: 24px;
+  animation: var(--motion-rise-in);
+}
+
+.sheet[data-leaving] {
+  animation: var(--motion-drop-out);
+  pointer-events: none;
+}
+
+.sheet .head {
+  min-height: 64px;
+  padding: 8px 12px 8px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sheet .title {
+  font-size: 20px;
+}
+
+.sheet .body {
+  padding: 4px 20px 12px;
+}
+
+.sheet .categories {
+  max-height: none;
+}
+
+.sheet .check {
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.sheet .option {
+  height: 40px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.sheet .foot {
+  padding: 12px 20px 16px;
+}
+
+.sheet .foot button {
+  flex: 1;
+  height: 48px;
+}

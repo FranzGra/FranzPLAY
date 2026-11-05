@@ -138,13 +138,48 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   };
 }
 
+// AdminFilters are the administrator's own filters, on top of the pills and
+// the search; "" keeps every video. categories are as the videos have them
+// ("Serie A/Stagione 1"), "" for the videos with no category: a folder is
+// not its subfolders.
+export type AdminFilters = {
+  categories: string[];
+  source: "" | "folder" | "upload"; // from the video folders, or uploaded
+  subtitles: "" | "with" | "without"; // inside the file or made by FranzPLAY
+  missing: "" | "cover" | "preview"; // the videos without it
+  length: "" | "short" | "medium" | "long"; // under 5 minutes, 5 to 30, over 30
+  added: "" | "7" | "30"; // in the last days
+};
+
+export const noFilters: AdminFilters = {
+  categories: [],
+  source: "",
+  subtitles: "",
+  missing: "",
+  length: "",
+  added: "",
+};
+
 export async function fetchAdminVideos(
-  options: { q?: string; show?: AdminShow; limit: number; offset?: number },
+  options: {
+    q?: string;
+    show?: AdminShow;
+    filters?: AdminFilters;
+    limit: number;
+    offset?: number;
+  },
   signal?: AbortSignal,
 ): Promise<AdminVideoList> {
   const params = new URLSearchParams({ limit: String(options.limit) });
   if (options.q) params.set("q", options.q);
   if (options.show) params.set("show", options.show);
+  const f = options.filters;
+  if (f) {
+    for (const c of f.categories) params.append("category", c);
+    for (const key of ["source", "subtitles", "missing", "length", "added"] as const) {
+      if (f[key]) params.set(key, f[key]);
+    }
+  }
   if (options.offset) params.set("offset", String(options.offset));
   const data = await request(`/api/admin/videos?${params}`, { signal });
   const d = (data ?? {}) as Record<string, unknown>;
