@@ -527,6 +527,135 @@ describe("subtitles", () => {
   });
 });
 
+describe("subtitles in iOS's own full screen player", () => {
+  // jsdom has no text tracks: these stand in for one per <track>. As in the
+  // browser, a change of mode fires one "change" on the list a moment later.
+  type FakeTrack = EventTarget & { mode: TextTrackMode; cues: never[] };
+  type FakeList = EventTarget & { length: number; [index: number]: FakeTrack };
+  const own = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "textTracks");
+  let lists = new WeakMap<HTMLMediaElement, FakeList>();
+
+  function fakeList(count: number): FakeList {
+    const list = new EventTarget() as FakeList;
+    let queued = false;
+    list.length = count;
+    for (let i = 0; i < count; i++) {
+      let mode: TextTrackMode = "disabled";
+      list[i] = Object.defineProperties(Object.assign(new EventTarget(), { cues: [] }), {
+        mode: {
+          get: () => mode,
+          set: (next: TextTrackMode) => {
+            if (next === mode) return;
+            mode = next;
+            if (queued) return;
+            queued = true;
+            queueMicrotask(() => {
+              queued = false;
+              list.dispatchEvent(new Event("change"));
+            });
+          },
+        },
+      }) as FakeTrack;
+    }
+    return list;
+  }
+
+  beforeEach(() => {
+    lists = new WeakMap();
+    Object.defineProperty(HTMLMediaElement.prototype, "textTracks", {
+      configurable: true,
+      get(this: HTMLMediaElement) {
+        let list = lists.get(this);
+        if (!list) {
+          list = fakeList(this.querySelectorAll("track").length);
+          lists.set(this, list);
+        }
+        return list;
+      },
+    });
+  });
+  afterEach(() => {
+    if (own) Object.defineProperty(HTMLMediaElement.prototype, "textTracks", own);
+    else delete (HTMLMediaElement.prototype as { textTracks?: unknown }).textTracks;
+  });
+
+  const modes = (video: HTMLVideoElement) =>
+    Array.from({ length: video.textTracks.length }, (_, i) => video.textTracks[i]?.mode);
+  const choice = () => JSON.parse(window.localStorage.getItem("franzplay.subtitles") ?? "null");
+
+  // iphone sets up a player with Italian subtitles on, on a phone where
+  // only the video itself goes full screen.
+  function iphone() {
+    window.localStorage.setItem("franzplay.subtitles", JSON.stringify({ on: true, lang: "it" }));
+    const result = setup({ subtitles: [english, italian] });
+    const enter = vi.fn(() => {
+      result.video.dispatchEvent(new Event("webkitbeginfullscreen"));
+    });
+    Object.assign(result.video, { webkitEnterFullscreen: enter });
+    return { ...result, enter };
+  }
+
+  it("shows the chosen subtitles when iOS's player opens", async () => {
+    const { user, video, enter } = iphone();
+    expect(modes(video)).toEqual(["disabled", "hidden"]);
+    await user.click(screen.getByRole("button", { name: "Schermo intero (f)" }));
+    expect(enter).toHaveBeenCalledTimes(1);
+    expect(modes(video)).toEqual(["disabled", "showing"]);
+  });
+
+  it("remembers the language chosen in iOS's menu", async () => {
+    const { user, video } = iphone();
+    await user.click(screen.getByRole("button", { name: "Schermo intero (f)" }));
+    // iOS's menu: English instead of Italian.
+    (video.textTracks[1] as TextTrack).mode = "disabled";
+    (video.textTracks[0] as TextTrack).mode = "showing";
+    await waitFor(() => expect(choice()).toEqual({ on: true, lang: "en" }));
+    expect(modes(video)).toEqual(["showing", "disabled"]);
+  });
+
+  it("draws the subtitles itself again when iOS's player closes", async () => {
+    const { user, video } = iphone();
+    await user.click(screen.getByRole("button", { name: "Schermo intero (f)" }));
+    (video.textTracks[1] as TextTrack).mode = "disabled";
+    (video.textTracks[0] as TextTrack).mode = "showing";
+    act(() => {
+      video.dispatchEvent(new Event("webkitendfullscreen"));
+    });
+    await waitFor(() => expect(modes(video)).toEqual(["hidden", "disabled"]));
+    expect(choice()).toEqual({ on: true, lang: "en" });
+    expect(screen.getByRole("button", { name: "Sottotitoli (c)" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("turns the subtitles off when they were turned off in iOS's menu", async () => {
+    const { user, video } = iphone();
+    await user.click(screen.getByRole("button", { name: "Schermo intero (f)" }));
+    (video.textTracks[1] as TextTrack).mode = "disabled";
+    act(() => {
+      video.dispatchEvent(new Event("webkitendfullscreen"));
+    });
+    await waitFor(() => expect(choice()).toEqual({ on: false, lang: "" }));
+    expect(modes(video)).toEqual(["disabled", "disabled"]);
+  });
+
+  it("keeps drawing the subtitles itself where the whole player goes full screen", async () => {
+    const { user, video, enter } = iphone();
+    const root = document.querySelector("[data-controls]") as HTMLElement;
+    const fullscreen = vi.fn(() => Promise.resolve());
+    root.requestFullscreen = fullscreen;
+    await user.click(screen.getByRole("button", { name: "Schermo intero (f)" }));
+    expect(fullscreen).toHaveBeenCalledTimes(1);
+    expect(enter).not.toHaveBeenCalled();
+    // A change the page did not ask for is not a choice outside iOS's player.
+    (video.textTracks[0] as TextTrack).mode = "showing";
+    await act(() => Promise.resolve());
+    expect(choice()).toEqual({ on: true, lang: "it" });
+    expect(modes(video)).toEqual(["showing", "hidden"]);
+  });
+});
+
 describe("pickTrack", () => {
   it.each([
     [{ on: false, lang: "it" }, null],
