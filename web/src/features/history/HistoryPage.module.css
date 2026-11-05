@@ -96,6 +96,37 @@
   list-style: none;
 }
 
+/* On a wide computer there is room to spare: a wider column, and bigger
+   rows (cover 168px -> 280px, still 16:9; title and details a step up).
+   The column stops at 1040px so the titles stay short enough to read.
+   Phones and tablets keep the rows above. */
+@media (min-width: 1280px) {
+  .page {
+    max-width: 1040px;
+  }
+
+  .dayTitle {
+    margin-bottom: 16px;
+    font-size: 19px;
+  }
+
+  .list {
+    --row-cover: 280px;
+    --row-gap: 20px;
+    --row-text-gap: 6px;
+    --row-title: 17px;
+    --row-info: 14px;
+    --row-small: 13px;
+    gap: 28px;
+  }
+
+  /* A title without spaces, like a file name, wraps instead of being cut
+     at the edge of the bigger text. */
+  .list h3 {
+    overflow-wrap: anywhere;
+  }
+}
+
 .more {
   display: flex;
   flex-direction: column;

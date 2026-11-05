@@ -189,11 +189,13 @@
 }
 
 /* Row: small cover on the left, text on the right. A smaller cover has
-   smaller corners, and its glow follows them. */
+   smaller corners, and its glow follows them. A page can make its rows
+   bigger with the --row-* properties (the history on a wide computer);
+   without them the row keeps the sizes below. */
 .root[data-layout="row"] {
   --card-radius: var(--radius-s);
   flex-direction: row;
-  gap: 12px;
+  gap: var(--row-gap, 12px);
 }
 
 /* align-self keeps the cover 16:9: stretched to the height of a long title
@@ -201,16 +203,26 @@
 .root[data-layout="row"] .cover {
   flex: none;
   align-self: flex-start;
-  width: 168px;
+  width: var(--row-cover, 168px);
   margin: 0;
 }
 
 .root[data-layout="row"] .duration {
   --inset: 6px;
+  font-size: var(--row-small, 12px);
+}
+
+.root[data-layout="row"] .text {
+  gap: var(--row-text-gap, 4px);
 }
 
 .root[data-layout="row"] .title {
-  font-size: 14px;
+  font-size: var(--row-title, 14px);
+}
+
+.root[data-layout="row"] .owner,
+.root[data-layout="row"] .details {
+  font-size: var(--row-info, 13px);
 }
 
 /* How much of the video was watched, along the bottom of the cover. */
