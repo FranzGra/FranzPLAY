@@ -792,3 +792,14 @@
 .fileAction {
   margin-top: 16px;
 }
+
+/* The video with its slider, to choose where the clip starts: under the
+   clip of now, as wide as the card. */
+.clipMoment {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}

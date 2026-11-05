@@ -159,6 +159,32 @@ describe("categories in the administration", () => {
     expect(sent?.headers.get("Content-Type")).toBe("image/jpeg");
   });
 
+  it("chooses on top the shape of every cover, and the preview follows at once", async () => {
+    const franz = { nameFirst: "Franz", nameSecond: "PLAY", color: "#2997ff" };
+    const { user, server } = renderApp(
+      "/admin/categorie",
+      page({ "PUT /api/site": { body: { ...franz, categoryShape: "square" } } }),
+    );
+    const shapes = await screen.findByRole("group", { name: "Forma delle copertine" });
+    const preview = await screen.findByRole("img", { name: "Come la vedono tutti" });
+    // Wide, as long as nobody chose another shape.
+    expect(within(shapes).getByRole("radio", { name: "Orizzontale (16:9)" })).toBeChecked();
+    expect(preview.querySelector("[data-shape]")).toHaveAttribute("data-shape", "landscape");
+
+    await user.click(within(shapes).getByRole("radio", { name: "Quadrata (1:1)" }));
+    await waitFor(() =>
+      expect(preview.querySelector("[data-shape]")).toHaveAttribute("data-shape", "square"),
+    );
+    expect(within(shapes).getByRole("radio", { name: "Quadrata (1:1)" })).toBeChecked();
+    const sent = server.requests.find((r) => r.method === "PUT" && r.url.endsWith("/api/site"));
+    expect(await sent?.json()).toEqual({ ...franz, categoryShape: "square" });
+  });
+
+  it("chooses the shape of the covers even before there is a category", async () => {
+    renderApp("/admin/categorie", page({ "GET /api/admin/categories": { body: [] } }));
+    expect(await screen.findByRole("group", { name: "Forma delle copertine" })).toBeInTheDocument();
+  });
+
   it("says how a category is born when there is none", async () => {
     renderApp("/admin/categorie", page({ "GET /api/admin/categories": { body: [] } }));
     expect(

@@ -1,4 +1,11 @@
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import {
   type AdminCategory,
   fetchAdminCategories,
@@ -14,6 +21,7 @@ import { usePresence } from "../../lib/presence";
 import { CategoryTile } from "../categories/CategoryTile";
 import { type LoadedPhoto, loadPhoto } from "../profile/photo";
 import preview from "./CategoryPreview.module.css";
+import { CategoryShapeSettings } from "./CategoryShapeSettings";
 import { CoverCropper } from "./CoverCropper";
 import { renderCover } from "./coverImage";
 import { presets } from "./LookFields";
@@ -24,8 +32,9 @@ import { Card, Chip, Empty, Loading, PageHeader, Unavailable, ui } from "./ui";
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; list: AdminCategory[] };
 
 // CategoriesAdminPage lets the administrator give each category the name
-// people see, a color and an image. On the left the categories, on the
-// right the one being changed: the colors are shown once, not per card.
+// people see, a color and an image. On top the shape of the covers of all
+// categories, then on the left the categories, on the right the one being
+// changed: the colors are shown once, not per card.
 // The videos and their folders do not change: only what people see.
 export function CategoriesAdminPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -50,81 +59,73 @@ export function CategoriesAdminPage() {
   const header = (
     <PageHeader
       title="Categorie"
-      description="Le categorie sono le sottocartelle dei video, o quelle che scegli tu per un video. Qui decidi come le vedono tutti: un altro nome, un colore, un'immagine. Le cartelle non cambiano."
+      description="Le categorie sono le cartelle che contengono dei video, o quelle che scegli tu per un video. Qui decidi come le vedono tutti: la forma delle copertine e, per ognuna, un altro nome, un colore, un'immagine. Le cartelle non cambiano."
     />
   );
-  if (state.kind === "loading") {
-    return (
-      <div className={ui.ui}>
-        {header}
-        <Loading />
+  // page puts the shape of the covers above what the page shows.
+  const page = (body: ReactNode) => (
+    <div className={ui.ui}>
+      {header}
+      <div className={ui.stack}>
+        <CategoryShapeSettings />
+        {body}
       </div>
-    );
+    </div>
+  );
+  if (state.kind === "loading") {
+    return page(<Loading />);
   }
   if (state.kind === "error") {
-    return (
-      <div className={ui.ui}>
-        {header}
-        <Unavailable title="Categorie non disponibili" />
-      </div>
-    );
+    return page(<Unavailable title="Categorie non disponibili" />);
   }
   if (state.list.length === 0) {
-    return (
-      <div className={ui.ui}>
-        {header}
-        <Empty icon="categories" title="Ancora nessuna categoria">
-          Una categoria nasce da sola quando una cartella di video ha delle sottocartelle, o quando
-          scegli una categoria per un video dalla sua pagina di modifica.
-        </Empty>
-      </div>
+    return page(
+      <Empty icon="categories" title="Ancora nessuna categoria">
+        Una categoria nasce da sola quando una cartella contiene dei video, o quando scegli una
+        categoria per un video dalla sua pagina di modifica.
+      </Empty>,
     );
   }
   const current = state.list.find((c) => c.name === chosen) ?? state.list[0];
-  return (
-    <div className={ui.ui}>
-      {header}
-      <div className={pages.split}>
-        <Card title="Tutte le categorie" icon="categories" sub={`${state.list.length}`}>
-          <ul className={pages.pickList} aria-label="Categorie">
-            {state.list.map((c) => (
-              <li key={c.name}>
-                <button
-                  type="button"
-                  className={pages.pick}
-                  aria-current={c.name === current?.name || undefined}
-                  onClick={() => setChosen(c.name)}
-                >
-                  <span className={pages.catThumb}>
-                    {c.image ? (
-                      <img src={c.image} alt="" loading="lazy" />
-                    ) : (
-                      <Icon name="categories" size={18} />
-                    )}
+  return page(
+    <div className={pages.split}>
+      <Card title="Tutte le categorie" icon="categories" sub={`${state.list.length}`}>
+        <ul className={pages.pickList} aria-label="Categorie">
+          {state.list.map((c) => (
+            <li key={c.name}>
+              <button
+                type="button"
+                className={pages.pick}
+                aria-current={c.name === current?.name || undefined}
+                onClick={() => setChosen(c.name)}
+              >
+                <span className={pages.catThumb}>
+                  {c.image ? (
+                    <img src={c.image} alt="" loading="lazy" />
+                  ) : (
+                    <Icon name="categories" size={18} />
+                  )}
+                </span>
+                <span className={pages.pickText}>
+                  <b>{c.label || c.found}</b>
+                  <span>
+                    {c.label || c.found !== c.name ? `Cartella: ${c.name} · ` : ""}
+                    {formatVideos(c.videos)}
                   </span>
-                  <span className={pages.pickText}>
-                    <b>{c.label || c.found}</b>
-                    <span>
-                      {c.label || c.found !== c.name ? `Cartella: ${c.name} · ` : ""}
-                      {formatVideos(c.videos)}
-                    </span>
-                  </span>
-                  <span
-                    className={pages.dot}
-                    style={c.color ? { background: c.color } : undefined}
-                    data-none={c.color ? undefined : true}
-                    aria-hidden="true"
-                  />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-        {current && (
-          <CategoryEditor key={current.name} category={current} onChanged={() => load()} />
-        )}
-      </div>
-    </div>
+                </span>
+                <span
+                  className={pages.dot}
+                  style={c.color ? { background: c.color } : undefined}
+                  data-none={c.color ? undefined : true}
+                  aria-hidden="true"
+                />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      {current && <CategoryEditor key={current.name} category={current} onChanged={() => load()} />}
+    </div>,
   );
 }
 

@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useId, useRef, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   type AdminVideo,
@@ -337,6 +337,8 @@ function FromVideo({
                 start={chosen ?? video.coverSecond ?? 0}
                 busy={busy}
                 onPick={onPick}
+                videoLabel="Il video: fermalo nel momento che vuoi come copertina"
+                action={(second) => `Usa ${formatDuration(second)} come copertina`}
               />
             ) : (
               video.preview && (
@@ -385,21 +387,33 @@ function FromVideo({
 }
 
 // MomentPicker shows the video: the administrator stops it where they like,
-// moves the slider or writes the second, and uses that moment as cover. The
-// picture follows the slider, but with one seek at a time: moves made while
-// the video is still looking for a frame only update the place to go next.
-function MomentPicker({
+// moves the slider or writes the second, and uses that moment: as cover, or
+// as the start of the clip on the card. The picture follows the slider, but
+// with one seek at a time: moves made while the video is still looking for
+// a frame only update the place to go next. children are more fields, next
+// to the second; last is the latest second that may be chosen.
+export function MomentPicker({
   video,
   duration,
   start,
   busy,
   onPick,
+  videoLabel,
+  action,
+  last = duration,
+  sliderLabel = "Momento del video",
+  children,
 }: {
   video: AdminVideo;
   duration: number;
   start: number;
   busy: boolean;
   onPick: (second: number) => void;
+  videoLabel: string;
+  action: (second: number) => ReactNode;
+  last?: number;
+  sliderLabel?: string;
+  children?: ReactNode;
 }) {
   const player = useRef<HTMLVideoElement>(null);
   const [second, setSecond] = useState(start);
@@ -410,7 +424,7 @@ function MomentPicker({
   const sliderId = useId();
 
   const seek = (value: number) => {
-    const s = Math.min(duration, Math.max(0, Math.floor(value)));
+    const s = Math.min(last, Math.max(0, Math.floor(value)));
     setSecond(s);
     const video = player.current;
     if (!video) return;
@@ -428,11 +442,11 @@ function MomentPicker({
         src={`${streamURL(video.id)}#t=${from}`}
         controls
         preload="metadata"
-        aria-label="Il video: fermalo nel momento che vuoi come copertina"
+        aria-label={videoLabel}
         onTimeUpdate={(e) => {
           // A seek on its way: the slider stays where the administrator left it.
           if (e.currentTarget.seeking || next.current !== null) return;
-          setSecond(Math.floor(e.currentTarget.currentTime));
+          setSecond(Math.min(last, Math.floor(e.currentTarget.currentTime)));
         }}
         onSeeked={(e) => {
           if (next.current === null) return;
@@ -443,7 +457,7 @@ function MomentPicker({
       <div className={edit.momentSlider}>
         <div className={edit.momentSliderHead}>
           <label htmlFor={sliderId} className={ui.label}>
-            Momento del video
+            {sliderLabel}
           </label>
           <span className={edit.momentTime}>
             {formatDuration(second)} di {formatDuration(duration)}
@@ -453,7 +467,7 @@ function MomentPicker({
           id={sliderId}
           type="range"
           min={0}
-          max={duration}
+          max={last}
           step={1}
           value={second}
           aria-valuetext={formatDuration(second)}
@@ -470,19 +484,20 @@ function MomentPicker({
             type="number"
             className={`${ui.input} ${edit.secondInput}`}
             min={0}
-            max={duration}
+            max={last}
             step={1}
             value={second}
             onChange={(e) => seek(Number(e.target.value))}
           />
         </span>
+        {children}
         <button
           type="button"
           className={`${ui.btn} ${ui.primary}`}
           disabled={busy}
           onClick={() => onPick(second)}
         >
-          Usa {formatDuration(second)} come copertina
+          {action(second)}
         </button>
       </div>
     </div>

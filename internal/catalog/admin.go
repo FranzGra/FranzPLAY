@@ -66,6 +66,11 @@ type AdminVideo struct {
 	// The clip the administrator chose: a "video" uploaded, "none", or ""
 	// for the one FranzPLAY makes.
 	ClipChoice string `json:"clipChoice"`
+	// Where the clip FranzPLAY makes starts, in seconds, and how long it
+	// lasts, if the administrator chose them for this video; null is the
+	// site's choice.
+	ClipSecond  *int64 `json:"clipSecond"`
+	ClipSeconds *int64 `json:"clipSeconds"`
 	// The format inside the file, for the administrator's table: "h264",
 	// "aac"; "" if not read yet. HasCopy tells that FranzPLAY made a copy
 	// every browser plays.
@@ -109,6 +114,9 @@ const (
 //	PUT  /api/admin/videos/{id}/clip       a video as the card's clip (the body is the video)
 //	POST /api/admin/videos/{id}/clip/remake  back to the clip FranzPLAY makes, made again
 //	DELETE /api/admin/videos/{id}/clip     no clip on the card
+//	PUT  /api/admin/videos/{id}/clip/moment  the clip made from this second, this long {second, seconds}
+//	GET  /api/admin/clip-settings          where every clip starts and how long it lasts
+//	PUT  /api/admin/clip-settings          the same, for the clips made from now on {startPercent, seconds}
 //	GET  /api/admin/categories             every category, as the videos have it
 //	PUT  /api/admin/categories/{name}      the name people see and the color {label, color}
 //	PUT  /api/admin/categories/{name}/image   its image (the body is a JPEG)
@@ -145,6 +153,9 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/admin/videos/{id}/clip", a.only(a.handleOwnClip))
 	mux.HandleFunc("POST /api/admin/videos/{id}/clip/remake", a.only(a.handleRemakeClip))
 	mux.HandleFunc("DELETE /api/admin/videos/{id}/clip", a.only(a.handleNoClip))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/clip/moment", a.only(a.handleClipMoment))
+	mux.HandleFunc("GET /api/admin/clip-settings", a.only(a.handleClipSettings))
+	mux.HandleFunc("PUT /api/admin/clip-settings", a.only(a.handleSaveClipSettings))
 	mux.HandleFunc("GET /api/admin/categories", a.only(a.handleAdminCategories))
 	mux.HandleFunc("PUT /api/admin/categories/{name}", a.only(a.handleCategory))
 	mux.HandleFunc("PUT /api/admin/categories/{name}/image", a.only(a.handleCategoryImage))
@@ -404,6 +415,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
 		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL,
 		       v.own_cover IS NOT NULL, v.cover_second, v.own_clip IS NOT NULL, v.no_clip,
+		       v.clip_second, v.clip_seconds,
 		       coalesce(v.video_codec, ''), coalesce(v.audio_codec, ''), v.converted IS NOT NULL,
 		       `+isProblem+`, `+jobs.FileUnreadableError+`
 		FROM videos v JOIN libraries l ON l.id = v.library_id
@@ -417,10 +429,11 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 	for rows.Next() {
 		var av AdminVideo
 		var ownCover, ownClip, noClip, unreadable bool
-		var second sql.NullInt64
+		var second, clipSecond, clipSeconds sql.NullInt64
 		var readError string
 		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing, &av.TooShort,
 			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second, &ownClip, &noClip,
+			&clipSecond, &clipSeconds,
 			&av.VideoCodec, &av.AudioCodec, &av.HasCopy, &unreadable, &readError}})
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
@@ -441,6 +454,12 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 			av.ClipChoice = "video"
 		case noClip:
 			av.ClipChoice = "none"
+		}
+		if clipSecond.Valid {
+			av.ClipSecond = &clipSecond.Int64
+		}
+		if clipSeconds.Valid {
+			av.ClipSeconds = &clipSeconds.Int64
 		}
 		out = append(out, av)
 	}

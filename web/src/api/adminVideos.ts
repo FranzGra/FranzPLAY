@@ -20,6 +20,10 @@ export type AdminVideo = Video & {
   coverChoice: CoverChoice;
   coverSecond: number | null; // the moment chosen as cover, in seconds
   clipChoice: ClipChoice;
+  // Where the clip FranzPLAY makes starts, in seconds, and how long it
+  // lasts, chosen for this video; null is the site's choice.
+  clipSecond: number | null;
+  clipSeconds: number | null;
   videoCodec: string; // the format of the picture inside the file: "h264"; "" if not read yet
   audioCodec: string; // the format of the sound: "aac"; "" if none or not read yet
   hasCopy: boolean; // FranzPLAY made a copy every browser plays
@@ -98,6 +102,8 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   ) {
     throw new Error("admin video: bad coverSecond");
   }
+  const clipSecond = optionalCount(d.clipSecond, "clipSecond");
+  const clipSeconds = optionalCount(d.clipSeconds, "clipSeconds");
   const fileProblem = d.fileProblem ?? "";
   if (
     fileProblem !== "" &&
@@ -124,6 +130,8 @@ export function parseAdminVideo(data: unknown): AdminVideo {
     coverChoice: d.coverChoice,
     coverSecond: second,
     clipChoice: d.clipChoice,
+    clipSecond,
+    clipSeconds,
     videoCodec: d.videoCodec,
     audioCodec: d.audioCodec,
     hasCopy: d.hasCopy,
@@ -210,6 +218,29 @@ export async function uploadClip(id: number, clip: Blob): Promise<void> {
 // remakeClip goes back to the clip FranzPLAY makes, and makes it again.
 export async function remakeClip(id: number): Promise<void> {
   await request(`/api/admin/videos/${id}/clip/remake`, { method: "POST" });
+}
+
+// setClipMoment makes the clip again from the video, from second for
+// seconds, and keeps the choice for the clips made later; null goes back
+// to the site's choice.
+export async function setClipMoment(
+  id: number,
+  second: number | null,
+  seconds: number | null,
+): Promise<void> {
+  await request(`/api/admin/videos/${id}/clip/moment`, {
+    method: "PUT",
+    body: { second, seconds },
+  });
+}
+
+// optionalCount reads a number of seconds that may be missing or null.
+function optionalCount(v: unknown, what: string): number | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) {
+    throw new Error(`admin video: bad ${what}`);
+  }
+  return v;
 }
 
 // removeClip leaves the video's card without a clip.
