@@ -61,6 +61,8 @@ type RuleError struct {
 func (e *RuleError) Error() string { return fmt.Sprintf("Regola %d: %s", e.Rule, e.Reason) }
 
 // ErrTooManyRules is returned for more than MaxRules rules.
+//
+//nolint:revive,staticcheck // words shown to the administrator as they are
 var ErrTooManyRules = fmt.Errorf("Al massimo %d regole.", MaxRules)
 
 // Clean checks settings sent from outside: every rule must have something

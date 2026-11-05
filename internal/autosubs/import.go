@@ -26,6 +26,8 @@ const ImportedModel = "import"
 const maxImport = 2 << 20
 
 // Why an imported file is refused, in words for the administrator.
+//
+//nolint:revive,staticcheck // words shown to the administrator as they are
 var (
 	errImportTooBig   = fmt.Errorf("Il file è troppo grande: al massimo %d MB.", maxImport>>20)
 	errImportNotText  = errors.New("Il file non è un testo: scegli un file di sottotitoli .srt o .vtt.")
