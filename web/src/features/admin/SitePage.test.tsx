@@ -34,7 +34,7 @@ describe("site name and color", () => {
     await user.click(within(form).getByRole("button", { name: "Salva nome e colore" }));
     expect(await within(form).findByRole("status")).toHaveTextContent("Salvato");
     // The shape of the category covers goes too, as it was.
-    expect(await server.requests.at(-1)?.json()).toEqual({ ...saved, categoryShape: "landscape" });
+    expect(await server.lastSent()?.json()).toEqual({ ...saved, categoryShape: "landscape" });
     // The logo at the top and the color of the page follow.
     expect(screen.getByRole("link", { name: "CasaRossi" })).toBeInTheDocument();
     expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe("#dc2626");
@@ -78,7 +78,7 @@ describe("site name and color", () => {
     expect(await within(form).findByRole("status")).toHaveTextContent(
       "Vale per le anteprime fatte da adesso",
     );
-    expect(await server.requests.at(-1)?.json()).toEqual({ startPercent: 20, seconds: 8 });
+    expect(await server.lastSent()?.json()).toEqual({ startPercent: 20, seconds: 8 });
   });
 
   it("goes back to the automatic start", async () => {
@@ -95,7 +95,7 @@ describe("site name and color", () => {
     expect(within(form).queryByRole("spinbutton", { name: /Punto di partenza/ })).toBeNull();
     await user.click(within(form).getByRole("button", { name: "Salva anteprime" }));
     await within(form).findByRole("status");
-    expect(await server.requests.at(-1)?.json()).toEqual({ startPercent: 0, seconds: 8 });
+    expect(await server.lastSent()?.json()).toEqual({ startPercent: 0, seconds: 8 });
   });
 
   it("refuses clips longer than the server makes", async () => {
@@ -155,7 +155,7 @@ describe("site settings page", () => {
     await user.click(box);
     expect(await screen.findByRole("status")).toHaveTextContent("Registrazione aperta");
     expect(box).toBeChecked();
-    expect(await server.requests.at(-1)?.json()).toEqual({ open: true });
+    expect(await server.lastSent()?.json()).toEqual({ open: true });
 
     await user.click(box);
     expect(await screen.findByRole("status")).toHaveTextContent("Registrazione chiusa");
@@ -172,5 +172,135 @@ describe("site settings page", () => {
     await user.click(await screen.findByRole("switch", { name: "Chiunque può registrarsi" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Non si è riusciti a salvare");
     expect(screen.getByRole("switch", { name: "Chiunque può registrarsi" })).not.toBeChecked();
+  });
+});
+
+describe("site name and color, when saving fails", () => {
+  it.each([
+    [400, "Il nome o il colore non vanno bene"],
+    [500, "Non si è riusciti a salvare. Riprova tra poco."],
+  ])("explains a refusal %i and keeps the name typed", async (status, words) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { user } = renderApp("/admin/sito", {
+      ...signedIn(),
+      "GET /api/registration": { body: { open: false } },
+      "PUT /api/site": { status, body: { error: "no" } },
+    });
+    const form = await screen.findByRole("form", { name: "Nome e colore del sito" });
+    const first = within(form).getByLabelText("Prima parte del nome");
+    await user.clear(first);
+    await user.type(first, "Casa è mia 🎬");
+    await user.click(within(form).getByRole("button", { name: "Salva nome e colore" }));
+    expect(await within(form).findByRole("alert")).toHaveTextContent(words);
+    expect(first).toHaveValue("Casa è mia 🎬");
+    // The logo at the top did not change.
+    expect(screen.getByRole("link", { name: "FranzPLAY" })).toBeInTheDocument();
+  });
+
+  it("puts the saved name back with Annulla", async () => {
+    const { user, server } = renderApp("/admin/sito", {
+      ...signedIn(),
+      "GET /api/registration": { body: { open: false } },
+    });
+    const form = await screen.findByRole("form", { name: "Nome e colore del sito" });
+    const first = within(form).getByLabelText("Prima parte del nome");
+    await user.type(first, "!!");
+    await user.click(within(form).getByRole("button", { name: "Annulla" }));
+    expect(first).toHaveValue("Franz");
+    expect(form).toHaveTextContent("Nessuna modifica da salvare");
+    expect(server.lastSent()).toBeUndefined();
+  });
+});
+
+describe("who may enter", () => {
+  const routes = (methods: string[], save?: (r: Request) => Response | Promise<Response>) => ({
+    ...signedIn(),
+    "GET /api/registration": { body: { open: false } },
+    "GET /api/login-methods": { body: { methods } },
+    ...(save ? { "PUT /api/login-methods": save } : {}),
+  });
+  const echo = async (request: Request) =>
+    Response.json({ methods: ((await request.clone().json()) as { methods: string[] }).methods });
+
+  it("lists the ways to log in, each with its state", async () => {
+    renderApp("/admin/sito", routes(["password", "pin"]));
+    const list = await screen.findByRole("list", { name: "Modi per entrare" });
+    expect(within(list).getByRole("switch", { name: "Password" })).toBeChecked();
+    expect(within(list).getByRole("switch", { name: "PIN" })).toBeChecked();
+    expect(within(list).getByRole("switch", { name: "Sequenza" })).not.toBeChecked();
+    expect(within(list).getByRole("switch", { name: "Sequenza" })).toHaveAccessibleDescription(
+      /almeno 5 punti su 9/,
+    );
+  });
+
+  it("allows a way, in the order of the list", async () => {
+    const { user, server } = renderApp("/admin/sito", routes(["password", "pattern"], echo));
+    const list = await screen.findByRole("list", { name: "Modi per entrare" });
+    await user.click(within(list).getByRole("switch", { name: "PIN" }));
+    expect(await screen.findByText(/PIN ammesso: le persone possono sceglierlo/)).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(await server.lastSent()?.json()).toEqual({ methods: ["password", "pin", "pattern"] });
+    expect(within(list).getByRole("switch", { name: "PIN" })).toBeChecked();
+  });
+
+  it("takes a way away, and says what happens to who uses it", async () => {
+    const { user, server } = renderApp("/admin/sito", routes(["password", "pattern"], echo));
+    const list = await screen.findByRole("list", { name: "Modi per entrare" });
+    await user.click(within(list).getByRole("switch", { name: "Sequenza" }));
+    expect(await screen.findByText(/Sequenza non più ammessa\. Chi lo usa entra ancora/)).toBe(
+      screen.getAllByRole("status").at(-1),
+    );
+    expect(await server.lastSent()?.json()).toEqual({ methods: ["password"] });
+    // The last one left cannot be turned off.
+    expect(within(list).getByRole("switch", { name: "Password" })).toBeDisabled();
+  });
+
+  it("never leaves nobody a way in", async () => {
+    const { server } = renderApp("/admin/sito", routes(["pin"], echo));
+    const list = await screen.findByRole("list", { name: "Modi per entrare" });
+    expect(within(list).getByRole("switch", { name: "PIN" })).toBeDisabled();
+    expect(within(list).getByRole("switch", { name: "Password" })).toBeEnabled();
+    expect(server.lastSent()).toBeUndefined();
+  });
+
+  it("says when the choice was not saved, and keeps the old one", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { user } = renderApp(
+      "/admin/sito",
+      routes(["password"], () => Response.json({ error: "boom" }, { status: 500 })),
+    );
+    const list = await screen.findByRole("list", { name: "Modi per entrare" });
+    await user.click(within(list).getByRole("switch", { name: "PIN" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Non si è riusciti a salvare. Riprova tra poco.",
+    );
+    expect(within(list).getByRole("switch", { name: "PIN" })).not.toBeChecked();
+  });
+
+  it("says when the ways cannot be read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    renderApp("/admin/sito", {
+      ...routes([]),
+      "GET /api/login-methods": { status: 500, body: { error: "boom" } },
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Modi di accesso non disponibili" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says when registration cannot be read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    renderApp("/admin/sito", {
+      ...signedIn(),
+      "GET /api/registration": { status: 503, body: { error: "down" } },
+      "GET /api/admin/clip-settings": { body: { startPercent: 0, seconds: 6 } },
+    });
+    await screen.findByRole("form", { name: "Anteprime dei video" });
+    expect(
+      await screen.findByRole("heading", { name: "Impostazioni non disponibili" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Chiunque può registrarsi" })).toBeNull();
   });
 });

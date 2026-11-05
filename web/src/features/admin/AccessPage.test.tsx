@@ -42,9 +42,7 @@ describe("access log page", () => {
     expect(server.requests.at(-1)?.url).toContain("failed=1");
 
     await user.type(screen.getByLabelText("Cerca un nome o un indirizzo"), "zzz");
-    expect(
-      await screen.findByText("Nessun accesso trovato", {}, { timeout: 2000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Nessun accesso trovato")).toBeInTheDocument();
   });
 
   it("shows older entries on request", async () => {

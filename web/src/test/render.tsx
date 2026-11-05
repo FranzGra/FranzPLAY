@@ -3,6 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import type { Account } from "../api/auth";
 import { App } from "../app/App";
+import * as lazyPages from "../app/lazyPages";
+
+// Pages load their code a piece at a time (React.lazy). The first time a
+// page opens, its code is compiled: on a busy computer that alone can take
+// longer than a findBy waits, and the test fails without a real problem.
+// Loading every page before the tests of the file leaves each test to time
+// only its own work.
+beforeAll(async () => {
+  await Promise.all(
+    Object.values(lazyPages).map((p) => ("preload" in p ? p.preload() : undefined)),
+  );
+}, 120_000);
 
 export const testAccount: Account = {
   id: 1,
@@ -44,7 +56,11 @@ export function fakeServer(routes: Routes) {
       ? new Response(null, { status: 204 })
       : json(answer.body, answer.status);
   });
-  return { spy, requests };
+  // lastSent is the latest request that changes something (not a GET): the
+  // pages keep loading their lists around it, in an order that changes when
+  // the computer is busy.
+  const lastSent = () => requests.filter((r) => r.method !== "GET").at(-1);
+  return { spy, requests, lastSent };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -72,7 +88,9 @@ export function signedIn(account: Account = testAccount): Routes {
 // renderApp shows the whole interface at the given address, without a
 // real browser, talking to a fake server (by default: logged in).
 export function renderApp(path = "/", routes: Routes = signedIn()) {
-  const user = userEvent.setup();
+  // No pause between keys: each pause is a timer, and on a busy computer a
+  // long typed text alone could use up the time of the test.
+  const user = userEvent.setup({ delay: null });
   const server = fakeServer(routes);
   const result = render(
     <MemoryRouter initialEntries={[path]}>

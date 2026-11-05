@@ -45,7 +45,7 @@ async function openCover(
     "GET /api/admin/videos/7": { body: video },
     ...routes,
   });
-  await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 });
+  await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
   const panel = screen.getByRole("region", { name: "Copertina di Mare 2024" });
   await app.user.click(within(panel).getByRole("tab", { name: tab }));
   return { ...app, panel };

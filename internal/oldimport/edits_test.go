@@ -58,7 +58,10 @@ func coverFixture(t *testing.T, db *sql.DB) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dump := strings.Replace(string(data),
+	// A Windows checkout may give the fixture CRLF line ends: the
+	// replacements below expect LF.
+	dump := strings.ReplaceAll(string(data), "\r\n", "\n")
+	dump = strings.Replace(dump,
 		`(2,'Film/Il sorpasso (1962).mp4','Il sorpasso',2,NULL,0,'1:45','mp4',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)`,
 		`(2,'Film/Il sorpasso (1962).mp4','Il sorpasso',2,NULL,0,'1:45','mp4','Film/copertine_Film/Il sorpasso (1962).jpg',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'manuale',NULL)`, 1)
 	dump = strings.Replace(dump,

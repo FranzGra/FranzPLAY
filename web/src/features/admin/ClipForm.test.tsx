@@ -30,7 +30,7 @@ async function openClip(video: Record<string, unknown>, routes: Record<string, u
     "GET /api/admin/videos/7": { body: video },
     ...routes,
   });
-  await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 });
+  await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
   return { ...app, panel: screen.getByRole("region", { name: "Anteprima di Mare 2024" }) };
 }
 
@@ -45,7 +45,7 @@ describe("choosing a clip", () => {
       target: { files: [file] },
     });
     expect(await screen.findByText(/l'anteprima nuova arriva/)).toBeInTheDocument();
-    const sent = server.requests.at(-1);
+    const sent = server.lastSent();
     expect(sent?.url).toContain("/api/admin/videos/7/clip");
     expect(sent?.headers.get("Content-Type")).toBe("video/mp4");
     expect(within(panel).getByText("Caricata da te")).toHaveAttribute("aria-current", "true");
@@ -70,13 +70,13 @@ describe("choosing a clip", () => {
     await user.click(within(panel).getByRole("button", { name: "Nessuna anteprima" }));
     expect(await screen.findByText(/niente anteprima/)).toBeInTheDocument();
     expect(within(panel).getByText("Senza anteprima")).toBeInTheDocument();
-    expect(server.requests.at(-1)?.method).toBe("DELETE");
+    expect(server.lastSent()?.method).toBe("DELETE");
 
     const again = screen.getByRole("region", { name: "Anteprima di Mare 2024" });
     expect(again).toHaveTextContent("non ha anteprima");
     expect(within(again).queryByRole("button", { name: "Nessuna anteprima" })).toBeNull();
     await user.click(within(again).getByRole("button", { name: "Rifalla dal video" }));
-    await waitFor(() => expect(server.requests.at(-1)?.url).toContain("/clip/remake"));
+    await waitFor(() => expect(server.lastSent()?.url).toContain("/clip/remake"));
     expect(await screen.findByText(/rifà l'anteprima/)).toBeInTheDocument();
     expect(within(again).queryByText("Senza anteprima")).not.toBeInTheDocument();
   });
@@ -117,7 +117,7 @@ describe("choosing where the clip starts", () => {
     expect(
       await screen.findByText(/l'anteprima riparte da 1:30 e dura 8 secondi/),
     ).toBeInTheDocument();
-    const sent = server.requests.at(-1);
+    const sent = server.lastSent();
     expect(sent?.url).toContain("/api/admin/videos/7/clip/moment");
     expect(await sent?.json()).toEqual({ second: 90, seconds: 8 });
     expect(screen.getByRole("region", { name: "Anteprima di Mare 2024" })).toHaveTextContent(
@@ -136,7 +136,7 @@ describe("choosing where the clip starts", () => {
     });
     await user.click(screen.getByRole("button", { name: "Rigenera anteprima da qui" }));
     await screen.findByText(/l'anteprima riparte da 0:12 e dura 6 secondi/);
-    expect(await server.requests.at(-1)?.json()).toEqual({ second: 12, seconds: null });
+    expect(await server.lastSent()?.json()).toEqual({ second: 12, seconds: null });
   });
 
   it("refuses a length the clips cannot have", async () => {
@@ -161,7 +161,7 @@ describe("choosing where the clip starts", () => {
     expect(panel).toHaveTextContent("a partire da 0:42, per 10 secondi: scelto da te");
     await user.click(within(panel).getByRole("button", { name: "Torna come le altre" }));
     expect(await screen.findByText(/torna come quelle del sito/)).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({ second: null, seconds: null });
+    expect(await server.lastSent()?.json()).toEqual({ second: null, seconds: null });
     expect(
       within(screen.getByRole("region", { name: "Anteprima di Mare 2024" })).queryByRole("button", {
         name: "Torna come le altre",

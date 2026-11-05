@@ -35,7 +35,7 @@ async function typeName(page: Page, name: string, button = "Entra") {
 }
 
 test("PIN on the keypad", async ({ page, browser }, info) => {
-  const name = `Nonna ${info.project.name}`;
+  const name = `Nonna ${info.project.name} ${info.repeatEachIndex + 1}`;
   await addPerson(page, name, "pin", "482915");
   const guest = await stranger(browser);
   await typeName(guest, name);
@@ -48,7 +48,7 @@ test("PIN on the keypad", async ({ page, browser }, info) => {
 });
 
 test("pattern drawn with the pointer", async ({ page, browser }, info) => {
-  const name = `Luca ${info.project.name}`;
+  const name = `Luca ${info.project.name} ${info.repeatEachIndex + 1}`;
   // An L: down the left column, then along the bottom row.
   await addPerson(page, name, "pattern", "14789");
   const guest = await stranger(browser);
@@ -75,7 +75,7 @@ test("pattern drawn with the pointer", async ({ page, browser }, info) => {
 });
 
 test("a PIN is blocked after 3 wrong tries, with the wait", async ({ page, browser }, info) => {
-  const name = `Zia ${info.project.name}`;
+  const name = `Zia ${info.project.name} ${info.repeatEachIndex + 1}`;
   await addPerson(page, name, "pin", "135790");
   const guest = await stranger(browser);
   await typeName(guest, name);
@@ -104,7 +104,7 @@ test("a PIN is blocked after 3 wrong tries, with the wait", async ({ page, brows
 });
 
 test("setting a pattern in the profile takes two steps", async ({ page, browser }, info) => {
-  const name = `Bea ${info.project.name}`;
+  const name = `Bea ${info.project.name} ${info.repeatEachIndex + 1}`;
   await addPerson(page, name, "password", "password-di-bea");
   const guest = await stranger(browser);
   await guest.goto("/");
@@ -140,7 +140,9 @@ test("setting a pattern in the profile takes two steps", async ({ page, browser 
   await draw("Ripeti la sequenza", [7, 8, 9, 6, 3]);
   await expect(guest.getByRole("alert")).toContainText("non sono uguali");
   await expect(guest.getByText("Ridisegnala per confermare")).toBeVisible();
-  await guest.waitForTimeout(700); // the wrong pattern, red, goes away
+  // The wrong pattern, red, goes away: no dot stays pressed.
+  const again = guest.getByRole("group", { name: "Ripeti la sequenza" });
+  await expect(again.getByRole("button", { pressed: true })).toHaveCount(0);
   await draw("Ripeti la sequenza", [7, 4, 1, 2, 3]);
   await expect(guest.locator("span", { hasText: "Sequenza confermata" })).toBeVisible();
   await guest.getByRole("button", { name: "Salva" }).click();

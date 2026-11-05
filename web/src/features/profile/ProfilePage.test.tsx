@@ -173,7 +173,7 @@ describe("profile page", () => {
     await user.click(within(form).getByRole("button", { name: "Salva il nome" }));
     expect(await screen.findByRole("heading", { name: "Paoletto" })).toBeInTheDocument();
     expect(screen.getByText(/Nome cambiato/)).toHaveAttribute("role", "status");
-    expect(await server.requests.at(-1)?.json()).toEqual({ name: "Paoletto" });
+    expect(await server.lastSent()?.json()).toEqual({ name: "Paoletto" });
   });
 
   it("explains when the name is already used", async () => {
@@ -261,7 +261,7 @@ describe("profile page", () => {
       "aria-pressed",
       "true",
     );
-    expect(await server.requests.at(-1)?.json()).toEqual({ color: "#7c3aed" });
+    expect(await server.lastSent()?.json()).toEqual({ color: "#7c3aed" });
 
     // Any other color, saved only when asked.
     fireEvent.input(within(colors).getByLabelText("Un altro colore"), {

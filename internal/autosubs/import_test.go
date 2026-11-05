@@ -18,7 +18,8 @@ func TestImportedVTT(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nCiao <b>a tutti</b>\n\n00:00:03.000 --> 00:00:04.000\nSeconda &lt;script&gt;battuta&lt;/script&gt;\n"
+	// Markup other than italics, bold and underline goes; its words stay.
+	want := "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nCiao <b>a tutti</b>\n\n00:00:03.000 --> 00:00:04.000\nSeconda battuta\n"
 	if got != want {
 		t.Errorf("from .srt:\n%q\nwant\n%q", got, want)
 	}

@@ -212,7 +212,7 @@ describe("upload page", () => {
     await user.type(title, "Al mare d'estate");
     await user.click(within(mine).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByRole("link", { name: "Al mare d'estate" })).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({ title: "Al mare d'estate" });
+    expect(await server.lastSent()?.json()).toEqual({ title: "Al mare d'estate" });
   });
 
   const people = [
@@ -238,7 +238,7 @@ describe("upload page", () => {
     await user.click(within(who).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/solo tu lo vedi/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Chi lo vede" })).not.toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       private: true,
       sharedWith: [],
       byLink: false,
@@ -270,7 +270,7 @@ describe("upload page", () => {
     await user.click(within(who).getByRole("checkbox", { name: "Marco" }));
     await user.click(within(who).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/lo vedono anche Marco$/)).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       private: true,
       sharedWith: [4],
       byLink: false,
@@ -333,7 +333,7 @@ describe("upload page", () => {
     expect(within(who).getByText(/comparirà appena salvi/)).toBeInTheDocument();
     await user.click(within(who).getByRole("button", { name: "Salva" }));
     expect(await within(mine).findByText(/lo vede chi ha il link$/)).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       private: true,
       sharedWith: [],
       byLink: true,

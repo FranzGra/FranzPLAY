@@ -293,7 +293,7 @@ describe("videos page", () => {
       const { user } = await open();
       await user.click(within(rowOf("Mare 2024")).getByRole("link", { name: "Mare 2024" }));
       expect(
-        await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 }),
+        await screen.findByRole("heading", { level: 1, name: "Mare 2024" }),
       ).toBeInTheDocument();
       expect(screen.getByRole("textbox", { name: "Titolo" })).toBeInTheDocument();
       expect(anyPanel()).not.toBeInTheDocument();
@@ -305,7 +305,7 @@ describe("videos page", () => {
         within(rowOf("Mare 2024")).getByRole("link", { name: "Copertina di Mare 2024" }),
       );
       expect(
-        await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 }),
+        await screen.findByRole("heading", { level: 1, name: "Mare 2024" }),
       ).toBeInTheDocument();
       expect(anyPanel()).not.toBeInTheDocument();
     });
@@ -366,9 +366,7 @@ describe("videos page", () => {
     await screen.findByRole("table", { name: "Video" });
     await user.click(within(rowOf("Mare 2024")).getByRole("link", { name: "Modifica Mare 2024" }));
     // The page loads its code the first time: give it a moment.
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();
     // The path on top goes back to the list.
     const crumb = screen.getByRole("list", { name: "Sei qui" });
     expect(within(crumb).getByRole("link", { name: "Video" })).toHaveAttribute(
@@ -400,9 +398,7 @@ describe("videos page", () => {
     expect(window.localStorage.getItem("franzplay.adminVideosView")).toBe('"cards"');
 
     await user.click(card);
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Mare 2024" })).toBeInTheDocument();
   });
 
   it("opens on the cards when this browser chose them", async () => {
@@ -427,7 +423,7 @@ async function detail(video = adminVideo(), routes: Record<string, unknown> = {}
     "GET /api/admin/videos/7": { body: video },
     ...routes,
   });
-  await screen.findByRole("textbox", { name: "Titolo" }, { timeout: 3000 });
+  await screen.findByRole("textbox", { name: "Titolo" });
   return app;
 }
 
@@ -585,7 +581,7 @@ describe("page of a video in the administration", () => {
       ...signedIn(),
       "GET /api/admin/videos/7": { body: adminVideo() },
     });
-    await screen.findByRole("textbox", { name: "Titolo" }, { timeout: 3000 });
+    await screen.findByRole("textbox", { name: "Titolo" });
     expect(screen.getByRole("link", { name: "Video precedente" })).toHaveAttribute(
       "href",
       "/admin/video/5",
@@ -773,7 +769,7 @@ describe("page of a video in the administration", () => {
     await vi.waitFor(() => expect(hidden).toBeChecked());
     await user.click(hidden);
     await vi.waitFor(async () =>
-      expect(await server.requests.at(-1)?.clone().json()).toEqual({ hidden: false }),
+      expect(await server.lastSent()?.clone().json()).toEqual({ hidden: false }),
     );
   });
 
@@ -830,7 +826,7 @@ describe("page of a video in the administration", () => {
       "POST /api/videos/7/prepare": { body: { state: "waiting" } },
     });
     await user.click(screen.getByRole("button", { name: "Crea copia compatibile" }));
-    await vi.waitFor(() => expect(server.requests.at(-1)?.url).toContain("/prepare"));
+    await vi.waitFor(() => expect(server.lastSent()?.url).toContain("/prepare"));
     expect(screen.getByRole("button", { name: "Copia in preparazione" })).toBeDisabled();
   });
 
@@ -848,8 +844,6 @@ describe("page of a video in the administration", () => {
 
   it("says when the video is not there", async () => {
     renderApp("/admin/video/99", signedIn());
-    expect(
-      await screen.findByRole("heading", { name: "Video non trovato" }, { timeout: 3000 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Video non trovato" })).toBeInTheDocument();
   });
 });

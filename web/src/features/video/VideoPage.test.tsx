@@ -16,8 +16,7 @@ describe("video page", () => {
       },
       "POST /api/videos/7/prepare": { body: { state: "working", percent: 40 } },
     });
-    // The first test loads the page's code: give it a moment on a busy machine.
-    await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
     await waitFor(() =>
       expect(server.requests.some((r) => r.method === "POST" && r.url.endsWith("/prepare"))).toBe(
         true,

@@ -33,7 +33,7 @@ async function open(video: Record<string, unknown>, routes: Record<string, unkno
     "GET /api/people": { body: [{ id: 2, name: "Marco", avatar: 0 }] },
     ...routes,
   });
-  await screen.findByRole("heading", { level: 1, name: "Mare 2024" }, { timeout: 3000 });
+  await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
   return app;
 }
 

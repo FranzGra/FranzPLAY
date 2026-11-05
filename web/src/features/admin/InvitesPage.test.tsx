@@ -55,7 +55,7 @@ describe("invites page", () => {
     expect(within(panel).getByLabelText("Mandalo a chi vuoi invitare")).toHaveValue(
       `${window.location.origin}/invito#codice-segreto`,
     );
-    expect(await server.requests.at(-1)?.json()).toEqual({ note: "Nonna Maria", canUpload: true });
+    expect(await server.lastSent()?.json()).toEqual({ note: "Nonna Maria", canUpload: true });
     expect(screen.getByRole("list", { name: "Inviti" })).toHaveTextContent("Nonna Maria");
 
     await user.click(within(panel).getByRole("button", { name: "Fatto" }));
@@ -71,6 +71,6 @@ describe("invites page", () => {
     });
     await user.click(await screen.findByRole("button", { name: /Annulla l'invito/ }));
     expect(await screen.findByRole("heading", { name: "Nessun invito" })).toBeInTheDocument();
-    expect(server.requests.at(-1)?.method).toBe("DELETE");
+    expect(server.lastSent()?.method).toBe("DELETE");
   });
 });
