@@ -125,6 +125,24 @@ func vttText(text string) string {
 	return strings.Join(lines, "\n")
 }
 
+// cueMarkup is the markup a subtitle not written by FranzPLAY may have.
+var cueMarkup = regexp.MustCompile(`</?[a-zA-Z][^>]*>|\{\\[^}]*\}`)
+
+// cueStyle is the markup that stays: italics, bold and underline, which a
+// browser shows. The rest, like <font> or {\an8}, it would not understand.
+var cueStyle = regexp.MustCompile(`(?i)^</?[biu]>$`)
+
+// KeepStyle takes out of a cue's text the markup of a subtitle not written
+// by FranzPLAY, keeping italics, bold and underline.
+func KeepStyle(text string) string {
+	return cueMarkup.ReplaceAllStringFunc(text, func(mark string) string {
+		if cueStyle.MatchString(mark) {
+			return strings.ToLower(mark)
+		}
+		return ""
+	})
+}
+
 // vttUnescapes undo vttEscapes, plus the spaces WebVTT may write by name.
 var vttUnescapes = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&nbsp;", " ", "&amp;", "&")
 
@@ -136,6 +154,7 @@ var vttTiming = regexp.MustCompile(`^((?:\d+:)?\d{2}:\d{2}\.\d{3})\s+-->\s+((?:\
 // It is used to translate subtitles already made.
 func ParseWebVTT(text string) ([]Cue, error) {
 	text = strings.ReplaceAll(strings.TrimPrefix(text, "\uFEFF"), "\r\n", "\n")
+	text = spacesOnly.ReplaceAllString(text, "")
 	if !strings.HasPrefix(text, "WEBVTT") {
 		return nil, fmt.Errorf("%w: not WebVTT", ErrBadTranscript)
 	}

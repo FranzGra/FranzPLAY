@@ -20,7 +20,7 @@ const continueLimit = 20
 
 // videos is what this feature needs from the catalog.
 type videos interface {
-	ByIDs(ctx context.Context, ids []int64) ([]catalog.Video, error)
+	ByIDsFor(ctx context.Context, ids []int64, viewer int64) ([]catalog.Video, error)
 }
 
 type handlers struct {
@@ -101,7 +101,7 @@ func (h handlers) save(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, h.logger, http.StatusBadRequest, "the request must be {\"position\": seconds}")
 		return
 	}
-	duration, err := h.store.duration(r.Context(), videoID)
+	duration, err := h.store.duration(r.Context(), userID, videoID)
 	if errors.Is(err, errVideoNotFound) {
 		respond.Error(w, r, h.logger, http.StatusNotFound, err.Error())
 		return
@@ -130,15 +130,16 @@ type item struct {
 	WatchedAt time.Time     `json:"watchedAt"`
 }
 
-// items adds each video's details to what was watched, in the same order.
-func (h handlers) items(ctx context.Context, list []watched) ([]item, error) {
+// items adds each video's details to what the person watched, in the
+// same order.
+func (h handlers) items(ctx context.Context, userID int64, list []watched) ([]item, error) {
 	ids := make([]int64, len(list))
 	byID := make(map[int64]watched, len(list))
 	for i, w := range list {
 		ids[i] = w.videoID
 		byID[w.videoID] = w
 	}
-	found, err := h.videos.ByIDs(ctx, ids)
+	found, err := h.videos.ByIDsFor(ctx, ids, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ func (h handlers) list(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	items, err := h.items(r.Context(), started)
+	items, err := h.items(r.Context(), a.ID, started)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
 		return
@@ -191,7 +192,7 @@ func (h handlers) history(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	items, err := h.items(r.Context(), list)
+	items, err := h.items(r.Context(), a.ID, list)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
 		return

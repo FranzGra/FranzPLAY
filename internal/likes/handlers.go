@@ -15,7 +15,7 @@ import (
 
 // videos is what this feature needs from the catalog.
 type videos interface {
-	ByIDs(ctx context.Context, ids []int64) ([]catalog.Video, error)
+	ByIDsFor(ctx context.Context, ids []int64, viewer int64) ([]catalog.Video, error)
 	CanOpen(ctx context.Context, videoID, viewer int64) (bool, error)
 }
 
@@ -69,7 +69,7 @@ func (h handlers) list(w http.ResponseWriter, r *http.Request) {
 		respond.InternalError(w, r, h.logger, err)
 		return
 	}
-	found, err := h.videos.ByIDs(r.Context(), ids)
+	found, err := h.videos.ByIDsFor(r.Context(), ids, a.ID)
 	if err != nil {
 		respond.InternalError(w, r, h.logger, err)
 		return

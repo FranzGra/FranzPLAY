@@ -171,6 +171,10 @@ func decodeWindows1252(b []byte) string {
 // srtTime is a time in an .srt cue line: "0:01:02,345" or "00:01:02,345".
 var srtTime = regexp.MustCompile(`(\d+):(\d{2}):(\d{2})[,.](\d{3})`)
 
+// spacesOnly are the lines of only spaces. Many files end their cues with
+// one; emptied, it ends the cue as an empty line does.
+var spacesOnly = regexp.MustCompile(`(?m)^[ \t]+$`)
+
 // ToWebVTT turns the text of an .srt or .vtt file into WebVTT, the only
 // subtitle format browsers read. An .srt only needs a header and dots
 // instead of commas in its times.
@@ -178,6 +182,7 @@ func ToWebVTT(text, format string) string {
 	text = strings.TrimPrefix(text, "\uFEFF")
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
+	text = spacesOnly.ReplaceAllString(text, "")
 	if format == "vtt" {
 		if strings.HasPrefix(text, "WEBVTT") {
 			return text

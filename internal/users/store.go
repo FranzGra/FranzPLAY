@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -65,6 +66,45 @@ type store struct {
 	db *sql.DB
 }
 
+// querier is what a *sql.DB and a *sql.Tx both do.
+type querier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// sameName returns the name of the user, other than the one with the id
+// except, whose name is name whatever its capitals; ok is false if there
+// is none. The column compares with COLLATE NOCASE, which folds only A to
+// Z: other letters, like "Élodie" and "élodie", are compared here. A name
+// written the same way comes first.
+func sameName(ctx context.Context, q querier, name string, except int64) (found string, ok bool, err error) {
+	err = q.QueryRowContext(ctx, `SELECT name FROM users WHERE name = ? AND id != ?`, name, except).Scan(&found)
+	if err == nil {
+		return found, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return "", false, fmt.Errorf("read user names: %w", err)
+	}
+	// The people of one server are few: reading all their names is quick.
+	rows, err := q.QueryContext(ctx, `SELECT name FROM users WHERE id != ? ORDER BY id`, except)
+	if err != nil {
+		return "", false, fmt.Errorf("read user names: %w", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		if err := rows.Scan(&found); err != nil {
+			return "", false, fmt.Errorf("read user names: %w", err)
+		}
+		if strings.EqualFold(found, name) {
+			return found, true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, fmt.Errorf("read user names: %w", err)
+	}
+	return "", false, nil
+}
+
 func (s store) countUsers(ctx context.Context) (int, error) {
 	var n int
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users`).Scan(&n); err != nil {
@@ -96,11 +136,9 @@ func (s store) createUser(ctx context.Context, a Account, hash string, now time.
 
 // insertUser adds a user inside a transaction, if the name is free.
 func insertUser(ctx context.Context, tx *sql.Tx, a Account, hash string, now time.Time) (Account, error) {
-	var exists int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE name = ?`, a.Name).Scan(&exists); err != nil {
+	if _, taken, err := sameName(ctx, tx, a.Name, 0); err != nil {
 		return Account{}, fmt.Errorf("create user: %w", err)
-	}
-	if exists > 0 {
+	} else if taken {
 		return Account{}, errNameTaken
 	}
 	if a.UploadQuota == 0 {
@@ -155,6 +193,13 @@ func scanAccount(row scanner, extra ...any) (storedAccount, error) {
 
 // credentials returns a user and its password hash, by name.
 func (s store) credentials(ctx context.Context, name string) (storedAccount, string, error) {
+	name, ok, err := sameName(ctx, s.db, name, 0)
+	if err != nil {
+		return storedAccount{}, "", err
+	}
+	if !ok {
+		return storedAccount{}, "", errUserNotFound
+	}
 	var hash string
 	a, err := scanAccount(s.db.QueryRowContext(ctx, `SELECT `+accountColumns+`, password_hash FROM users WHERE name = ?`, name), &hash)
 	if errors.Is(err, sql.ErrNoRows) {

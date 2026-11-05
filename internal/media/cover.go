@@ -193,8 +193,14 @@ func (c *Coverer) coverArgs(video string, duration int64, choice coverChoice, ke
 		args = append(args, "-i", "file:"+choice.own)
 		scale = crop + scale
 	case choice.second.Valid:
+		// The duration saved is rounded, so its last second may be past the
+		// real end, where there is no frame: one second before always has one.
+		second := choice.second.Int64
+		if duration > 0 {
+			second = min(second, duration-1)
+		}
 		// -ss before -i jumps straight to the moment instead of decoding up to it.
-		args = append(args, "-ss", strconv.FormatInt(choice.second.Int64, 10), "-i", "file:"+video)
+		args = append(args, "-ss", strconv.FormatInt(second, 10), "-i", "file:"+video)
 	case choice.beside != "":
 		args = append(args, "-i", "file:"+choice.beside)
 		scale = crop + scale

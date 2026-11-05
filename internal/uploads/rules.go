@@ -102,6 +102,10 @@ func check(a users.Account, req newUpload, space Space, waiting int) (newUpload,
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
 		title = strings.TrimSpace(strings.TrimSuffix(name, path.Ext(name)))
+		// A name may be longer than a title: the title is its beginning.
+		if r := []rune(title); len(r) > maxTitle {
+			title = strings.TrimSpace(string(r[:maxTitle]))
+		}
 	}
 	if !cleanText(title, maxTitle) {
 		return newUpload{}, errBadTitle

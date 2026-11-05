@@ -60,8 +60,18 @@ func importedVTT(data []byte) (string, error) {
 	default:
 		return "", errImportFormat
 	}
-	cues, err := video.ParseWebVTT(vtt)
-	if err != nil || len(cues) == 0 {
+	parsed, err := video.ParseWebVTT(vtt)
+	if err != nil {
+		return "", errImportNoCues
+	}
+	cues := make([]video.Cue, 0, len(parsed))
+	for _, c := range parsed {
+		// <font> and {\an8} would show as text: only their words stay.
+		if c.Text = strings.TrimSpace(video.KeepStyle(c.Text)); c.Text != "" {
+			cues = append(cues, c)
+		}
+	}
+	if len(cues) == 0 {
 		return "", errImportNoCues
 	}
 	return video.WebVTT(cues), nil
