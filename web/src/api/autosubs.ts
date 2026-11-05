@@ -412,6 +412,40 @@ export async function deleteMadeSubtitles(id: number, lang: string): Promise<voi
   });
 }
 
+// importedModel is the model of subtitles imported from a file: the server
+// keeps them as if whisper wrote them.
+export const importedModel = "import";
+
+// maxImportSize is the largest subtitle file the server accepts.
+export const maxImportSize = 2 * 1024 * 1024;
+
+// importProblem says whether a file looks like subtitles that can be
+// imported: an .srt or a .vtt, not too big. "" when it does, else why not.
+export function importProblem(file: File): string {
+  if (!/\.(srt|vtt)$/i.test(file.name)) {
+    return "Si possono importare solo file di sottotitoli .srt o .vtt.";
+  }
+  if (file.size > maxImportSize) return "Il file è troppo grande: al massimo 2 MB.";
+  if (file.size === 0) return "Il file è vuoto.";
+  return "";
+}
+
+// importSubtitles saves a .srt or .vtt file as the subtitles of a video in
+// one language. Without replace, subtitles already there in that language
+// make it fail with 409: ask before replacing them.
+export async function importSubtitles(
+  id: number,
+  lang: string,
+  file: Blob,
+  replace = false,
+): Promise<void> {
+  const query = replace ? "?replace=1" : "";
+  await request(`/api/admin/subtitles/${id}/import/${encodeURIComponent(lang)}${query}`, {
+    method: "PUT",
+    body: file,
+  });
+}
+
 // languageNames are the languages FranzPLAY names, in Italian.
 const languageNames: Record<string, string> = {
   it: "Italiano",
@@ -421,6 +455,9 @@ const languageNames: Record<string, string> = {
   de: "Tedesco",
   pt: "Portoghese",
 };
+
+// knownLanguages are the languages FranzPLAY names, in its order.
+export const knownLanguages = Object.keys(languageNames);
 
 // mainLang is a language without its country: "en" from "en-US".
 export function mainLang(code: string): string {

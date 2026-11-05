@@ -2,8 +2,14 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 
 // Pages load their code a piece at a time (React.lazy): on a busy
-// computer the default second is not always enough to find them.
-configure({ asyncUtilTimeout: 4000 });
+// computer the default second is not always enough to find them. A test
+// that passes never waits this long: it is only how long a missing thing
+// is looked for before the test fails.
+configure({ asyncUtilTimeout: 10_000 });
+
+// The longest tests click and type through a whole page: with other work on
+// the computer the default 5 seconds is sometimes not enough to finish.
+vi.setConfig({ testTimeout: 15_000 });
 
 afterEach(() => {
   cleanup();

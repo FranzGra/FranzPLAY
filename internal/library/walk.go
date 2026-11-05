@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
-	"strings"
 
 	"github.com/FranzGra/FranzPLAY/internal/video"
 )
@@ -120,12 +119,19 @@ func (l listing) coverImages() map[string]string {
 }
 
 // categoryPictures are the pictures in the folders of the categories (the
-// first-level folders) whose name says they are the picture of the
-// category, like "Viaggi/poster.jpg" (video.IsCategoryPicture).
+// folders with videos of their own, at any depth: categoryOf) whose name
+// says they are the picture of the category, like "Viaggi/poster.jpg" or
+// "Serie A/Stagione 1/poster.jpg" (video.IsCategoryPicture).
 func (l listing) categoryPictures() []categoryPicture {
+	categories := make(map[string]bool)
+	for _, f := range l.files {
+		if c := categoryOf(f.loc.path); c != "" {
+			categories[c] = true
+		}
+	}
 	var out []categoryPicture
 	for dir, pictures := range l.images {
-		if dir == "." || strings.Contains(dir, "/") {
+		if !categories[dir] {
 			continue
 		}
 		for _, p := range pictures {

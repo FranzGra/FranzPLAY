@@ -68,7 +68,7 @@ describe("confirming what the internet found", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Usa la proposta per Gita" }));
-    expect(server.requests.at(-1)?.method).toBe("POST");
+    expect(server.lastSent()?.method).toBe("POST");
     expect(
       await screen.findByRole("button", { name: "Scarta la proposta per Mare" }),
     ).toBeEnabled();
@@ -76,7 +76,7 @@ describe("confirming what the internet found", () => {
 
     await user.click(screen.getByRole("button", { name: "Scarta la proposta per Mare" }));
     expect(await screen.findByText(/Niente da confermare/)).toBeInTheDocument();
-    expect(server.requests.at(-1)?.method).toBe("DELETE");
+    expect(server.lastSent()?.method).toBe("DELETE");
   });
 
   it("shows proposals left after the confirm mode was turned off", async () => {

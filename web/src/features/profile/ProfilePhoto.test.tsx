@@ -44,7 +44,7 @@ describe("profile photo", () => {
       y: 250,
       side: 500,
     });
-    const sent = server.requests.at(-1);
+    const sent = server.lastSent();
     expect(sent?.headers.get("Content-Type")).toBe("image/jpeg");
     // The new photo shows at once, in the top bar too.
     const photos = document.querySelectorAll('img[src="/api/users/1/avatar?v=1760263200000"]');

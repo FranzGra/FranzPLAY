@@ -20,6 +20,10 @@ export type AdminVideo = Video & {
   coverChoice: CoverChoice;
   coverSecond: number | null; // the moment chosen as cover, in seconds
   clipChoice: ClipChoice;
+  // Where the clip FranzPLAY makes starts, in seconds, and how long it
+  // lasts, chosen for this video; null is the site's choice.
+  clipSecond: number | null;
+  clipSeconds: number | null;
   videoCodec: string; // the format of the picture inside the file: "h264"; "" if not read yet
   audioCodec: string; // the format of the sound: "aac"; "" if none or not read yet
   hasCopy: boolean; // FranzPLAY made a copy every browser plays
@@ -98,6 +102,8 @@ export function parseAdminVideo(data: unknown): AdminVideo {
   ) {
     throw new Error("admin video: bad coverSecond");
   }
+  const clipSecond = optionalCount(d.clipSecond, "clipSecond");
+  const clipSeconds = optionalCount(d.clipSeconds, "clipSeconds");
   const fileProblem = d.fileProblem ?? "";
   if (
     fileProblem !== "" &&
@@ -124,19 +130,56 @@ export function parseAdminVideo(data: unknown): AdminVideo {
     coverChoice: d.coverChoice,
     coverSecond: second,
     clipChoice: d.clipChoice,
+    clipSecond,
+    clipSeconds,
     videoCodec: d.videoCodec,
     audioCodec: d.audioCodec,
     hasCopy: d.hasCopy,
   };
 }
 
+// AdminFilters are the administrator's own filters, on top of the pills and
+// the search; "" keeps every video. categories are as the videos have them
+// ("Serie A/Stagione 1"), "" for the videos with no category: a folder is
+// not its subfolders.
+export type AdminFilters = {
+  categories: string[];
+  source: "" | "folder" | "upload"; // from the video folders, or uploaded
+  subtitles: "" | "with" | "without"; // inside the file or made by FranzPLAY
+  missing: "" | "cover" | "preview"; // the videos without it
+  length: "" | "short" | "medium" | "long"; // under 5 minutes, 5 to 30, over 30
+  added: "" | "7" | "30"; // in the last days
+};
+
+export const noFilters: AdminFilters = {
+  categories: [],
+  source: "",
+  subtitles: "",
+  missing: "",
+  length: "",
+  added: "",
+};
+
 export async function fetchAdminVideos(
-  options: { q?: string; show?: AdminShow; limit: number; offset?: number },
+  options: {
+    q?: string;
+    show?: AdminShow;
+    filters?: AdminFilters;
+    limit: number;
+    offset?: number;
+  },
   signal?: AbortSignal,
 ): Promise<AdminVideoList> {
   const params = new URLSearchParams({ limit: String(options.limit) });
   if (options.q) params.set("q", options.q);
   if (options.show) params.set("show", options.show);
+  const f = options.filters;
+  if (f) {
+    for (const c of f.categories) params.append("category", c);
+    for (const key of ["source", "subtitles", "missing", "length", "added"] as const) {
+      if (f[key]) params.set(key, f[key]);
+    }
+  }
   if (options.offset) params.set("offset", String(options.offset));
   const data = await request(`/api/admin/videos?${params}`, { signal });
   const d = (data ?? {}) as Record<string, unknown>;
@@ -210,6 +253,29 @@ export async function uploadClip(id: number, clip: Blob): Promise<void> {
 // remakeClip goes back to the clip FranzPLAY makes, and makes it again.
 export async function remakeClip(id: number): Promise<void> {
   await request(`/api/admin/videos/${id}/clip/remake`, { method: "POST" });
+}
+
+// setClipMoment makes the clip again from the video, from second for
+// seconds, and keeps the choice for the clips made later; null goes back
+// to the site's choice.
+export async function setClipMoment(
+  id: number,
+  second: number | null,
+  seconds: number | null,
+): Promise<void> {
+  await request(`/api/admin/videos/${id}/clip/moment`, {
+    method: "PUT",
+    body: { second, seconds },
+  });
+}
+
+// optionalCount reads a number of seconds that may be missing or null.
+function optionalCount(v: unknown, what: string): number | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) {
+    throw new Error(`admin video: bad ${what}`);
+  }
+  return v;
 }
 
 // removeClip leaves the video's card without a clip.

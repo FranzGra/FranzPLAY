@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 import { Link } from "react-router";
+import type { CategoryShape } from "../../api/site";
+import { useSite } from "../../app/site";
 import { Icon } from "../../components/Icon";
 import { formatVideos } from "../../lib/format";
 import styles from "./CategoryTile.module.css";
@@ -16,6 +18,9 @@ type Props = {
   // to makes the card a link; without it, it is a plain picture of the
   // card (the administrator's preview).
   to?: string;
+  // shape is the shape of the card; without it, the one the administrator
+  // chose for every category in the site's settings.
+  shape?: CategoryShape;
 };
 
 // CategoryTile is the big card of a category. With a wide image (chosen by
@@ -26,13 +31,22 @@ type Props = {
 // grainy surface and a big folder in the corner that straightens up under
 // the mouse. The public Categories page and the administrator's preview
 // both draw it, so the placeholder is the real card.
-export function CategoryTile({ name, videos, color, image, poster, to }: Props) {
+//
+// A tall or square card has no room for a poster in the corner: the
+// picture that fits its shape best fills it (the poster for a tall card,
+// the wide picture for a square one), cut at the edges, never stretched.
+export function CategoryTile({ name, videos, color, image, poster, to, shape }: Props) {
+  const site = useSite();
+  const form = shape ?? site.look.categoryShape;
+  const filled =
+    form === "landscape" ? image : form === "portrait" ? (poster ?? image) : (image ?? poster);
+  const corner = form === "landscape" && !image ? poster : null;
   const content = (
     <>
-      {image ? (
-        <img className={styles.image} src={image} alt="" loading="lazy" decoding="async" />
-      ) : poster ? (
-        <img className={styles.poster} src={poster} alt="" loading="lazy" decoding="async" />
+      {filled ? (
+        <img className={styles.image} src={filled} alt="" loading="lazy" decoding="async" />
+      ) : corner ? (
+        <img className={styles.poster} src={corner} alt="" loading="lazy" decoding="async" />
       ) : (
         <span className={styles.folder}>
           <Icon name="folder" size={160} />
@@ -44,8 +58,9 @@ export function CategoryTile({ name, videos, color, image, poster, to }: Props) 
   );
   const common = {
     className: styles.tile,
-    "data-image": image ? "" : undefined,
-    "data-poster": !image && poster ? "" : undefined,
+    "data-shape": form,
+    "data-image": filled ? "" : undefined,
+    "data-poster": corner ? "" : undefined,
     style: { "--tile-color": tileColor({ name, color }) } as CSSProperties,
   };
   return to ? (

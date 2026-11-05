@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -45,9 +46,9 @@ func scanRow(sc interface{ Scan(...any) error }) (row, error) {
 	return r, nil
 }
 
-// list returns the comments of a video, oldest first.
+// list returns the newest maxPerVideo comments of a video, oldest first.
 func (s store) list(ctx context.Context, videoID int64) (_ []row, err error) {
-	rows, err := s.db.QueryContext(ctx, selectRow+` WHERE c.video_id = ? ORDER BY c.created_at, c.id LIMIT ?`,
+	rows, err := s.db.QueryContext(ctx, selectRow+` WHERE c.video_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT ?`,
 		videoID, maxPerVideo)
 	if err != nil {
 		return nil, fmt.Errorf("list comments: %w", err)
@@ -61,7 +62,11 @@ func (s store) list(ctx context.Context, videoID int64) (_ []row, err error) {
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list comments: %w", err)
+	}
+	slices.Reverse(out)
+	return out, nil
 }
 
 func (s store) get(ctx context.Context, id int64) (row, error) {

@@ -124,6 +124,42 @@ export function pickTrack(tracks: SubtitleTrack[], choice: SubtitleChoice): stri
   return (same ?? tracks[0])?.key ?? null;
 }
 
+// setModes switches on the chosen subtitles and off all the others. The
+// tracks are in the order of the list. FranzPLAY draws the chosen ones
+// itself ("hidden"); iOS's own full screen player shows only "showing"
+// ones. It returns the track switched on.
+function setModes(
+  list: TextTrackList,
+  tracks: SubtitleTrack[],
+  key: string | null,
+  native: boolean,
+): TextTrack | null {
+  let shown: TextTrack | null = null;
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i] as TextTrack;
+    const k = tracks[i]?.key;
+    if (k !== undefined && k === key) {
+      t.mode = native ? "showing" : "hidden";
+      shown = t;
+    } else {
+      t.mode = "disabled";
+    }
+  }
+  return shown;
+}
+
+// shownKey is the key of the subtitles iOS's own player shows, if any.
+function shownKey(list: TextTrackList, tracks: SubtitleTrack[]): string | null {
+  for (let i = 0; i < list.length; i++) {
+    if ((list[i] as TextTrack).mode === "showing") return tracks[i]?.key ?? null;
+  }
+  return null;
+}
+
+// IOSVideo is a video on an iPhone: only the video itself can go full
+// screen, in iOS's own player.
+type IOSVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+
 const parseTimeLeft = (data: unknown) => {
   if (typeof data !== "boolean") throw new Error("bad time left");
   return data;
@@ -267,6 +303,8 @@ export function Player({
     loadSetting("subtitleStyle", parseSubtitleStyle, defaultSubtitleStyle),
   );
   const [caption, setCaption] = useState<string[]>([]);
+  // nativeFull: the video is in iOS's own full screen player.
+  const nativeFull = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   // The sound track playing, when it is not the original one. The ref is
   // for the video's events, which must not wait for a new render.
@@ -373,13 +411,7 @@ export function Player({
     const list = video.current?.textTracks;
     setCaption([]);
     if (!list) return;
-    let shown: TextTrack | null = null;
-    for (let i = 0; i < list.length; i++) {
-      const t = list[i] as TextTrack;
-      const key = subtitles[i]?.key;
-      t.mode = key !== undefined && key === track ? "hidden" : "disabled";
-      if (t.mode === "hidden") shown = t;
-    }
+    const shown = setModes(list, subtitles, track, nativeFull.current);
     const v = video.current;
     if (!shown || !v) return;
     const current = shown;
@@ -406,6 +438,51 @@ export function Player({
     },
     [subtitles],
   );
+
+  // On an iPhone, full screen is iOS's own player, which has its own menu
+  // of subtitles: the tracks below go there. While it is up, the chosen
+  // subtitles are "showing" and what the person picks in that menu becomes
+  // their choice; back in the page, FranzPLAY draws them again. The refs
+  // are for these events, which must not wait for a new render.
+  // Not handled yet: with a sound track made by the server (offset > 0)
+  // iOS shows the subtitles early by the offset, as it counts from there.
+  const trackRef = useRef(track);
+  const subtitlesRef = useRef(subtitles);
+  const chooseRef = useRef(chooseTrack);
+  useEffect(() => {
+    trackRef.current = track;
+    subtitlesRef.current = subtitles;
+    chooseRef.current = chooseTrack;
+  }, [track, subtitles, chooseTrack]);
+  useEffect(() => {
+    const v = video.current;
+    const list = v?.textTracks;
+    // Browsers' track lists send events; a stand-in for tests may not.
+    if (!v || !list || typeof list.addEventListener !== "function") return;
+    const begin = () => {
+      nativeFull.current = true;
+      setModes(list, subtitlesRef.current, trackRef.current, true);
+    };
+    const change = () => {
+      if (!nativeFull.current) return;
+      const key = shownKey(list, subtitlesRef.current);
+      if (key !== trackRef.current) chooseRef.current(key);
+    };
+    const end = () => {
+      const key = shownKey(list, subtitlesRef.current);
+      nativeFull.current = false;
+      if (key !== trackRef.current) chooseRef.current(key);
+      setModes(list, subtitlesRef.current, key, false);
+    };
+    v.addEventListener("webkitbeginfullscreen", begin);
+    v.addEventListener("webkitendfullscreen", end);
+    list.addEventListener("change", change);
+    return () => {
+      v.removeEventListener("webkitbeginfullscreen", begin);
+      v.removeEventListener("webkitendfullscreen", end);
+      list.removeEventListener("change", change);
+    };
+  }, []);
 
   const chooseStyle = useCallback((style: typeof subtitleStyle) => {
     setSubtitleStyle(style);
@@ -578,13 +655,22 @@ export function Player({
 
   const toggleFullscreen = useCallback(() => {
     const el = root.current;
-    const v = video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    const v = video.current as IOSVideo | null;
     if (document.fullscreenElement) {
       document.exitFullscreen().catch((error: unknown) => console.warn("exit fullscreen", error));
     } else if (el?.requestFullscreen) {
       el.requestFullscreen().catch((error: unknown) => console.warn("fullscreen refused", error));
-    } else {
-      v?.webkitEnterFullscreen?.(); // iPhone: only the video itself can go full screen
+    } else if (v?.webkitEnterFullscreen) {
+      // iPhone: only the video itself can go full screen. The subtitles
+      // are "showing" before iOS's player opens, so it starts with them.
+      const list = v.textTracks;
+      if (list) setModes(list, subtitlesRef.current, trackRef.current, true);
+      try {
+        v.webkitEnterFullscreen();
+      } catch (error: unknown) {
+        if (list) setModes(list, subtitlesRef.current, trackRef.current, nativeFull.current);
+        console.warn("fullscreen refused", error);
+      }
     }
   }, []);
 

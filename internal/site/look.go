@@ -6,6 +6,7 @@ package site
 import (
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -18,10 +19,16 @@ type Look struct {
 	NameFirst  string `json:"nameFirst"`
 	NameSecond string `json:"nameSecond"`
 	Color      string `json:"color"` // "#rrggbb", lower case
+	// CategoryShape is the shape of the covers of every category:
+	// "portrait" (2:3), "square" (1:1) or "landscape" (16:9, the first one).
+	CategoryShape string `json:"categoryShape"`
 }
 
 // Default is how a new FranzPLAY looks.
-var Default = Look{NameFirst: "Franz", NameSecond: "PLAY", Color: "#2997ff"}
+var Default = Look{NameFirst: "Franz", NameSecond: "PLAY", Color: "#2997ff", CategoryShape: "landscape"}
+
+// CategoryShapes are the shapes a category cover can have.
+var CategoryShapes = []string{"portrait", "square", "landscape"}
 
 // maxNamePart is the longest part of the name: the logo must fit in the
 // top bar of a phone.
@@ -31,6 +38,7 @@ const maxNamePart = 16
 var (
 	errBadName  = errors.New("each part of the name must be one line of at most 16 characters, and the first cannot be empty")
 	errBadColor = errors.New(`the color must look like "#2997ff"`)
+	errBadShape = errors.New(`the shape of the category covers must be "portrait", "square" or "landscape"`)
 )
 
 var colorShape = regexp.MustCompile(`^#[0-9a-f]{6}$`)
@@ -50,7 +58,14 @@ func (l Look) Clean() (Look, error) {
 	if !colorShape.MatchString(color) {
 		return Look{}, errBadColor
 	}
-	return Look{NameFirst: first, NameSecond: second, Color: color}, nil
+	shape := strings.TrimSpace(l.CategoryShape)
+	if shape == "" {
+		shape = Default.CategoryShape // a look saved before the shape existed
+	}
+	if !slices.Contains(CategoryShapes, shape) {
+		return Look{}, errBadShape
+	}
+	return Look{NameFirst: first, NameSecond: second, Color: color, CategoryShape: shape}, nil
 }
 
 func cleanPart(s string) (string, bool) {

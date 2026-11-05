@@ -34,7 +34,8 @@ const maxBody = 4 << 10
 //	GET    /api/users         administrators only
 //	POST   /api/users         administrators only {name, method, password, role, canUpload, ownMethods}
 //	PUT    /api/users/{id}    administrators only {role, canUpload, uploadQuota, canSharePublic, ownMethods}:
-//	                          left out, a field keeps its value; ownMethods [] follows the server
+//	                          role is needed and canUpload left out is false; the others
+//	                          left out keep their value; ownMethods [] follows the server
 //	DELETE /api/users/{id}    administrators only
 //	PUT    /api/users/{id}/password  administrators only {method, password}
 //	GET    /api/invites       administrators only
@@ -231,9 +232,12 @@ func (s *Service) handleLoginMethod(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, r, s.logger, http.StatusOK, methodAnswer{Method: m})
 }
 
+// handleLogout ends the session of the cookie, if it is still there, and
+// clears the cookie: logging out always works, twice or with a session
+// already over too.
 func (s *Service) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if token, ok := r.Context().Value(tokenKey{}).(string); ok {
-		if err := s.store.deleteSession(r.Context(), hashToken(token)); err != nil {
+	if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
+		if err := s.store.deleteSession(r.Context(), hashToken(c.Value)); err != nil {
 			s.fail(w, r, err)
 			return
 		}
@@ -410,7 +414,7 @@ type updateRequest struct {
 	// server, nil (left out) keeps what they have.
 	OwnMethods  *[]Method `json:"ownMethods"`
 	Role        string    `json:"role"`
-	CanUpload   bool      `json:"canUpload"`
+	CanUpload   bool      `json:"canUpload"`   // left out: false, like the role it is always sent
 	UploadQuota *int64    `json:"uploadQuota"` // nil: unchanged
 	// CanSharePublic lets them make public links; nil: unchanged.
 	CanSharePublic *bool `json:"canSharePublic"`

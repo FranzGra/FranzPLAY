@@ -66,6 +66,11 @@ type AdminVideo struct {
 	// The clip the administrator chose: a "video" uploaded, "none", or ""
 	// for the one FranzPLAY makes.
 	ClipChoice string `json:"clipChoice"`
+	// Where the clip FranzPLAY makes starts, in seconds, and how long it
+	// lasts, if the administrator chose them for this video; null is the
+	// site's choice.
+	ClipSecond  *int64 `json:"clipSecond"`
+	ClipSeconds *int64 `json:"clipSeconds"`
 	// The format inside the file, for the administrator's table: "h264",
 	// "aac"; "" if not read yet. HasCopy tells that FranzPLAY made a copy
 	// every browser plays.
@@ -97,7 +102,8 @@ const (
 
 // AdminRoutes adds the administrator's video API to mux:
 //
-//	GET  /api/admin/videos                 every video (?q=&show=eligible|short|problems|hidden|missing|public&limit=&offset=)
+//	GET  /api/admin/videos                 every video (?q=&show=eligible|short|problems|hidden|missing|public&limit=&offset=,
+//	                                       category=&source=&subtitles=&missing=&length=&added=: adminfilters.go)
 //	GET  /api/admin/videos/{id}            one video, as in the list
 //	PUT  /api/admin/videos/{id}/hidden     hide or show again {hidden}
 //	POST /api/admin/videos/{id}/refresh    read it again and remake cover and previews
@@ -109,6 +115,9 @@ const (
 //	PUT  /api/admin/videos/{id}/clip       a video as the card's clip (the body is the video)
 //	POST /api/admin/videos/{id}/clip/remake  back to the clip FranzPLAY makes, made again
 //	DELETE /api/admin/videos/{id}/clip     no clip on the card
+//	PUT  /api/admin/videos/{id}/clip/moment  the clip made from this second, this long {second, seconds}
+//	GET  /api/admin/clip-settings          where every clip starts and how long it lasts
+//	PUT  /api/admin/clip-settings          the same, for the clips made from now on {startPercent, seconds}
 //	GET  /api/admin/categories             every category, as the videos have it
 //	PUT  /api/admin/categories/{name}      the name people see and the color {label, color}
 //	PUT  /api/admin/categories/{name}/image   its image (the body is a JPEG)
@@ -145,6 +154,9 @@ func (a admin) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/admin/videos/{id}/clip", a.only(a.handleOwnClip))
 	mux.HandleFunc("POST /api/admin/videos/{id}/clip/remake", a.only(a.handleRemakeClip))
 	mux.HandleFunc("DELETE /api/admin/videos/{id}/clip", a.only(a.handleNoClip))
+	mux.HandleFunc("PUT /api/admin/videos/{id}/clip/moment", a.only(a.handleClipMoment))
+	mux.HandleFunc("GET /api/admin/clip-settings", a.only(a.handleClipSettings))
+	mux.HandleFunc("PUT /api/admin/clip-settings", a.only(a.handleSaveClipSettings))
 	mux.HandleFunc("GET /api/admin/categories", a.only(a.handleAdminCategories))
 	mux.HandleFunc("PUT /api/admin/categories/{name}", a.only(a.handleCategory))
 	mux.HandleFunc("PUT /api/admin/categories/{name}/image", a.only(a.handleCategoryImage))
@@ -167,26 +179,31 @@ func (a admin) only(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // parseAdminQuery checks the parameters of GET /api/admin/videos: the
-// ones of the normal list, except category, plus show.
-func parseAdminQuery(values url.Values) (listQuery, adminFilter, error) {
+// ones of the normal list, plus show and the administrator's filters
+// (category among them, more than one at a time: adminfilters.go).
+func parseAdminQuery(values url.Values, now time.Time) (listQuery, adminFilter, adminNarrow, error) {
 	q, err := parseListQuery(values)
 	if err != nil {
-		return listQuery{}, "", err
+		return listQuery{}, "", adminNarrow{}, err
 	}
 	q.category = ""
+	narrow, err := parseAdminNarrow(values, now)
+	if err != nil {
+		return listQuery{}, "", adminNarrow{}, err
+	}
 	switch f := adminFilter(values.Get("show")); f {
 	case allVideos, eligibleVideos, shortVideos, problemVideos, hiddenVideos, missingVideos, publicVideos:
-		return q, f, nil
+		return q, f, narrow, nil
 	default:
-		return listQuery{}, "", fmt.Errorf(`%w: show must be "eligible", "short", "problems", "hidden", "missing" or "public"`, errBadQuery)
+		return listQuery{}, "", adminNarrow{}, fmt.Errorf(`%w: show must be "eligible", "short", "problems", "hidden", "missing" or "public"`, errBadQuery)
 	}
 }
 
 type adminList struct {
 	Videos []AdminVideo `json:"videos"`
 	Total  int          `json:"total"`
-	// Counts are how many videos each filter shows for the same search,
-	// for the filter menu: "" (all), "eligible", "short", "problems",
+	// Counts are how many videos each filter shows for the same search and
+	// the same filters of the administrator, for the filter menu: "" (all), "eligible", "short", "problems",
 	// "public", "hidden", "missing".
 	Counts map[adminFilter]int `json:"counts"`
 	// MinDuration is the minimum length the administrator chose, in seconds;
@@ -195,17 +212,17 @@ type adminList struct {
 }
 
 func (a admin) handleList(w http.ResponseWriter, r *http.Request) {
-	q, filter, err := parseAdminQuery(r.URL.Query())
+	q, filter, narrow, err := parseAdminQuery(r.URL.Query(), a.now())
 	if err != nil {
 		respond.Error(w, r, a.logger, http.StatusBadRequest, err.Error())
 		return
 	}
-	videos, total, err := a.store.adminList(r.Context(), q, filter, 0)
+	videos, total, err := a.store.adminList(r.Context(), q, filter, narrow, 0)
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
 	}
-	counts, err := a.store.adminCounts(r.Context(), q)
+	counts, err := a.store.adminCounts(r.Context(), q, narrow)
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
@@ -224,7 +241,7 @@ func (a admin) handleOne(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusNotFound, errNotFound.Error())
 		return
 	}
-	videos, _, err := a.store.adminList(r.Context(), listQuery{limit: 1}, allVideos, id)
+	videos, _, err := a.store.adminList(r.Context(), listQuery{limit: 1}, allVideos, adminNarrow{}, id)
 	if err != nil {
 		respond.InternalError(w, r, a.logger, err)
 		return
@@ -342,18 +359,13 @@ func (a admin) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// adminList returns a page of every video, hidden and missing ones too,
-// newest first, and how many match in total.
 // adminCounts counts, in one read, the videos of each filter of the
-// administrator's list for the same search.
-func (s store) adminCounts(ctx context.Context, q listQuery) (map[adminFilter]int, error) {
-	where := `1`
-	args := []any{}
-	for _, w := range q.words {
-		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
-		p := likePattern(w)
-		args = append(args, p, p, p)
-	}
+// administrator's list for the same search and the same filters.
+func (s store) adminCounts(ctx context.Context, q listQuery, narrow adminNarrow) (map[adminFilter]int, error) {
+	search, args := adminSearch(q.words)
+	filters, more := narrow.where()
+	where := `1` + search + filters
+	args = append(args, more...)
 	var all, eligible, short, problems, public, hidden, missing int
 	err := s.db.QueryRowContext(ctx, `SELECT count(*),
 		coalesce(sum(`+isEligible+`), 0),
@@ -370,7 +382,9 @@ func (s store) adminCounts(ctx context.Context, q listQuery) (map[adminFilter]in
 		publicVideos: public, hiddenVideos: hidden, missingVideos: missing}, nil
 }
 
-func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, id int64) (_ []AdminVideo, total int, err error) {
+// adminList returns a page of every video, hidden and missing ones too,
+// newest first, and how many match in total.
+func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, narrow adminNarrow, id int64) (_ []AdminVideo, total int, err error) {
 	where := `1`
 	args := []any{}
 	if id > 0 {
@@ -391,11 +405,10 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 	case shortVideos:
 		where += ` AND ` + isShort
 	}
-	for _, w := range q.words {
-		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\' OR v.path LIKE ? ESCAPE '\')`
-		p := likePattern(w)
-		args = append(args, p, p, p)
-	}
+	search, more := adminSearch(q.words)
+	filters, moreFilters := narrow.where()
+	where += search + filters
+	args = append(append(args, more...), moreFilters...)
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM videos v WHERE `+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count videos: %w", err)
 	}
@@ -404,6 +417,7 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 		       coalesce(v.details_title, v.online_title, v.title), v.folder_category,
 		       v.admin_title IS NOT NULL, v.admin_category IS NOT NULL,
 		       v.own_cover IS NOT NULL, v.cover_second, v.own_clip IS NOT NULL, v.no_clip,
+		       v.clip_second, v.clip_seconds,
 		       coalesce(v.video_codec, ''), coalesce(v.audio_codec, ''), v.converted IS NOT NULL,
 		       `+isProblem+`, `+jobs.FileUnreadableError+`
 		FROM videos v JOIN libraries l ON l.id = v.library_id
@@ -417,10 +431,11 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 	for rows.Next() {
 		var av AdminVideo
 		var ownCover, ownClip, noClip, unreadable bool
-		var second sql.NullInt64
+		var second, clipSecond, clipSeconds sql.NullInt64
 		var readError string
 		av.Video, err = scanVideo(moreColumns{rows, []any{&av.Folder, &av.Path, &av.Hidden, &av.Missing, &av.TooShort,
 			&av.FoundTitle, &av.FoundCategory, &av.TitleSet, &av.CategorySet, &ownCover, &second, &ownClip, &noClip,
+			&clipSecond, &clipSeconds,
 			&av.VideoCodec, &av.AudioCodec, &av.HasCopy, &unreadable, &readError}})
 		if err != nil {
 			return nil, 0, fmt.Errorf("list videos: %w", err)
@@ -441,6 +456,12 @@ func (s store) adminList(ctx context.Context, q listQuery, filter adminFilter, i
 			av.ClipChoice = "video"
 		case noClip:
 			av.ClipChoice = "none"
+		}
+		if clipSecond.Valid {
+			av.ClipSecond = &clipSecond.Int64
+		}
+		if clipSeconds.Valid {
+			av.ClipSeconds = &clipSeconds.Int64
 		}
 		out = append(out, av)
 	}

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/catalog"
 )
 
 // errVideoNotFound means there is no present video with that id.
@@ -51,14 +53,15 @@ func (s store) set(ctx context.Context, userID, videoID int64, liked bool, now t
 }
 
 // liked returns the videos a person likes, the last liked first, and how
-// many there are in all. Only present videos count.
+// many there are in all. Only the videos the person may open count, the
+// ones shared with them too.
 func (s store) liked(ctx context.Context, userID int64, limit, offset int) (_ []int64, total int, err error) {
-	const from = ` FROM likes l JOIN videos v ON v.id = l.video_id WHERE l.user_id = ? AND v.visible`
-	if err := s.db.QueryRowContext(ctx, `SELECT count(*)`+from, userID).Scan(&total); err != nil {
+	const from = ` FROM likes l JOIN videos v ON v.id = l.video_id WHERE l.user_id = ? AND ` + catalog.Watchable
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*)`+from, userID, userID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count likes: %w", err)
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT l.video_id`+from+`
-		ORDER BY l.created_at DESC, l.video_id DESC LIMIT ? OFFSET ?`, userID, limit, offset)
+		ORDER BY l.created_at DESC, l.video_id DESC LIMIT ? OFFSET ?`, userID, userID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list likes: %w", err)
 	}

@@ -643,3 +643,19 @@
   color: var(--color-text);
   text-decoration: underline;
 }
+
+/* The search takes only the room it needs: the choice of view and the
+   filters sit at the end of the same row. On a phone it has a row of its
+   own, the two others share the one below. */
+.search {
+  flex: 1 1 240px;
+  max-width: 400px;
+  margin-right: auto;
+}
+
+@media (max-width: 599px) {
+  .search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

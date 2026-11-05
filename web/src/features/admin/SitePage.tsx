@@ -12,6 +12,7 @@ import { ApiError } from "../../api/client";
 import { type Look, lookProblem, saveLook } from "../../api/site";
 import { useSite } from "../../app/site";
 import { Icon } from "../../components/Icon";
+import { ClipSettingsCard } from "./ClipSettingsCard";
 import { LookFields } from "./LookFields";
 import pages from "./Pages.module.css";
 import { UpdateSettings } from "./UpdateSettings";
@@ -25,11 +26,12 @@ export function SitePage() {
     <div className={ui.ui}>
       <PageHeader
         title="Sito"
-        description="Le impostazioni di tutto FranzPLAY: come si chiama, il suo colore, chi può entrare e come, e il controllo delle nuove versioni."
+        description="Le impostazioni di tutto FranzPLAY: come si chiama, il suo colore, da dove partono le anteprime dei video, chi può entrare e come, e il controllo delle nuove versioni."
       />
       <div className={ui.grid}>
         <div className={`${ui.span7} ${ui.stack}`}>
           <LookSettings />
+          <ClipSettingsCard />
         </div>
         <div className={`${ui.span5} ${ui.stack}`}>
           <Card title="Chi può entrare" icon="lock">
@@ -68,7 +70,8 @@ function LookForm() {
     setBusy(true);
     setProblem("");
     setDone("");
-    saveLook(look)
+    // The shape of the covers is saved by its own card: kept as it is now.
+    saveLook({ ...look, categoryShape: site.look.categoryShape })
       .then((saved) => {
         site.changed(saved);
         setDone("Salvato. Tutti vedono il nome e il colore nuovi.");

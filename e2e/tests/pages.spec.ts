@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ADMIN, BASE, logIn, PEOPLE, videos, watchErrors } from "./franzplay";
+import { ADMIN, BASE, logIn, PEOPLE, settled, videos, watchErrors } from "./franzplay";
 
 // Every page opens without errors and fits the screen: nothing may make
 // the page wider than the window, or on the phone it slides sideways
@@ -27,6 +27,7 @@ const adminPages = [
   "/admin/video",
   "/admin/categorie",
   "/admin/sottotitoli",
+  "/admin/regole-titoli",
   "/admin/commenti",
   "/admin/cartelle",
   "/admin/internet",
@@ -51,7 +52,7 @@ async function checkPages(page: import("@playwright/test").Page, paths: string[]
       await page.goto(path);
       await expect(page.locator("main")).toBeVisible();
       // Let the page ask the server for its data and draw it.
-      await page.waitForTimeout(400);
+      await settled(page);
       const { width, scroll } = await page.evaluate(() => ({
         width: window.innerWidth,
         scroll: document.documentElement.scrollWidth,
@@ -138,7 +139,7 @@ test("on the phone the videos come one per line, as wide as the screen", async (
       await page.goto(path);
       const card = page.locator('main a[data-layout="grid"]').first();
       await expect(card).toBeVisible();
-      await page.waitForTimeout(400); // the page slides in
+      await settled(page); // the page slides in
       const { width, cards } = await page.evaluate(() => ({
         width: window.innerWidth,
         cards: Array.from(document.querySelectorAll('main a[data-layout="grid"]'))
@@ -165,7 +166,7 @@ test("on the phone Salva opens a window over the whole screen", async ({ page, i
   const sheet = page.getByRole("dialog", { name: "Salva in una playlist" });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole("checkbox", { name: "Guarda più tardi" })).toBeAttached();
-  await page.waitForTimeout(500); // it rises from the bottom
+  await settled(page); // it rises from the bottom
   const box = await sheet.boundingBox();
   const size = page.viewportSize();
   expect(box).toEqual({ x: 0, y: 0, width: size?.width, height: size?.height });
@@ -193,7 +194,7 @@ test("on the computer Salva opens over everything, the videos on the right inclu
   await page.getByRole("button", { name: "Salva", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Salva in una playlist" });
   await expect(panel.getByRole("checkbox", { name: "Guarda più tardi" })).toBeAttached();
-  await page.waitForTimeout(500); // it grows out of the button
+  await settled(page); // it grows out of the button
   // Every corner of the panel is the panel itself: nothing lies on top of it.
   // (A bit inside the corners, which are round.)
   const covered = await panel.evaluate((element) => {
@@ -231,12 +232,12 @@ test("who sees a list opens over the page, without moving its title", async ({
   const title = page.getByRole("heading", { level: 1 });
   const row = page.getByRole("main").getByRole("listitem").last();
   await expect(row).toBeVisible();
-  await page.waitForTimeout(600); // the page slides in
+  await settled(page); // the page slides in
   const before = { title: await title.boundingBox(), row: await row.boundingBox() };
   await page.getByRole("button", { name: "Chi la vede" }).click();
   const panel = page.getByRole("dialog", { name: "Chi la vede" });
   await expect(panel.getByRole("radio", { name: "Solo io" })).toBeChecked();
-  await page.waitForTimeout(500); // it grows out of the button, or rises
+  await settled(page); // it grows out of the button, or rises
   // Nothing on the page moved or stretched to make room for it.
   expect(await title.boundingBox()).toEqual(before.title);
   expect(await row.boundingBox()).toEqual(before.row);

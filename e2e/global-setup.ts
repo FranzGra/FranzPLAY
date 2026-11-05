@@ -1,33 +1,8 @@
-import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { ADMIN, BASE, PASSWORD, PEOPLE, STATE_FILE } from "./tests/franzplay";
-
-// makeVideo writes a short video the browser plays (VP9 picture, Opus sound).
-function makeVideo(file: string, seconds: number, tone: number) {
-  const picture = `testsrc2=size=640x360:rate=25:duration=${seconds}`;
-  const sound = `sine=frequency=${tone}:duration=${seconds}`;
-  const args = `-v error -y -f lavfi -i ${picture} -f lavfi -i ${sound}
-    -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -b:v 400k -g 50 -c:a libopus`;
-  execFileSync("ffmpeg", [...args.split(/\s+/), file]);
-}
-
-async function api(path: string, body: unknown, cookie = ""): Promise<Response> {
-  const res = await fetch(BASE + path, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Origin: BASE,
-      Cookie: cookie,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(`POST ${path}: ${res.status} ${await res.text()}`);
-  }
-  return res;
-}
+import { launch, makeLibrary, makeVideo, post, waitForJobs } from "./tests/server";
 
 export default async function globalSetup() {
   const root = mkdtempSync(join(tmpdir(), "franzplay-e2e-"));
@@ -49,38 +24,22 @@ export default async function globalSetup() {
     join(library, "Corsi", "Lezione 1.it.vtt"),
     "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nCiao a tutti\n",
   );
+  // The library every test with a FranzPLAY of its own copies (server.ts).
+  const template = join(root, "modello");
+  makeLibrary(template);
 
-  const program = resolve(process.env.FRANZPLAY_BIN ?? "../bin/franzplay");
-  const server = spawn(program, [], {
-    env: {
-      ...process.env,
-      FRANZPLAY_ADDR: "127.0.0.1:8091",
-      FRANZPLAY_DATA_DIR: join(root, "data"),
-      FRANZPLAY_LIBRARIES: library,
-    },
-    stdio: ["ignore", "ignore", "pipe"],
-  });
-  // A new FranzPLAY says in the log that it waits for its administrator,
-  // which the first visitor creates without any code.
-  await new Promise<void>((ok, fail) => {
-    let log = "";
-    const timer = setTimeout(() => fail(new Error(`FranzPLAY did not start:\n${log}`)), 20_000);
-    server.stderr.on("data", (chunk: Buffer) => {
-      log += chunk.toString();
-      if (log.includes("no administrator yet")) {
-        clearTimeout(timer);
-        ok();
-      }
-    });
-    server.on("exit", (status) => fail(new Error(`FranzPLAY stopped (${status}):\n${log}`)));
-  });
-  server.stderr.resume();
-  writeFileSync(STATE_FILE, JSON.stringify({ pid: server.pid, root }));
+  const server = await launch(join(root, "data"), library, Number(new URL(BASE).port));
+  writeFileSync(STATE_FILE, JSON.stringify({ pid: server.process.pid, root, template }));
 
-  const setup = await api("/api/setup", { name: ADMIN, password: PASSWORD });
-  const cookie = (setup.headers.get("set-cookie") ?? "").split(";")[0];
+  const setup = await post(BASE, "/api/setup", { name: ADMIN, password: PASSWORD });
+  const cookie = (setup.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
   for (const name of PEOPLE) {
-    await api("/api/users", { name, password: PASSWORD, role: "user", canUpload: true }, cookie);
+    await post(
+      BASE,
+      "/api/users",
+      { name, password: PASSWORD, role: "user", canUpload: true },
+      cookie,
+    );
   }
 
   // Likes, so the cards show their count (and the "Ti piacciono" row).
@@ -99,22 +58,5 @@ export default async function globalSetup() {
   // Covers, previews and clips are made in the background: wait for them,
   // so every page shows what people really see.
   // Generous: a busy machine can take minutes to convert the test videos.
-  const deadline = Date.now() + 600_000;
-  for (;;) {
-    const res = await fetch(`${BASE}/api/jobs`, {
-      headers: { Cookie: cookie },
-    });
-    const jobs = (await res.json()) as {
-      waiting: number;
-      retrying: number;
-      running: unknown;
-    };
-    if (jobs.waiting === 0 && jobs.retrying === 0 && jobs.running === null) {
-      break;
-    }
-    if (Date.now() > deadline) {
-      throw new Error(`background jobs not finished: ${JSON.stringify(jobs)}`);
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
+  await waitForJobs(BASE, cookie, 600_000);
 }

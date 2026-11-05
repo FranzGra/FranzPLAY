@@ -11,6 +11,7 @@ import (
 
 	"github.com/FranzGra/FranzPLAY/internal/content"
 	"github.com/FranzGra/FranzPLAY/internal/jobs"
+	"github.com/FranzGra/FranzPLAY/internal/titles"
 )
 
 // store reads and writes the catalog tables. All the decisions are made
@@ -22,6 +23,9 @@ type store struct {
 	// (defaultBatch when zero). A long transaction would make everyone
 	// else's writes wait: likes, progress, the job queue.
 	batch int
+	// clean makes titles from the names of the files, with the
+	// administrator's rules; nil: the name as it is. Each scan reads them.
+	clean *titles.Cleaner
 }
 
 // defaultBatch keeps each transaction well under a second on a Raspberry Pi.
@@ -153,7 +157,7 @@ func (s store) applyChanges(ctx context.Context, ch changes, now time.Time) (err
 			    missing_since = NULL
 			WHERE id = ?`,
 			f.fingerprint, f.loc.library, f.loc.path, f.size, f.modTime,
-			titleOf(f.loc.path), categoryOf(f.loc.path), u.id); err != nil {
+			s.clean.Title(titleOf(f.loc.path)), categoryOf(f.loc.path), u.id); err != nil {
 			return fmt.Errorf("update video %d: %w", u.id, err)
 		}
 		switch {
@@ -193,7 +197,7 @@ func (s store) add(ctx context.Context, added []identified, reuse map[string]*co
 			INSERT INTO videos (fingerprint, library_id, path, size, mod_time, title, folder_category, added_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			f.fingerprint, f.loc.library, f.loc.path, f.size, f.modTime,
-			titleOf(f.loc.path), categoryOf(f.loc.path), stamp)
+			s.clean.Title(titleOf(f.loc.path)), categoryOf(f.loc.path), stamp)
 		if err != nil {
 			return adopted, fmt.Errorf("add video %s: %w", f.loc.path, err)
 		}

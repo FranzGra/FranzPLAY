@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/FranzGra/FranzPLAY/internal/catalog"
 )
 
 // errVideoNotFound means there is no present video with that id.
@@ -15,10 +17,12 @@ type store struct {
 	db *sql.DB
 }
 
-// duration returns the length of a present video, 0 when not read yet.
-func (s store) duration(ctx context.Context, videoID int64) (int64, error) {
+// duration returns the length of a video the person may open (a shared
+// one too), 0 when not read yet.
+func (s store) duration(ctx context.Context, userID, videoID int64) (int64, error) {
 	var d sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `SELECT duration FROM videos WHERE id = ? AND visible`, videoID).Scan(&d)
+	err := s.db.QueryRowContext(ctx, `SELECT v.duration FROM videos v WHERE v.id = ? AND `+catalog.Watchable,
+		videoID, userID).Scan(&d)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, errVideoNotFound
 	}
@@ -64,19 +68,20 @@ type watched struct {
 }
 
 // list returns the videos watched by a person, most recent first, and how
-// many there are in all. Only present videos count. With onlyStarted,
+// many there are in all. Only the videos the person may open count, the
+// ones shared with them too. With onlyStarted,
 // only those left in the middle: for "Continua a guardare".
 func (s store) list(ctx context.Context, userID int64, onlyStarted bool, limit, offset int) (_ []watched, total int, err error) {
-	where := `p.user_id = ? AND v.visible`
+	where := `p.user_id = ? AND ` + catalog.Watchable
 	if onlyStarted {
 		where += ` AND p.finished = 0 AND p.position > 0 AND p.in_continue`
 	}
 	from := ` FROM watch_progress p JOIN videos v ON v.id = p.video_id WHERE ` + where
-	if err := s.db.QueryRowContext(ctx, `SELECT count(*)`+from, userID).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*)`+from, userID, userID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count progress: %w", err)
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT p.video_id, p.position, p.finished, p.updated_at`+from+`
-		ORDER BY p.updated_at DESC, p.video_id DESC LIMIT ? OFFSET ?`, userID, limit, offset)
+		ORDER BY p.updated_at DESC, p.video_id DESC LIMIT ? OFFSET ?`, userID, userID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list progress: %w", err)
 	}

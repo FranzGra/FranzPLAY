@@ -45,11 +45,12 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 	if err != nil {
 		return err
 	}
-	var duration sql.NullInt64
+	var duration, second, seconds sql.NullInt64
 	var old, oldHD, own sql.NullString
 	var noClip bool
-	if err := c.db.QueryRowContext(ctx, `SELECT duration, clip, clip_hd, own_clip, no_clip FROM videos WHERE id = ?`, videoID).
-		Scan(&duration, &old, &oldHD, &own, &noClip); err != nil {
+	if err := c.db.QueryRowContext(ctx, `SELECT duration, clip, clip_hd, own_clip, no_clip, clip_second, clip_seconds
+		FROM videos WHERE id = ?`, videoID).
+		Scan(&duration, &old, &oldHD, &own, &noClip, &second, &seconds); err != nil {
 		return fmt.Errorf("read video %d: %w", videoID, err)
 	}
 	flat, flatHD := c.root.Clips(), c.root.ClipsHD()
@@ -81,10 +82,16 @@ func (c *Clipper) Handle(ctx context.Context, videoID int64) (err error) {
 			return err
 		}
 	} else {
-		parts := video.ClipParts(duration.Int64)
+		site, err := ReadClipSettings(ctx, c.db)
+		if err != nil {
+			return err
+		}
+		plan := clipPlan(site, second, seconds)
+		parts := plan.Parts(duration.Int64)
 		if len(parts) == 0 {
 			return nil // too short to need a clip
 		}
+		version = plan.Tag()
 		build = func(ctx context.Context, out, outHD string) error {
 			return c.fromParts(ctx, file, parts, work, out, outHD)
 		}

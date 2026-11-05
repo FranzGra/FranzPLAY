@@ -103,7 +103,7 @@ describe("people page", () => {
     await user.click(within(form).getByRole("button", { name: "Aggiungi" }));
     expect(await rowOf("Anna")).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Nuova persona" })).not.toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       name: "Anna",
       method: "password",
       password: "corta-ma-giusta",
@@ -141,7 +141,7 @@ describe("people page", () => {
     await user.click(within(row).getByRole("switch", { name: "Può caricare video" }));
     expect(await within(row).findByText(/carica video, fino a 10 GB$/)).toBeInTheDocument();
     expect(within(row).getByRole("switch", { name: "Può caricare video" })).toBeChecked();
-    expect(await server.requests.at(-1)?.json()).toEqual({ role: "user", canUpload: true });
+    expect(await server.lastSent()?.json()).toEqual({ role: "user", canUpload: true });
   });
 
   it("chooses how much space a person has for videos", async () => {
@@ -155,7 +155,7 @@ describe("people page", () => {
     await user.click(within(row).getByRole("combobox", { name: "Spazio" }));
     await user.click(screen.getByRole("option", { name: "50 GB" }));
     expect(await within(row).findByText(/fino a 50 GB$/)).toBeInTheDocument();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       role: "user",
       canUpload: true,
       uploadQuota: 50 * 1024 ** 3,
@@ -200,7 +200,7 @@ describe("people page", () => {
     await user.type(within(form).getByLabelText("Ripeti la password"), "nuova-password");
     await user.click(within(form).getByRole("button", { name: "Salva" }));
     expect(await within(row).findByRole("status")).toHaveTextContent("Accesso cambiato");
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       method: "password",
       password: "nuova-password",
     });
@@ -221,7 +221,7 @@ describe("people page", () => {
     await vi.waitFor(() => expect(pin).toBeEnabled());
     expect(pin).toBeChecked();
     await user.click(pin);
-    const sent = await server.requests.at(-1)?.json();
+    const sent = await server.lastSent()?.json();
     expect(sent.ownMethods).toEqual(["password", "pattern"]);
     expect(await within(row).findByText(/solo password/)).toBeInTheDocument();
   });
@@ -237,7 +237,7 @@ describe("people page", () => {
     await user.click(within(row).getByRole("button", { name: "Sì, elimina" }));
     const list = screen.getByRole("list", { name: "Persone" });
     await vi.waitFor(() => expect(within(list).queryByText("Giulia")).not.toBeInTheDocument());
-    expect(server.requests.at(-1)?.method).toBe("DELETE");
+    expect(server.lastSent()?.method).toBe("DELETE");
   });
 
   it("lets the administrator allow public links, off for a new person", async () => {

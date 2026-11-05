@@ -97,6 +97,7 @@ type Options struct {
 //	PUT    /api/admin/subtitles/{id}/translation    ask for translations {source, from, to, redo}
 //	DELETE /api/admin/subtitles/{id}/translation    take the translations asked back
 //	DELETE /api/admin/subtitles/{id}/made/{lang}    delete subtitles whisper made
+//	PUT    /api/admin/subtitles/{id}/import/{lang}  import an .srt or .vtt file as the subtitles of a language (?replace=1)
 //
 // queued tells the job worker and the open pages that there is new work.
 func Routes(db *sql.DB, opts Options, queued func(), logger *slog.Logger) func(mux *http.ServeMux) {
@@ -116,6 +117,7 @@ func (p page) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/admin/subtitles/{id}/translation", p.only(p.handleTranslate))
 	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/translation", p.only(p.handleTakeBackTranslation))
 	mux.HandleFunc("DELETE /api/admin/subtitles/{id}/made/{lang}", p.only(p.handleDelete))
+	mux.HandleFunc("PUT /api/admin/subtitles/{id}/import/{lang}", p.only(p.handleImport))
 }
 
 type page struct {

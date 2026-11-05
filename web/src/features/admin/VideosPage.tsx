@@ -1,10 +1,20 @@
-import { type FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useSearchParams } from "react-router";
 import {
   type AdminCounts,
+  type AdminFilters,
   type AdminShow,
   type AdminVideo,
   fetchAdminVideos,
+  noFilters,
   setVideoHidden,
 } from "../../api/adminVideos";
 import { onServerEvent } from "../../api/events";
@@ -16,11 +26,22 @@ import { LiveDot } from "../../components/ProgressBar";
 import { formatDuration } from "../../lib/format";
 import { usePresence } from "../../lib/presence";
 import { richMotion } from "../../lib/richMotion";
+import { loadSetting, saveSetting } from "../../lib/storage";
+import { VideoCard as HomeVideoCard } from "../videos/VideoCard";
+import grid from "../videos/VideoGrid.module.css";
 import type { ListState } from "./AdminVideoPage";
 import { useActivity } from "./activity";
 import { kindShort } from "./jobText";
 import { compatibility, qualityLabel } from "./quality";
 import { Chip, Empty, Loading, n, PageHeader, type Tone, Unavailable, ui, useToast } from "./ui";
+import {
+  activeFilters,
+  FilterChips,
+  FiltersButton,
+  readFilters,
+  useCategories,
+  writeFilters,
+} from "./VideoFilters";
 import videos from "./Videos.module.css";
 
 export const adminPageSize = 50;
@@ -48,6 +69,13 @@ const otherPills: Pill[] = [
 ];
 
 const pills = [...mainPills, ...otherPills];
+
+// View is how the videos are shown: the table, with the preview beside it,
+// or the cards of the Home, each a link to the page of its video. This
+// browser remembers the choice.
+type View = "table" | "cards";
+const viewKey = "adminVideosView";
+const parseView = (data: unknown): View => (data === "cards" ? "cards" : "table");
 
 // PillSentence says what the videos of a pill are; the others need no words.
 function PillSentence({ show, minDuration }: { show: AdminShow; minDuration: number }) {
@@ -124,6 +152,13 @@ export function VideosPage() {
   const show = pill?.show ?? "eligible";
   const [query, setQuery] = useState(q);
   useEffect(() => setQuery(q), [q]); // the back button brings the search back too
+  // The administrator's own filters, in the address too. The key keeps the
+  // same filters the same object, so the list is not asked again for nothing.
+  const filterKey = writeFilters(new URLSearchParams(), readFilters(params)).toString();
+  const filters = useMemo(() => readFilters(new URLSearchParams(filterKey)), [filterKey]);
+  const active = activeFilters(filters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [categories, retryCategories] = useCategories(filtersOpen || filters.categories.length > 0);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [counts, setCounts] = useState<AdminCounts | undefined>(undefined);
   const [chosen, setChosen] = useState<number | null>(null);
@@ -134,10 +169,18 @@ export function VideosPage() {
   const { jobs } = useActivity();
   const [toast, say] = useToast();
   const [scanning, setScanning] = useState(false);
+  const [view, setView] = useState<View>(() => loadSetting(viewKey, parseView, "table"));
+  // The same "now" for every card, as on the Home.
+  const [now] = useState(() => new Date());
+  const chooseView = (next: View) => {
+    setView(next);
+    saveSetting(viewKey, next);
+    if (next === "cards") setChosen(null);
+  };
 
   const load = useCallback(
     (limit: number, signal?: AbortSignal) => {
-      fetchAdminVideos({ q, show, limit }, signal)
+      fetchAdminVideos({ q, show, filters, limit }, signal)
         .then(({ videos: list, total, counts: c, minDuration }) => {
           setState({ kind: "ready", videos: list, total, minDuration });
           setCounts(c);
@@ -148,7 +191,7 @@ export function VideosPage() {
           setState((s) => (s.kind === "ready" ? s : { kind: "error" }));
         });
     },
-    [q, show],
+    [q, show, filters],
   );
 
   useEffect(() => {
@@ -172,6 +215,11 @@ export function VideosPage() {
     }
     setParams(p, { replace });
   };
+
+  // A filter replaces the address, as the search does: the boxes of the
+  // panel would fill the back button's history otherwise.
+  const changeFilters = (next: AdminFilters) =>
+    setParams(writeFilters(params, next), { replace: true });
 
   const search = (event: FormEvent) => {
     event.preventDefault();
@@ -283,9 +331,14 @@ export function VideosPage() {
       <PageHeader
         title="Video"
         description={
-          counts?.[""] !== undefined
-            ? `${n(counts[""])} video dalle cartelle e dai caricamenti. Scegli un video per l'anteprima, il suo titolo per cambiarlo.`
-            : "Scegli un video per l'anteprima, il suo titolo per cambiarlo."
+          (counts?.[""] === undefined
+            ? ""
+            : active > 0
+              ? `${n(counts[""])} video con questi filtri. `
+              : `${n(counts[""])} video dalle cartelle e dai caricamenti. `) +
+          (view === "cards"
+            ? "Scegli un video per cambiarlo."
+            : "Scegli un video per l'anteprima, il suo titolo per cambiarlo.")
         }
         actions={
           <>
@@ -302,14 +355,14 @@ export function VideosPage() {
       />
 
       <div className={ui.toolbar}>
-        <search className={ui.search}>
+        <search className={`${ui.search} ${videos.search}`}>
           <form onSubmit={search}>
             <label className={ui.searchBox}>
               <Icon name="search" size={18} />
               <span className="visually-hidden">Cerca tra i video</span>
               <input
                 type="search"
-                placeholder="Titolo, categoria o nome del file"
+                placeholder="Titolo, categoria o file"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -319,7 +372,37 @@ export function VideosPage() {
             </label>
           </form>
         </search>
+        <fieldset className={ui.segmented}>
+          <legend className="visually-hidden">Vista</legend>
+          <button
+            type="button"
+            className={ui.segment}
+            aria-pressed={view === "table"}
+            onClick={() => chooseView("table")}
+          >
+            <Icon name="menu" size={18} />
+            Tabella
+          </button>
+          <button
+            type="button"
+            className={ui.segment}
+            aria-pressed={view === "cards"}
+            onClick={() => chooseView("cards")}
+          >
+            <Icon name="categories" size={18} />
+            Card
+          </button>
+        </fieldset>
+        <FiltersButton
+          filters={filters}
+          categories={categories}
+          onRetry={retryCategories}
+          open={filtersOpen}
+          onOpen={setFiltersOpen}
+          onChange={changeFilters}
+        />
       </div>
+      <FilterChips filters={filters} categories={categories} onChange={changeFilters} />
 
       <fieldset className={ui.filters}>
         <legend className="visually-hidden">Mostra</legend>
@@ -335,16 +418,22 @@ export function VideosPage() {
         <Empty
           icon="film"
           title={
-            q
-              ? "Nessun video con queste parole"
-              : show === "problems"
-                ? "Nessun file con problemi"
-                : show === "short"
-                  ? "Nessun video scartato"
-                  : "Nessun video qui"
+            active > 0
+              ? "Nessun video con questi filtri"
+              : q
+                ? "Nessun video con queste parole"
+                : show === "problems"
+                  ? "Nessun file con problemi"
+                  : show === "short"
+                    ? "Nessun video scartato"
+                    : "Nessun video qui"
           }
           action={
-            q || param ? (
+            active > 0 ? (
+              <button type="button" className={ui.btn} onClick={() => changeFilters(noFilters)}>
+                Azzera i filtri
+              </button>
+            ) : q || param ? (
               <button
                 type="button"
                 className={ui.btn}
@@ -362,12 +451,31 @@ export function VideosPage() {
             )
           }
         >
-          {q || param
-            ? "Prova un'altra ricerca, o togli il filtro."
-            : "Aggiungi una cartella con dei video, o caricane uno."}
+          {active > 0
+            ? "Togli qualche filtro, o prova un'altra ricerca."
+            : q || param
+              ? "Prova un'altra ricerca, o togli il filtro."
+              : "Aggiungi una cartella con dei video, o caricane uno."}
         </Empty>
       )}
-      {state.kind === "ready" && list.length > 0 && (
+      {state.kind === "ready" && list.length > 0 && view === "cards" && (
+        <>
+          <ul className={`stagger ${grid.grid}`} aria-label="Video">
+            {list.map((video) => (
+              <li key={video.id}>
+                <HomeVideoCard
+                  video={video}
+                  now={now}
+                  to={`/admin/video/${video.id}`}
+                  state={{ ids } satisfies ListState}
+                />
+              </li>
+            ))}
+          </ul>
+          <MoreVideos shown={list.length} total={state.total} onMore={more} />
+        </>
+      )}
+      {state.kind === "ready" && list.length > 0 && view === "table" && (
         <div
           ref={(element) => {
             stage.current = element;
@@ -432,14 +540,7 @@ export function VideosPage() {
                 ))}
               </ul>
 
-              {list.length < state.total && list.length < 200 && (
-                <button type="button" className={`${ui.btn} ${videos.more}`} onClick={more}>
-                  Mostra altri ({n(state.total - list.length)})
-                </button>
-              )}
-              {list.length >= 200 && list.length < state.total && (
-                <p className={ui.cardText}>Per trovare gli altri, usa la ricerca.</p>
-              )}
+              <MoreVideos shown={list.length} total={state.total} onMore={more} />
             </div>
             <div className={videos.previewSlot} data-open={(beside && isOpen) || undefined}>
               {beside && preview.shown && inspector(preview.shown, false)}
@@ -450,6 +551,30 @@ export function VideosPage() {
       {toast}
     </>
   );
+}
+
+// MoreVideos asks for the next videos of the list, the same for the table
+// and the cards: up to 200, then the search finds the others.
+function MoreVideos({
+  shown,
+  total,
+  onMore,
+}: {
+  shown: number;
+  total: number;
+  onMore: () => void;
+}) {
+  if (shown < total && shown < 200) {
+    return (
+      <button type="button" className={`${ui.btn} ${videos.more}`} onClick={onMore}>
+        Mostra altri ({n(total - shown)})
+      </button>
+    );
+  }
+  if (shown >= 200 && shown < total) {
+    return <p className={ui.cardText}>Per trovare gli altri, usa la ricerca o i filtri.</p>;
+  }
+  return null;
 }
 
 // videoState is the one state worth seeing first: a problem, the work

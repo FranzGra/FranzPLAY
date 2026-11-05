@@ -147,7 +147,7 @@ describe("comments", () => {
     await user.click(screen.getByRole("button", { name: "Sì, elimina" }));
 
     expect(await screen.findByRole("heading", { name: "1 commento" })).toBeInTheDocument();
-    expect(server.requests.at(-1)?.method).toBe("DELETE");
+    expect(server.lastSent()?.method).toBe("DELETE");
   });
 
   it("keeps the text when the server refuses", async () => {

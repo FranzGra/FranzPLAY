@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type Category, fetchCategories } from "../../api/videos";
+import { useSite } from "../../app/site";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
@@ -8,11 +9,12 @@ import { CategoryTile } from "./CategoryTile";
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; categories: Category[] };
 
-// CategoriesPage lists the categories: the sub-folders of the video folders,
+// CategoriesPage lists the categories: every folder with videos of its own,
 // with the name, color and image the administrator may have given them and
 // the pictures found in their folders.
 export function CategoriesPage() {
   usePageTitle("Categorie");
+  const { look } = useSite();
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
@@ -41,12 +43,12 @@ export function CategoriesPage() {
       )}
       {state.kind === "ready" && state.categories.length === 0 && (
         <EmptyState title="Ancora nessuna categoria">
-          Le sottocartelle delle tue cartelle video diventano categorie: per esempio i video in
-          «Vacanze» finiscono nella categoria Vacanze.
+          Ogni cartella che contiene dei video diventa una categoria, a qualsiasi profondità: per
+          esempio i video in «Vacanze» finiscono nella categoria Vacanze.
         </EmptyState>
       )}
       {state.kind === "ready" && state.categories.length > 0 && (
-        <ul className={`stagger ${styles.list}`}>
+        <ul className={`stagger ${styles.list}`} data-shape={look.categoryShape}>
           {state.categories.map((category) => (
             <li key={category.name}>
               <CategoryTile

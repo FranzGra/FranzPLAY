@@ -95,7 +95,7 @@ describe("playlist page", () => {
     await user.click(screen.getByRole("button", { name: "Togli «Mare 2024» dalla playlist" }));
     expect(await screen.findByText(/^1 video ·/)).toBeInTheDocument();
     expect(screen.queryByText("Mare 2024")).not.toBeInTheDocument();
-    expect(server.requests.at(-1)?.method).toBe("DELETE");
+    expect(server.lastSent()?.method).toBe("DELETE");
   });
 
   it("renames a list", async () => {
@@ -255,5 +255,101 @@ describe("playlist page", () => {
     expect(
       await screen.findByRole("heading", { name: "Playlist non trovata" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("playlists when something goes wrong", () => {
+  const page = {
+    playlist: trips,
+    videos: [videoJSON(), videoJSON({ id: 8, title: "Montagna" })],
+  };
+
+  it("says when the lists cannot be loaded", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    renderApp("/playlist", {
+      ...signedIn(),
+      "GET /api/playlists": { status: 500, body: { error: "boom" } },
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Playlist non disponibili" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Nuova playlist" })).not.toBeInTheDocument();
+  });
+
+  it("says when a list cannot be loaded, apart from a missing one", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/playlists/2": { status: 500, body: { error: "boom" } },
+    });
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Playlist non disponibile" }),
+    ).toBeInTheDocument();
+  });
+
+  it("tells how to fill an empty list", async () => {
+    renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/playlists/2": { body: { playlist: { ...trips, videos: 0 }, videos: [] } },
+    });
+    expect(await screen.findByRole("heading", { name: "Playlist vuota" })).toBeInTheDocument();
+    expect(screen.getByText(/questa playlist/)).toBeInTheDocument();
+  });
+
+  it("tells how to fill watch later", async () => {
+    renderApp("/playlist/1", {
+      ...signedIn(),
+      "GET /api/playlists/1": { body: { playlist: later, videos: [] } },
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Niente da guardare più tardi" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/«Guarda più tardi»/)).toBeInTheDocument();
+  });
+
+  it("says that someone else's empty list will fill up", async () => {
+    renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/playlists/2": {
+        body: {
+          playlist: { ...trips, videos: 0, owner: { id: 5, name: "Giulia" }, public: true },
+          videos: [],
+        },
+      },
+    });
+    expect(
+      await screen.findByText("Quando Giulia aggiungerà dei video, li vedrai qui."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a video that could not be taken out, and says so", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { user } = renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/playlists/2": { body: page },
+      "DELETE /api/playlists/2/videos/7": { status: 500, body: { error: "boom" } },
+    });
+    await user.click(
+      await screen.findByRole("button", { name: "Togli «Mare 2024» dalla playlist" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Non sono riuscito a togliere il video. Riprova.",
+    );
+    expect(within(screen.getByRole("list")).getAllByRole("heading")).toHaveLength(2);
+  });
+
+  it("keeps a list that could not be deleted, and says so", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { user } = renderApp("/playlist/2", {
+      ...signedIn(),
+      "GET /api/playlists/2": { body: page },
+      "DELETE /api/playlists/2": { status: 500, body: { error: "boom" } },
+    });
+    await user.click(await screen.findByRole("button", { name: "Elimina" }));
+    await user.click(screen.getByRole("button", { name: "Sì, elimina" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Non sono riuscito a eliminare la playlist. Riprova.",
+    );
+    expect(screen.getByRole("heading", { level: 1, name: "Gite" })).toBeInTheDocument();
   });
 });

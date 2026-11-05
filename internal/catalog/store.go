@@ -157,8 +157,8 @@ type store struct {
 // opened while it is still the video's link, while those are on the disk
 // and not hidden. Its one argument is the person, from viewer.
 // Lists keep to visible: a private video shows up in no list but its
-// uploader's own channel (mineToo) and the list of the videos shared with
-// me (sharedWithMe).
+// uploader's own channel (mineToo), the list of the videos shared with
+// me (sharedWithMe), and a person's own likes and progress (Watchable).
 const watchable = `(v.visible OR (v.private AND v.missing_since IS NULL AND v.hidden_at IS NULL
 	AND ? IN (SELECT v.uploaded_by UNION ALL SELECT s.user_id FROM video_shares s WHERE s.video_id = v.id
 		UNION ALL SELECT l.user_id FROM video_link_viewers l WHERE l.video_id = v.id AND l.link_key = v.link_key)))`
@@ -187,9 +187,33 @@ func viewer(ctx context.Context) int64 {
 }
 
 // shownCategory is the category people see for the video v: the name the
-// administrator gave it in the categories table, or the category itself.
-// Two categories given the same name show as one.
-const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name = v.category), v.category)`
+// administrator gave it in the categories table, else the name the scan
+// gave its folder (folder_categories: "Stagione 1" for the folder "Serie
+// A/Stagione 1"), else the category itself. Two categories given the same
+// name show as one.
+const shownCategory = `coalesce((SELECT c.label FROM categories c WHERE c.name = v.category),
+	(SELECT f.shown FROM folder_categories f WHERE f.name = v.category), v.category)`
+
+// To filter by the name people see, the categories with that name are
+// found first among the few named ones, then the videos by their
+// category: SQLite can use the videos_shown index, instead of working out
+// shownCategory for every video.
+const (
+	// namedShownAs is the categories given a name (shownCategory) that
+	// meets the condition that follows it.
+	namedShownAs = `SELECT k.name FROM (SELECT name FROM categories UNION SELECT name FROM folder_categories) k
+		WHERE coalesce((SELECT c.label FROM categories c WHERE c.name = k.name),
+			(SELECT f.shown FROM folder_categories f WHERE f.name = k.name), k.name) `
+	// named is the categories that do not show as themselves.
+	named = `SELECT name FROM categories WHERE label IS NOT NULL UNION ALL SELECT name FROM folder_categories`
+	// inCategory is the videos shown in a category; its three arguments
+	// are the name people see.
+	inCategory = `v.category IN (` + namedShownAs + `= ? UNION ALL SELECT ? WHERE ? NOT IN (` + named + `))`
+	// categoryLike is the videos whose category people see matches a LIKE
+	// pattern, its three arguments.
+	categoryLike = `(v.category IN (` + namedShownAs + `LIKE ? ESCAPE '\') OR
+		(v.category LIKE ? ESCAPE '\' AND v.category NOT IN (` + named + `)))`
+)
 
 // videoColumns are read for every video, in the order scanVideo expects.
 const videoColumns = `v.id, v.shown_title, ` + shownCategory + `, v.duration, v.width, v.height, v.cover, v.added_at,
@@ -298,14 +322,14 @@ func (s store) list(ctx context.Context, q listQuery) (_ []Video, total int, err
 		args = append(args, q.uploader)
 	}
 	if q.category != "" {
-		where += ` AND ` + shownCategory + ` = ?`
-		args = append(args, q.category)
+		where += ` AND ` + inCategory
+		args = append(args, q.category, q.category, q.category)
 	}
 	// LIKE ignores case for the letters A to Z; that is enough for a home search.
 	for _, w := range q.words {
-		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + shownCategory + ` LIKE ? ESCAPE '\')`
+		where += ` AND (v.shown_title LIKE ? ESCAPE '\' OR ` + categoryLike + `)`
 		p := likePattern(w)
-		args = append(args, p, p)
+		args = append(args, p, p, p)
 	}
 	if q.shuffle != 0 {
 		return s.listShuffled(ctx, where, args, q)
@@ -401,17 +425,22 @@ func (s store) get(ctx context.Context, id int64) (Video, error) {
 }
 
 // byIDs returns the visible videos among ids, in the order of ids.
-func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
+func (s store) byIDs(ctx context.Context, ids []int64) ([]Video, error) {
+	return s.among(ctx, ids, `v.visible`)
+}
+
+// among returns the videos among ids that meet cond, a condition on
+// videos v with args as its arguments, in the order of ids.
+func (s store) among(ctx context.Context, ids []int64, cond string, args ...any) (_ []Video, err error) {
 	if len(ids) == 0 {
 		return []Video{}, nil
 	}
 	marks := strings.Repeat(",?", len(ids))[1:]
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
+	for _, id := range ids {
+		args = append(args, id)
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT `+videoColumns+` FROM videos v
-		WHERE v.visible AND v.id IN (`+marks+`)`, args...)
+		WHERE `+cond+` AND v.id IN (`+marks+`)`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read videos: %w", err)
 	}
@@ -441,18 +470,25 @@ func (s store) byIDs(ctx context.Context, ids []int64) (_ []Video, err error) {
 // the cover of the newest video that has one.
 func (s store) categories(ctx context.Context) (_ []Category, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT coalesce(c.label, g.category) AS shown, sum(g.videos), coalesce(max(c.color), ''), max(c.image),
-			max(g.cover)
+		SELECT seen_as, sum(videos), coalesce(max(color), ''), max(image), max(iif(newest_first = 1, cover, NULL))
 		FROM (
-			-- Counted first by the folder name, then joined to the names the
-			-- administrator chose. With max(), SQLite takes v.cover from the
-			-- row of the max: the newest video with a cover.
-			SELECT v.category, count(*) AS videos,
-				max(iif(v.cover IS NULL, NULL, v.added_at)), v.cover
-			FROM videos v
-			WHERE v.visible AND v.category != '' GROUP BY v.category
-		) g LEFT JOIN categories c ON c.name = g.category
-		GROUP BY shown ORDER BY shown COLLATE NOCASE`)
+			-- Folders given one name are one category: its cover is the
+			-- newest of their covers.
+			SELECT coalesce(c.label, f.shown, g.category) AS seen_as, g.videos, g.cover, c.color, c.image,
+				row_number() OVER (PARTITION BY coalesce(c.label, f.shown, g.category)
+					ORDER BY g.newest IS NULL, g.newest DESC, g.cover DESC) AS newest_first
+			FROM (
+				-- Counted first by the folder name, then joined to the names
+				-- the administrator chose. With max(), SQLite takes v.cover
+				-- from the row of the max: the newest video with a cover.
+				SELECT v.category, count(*) AS videos,
+					max(iif(v.cover IS NULL, NULL, v.added_at)) AS newest, v.cover
+				FROM videos v
+				WHERE v.visible AND v.category != '' GROUP BY v.category
+			) g LEFT JOIN categories c ON c.name = g.category
+			LEFT JOIN folder_categories f ON f.name = g.category
+		)
+		GROUP BY seen_as ORDER BY seen_as COLLATE NOCASE`)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
@@ -502,8 +538,9 @@ type folderPictures struct {
 // by the name people see.
 func (s store) categoryPictures(ctx context.Context) (_ map[string]folderPictures, err error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT coalesce(c.label, p.category), p.path, p.file, p.width, p.height
+		SELECT coalesce(c.label, f.shown, p.category), p.path, p.file, p.width, p.height
 		FROM category_pictures p LEFT JOIN categories c ON c.name = p.category
+		LEFT JOIN folder_categories f ON f.name = p.category
 		WHERE p.file IS NOT NULL ORDER BY p.library_id, p.id`)
 	if err != nil {
 		return nil, fmt.Errorf("list category pictures: %w", err)

@@ -10,6 +10,8 @@ package library
 import (
 	"path"
 	"strings"
+
+	"github.com/FranzGra/FranzPLAY/internal/titles"
 )
 
 // videoExtensions are the file types treated as videos (lower case).
@@ -47,19 +49,21 @@ func skipDir(name string) bool {
 	return strings.HasPrefix(name, ".") || ignoredDirs[strings.ToLower(name)]
 }
 
-// titleOf turns "Viaggi/Sardegna 2025.mp4" into "Sardegna 2025".
-// relPath always uses "/" as separator.
-func titleOf(relPath string) string {
-	name := path.Base(relPath)
-	return strings.TrimSuffix(name, path.Ext(name))
-}
+// titleOf turns "Viaggi/Sardegna 2025.mp4" into "Sardegna 2025", before
+// the administrator's rules (package titles). relPath always uses "/" as
+// separator.
+func titleOf(relPath string) string { return titles.FileTitle(relPath) }
 
-// categoryOf returns the first folder of relPath: "Viaggi/2025/mare.mp4"
-// belongs to "Viaggi". A video directly in the library has no category ("").
+// categoryOf returns the folder that holds the video, inside the library:
+// every folder with videos of its own is a category, at any depth, and its
+// path is what tells it apart from another folder with the same name.
+// "Viaggi/2025/mare.mp4" belongs to "Viaggi/2025"; a folder holding only
+// other folders is no category. A video directly in the library has no
+// category (""). The name people see is the last folder (categoryNames).
 func categoryOf(relPath string) string {
-	first, _, found := strings.Cut(relPath, "/")
-	if !found {
+	dir := path.Dir(relPath)
+	if dir == "." {
 		return ""
 	}
-	return first
+	return dir
 }

@@ -158,3 +158,95 @@ func TestClipRefusals(t *testing.T) {
 		t.Errorf("worker told %d times after refusals", s.queued)
 	}
 }
+
+func TestAdministratorChoosesTheClipMoment(t *testing.T) {
+	s := newAdminSite(t)
+	id := s.addVideo(t, "a.mp4", "a", "", 1, true) // 90 seconds long
+	address := "/api/admin/videos/" + strconv.FormatInt(id, 10) + "/clip"
+	moment := func() (second, seconds *int64) {
+		t.Helper()
+		v := decode[adminList](t, s.do(t, "GET", "/api/admin/videos", "", http.StatusOK)).Videos[0]
+		return v.ClipSecond, v.ClipSeconds
+	}
+	if second, seconds := moment(); second != nil || seconds != nil {
+		t.Fatalf("a new video has a moment: %v %v", second, seconds)
+	}
+
+	// A video of their own gives way to the moment chosen.
+	s.putClip(t, id, mp4Video, http.StatusNoContent)
+	s.do(t, "PUT", address+"/moment", `{"second": 42, "seconds": 10}`, http.StatusNoContent)
+	if own, none := s.clipChoice(t, id); own != nil || none {
+		t.Errorf("after the moment: own %v, none %v", own, none)
+	}
+	if files := s.ownClips(t); len(files) != 0 {
+		t.Errorf("own clips = %q, want none", files)
+	}
+	if second, seconds := moment(); second == nil || *second != 42 || seconds == nil || *seconds != 10 {
+		t.Errorf("moment = %v %v, want 42 for 10 seconds", second, seconds)
+	}
+	if got := pendingJobs(t, s.db, id); !slices.Equal(got, []string{"clip"}) {
+		t.Errorf("pending jobs = %q, want the clip", got)
+	}
+
+	// Made again later, the clip keeps the moment.
+	s.do(t, "POST", address+"/remake", "", http.StatusNoContent)
+	if second, _ := moment(); second == nil || *second != 42 {
+		t.Errorf("after remaking the moment is %v, want 42", second)
+	}
+
+	// Back to the site's choice.
+	s.do(t, "PUT", address+"/moment", `{"second": null, "seconds": null}`, http.StatusNoContent)
+	if second, seconds := moment(); second != nil || seconds != nil {
+		t.Errorf("after going back: %v %v", second, seconds)
+	}
+}
+
+func TestClipMomentRefusals(t *testing.T) {
+	s := newAdminSite(t)
+	id := s.addVideo(t, "a.mp4", "a", "", 1, true) // 90 seconds long
+	notRead := s.addVideo(t, "b.mp4", "b", "", 2, false)
+	address := func(id int64) string { return "/api/admin/videos/" + strconv.FormatInt(id, 10) + "/clip/moment" }
+
+	s.do(t, "PUT", address(id), `{"second": 90}`, http.StatusBadRequest)
+	s.do(t, "PUT", address(id), `{"second": -1}`, http.StatusBadRequest)
+	s.do(t, "PUT", address(id), `{"second": 5, "seconds": 1}`, http.StatusBadRequest)
+	s.do(t, "PUT", address(id), `{"second": 5, "seconds": 31}`, http.StatusBadRequest)
+	s.do(t, "PUT", address(id), `{"second": 5, "x": 1}`, http.StatusBadRequest)
+	s.do(t, "PUT", address(notRead), `{"second": 5}`, http.StatusConflict)
+	s.do(t, "PUT", address(999), `{"second": 5}`, http.StatusNotFound)
+	s.who.Role = "user"
+	s.do(t, "PUT", address(id), `{"second": 5}`, http.StatusForbidden)
+	s.do(t, "PUT", "/api/admin/clip-settings", `{"startPercent": 10, "seconds": 6}`, http.StatusForbidden)
+	if s.queued != 0 {
+		t.Errorf("worker told %d times after refusals", s.queued)
+	}
+}
+
+func TestClipSettings(t *testing.T) {
+	s := newAdminSite(t)
+	type settings struct {
+		StartPercent int `json:"startPercent"`
+		Seconds      int `json:"seconds"`
+	}
+	// As FranzPLAY always made them.
+	if got := decode[settings](t, s.do(t, "GET", "/api/admin/clip-settings", "", http.StatusOK)); got != (settings{0, 6}) {
+		t.Errorf("settings = %+v, want automatic for 6 seconds", got)
+	}
+	s.do(t, "PUT", "/api/admin/clip-settings", `{"startPercent": 20, "seconds": 8}`, http.StatusOK)
+	if got := decode[settings](t, s.do(t, "GET", "/api/admin/clip-settings", "", http.StatusOK)); got != (settings{20, 8}) {
+		t.Errorf("settings = %+v, want 20%% for 8 seconds", got)
+	}
+	for _, bad := range []string{`{"startPercent": 96, "seconds": 6}`, `{"startPercent": -1, "seconds": 6}`,
+		`{"startPercent": 0, "seconds": 1}`, `{"startPercent": 0, "seconds": 31}`, `{"seconds": 6}`, `{}`} {
+		s.do(t, "PUT", "/api/admin/clip-settings", bad, http.StatusBadRequest)
+	}
+	// Back to the start: nothing left in the settings.
+	s.do(t, "PUT", "/api/admin/clip-settings", `{"startPercent": 0, "seconds": 6}`, http.StatusOK)
+	var n int
+	if err := s.db.QueryRow(`SELECT count(*) FROM settings WHERE key LIKE 'clips.%'`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("clip settings rows = %d (%v), want none", n, err)
+	}
+	if s.queued != 0 {
+		t.Errorf("worker told %d times: the clips already made stay", s.queued)
+	}
+}

@@ -1132,3 +1132,9 @@ label.btn:has(.fileInput:focus-visible) {
     width: calc(100vw - 32px);
   }
 }
+
+/* A choice made of hidden radio buttons shows where the keyboard is. */
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

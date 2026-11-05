@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/FranzGra/FranzPLAY/internal/content"
+	"github.com/FranzGra/FranzPLAY/internal/titles"
 )
 
 // ForgetAfter is how long a missing video stays in the catalog, with its
@@ -60,6 +61,10 @@ type Scanner struct {
 	// them, and only Run calls Scan, so they need no lock.
 	pending map[location]found    // new or changed files, to notice one still being copied
 	skipped map[location]skipFile // duplicates and unreadable files
+	// titles are the title rules the names of every video were last made
+	// with ("" before the first scan): when they change, the next scan
+	// makes every name again.
+	titles string
 }
 
 // skipFile is a file the catalog does not hold: a second copy of a video,
@@ -198,6 +203,11 @@ func (s *Scanner) setScanning(on bool) {
 // Scan compares the video folders with the catalog once and saves the result.
 func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	var report Report
+	clean, titleRules, err := titles.LoadCleaner(ctx, s.store.db)
+	if err != nil {
+		return report, err
+	}
+	s.store.clean = clean
 	ids, err := s.store.libraryIDs(ctx, s.libraries)
 	if err != nil {
 		return report, err
@@ -359,6 +369,22 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 	if err != nil {
 		return report, err
 	}
+	// Other title rules (or the first scan since FranzPLAY started): every
+	// title and category is made again from the paths, no file is read.
+	renamed := 0
+	if titleRules != s.titles {
+		if renamed, err = s.store.renameAll(ctx, clean); err != nil {
+			return report, err
+		}
+		if renamed > 0 {
+			s.logger.InfoContext(ctx, "titles and categories made again", "videos", renamed)
+		}
+		s.titles = titleRules
+	}
+	namesChanged, err := s.store.syncCategoryNames(ctx, clean)
+	if err != nil {
+		return report, err
+	}
 
 	for _, d := range ch.duplicates {
 		if _, known := s.skipped[d.loc]; !known {
@@ -396,7 +422,7 @@ func (s *Scanner) Scan(ctx context.Context) (Report, error) {
 		}
 	}
 	s.scanned(ctx, movedIDs, replacedIDs)
-	if report.Changed() || picturesGone {
+	if report.Changed() || picturesGone || renamed > 0 || namesChanged {
 		s.changed()
 	}
 	return report, nil

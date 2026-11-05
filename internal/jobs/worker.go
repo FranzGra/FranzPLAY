@@ -174,29 +174,31 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	gaveWay := errors.Is(context.Cause(yieldCtx), errGaveWay)
 	yield(nil)
 
+	// The result is saved even if FranzPLAY starts stopping meanwhile: a
+	// job left running would count as a crash at the next start.
+	saveCtx, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), stopTimeout)
+	defer cancelSave()
 	if ctx.Err() != nil {
 		// FranzPLAY is stopping: the job did not fail, it was interrupted.
 		// It goes back in the queue as if it had not started.
-		saveCtx, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), stopTimeout)
-		defer cancelSave()
 		return true, w.giveBack(saveCtx, j)
 	}
 	if gaveWay {
 		w.logger.InfoContext(ctx, "job paused for other work", "kind", j.kind, "video", j.videoID,
 			"after", time.Since(start).Round(time.Second))
-		return true, w.giveBack(ctx, j)
+		return true, w.giveBack(saveCtx, j)
 	}
 	if later := (*LaterError)(nil); errors.As(runErr, &later) {
 		w.logger.DebugContext(ctx, "job postponed", "kind", j.kind, "video", j.videoID, "until", later.Until)
-		return true, w.postpone(ctx, j, later.Until)
+		return true, w.postpone(saveCtx, j, later.Until)
 	}
 	if runErr == nil {
 		w.logger.InfoContext(ctx, "job done", "kind", j.kind, "video", j.videoID,
 			"duration", time.Since(start).Round(time.Millisecond))
-		if err := w.finish(ctx, j, done, w.now(), ""); err != nil {
+		if err := w.finish(saveCtx, j, done, w.now(), ""); err != nil {
 			return true, err
 		}
-		w.jobDone(ctx, j.videoID)
+		w.jobDone(saveCtx, j.videoID)
 		return true, nil
 	}
 
@@ -204,7 +206,7 @@ func (w *Worker) RunNext(ctx context.Context) (bool, error) {
 	next, runAfter := afterFailure(attempts, runErr, w.now())
 	w.logger.WarnContext(ctx, "job failed", "kind", j.kind, "video", j.videoID,
 		"attempt", attempts, "will_retry", next == pending, "error", runErr)
-	return true, w.finish(ctx, j, next, runAfter, runErr.Error())
+	return true, w.finish(saveCtx, j, next, runAfter, runErr.Error())
 }
 
 // watchForOthers watches the queue while a job that gives way runs, and

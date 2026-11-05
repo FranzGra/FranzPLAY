@@ -55,12 +55,9 @@ func (s store) renameUser(ctx context.Context, id int64, name string) (err error
 	}
 	defer func() { err = finish(tx, err) }()
 
-	var taken int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE name = ? AND id != ?`, name, id).
-		Scan(&taken); err != nil {
+	if _, taken, err := sameName(ctx, tx, name, id); err != nil {
 		return fmt.Errorf("rename user: %w", err)
-	}
-	if taken > 0 {
+	} else if taken {
 		return errNameTaken
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE users SET name = ? WHERE id = ?`, name, id)

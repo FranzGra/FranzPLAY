@@ -1,0 +1,12 @@
+# Only what the program needs: the checks themselves are mounted by run.sh.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!web/
+**/*_test.go
+**/testdata/
+internal/webui/dist/app/
+web/node_modules/
+web/dist/

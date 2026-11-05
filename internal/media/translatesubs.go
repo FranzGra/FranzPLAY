@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -162,7 +161,7 @@ func (t *Transcriber) sourceCues(ctx context.Context, videoID int64, file string
 	}
 	cues = make([]video.Cue, 0, len(parsed))
 	for _, c := range parsed {
-		c.Text = strings.TrimSpace(keepStyle(c.Text))
+		c.Text = strings.TrimSpace(video.KeepStyle(c.Text))
 		if c.Text != "" {
 			cues = append(cues, c)
 		}
@@ -171,22 +170,6 @@ func (t *Transcriber) sourceCues(ctx context.Context, videoID int64, file string
 		return nil, "", fmt.Errorf("video %d: %w: %w", videoID, errNoSource, jobs.ErrPermanent)
 	}
 	return cues, model, nil
-}
-
-// cueMarkup is the markup a subtitle not written by FranzPLAY may have.
-var cueMarkup = regexp.MustCompile(`</?[a-zA-Z][^>]*>|\{\\[^}]*\}`)
-
-// cueStyle is the markup that stays: italics, bold and underline, which a
-// browser shows. The rest, like <font> or {\an8}, it would not understand.
-var cueStyle = regexp.MustCompile(`(?i)^</?[biu]>$`)
-
-func keepStyle(text string) string {
-	return cueMarkup.ReplaceAllStringFunc(text, func(mark string) string {
-		if cueStyle.MatchString(mark) {
-			return strings.ToLower(mark)
-		}
-		return ""
-	})
 }
 
 // fileSubtitle reads, as WebVTT, the subtitle in a language next to a video.

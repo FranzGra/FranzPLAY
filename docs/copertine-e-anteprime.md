@@ -129,9 +129,21 @@ Viaggi/
 
 ## L'anteprima sulla copertina
 
-- È fatta di **3 pezzi da 2 secondi**, presi a un quarto, a metà e a tre quarti del video, così
-  si capisce com'è tutto il video e si saltano sigle e titoli di coda. Un video sotto i 30 secondi
-  dà un pezzo solo; uno sotto i 4 secondi non ha anteprima.
+- Di solito è fatta di **3 pezzi da 2 secondi**, presi a un quarto, a metà e a tre quarti del video,
+  così si capisce com'è tutto il video e si saltano sigle e titoli di coda. Un video sotto i 30
+  secondi dà un pezzo solo; uno sotto i 4 secondi non ha anteprima.
+- In **Amministrazione › Sito › Anteprime dei video** scegli per tutto il sito:
+  - **da dove parte**: **Automatica** (i 3 pezzi qui sopra, come sempre) oppure **Da un punto
+    fisso**, in percentuale della durata (da 1 a 95: per esempio 10 = da un decimo del video), in
+    un pezzo solo;
+  - **quanto dura**: da 2 a 30 secondi, 6 se non la cambi. Con la partenza automatica i secondi si
+    dividono fra i 3 pezzi.
+
+  Vale per le anteprime fatte **da adesso in poi**: quelle già pronte restano come sono, finché non
+  le rifai dalla pagina del video. In percentuale e non in secondi perché i video hanno durate
+  diversissime: "da un decimo" va bene sia per un video di 2 minuti sia per un film.
+- Se il video finisce prima, l'anteprima **parte un po' prima**, così dura sempre quanto hai scelto;
+  se il video è più corto dell'anteprima, la fa con tutto il video.
 - Esiste in **due versioni**, fatte insieme con un solo passaggio di FFmpeg:
   - **leggera**, 360p: poche centinaia di KB;
   - **nitida**, 720p (o meno, se il video è più piccolo: non viene mai ingrandita).
@@ -147,6 +159,11 @@ In **Amministrazione › Video**, pulsante **Anteprima**, puoi:
   senza audio, e ne fa le due versioni come per le altre;
 - **Rifalla dal video**: torna all'anteprima fatta da FranzPLAY;
 - **Nessuna anteprima**: su quel video non parte niente.
+- **Scegli il momento**: come per la copertina, fermi il video (o sposti il cursore, o scrivi il
+  secondo) dove deve partire l'anteprima, scegli quanto dura (all'inizio quella del sito) e premi
+  **Rigenera anteprima da qui**. Il fotogramma fermo è il primo dell'anteprima. Il lavoro va in
+  coda come gli altri e lo segui nei lavori del video. La scelta resta: anche **Rifalla dal video**
+  la usa. **Torna come le altre** la toglie, e il video torna a seguire le impostazioni del sito.
 
 Perché 720p e non 1080p: [decisione 0020](decisioni/0020-anteprime-alta-e-bassa-qualita.md).
 

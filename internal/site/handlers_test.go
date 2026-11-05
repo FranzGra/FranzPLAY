@@ -72,7 +72,7 @@ func TestAdministratorChangesNameAndColor(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT = %d %s", rec.Code, rec.Body)
 	}
-	want := Look{NameFirst: "Casa", NameSecond: "Rossi", Color: "#dc2626"}
+	want := Look{NameFirst: "Casa", NameSecond: "Rossi", Color: "#dc2626", CategoryShape: "landscape"}
 	if got := fx.look(t); got != want {
 		t.Fatalf("after saving: %+v, want %+v", got, want)
 	}
@@ -100,6 +100,7 @@ func TestBadLooksAreRefused(t *testing.T) {
 		`{"nameFirst": "", "nameSecond": "PLAY", "color": "#2997ff"}`,
 		`{"nameFirst": "Franz", "nameSecond": "PLAY", "color": "blue"}`,
 		`{"nameFirst": "Franz", "nameSecond": "PLAY", "color": "#2997ff", "logo": "x"}`,
+		`{"nameFirst": "Franz", "nameSecond": "PLAY", "color": "#2997ff", "categoryShape": "round"}`,
 		`not json`,
 	} {
 		if rec := fx.do("PUT", body); rec.Code != http.StatusBadRequest {
@@ -108,5 +109,23 @@ func TestBadLooksAreRefused(t *testing.T) {
 	}
 	if got := fx.look(t); got != Default {
 		t.Errorf("the look changed anyway: %+v", got)
+	}
+}
+
+func TestAdministratorChangesTheShapeOfTheCategoryCovers(t *testing.T) {
+	fx := newFixture(t)
+	rec := fx.do("PUT", `{"nameFirst": "Franz", "nameSecond": "PLAY", "color": "#2997ff", "categoryShape": "portrait"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT = %d %s", rec.Code, rec.Body)
+	}
+	if got := fx.look(t).CategoryShape; got != "portrait" {
+		t.Fatalf("shape = %q, want portrait", got)
+	}
+	// Who sends only the name and color, like the first setup, keeps it.
+	if rec := fx.do("PUT", `{"nameFirst": "Casa", "nameSecond": "", "color": "#000000"}`); rec.Code != http.StatusOK {
+		t.Fatalf("PUT without shape = %d %s", rec.Code, rec.Body)
+	}
+	if got := fx.look(t); got.CategoryShape != "portrait" || got.NameFirst != "Casa" {
+		t.Fatalf("after saving without shape: %+v", got)
 	}
 }

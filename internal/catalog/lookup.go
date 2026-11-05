@@ -22,6 +22,18 @@ func (l Lookup) ByIDs(ctx context.Context, ids []int64) ([]Video, error) {
 	return l.store.byIDs(ctx, ids)
 }
 
+// Watchable is the condition on videos v that CanOpen checks, with the
+// person as its one argument. The features that keep a person's own list
+// of videos (likes, progress) count with it, so a video shared with them
+// is there too.
+const Watchable = watchable
+
+// ByIDsFor returns the videos among ids that the person with the id viewer
+// may open (CanOpen), in the same order. The others are left out.
+func (l Lookup) ByIDsFor(ctx context.Context, ids []int64, viewer int64) ([]Video, error) {
+	return l.store.among(ctx, ids, watchable, viewer)
+}
+
 // CanOpen reports whether the person with the id viewer may open a video:
 // a visible one, or a private upload of theirs or shared with them. Likes
 // and comments follow it, so the people who see a shared video can talk

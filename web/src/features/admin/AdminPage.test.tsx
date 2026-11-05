@@ -1,5 +1,5 @@
 import { fireEvent, screen, within } from "@testing-library/react";
-import { renderApp, signedIn } from "../../test/render";
+import { renderApp, signedIn, testAccount } from "../../test/render";
 import { groups } from "./AdminPage";
 
 // narrow makes the window as wide as a phone.
@@ -149,6 +149,38 @@ describe("administration console", () => {
     expect(within(menu).getByRole("link", { name: "Sito" })).toHaveAttribute(
       "aria-current",
       "page",
+    );
+  });
+});
+
+describe("administration for who is not the administrator", () => {
+  const sections = [
+    "",
+    "riepilogo",
+    "persone",
+    "inviti",
+    "accessi",
+    "video",
+    "video/7",
+    "categorie",
+    "sottotitoli",
+    "regole-titoli",
+    "commenti",
+    "cartelle",
+    "internet",
+    "lavori",
+    "sito",
+  ];
+
+  it.each(sections)("shows nothing of /admin/%s and asks the server nothing", async (section) => {
+    const { server } = renderApp(`/admin/${section}`, signedIn({ ...testAccount, role: "user" }));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Solo per l'amministratore" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /Amministrazione/ })).toBeNull();
+    const asked = server.requests.map((r) => new URL(r.url).pathname);
+    expect(asked.filter((p) => p.startsWith("/api/admin") || p.startsWith("/api/logins"))).toEqual(
+      [],
     );
   });
 });

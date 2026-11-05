@@ -21,6 +21,11 @@ type VideoCardProps = {
   position?: number;
   // note is one more line under the details, like why it is suggested.
   note?: string;
+  // to opens another page instead of the player, like the administrator's
+  // page of the video: a plain link, without the cover growing into the
+  // player. state goes with it.
+  to?: string;
+  state?: unknown;
 };
 
 // VideoCard is a video in a grid: cover with its duration, title, whose it
@@ -28,26 +33,37 @@ type VideoCardProps = {
 // my own channel the cover also says who sees each of my videos. Resting the mouse on it
 // plays a few silent seconds of the video; on a touch screen the card that
 // stays in the middle of the screen plays them.
-export function VideoCard({ video, now, layout = "grid", position, note }: VideoCardProps) {
+export function VideoCard({
+  video,
+  now,
+  layout = "grid",
+  position,
+  note,
+  to: elsewhere,
+  state,
+}: VideoCardProps) {
   const { playing, handlers, coverRef } = useClipPreview(video.clip, layout === "grid");
   const details = [video.category, formatAge(video.addedAt, now)].filter(Boolean).join(" · ");
   const watched =
     position !== undefined && video.duration ? Math.min(1, position / video.duration) : null;
   const navigate = useNavigate();
-  const to = `/video/${video.id}`;
+  const to = elsewhere ?? `/video/${video.id}`;
+  const preload = elsewhere ? undefined : preloadPlayer;
   return (
     <Link
       to={to}
+      state={elsewhere ? state : undefined}
       className={`glow ${styles.root}`}
       data-layout={layout}
       // Fetch the player's code as soon as the card is pointed at.
-      onMouseEnter={preloadPlayer}
-      onFocus={preloadPlayer}
-      onTouchStart={preloadPlayer}
+      onMouseEnter={preload}
+      onFocus={preload}
+      onTouchStart={preload}
       {...handlers}
       // Where the browser can, the cover grows into the player (coverMorph);
       // elsewhere, and with Ctrl, Cmd or the middle button, a plain link.
       onClick={(event) => {
+        if (elsewhere) return;
         const cover = event.currentTarget.querySelector<HTMLElement>("[data-card-video]");
         if (!cover || !canOpenWithMorph(event)) return;
         event.preventDefault();

@@ -27,7 +27,7 @@ describe("online sources page", () => {
     await user.click(youtube);
     expect(await screen.findByRole("status")).toHaveTextContent("un video alla volta");
     expect(youtube).toBeChecked();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       youtube: true,
       tmdb: false,
       tpdb: false,
@@ -63,14 +63,14 @@ describe("online sources page", () => {
     await user.type(within(form).getByLabelText("Chiave di TMDB"), ` ${key} `);
     await user.click(within(form).getByRole("button", { name: "Prova e salva" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Ora puoi accendere TMDB");
-    expect(await server.requests.at(-1)?.json()).toEqual({ key });
+    expect(await server.lastSent()?.json()).toEqual({ key });
     expect(card).toHaveTextContent("La chiave è salvata");
     expect(screen.getByLabelText("Nuova chiave di TMDB")).toHaveValue("");
 
     await user.click(tmdb);
     expect(await screen.findByRole("status")).toHaveTextContent("un video alla volta");
     expect(tmdb).toBeChecked();
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       youtube: false,
       tmdb: true,
       tpdb: false,
@@ -114,12 +114,12 @@ describe("online sources page", () => {
     await user.type(within(form).getByLabelText("Chiave di ThePornDB"), key);
     await user.click(within(form).getByRole("button", { name: "Prova e salva" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Ora puoi accendere ThePornDB");
-    expect(server.requests.at(-1)?.url).toContain("/api/online/tpdb-key");
-    expect(await server.requests.at(-1)?.json()).toEqual({ key });
+    expect(server.lastSent()?.url).toContain("/api/online/tpdb-key");
+    expect(await server.lastSent()?.json()).toEqual({ key });
 
     await user.click(tpdb);
     expect(await screen.findByRole("status")).toHaveTextContent("un video alla volta");
-    expect(await server.requests.at(-1)?.json()).toEqual({
+    expect(await server.lastSent()?.json()).toEqual({
       youtube: false,
       tmdb: false,
       tpdb: true,
@@ -155,6 +155,6 @@ describe("online sources page", () => {
 
     await user.click(within(form).getByRole("button", { name: "Salva le regole" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Regole salvate");
-    expect(await server.requests.at(-1)?.json()).toEqual(saved.rules);
+    expect(await server.lastSent()?.json()).toEqual(saved.rules);
   });
 });

@@ -7,6 +7,7 @@ import {
   fetchSubtitledVideos,
   fetchSubtitlesSetup,
   fromLanguage,
+  importedModel,
   languageName,
   type SubtitledVideo,
   type SubtitleRequest,
@@ -26,6 +27,7 @@ import { Select } from "../../components/Select";
 import { formatRemaining } from "../../lib/format";
 import { pollEvery, throttle } from "./activity";
 import { downloadedText, heardText, translatedText } from "./jobText";
+import { SubtitleImport } from "./SubtitleImport";
 import subs from "./Subtitles.module.css";
 import { TranscribeForm, TranslateForm } from "./SubtitlesForms";
 import { SubtitlesSetupBox } from "./SubtitlesSetup";
@@ -409,10 +411,20 @@ function Tracks({
                 key={`${s.source}-${s.lang}-${s.from}`}
                 className={ui.chip}
                 data-tone={s.source === "auto" ? "ok" : undefined}
-                title={s.model ? `Scritti da Whisper, modello ${s.model}` : undefined}
+                title={
+                  s.model === importedModel
+                    ? "Importati da un file"
+                    : s.model
+                      ? `Scritti da Whisper, modello ${s.model}`
+                      : undefined
+                }
               >
                 {languageName(s.lang)} ·{" "}
-                {s.from ? `tradotto ${fromLanguage(s.from)}` : sourceNames[s.source]}
+                {s.from
+                  ? `tradotto ${fromLanguage(s.from)}`
+                  : s.model === importedModel
+                    ? "importati"
+                    : sourceNames[s.source]}
                 {s.source === "auto" && (
                   <button
                     type="button"
@@ -444,7 +456,7 @@ function VideoRow({
 }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
-  const [open, setOpen] = useState<"" | "transcribe" | "translate">("");
+  const [open, setOpen] = useState<"" | "transcribe" | "translate" | "import">("");
   const r = video.request;
   const t = video.translation;
   const canListen = setup.whisper && setup.whisperProblem === "" && setup.models.length > 0;
@@ -543,6 +555,14 @@ function VideoRow({
             onCancel={() => closeAnd(false)}
           />
         )}
+        {open === "import" && (
+          <SubtitleImport
+            videoId={video.id}
+            title={video.title}
+            onDone={() => closeAnd(true)}
+            onCancel={() => closeAnd(false)}
+          />
+        )}
       </div>
       <div className={subs.actions}>
         {r?.state === "failed" && (
@@ -631,6 +651,18 @@ function VideoRow({
           >
             <Icon name="globe" size={16} />
             Traduci
+          </button>
+        )}
+        {!listening && open !== "import" && (
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.small}`}
+            disabled={busy}
+            aria-label={`Importa sottotitoli per ${video.title}`}
+            onClick={() => setOpen("import")}
+          >
+            <Icon name="upload" size={16} />
+            Importa sottotitoli
           </button>
         )}
       </div>

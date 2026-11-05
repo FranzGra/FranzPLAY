@@ -1,0 +1,195 @@
+/* The rules, one card each, numbered in the order they run. */
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: rgb(0 0 0 / 0.18);
+}
+
+.number {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: 24px;
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  min-width: 0;
+}
+
+/* The two fields side by side start at the same height. */
+.fields > label:nth-child(2) {
+  margin-top: 0;
+}
+
+/* What is looked for and its replacement, letter by letter: a monospaced font. */
+.code {
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Consolas, monospace);
+  font-size: 14px;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.fields > .options {
+  grid-column: 1 / -1;
+}
+
+/* A rule turned off stays in its place, dimmed. */
+.rule[data-off] .fields {
+  opacity: 0.55;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: var(--color-text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 20px;
+}
+
+.up {
+  display: flex;
+  rotate: 180deg;
+}
+
+.add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------- The preview ---------- */
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 14px 0 0;
+}
+
+.result b {
+  font-size: 18px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.exampleList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.exampleList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.exampleList b {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.file {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Consolas, monospace);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.arrow {
+  color: var(--color-text-muted);
+}
+
+/* On a phone the fields and the buttons of a rule stack up. */
+@media (max-width: 599px) {
+  .rule {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .number {
+    margin-top: 0;
+  }
+
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tools {
+    flex-direction: row;
+    margin-top: 0;
+  }
+
+  .exampleList li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .arrow {
+    display: none;
+  }
+}

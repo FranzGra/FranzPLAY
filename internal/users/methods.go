@@ -238,17 +238,23 @@ func decoyMethod(secret []byte, name string, server Methods) Method {
 // decoy for names that do not exist.
 func (s *Service) methodOf(ctx context.Context, name string) (Method, error) {
 	name = strings.TrimSpace(name)
-	var stored string
-	err := s.store.db.QueryRowContext(ctx, `SELECT login_method FROM users WHERE name = ?`, name).Scan(&stored)
-	if err == nil {
-		m, ok := parseMethod(stored)
-		if !ok {
-			return "", fmt.Errorf("user %q has unknown login method %q", name, stored)
-		}
-		return m, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	user, found, err := sameName(ctx, s.store.db, name, 0)
+	if err != nil {
 		return "", fmt.Errorf("read login method: %w", err)
+	}
+	if found {
+		var stored string
+		err := s.store.db.QueryRowContext(ctx, `SELECT login_method FROM users WHERE name = ?`, user).Scan(&stored)
+		if err == nil {
+			m, ok := parseMethod(stored)
+			if !ok {
+				return "", fmt.Errorf("user %q has unknown login method %q", user, stored)
+			}
+			return m, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) { // gone meanwhile: a name like any other
+			return "", fmt.Errorf("read login method: %w", err)
+		}
 	}
 	server, err := s.serverMethodsCached(ctx)
 	if err != nil {

@@ -467,3 +467,76 @@ func TestOwnClipWithRealFFmpeg(t *testing.T) {
 		t.Errorf("clip lasts %v (%v), want about 15 seconds", length, err)
 	}
 }
+
+func TestClipFromTheChosenMoment(t *testing.T) {
+	fx := newClipFixture(t, "/videos", "a.mp4", 600)
+	ctx := context.Background()
+	run := func() [][]string {
+		t.Helper()
+		var calls [][]string
+		fx.c.run = func(ctx context.Context, program string, args ...string) ([]byte, error) {
+			calls = append(calls, args)
+			return fakeClipFFmpeg("clip", nil)(ctx, program, args...)
+		}
+		if err := fx.c.Handle(ctx, fx.id); err != nil {
+			t.Fatal(err)
+		}
+		return calls
+	}
+	// seekOf is where a piece starts and how long it is: -ss and -t.
+	seekOf := func(args []string) string {
+		i := slices.Index(args, "-ss")
+		if i < 0 || i+3 >= len(args) {
+			return ""
+		}
+		return args[i+1] + "+" + args[i+3]
+	}
+
+	// The site's choice: one piece from a tenth of the video.
+	if err := SaveClipSettings(ctx, fx.db, ClipSettings{StartPercent: 10, Seconds: 8}); err != nil {
+		t.Fatal(err)
+	}
+	calls := run()
+	if len(calls) != 2 || seekOf(calls[0]) != "60+8" {
+		t.Fatalf("site's choice: ffmpeg ran %q", calls)
+	}
+	if v := content.Version(fx.saved(t).String); v != "p10-8" {
+		t.Errorf("version = %q, want p10-8", v)
+	}
+
+	// The video's own choice wins.
+	if _, err := fx.db.Exec(`UPDATE videos SET clip_second = 42, clip_seconds = 5 WHERE id = ?`, fx.id); err != nil {
+		t.Fatal(err)
+	}
+	calls = run()
+	if len(calls) != 2 || seekOf(calls[0]) != "42+5" {
+		t.Fatalf("video's choice: ffmpeg ran %q", calls)
+	}
+	if v := content.Version(fx.saved(t).String); v != "s42-5" {
+		t.Errorf("version = %q, want s42-5", v)
+	}
+	// Only the last clip stays.
+	if files := fx.files(t); len(files) != 1 {
+		t.Errorf("clips = %q, want one", files)
+	}
+}
+
+func TestClipSettingsSaved(t *testing.T) {
+	fx := newClipFixture(t, "/videos", "a.mp4", 600)
+	ctx := context.Background()
+	got, err := ReadClipSettings(ctx, fx.db)
+	if err != nil || got != (ClipSettings{0, 6}) {
+		t.Fatalf("new site: %+v, %v", got, err)
+	}
+	for _, bad := range []ClipSettings{{-1, 6}, {96, 6}, {0, 1}, {0, 31}} {
+		if err := SaveClipSettings(ctx, fx.db, bad); !errors.Is(err, ErrBadClipSettings) {
+			t.Errorf("saving %+v: %v", bad, err)
+		}
+	}
+	if err := SaveClipSettings(ctx, fx.db, ClipSettings{30, 12}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = ReadClipSettings(ctx, fx.db); err != nil || got != (ClipSettings{30, 12}) {
+		t.Errorf("read back %+v, %v", got, err)
+	}
+}

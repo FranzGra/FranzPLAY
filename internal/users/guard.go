@@ -24,6 +24,7 @@ var publicAPI = map[string]bool{
 	"/api/register":     true, // refused by itself unless the administrator allows it
 	"/api/site":         true, // name and color, for the login page; changing them checks the role itself
 	"/api/me":           true, // answers 401 itself, so the interface knows to show the login
+	"/api/logout":       true, // clears the cookie even when its session is over
 }
 
 // isPublicLink reports whether a request reads the video of a public

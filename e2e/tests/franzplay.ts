@@ -50,3 +50,16 @@ export async function videos(page: Page): Promise<Video[]> {
   expect(res.ok()).toBe(true);
   return ((await res.json()) as { videos: Video[] }).videos;
 }
+
+// settled waits until every animation that ends (a page sliding in, a panel
+// growing out of its button or rising from the bottom) has ended. Endless
+// ones, like a spinner, are left out: they never end.
+export async function settled(page: Page) {
+  await page.waitForFunction(() =>
+    document.getAnimations().every((animation) => {
+      if (animation.playState !== "running") return true;
+      const end = Number(animation.effect?.getComputedTiming().endTime ?? 0);
+      return !Number.isFinite(end);
+    }),
+  );
+}
