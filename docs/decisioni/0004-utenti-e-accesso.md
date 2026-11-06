@@ -48,8 +48,9 @@ sito su internet prima di crearlo accende il codice con `FRANZPLAY_SETUP_CODE=tr
 Una volta entrati, il browser riceve un **cookie** (un piccolo biglietto che rimanda a ogni
 richiesta) con un codice casuale. Nel database si salva solo l'impronta del codice.
 
-- Dura **30 giorni dall'ultimo uso**: chi usa FranzPLAY almeno una volta al mese non deve mai
-  rientrare.
+- Dura **90 giorni dall'ultimo uso**: chi usa FranzPLAY almeno una volta ogni tre mesi non deve
+  mai rientrare. Al massimo una volta l'ora, quando la sessione si allunga, anche il cookie del
+  browser riceve di nuovo 90 giorni.
 - Il cookie non è leggibile dagli script della pagina e non viene mandato da altri siti.
 - Se si cambia la password, tutti gli altri browser vengono fatti uscire.
 - Se l'amministratore cancella un utente, anche le sue sessioni spariscono.

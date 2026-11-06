@@ -23,14 +23,14 @@ func sessionExpiry(t *testing.T, s *site) time.Time {
 	return time.Unix(at, 0)
 }
 
-func TestSessionEndsExactlyThirtyDaysAfterItsLastUse(t *testing.T) {
+func TestSessionEndsExactlyNinetyDaysAfterItsLastUse(t *testing.T) {
 	s := newSite(t)
 	b := s.setUp()
 	start := s.now
 	if got := sessionExpiry(t, s); !got.Equal(start.Add(sessionLife)) {
 		t.Fatalf("a new session ends at %v, want %v", got, start.Add(sessionLife))
 	}
-	// Unused, the last second still works: that use starts thirty days again.
+	// Unused, the last second still works: that use starts ninety days again.
 	s.now = start.Add(sessionLife - time.Second)
 	expect(t, b.do("GET", "/api/me", nil), http.StatusOK)
 	used := s.now
@@ -58,6 +58,80 @@ func TestSessionIsWrittenDownAtMostOnceAnHour(t *testing.T) {
 	if got := sessionExpiry(t, s); !got.Equal(s.now.Add(sessionLife)) {
 		t.Fatalf("used after an hour: ends %v, want %v", got, s.now.Add(sessionLife))
 	}
+}
+
+// sessionCookies checks the status of an answer and returns the session
+// cookies it sets.
+func sessionCookies(t *testing.T, rec *httptest.ResponseRecorder, status int) []*http.Cookie {
+	t.Helper()
+	expect(t, rec, status)
+	var found []*http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == cookieName {
+			found = append(found, c)
+		}
+	}
+	return found
+}
+
+// When the session gets a new expiry, so does the browser's cookie: else
+// the cookie would end sessionLife after the login, even for someone using
+// FranzPLAY every day.
+func TestCookieIsRenewedWithTheSession(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		header []string
+		secure bool
+	}{
+		{"plain http", nil, false},
+		{"https proxy", []string{"X-Forwarded-Proto", "https"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSite(t)
+			b := s.setUp()
+			token := b.cookie
+			start := s.now
+			for _, after := range []time.Duration{time.Minute, touchEvery - time.Second} {
+				s.now = start.Add(after)
+				if got := sessionCookies(t, b.do("GET", "/api/me", nil, tc.header...), http.StatusOK); len(got) != 0 {
+					t.Fatalf("used after %v, before the touch: cookie %+v, want none", after, got[0])
+				}
+			}
+			s.now = start.Add(touchEvery)
+			got := sessionCookies(t, b.do("GET", "/api/secret", nil, tc.header...), http.StatusOK)
+			if len(got) != 1 {
+				t.Fatalf("used after an hour: %d session cookies, want 1", len(got))
+			}
+			c := got[0]
+			if c.Value != token || c.MaxAge != 7776000 || c.MaxAge != int(sessionLife.Seconds()) ||
+				!c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Secure != tc.secure || c.Path != "/" {
+				t.Errorf("renewed cookie = %+v", c)
+			}
+			// Right after the touch, nothing again until the next hour.
+			s.now = s.now.Add(time.Minute)
+			if got := sessionCookies(t, b.do("GET", "/api/me", nil, tc.header...), http.StatusOK); len(got) != 0 {
+				t.Errorf("a minute after the touch: cookie %+v, want none", got[0])
+			}
+		})
+	}
+}
+
+// A logout or a login that comes when the session is due for a touch
+// answers with one session cookie only: the handler's, not the renewal.
+func TestHandlerCookieReplacesTheRenewal(t *testing.T) {
+	s := newSite(t)
+	b := s.setUp()
+	s.now = s.now.Add(touchEvery)
+	login := b.do("POST", "/api/login", map[string]string{"name": "Admin", "password": "admin-password"})
+	if got := sessionCookies(t, login, http.StatusOK); len(got) != 1 || got[0].MaxAge != int(sessionLife.Seconds()) {
+		t.Fatalf("login over an old session: cookies %+v, want the new one only", got)
+	}
+	s.now = s.now.Add(touchEvery)
+	logout := b.do("POST", "/api/logout", nil)
+	if got := sessionCookies(t, logout, http.StatusNoContent); len(got) != 1 || got[0].MaxAge >= 0 || got[0].Value != "" {
+		t.Fatalf("logout when due for a touch: cookies %+v, want it cleared only", got)
+	}
+	expect(t, b.do("GET", "/api/me", nil), http.StatusUnauthorized)
 }
 
 // The cleaning done at every start (NewService) removes the sessions that

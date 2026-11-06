@@ -348,7 +348,7 @@ func TestSessionExpiresWhenUnused(t *testing.T) {
 		s.now = s.now.Add(20 * 24 * time.Hour)
 		expect(t, b.do("GET", "/api/secret", nil), http.StatusOK)
 	}
-	// Unused for more than 30 days: login again.
+	// Unused for more than 90 days: login again.
 	s.now = s.now.Add(sessionLife + time.Second)
 	expect(t, b.do("GET", "/api/secret", nil), http.StatusUnauthorized)
 }

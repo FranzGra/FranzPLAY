@@ -63,7 +63,16 @@ func (s *Service) Protect(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		a, token, err := s.account(r)
+		a, token, renewed, err := s.account(r)
+		if err == nil && renewed {
+			// The session just got a new expiry: the cookie gets it too, or
+			// the browser would drop it sessionLife after the login even
+			// for someone using FranzPLAY every day. Set before the handler
+			// runs, so it goes out with the headers of every answer, a
+			// video or the event stream too. A handler that sets or clears
+			// the cookie itself replaces this one (see dropSessionCookie).
+			setCookie(w, r, token)
+		}
 		switch {
 		case err == nil && a.MustChooseMethod && !whileChoosing[r.URL.Path]:
 			respond.Error(w, r, s.logger, http.StatusForbidden, errMustChoose.Error())
@@ -95,18 +104,19 @@ var whileChoosing = map[string]bool{
 
 type tokenKey struct{}
 
-// account finds the user of the request's session cookie.
-func (s *Service) account(r *http.Request) (Account, string, error) {
+// account finds the user of the request's session cookie. renewed tells
+// that the session got a new expiry with this request.
+func (s *Service) account(r *http.Request) (a Account, token string, renewed bool, err error) {
 	c, err := r.Cookie(cookieName)
 	if err != nil || c.Value == "" || len(c.Value) > 100 {
-		return Account{}, "", errNoSession
+		return Account{}, "", false, errNoSession
 	}
-	stored, err := s.store.sessionAccount(r.Context(), hashToken(c.Value), s.now())
+	stored, renewed, err := s.store.sessionAccount(r.Context(), hashToken(c.Value), s.now())
 	if err != nil {
-		return Account{}, "", err
+		return Account{}, "", false, err
 	}
-	a, err := s.withMethods(r.Context(), stored.Account, stored.method, stored.own)
-	return a, c.Value, err
+	a, err = s.withMethods(r.Context(), stored.Account, stored.method, stored.own)
+	return a, c.Value, renewed, err
 }
 
 // sameOrigin reports whether a request that changes something comes from
@@ -161,6 +171,7 @@ func forwardedHost(r *http.Request) string {
 //   - SameSite=Lax: other sites cannot send it with their requests.
 //   - Secure: only over HTTPS, when FranzPLAY is reached through HTTPS.
 func setCookie(w http.ResponseWriter, r *http.Request, token string) {
+	dropSessionCookie(w)
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    token,
@@ -173,10 +184,28 @@ func setCookie(w http.ResponseWriter, r *http.Request, token string) {
 }
 
 func clearCookie(w http.ResponseWriter, r *http.Request) {
+	dropSessionCookie(w)
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: "", Path: "/", MaxAge: -1,
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isHTTPS(r),
 	})
+}
+
+// dropSessionCookie removes a session cookie already set on this answer,
+// like the renewal Protect sets before a login or a logout: an answer
+// carries one session cookie only, the last word. Other cookies stay.
+func dropSessionCookie(w http.ResponseWriter) {
+	h := w.Header()
+	var kept []string
+	for _, v := range h.Values("Set-Cookie") {
+		if !strings.HasPrefix(v, cookieName+"=") {
+			kept = append(kept, v)
+		}
+	}
+	h.Del("Set-Cookie")
+	for _, v := range kept {
+		h.Add("Set-Cookie", v)
+	}
 }
 
 // isHTTPS reports whether the browser reached FranzPLAY through HTTPS,
