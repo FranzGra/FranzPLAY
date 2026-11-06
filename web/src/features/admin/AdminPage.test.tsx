@@ -43,15 +43,32 @@ describe("administration console", () => {
       "page",
     );
     expect(await screen.findByRole("heading", { level: 1, name: "Sito" })).toBeInTheDocument();
-    // The path on top says where the page is, and the app is one click away.
+    // The path on top says where the page is.
     const crumb = screen.getByRole("list", { name: "Sei qui" });
     expect(crumb).toHaveTextContent("Sistema");
     expect(within(crumb).getByText("Sito")).toHaveAttribute("aria-current", "page");
-    const rail = screen.getByRole("navigation", { name: "Menu dell'app" });
-    expect(within(rail).getAllByRole("link", { name: "Home" }).length).toBeGreaterThan(0);
     // What is at work is always in sight, in the bar and under the menu.
     expect(screen.getAllByRole("link", { name: /Tutto fermo/ }).length).toBeGreaterThan(0);
     expect(screen.getByRole("region", { name: "Tutto fermo" })).toBeInTheDocument();
+  });
+
+  it("has no menu of the site, only its own with Torna al sito", async () => {
+    const { user } = renderApp("/admin/riepilogo", signedIn());
+    const own = await screen.findByRole("complementary", { name: "Amministrazione" });
+    expect(screen.queryByRole("navigation", { name: "Menu principale" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Menu del telefono" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Menu dell'app" })).toBeNull();
+    // On top of the menu: the logo, then Torna al sito, then Vai a…
+    const logo = within(own).getByRole("link", { name: /Console di amministrazione/ });
+    expect(logo).toHaveAttribute("href", "/");
+    const back = within(own).getByRole("link", { name: "Torna al sito" });
+    expect(back).toHaveAttribute("href", "/");
+    const goto = within(own).getByRole("button", { name: /Vai a…/ });
+    expect(logo.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(back.compareDocumentPosition(goto) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(back);
+    expect(await screen.findByRole("navigation", { name: "Menu principale" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Amministrazione" })).toBeNull();
   });
 
   it("shows how far the work is in the menu and on top", async () => {
@@ -144,6 +161,9 @@ describe("administration console", () => {
       groups.flatMap((g) => g.sections).length,
     );
     expect(screen.queryByRole("button", { name: /Vai a…/ })).not.toBeInTheDocument();
+    // No bar of the site at the bottom; Torna al sito leads home instead.
+    expect(screen.queryByRole("navigation", { name: "Menu del telefono" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Torna al sito" })).toHaveAttribute("href", "/");
     await user.click(within(menu).getByRole("link", { name: "Sito" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Sito" })).toBeInTheDocument();
     expect(within(menu).getByRole("link", { name: "Sito" })).toHaveAttribute(

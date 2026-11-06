@@ -304,6 +304,9 @@ test("the administration menu: beside the page on the computer, chips over the p
     await page.getByRole("button", { name: "Salva le regole" }).waitFor({ state: "attached" });
     const first = menu.getByRole("link", { name: "Riepilogo" });
     const before = await first.boundingBox();
+    // The wheel over the page, not over the menu: the menu against the left
+    // edge scrolls on its own and keeps the wheel for itself.
+    await page.mouse.move(900, 450);
     await page.mouse.wheel(0, 1500);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
     // Half a pixel of give: the top bar is not a whole number of pixels tall.

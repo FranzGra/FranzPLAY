@@ -11,11 +11,9 @@ import {
   useState,
 } from "react";
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { avatarUrl } from "../../api/auth";
 import type { Overview } from "../../api/overview";
 import { useAccount } from "../../app/auth";
 import { PageLoading } from "../../app/PageLoading";
-import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon, type IconName } from "../../components/Icon";
 import { usePageTitle } from "../../components/PageTitle";
@@ -161,10 +159,11 @@ export function useCrumb(name: string) {
 }
 
 // AdminPage is the frame of the administration, a console: only the
-// administrator sees it. On a computer: the app's icons in a narrow bar,
-// the administration's own menu with what is at work at its foot, and the
-// open page at full width under a bar with the path and the work going
-// on. On a phone: the sections as chips over the page.
+// administrator sees it. On a computer: the administration's own menu
+// against the left edge, with the logo and "Torna al sito" on top and what
+// is at work at its foot, and the open page at full width under a bar
+// with the path and the work going on. On a phone: "Torna al sito" and
+// the sections as chips over the page.
 export function AdminPage() {
   usePageTitle("Amministrazione");
   const account = useAccount();
@@ -237,6 +236,9 @@ function Console() {
     return (
       <div className={`${styles.console} ${ui.ui}`}>
         <div className={styles.phoneBar}>
+          <div className={styles.phoneBack}>
+            <BackToSite />
+          </div>
           <nav aria-label="Sezioni dell'amministrazione">
             <ChipsMenu />
           </nav>
@@ -258,14 +260,19 @@ function Console() {
 
   return (
     <div className={`${styles.console} ${ui.ui}`}>
-      <AppRail />
       <aside className={styles.nav} aria-label="Amministrazione">
-        <div className={styles.navSite}>
-          <span className={styles.navSiteName}>
-            <SiteName accentClass={styles.navSiteAccent} />
+        <Link to="/" className={styles.navSite}>
+          <span className={styles.navLogo}>
+            <Icon name="play" size={14} />
           </span>
-          <span className={styles.navSiteSub}>Console di amministrazione</span>
-        </div>
+          <span className={styles.navSiteText}>
+            <span className={styles.navSiteName}>
+              <SiteName accentClass={styles.navSiteAccent} />
+            </span>
+            <span className={styles.navSiteSub}>Console di amministrazione</span>
+          </span>
+        </Link>
+        <BackToSite />
         <button type="button" className={styles.goto} onClick={() => setGoing(true)}>
           <Icon name="search" size={16} />
           Vai a…
@@ -311,45 +318,16 @@ function Console() {
   );
 }
 
-// AppRail is the app's own menu, folded to its icons, so the whole site is
-// one click away from the console.
-function AppRail() {
-  const account = useAccount();
-  const links: { to: string; label: string; icon: IconName }[] = [
-    { to: "/", label: "Home", icon: "home" },
-    { to: "/categorie", label: "Categorie", icon: "categories" },
-    { to: "/playlist", label: "Playlist", icon: "playlist" },
-    { to: "/cronologia", label: "Cronologia", icon: "history" },
-    { to: `/canale/${account.id}`, label: "Il mio canale", icon: "channel" },
-  ];
+// BackToSite leaves the administration for the Home of the site; the logo
+// on top leads there too.
+function BackToSite() {
   return (
-    <nav className={styles.rail} aria-label="Menu dell'app">
-      <Link to="/" className={styles.railLogo} aria-label="Home">
-        <Icon name="play" size={15} />
-      </Link>
-      {links.map((l) => (
-        <Link key={l.to} to={l.to} className={styles.railLink} aria-label={l.label}>
-          <Icon name={l.icon} size={20} />
-          <span className={styles.railTip} aria-hidden="true">
-            {l.label}
-          </span>
-        </Link>
-      ))}
-      <span className={`${styles.railLink}`} data-here aria-label="Amministrazione" role="img">
-        <Icon name="shield" size={20} />
+    <Link to="/" className={styles.back}>
+      <span className={styles.backArrow}>
+        <Icon name="chevronLeft" size={18} />
       </span>
-      <span className={styles.railSpacer} />
-      <Link
-        to="/profilo"
-        className={`${styles.railLink} ${styles.railAvatar}`}
-        aria-label="Il tuo profilo"
-      >
-        <Avatar name={account.name} size={36} photo={avatarUrl(account.id, account.avatar)} />
-        <span className={styles.railTip} aria-hidden="true">
-          Il tuo profilo
-        </span>
-      </Link>
-    </nav>
+      Torna al sito
+    </Link>
   );
 }
 
