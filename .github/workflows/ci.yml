@@ -9,10 +9,18 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request stops the older run of that pull request: only
+# the newest code counts. Runs on main are never stopped (each has its own
+# group, the run's id), so every commit of main is checked.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -25,6 +33,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -33,7 +42,8 @@ jobs:
       - name: Check go.mod is tidy
         run: go mod tidy -diff
       - name: Install ffmpeg (some tests run the real ffprobe and ffmpeg)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+        timeout-minutes: 10
+        run: sh .github/scripts/install-ffmpeg.sh
       - name: Run tests
         run: go test -race ./...
       # The benchmarks measure what must stay fast on a Raspberry Pi (the
@@ -45,6 +55,7 @@ jobs:
   web:
     name: Web interface
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: web
@@ -64,6 +75,7 @@ jobs:
   e2e:
     name: Browser
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -77,7 +89,8 @@ jobs:
             web/package-lock.json
             e2e/package-lock.json
       - name: Install ffmpeg (FranzPLAY makes covers; the test makes its videos)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+        timeout-minutes: 10
+        run: sh .github/scripts/install-ffmpeg.sh
       - name: Build FranzPLAY, interface included
         run: make build
       - name: Install the browser checks
@@ -102,6 +115,7 @@ jobs:
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         include:
