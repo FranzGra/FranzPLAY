@@ -253,6 +253,8 @@ func (w *Worker) watchForOthers(ctx context.Context, j job, stop context.CancelC
 // waiting for the running job itself. A job trying again after a failure
 // waits for the end of the long one: offline, the internet lookups fail and
 // come back every few minutes, and each would throw away hours of conversion.
+// So does a failed job the administrator tried again by hand (retried): it
+// starts from zero attempts, but it is not new work.
 func (w *Worker) othersWaiting(ctx context.Context, j job) (bool, error) {
 	args := []any{w.now().Unix()}
 	placeholders := ""
@@ -275,7 +277,7 @@ func (w *Worker) othersWaiting(ctx context.Context, j job) (bool, error) {
 	var waiting bool
 	err := w.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
 		WHERE state = 'pending' AND run_after <= ?
-		AND ((attempts = 0 AND kind IN (`+placeholders+`)) OR (urgent AND kind IN (`+urgent+`))))
+		AND ((attempts = 0 AND NOT retried AND kind IN (`+placeholders+`)) OR (urgent AND kind IN (`+urgent+`))))
 		AND NOT EXISTS (SELECT 1 FROM jobs WHERE id = ? AND urgent)`, args...).Scan(&waiting)
 	if err != nil {
 		return false, fmt.Errorf("look for waiting jobs: %w", err)
@@ -366,7 +368,11 @@ func (w *Worker) claim(ctx context.Context) (job, bool, error) {
 	return j, true, nil
 }
 
-// finish saves how a job ended. If the job was asked for again while it
+// finish saves how a job ended. A job that did not succeed (failed, or
+// trying again later) is no longer one someone waits for: it becomes
+// ordinary, so trying it again later, by itself or by hand, does not stop a
+// long job. Who waited for it sees it failed, or waiting, in its state, and
+// can hurry it again. If the job was asked for again while it
 // ran (the file changed meanwhile), it is no longer "running" and is left
 // pending, so it runs again on the new content.
 func (w *Worker) finish(ctx context.Context, j job, s state, runAfter time.Time, lastError string) error {
@@ -381,9 +387,11 @@ func (w *Worker) finish(ctx context.Context, j job, s state, runAfter time.Time,
 	}
 	_, err := w.db.ExecContext(ctx, `
 		UPDATE jobs SET state = ?, attempts = ?, last_error = ?, run_after = ?, updated_at = ?,
-			ended_ms = COALESCE(?, ended_ms)
+			ended_ms = COALESCE(?, ended_ms),
+			urgent = CASE WHEN ? THEN urgent ELSE 0 END,
+			urgent_at = CASE WHEN ? THEN urgent_at ELSE 0 END
 		WHERE id = ? AND state = 'running'`,
-		string(s), attempts, lastError, runAfter.Unix(), now.Unix(), ended, j.id)
+		string(s), attempts, lastError, runAfter.Unix(), now.Unix(), ended, s == done, s == done, j.id)
 	if err != nil {
 		return fmt.Errorf("save job %d: %w", j.id, err)
 	}
