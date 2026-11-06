@@ -271,13 +271,22 @@ test("the big play button grows in place under the mouse", async ({ page, isMobi
   expect(y1).toBeCloseTo(y0, 0);
 });
 
+// firstCard is the cover of the first card of the page, held by its video:
+// the page can still be drawn again after it shows (the rows of the home
+// page arrive one by one), and then "the first card" is another video.
+async function firstCard(page: Page) {
+  const first = page.locator("main [data-card-video]").first();
+  await expect(first).toBeVisible();
+  const id = await first.getAttribute("data-card-video");
+  expect(id, "the card says which video it opens").toBeTruthy();
+  return { id, cover: page.locator(`main [data-card-video="${id}"]`).first() };
+}
+
 test("a card's cover grows into the player, and back into its card", async ({ page }) => {
   const errors = watchErrors(page);
   await logIn(page, PEOPLE[0]);
   await page.goto("/");
-  const cover = page.locator("main [data-card-video]").first();
-  await expect(cover).toBeVisible();
-  const id = await cover.getAttribute("data-card-video");
+  const { id, cover } = await firstCard(page);
   // Notes, from inside the page, whether the browser really ran a view
   // transition (the ::view-transition pseudo-element tree exists while it
   // runs) and which elements carried the shared name.
@@ -341,8 +350,7 @@ test("without view transitions, or with less motion, a card is a plain link", as
     const errors = watchErrors(page);
     await logIn(page, PEOPLE[0]);
     await page.goto("/");
-    const cover = page.locator("main [data-card-video]").first();
-    const id = await cover.getAttribute("data-card-video");
+    const { id, cover } = await firstCard(page);
     await cover.click();
     await expect(page).toHaveURL(`/video/${id}`);
     await expect(page.locator("video")).toHaveCount(1);
@@ -488,7 +496,7 @@ test("the cover moves as long from the home page as from the videos beside the p
   const errors = watchErrors(page);
   await logIn(page, PEOPLE[0]);
   await page.goto("/");
-  const card = page.locator("main [data-card-video]").first();
+  const { cover: card } = await firstCard(page);
   await card.hover();
   await page.waitForTimeout(500);
   await watchMorph(page);
@@ -523,10 +531,8 @@ test("on the first click, before the player's code arrived, the page opens plain
     await route.continue();
   });
   await page.goto("/");
-  const card = page.locator("main [data-card-video]").first();
-  await expect(card).toBeVisible();
+  const { id, cover: card } = await firstCard(page);
   await watchMorph(page);
-  const id = await card.getAttribute("data-card-video");
   await card.click();
   await expect(page).toHaveURL(`/video/${id}`);
   await expect(page.locator(`[data-video-frame="${id}"]`)).toBeVisible();
