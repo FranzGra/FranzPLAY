@@ -2,7 +2,9 @@ package jobs
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -20,12 +22,13 @@ import (
 // worker's wake and the pages' notice.
 type adminSite struct {
 	mux            *http.ServeMux
+	db             *sql.DB
 	who            users.Account
 	woken, changed int
 }
 
 func newAdminSite(fx *fixture) *adminSite {
-	s := &adminSite{mux: http.NewServeMux(), who: users.Account{ID: 1, Name: "Admin", Role: users.Admin}}
+	s := &adminSite{mux: http.NewServeMux(), db: fx.db, who: users.Account{ID: 1, Name: "Admin", Role: users.Admin}}
 	a := admin{
 		db: fx.db, available: map[Kind]bool{Probe: true, Cover: true},
 		wake: func() { s.woken++ }, changed: func() { s.changed++ },
@@ -115,8 +118,8 @@ func TestRetry(t *testing.T) {
 	for _, v := range fx.videos {
 		fx.enqueue(t, v, Cover)
 	}
-	mustExec(t, fx.db, `UPDATE jobs SET state = 'failed', attempts = 3, last_error = 'x', run_after = 99
-		WHERE video_id IN (?, ?)`, fx.videos[0], fx.videos[1])
+	mustExec(t, fx.db, `UPDATE jobs SET state = 'failed', attempts = 3, last_error = 'x', run_after = 99,
+		urgent = 1, urgent_at = 5 WHERE video_id IN (?, ?)`, fx.videos[0], fx.videos[1])
 	s := newAdminSite(fx)
 
 	var ids []int64
@@ -134,6 +137,10 @@ func TestRetry(t *testing.T) {
 	if j := fx.job(t, retried, Cover); j.state != pending || j.attempts != 0 || j.lastError != "" {
 		t.Errorf("retried job = %+v", j)
 	}
+	// Tried again by hand, it is ordinary work: no longer put first, and not new.
+	if u, at, r := urgency(t, fx, ids[0]); u || at != 0 || !r {
+		t.Errorf("retried job: urgent %v, urgent_at %d, retried %v; want false, 0, true", u, at, r)
+	}
 	s.do(t, "POST", "/api/jobs/"+itoa(ids[0])+"/retry", http.StatusConflict) // no longer failed
 	s.do(t, "POST", "/api/jobs/999/retry", http.StatusNotFound)
 	s.do(t, "POST", "/api/jobs/abc/retry", http.StatusNotFound)
@@ -147,6 +154,9 @@ func TestRetry(t *testing.T) {
 	}
 	if o := s.overview(t); o.FailedTotal != 0 || o.Waiting != 3 {
 		t.Errorf("after retrying all: %+v", o)
+	}
+	if u, at, r := urgency(t, fx, ids[1]); u || at != 0 || !r {
+		t.Errorf("job retried with all: urgent %v, urgent_at %d, retried %v; want false, 0, true", u, at, r)
 	}
 	// Nothing left to retry: the worker is not disturbed.
 	before := s.woken
@@ -289,3 +299,139 @@ func TestWorkerTellsWhenJobsStartAndEnd(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// failedJob makes the cover of a video a job that failed, put first before it
+// failed if urgent, and returns its id.
+func failedJob(t *testing.T, fx *fixture, videoID int64, urgent bool) int64 {
+	t.Helper()
+	fx.enqueue(t, videoID, Cover)
+	mustExec(t, fx.db, `UPDATE jobs SET state = 'failed', attempts = 3, last_error = 'x', urgent = ?, urgent_at = ?
+		WHERE video_id = ? AND kind = 'cover'`, urgent, fx.clock.UnixMilli(), videoID)
+	var id int64
+	if err := fx.db.QueryRow(`SELECT id FROM jobs WHERE video_id = ? AND kind = 'cover'`, videoID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// longJobWithARetry runs a long job of this kind; while it runs, the
+// administrator tries again a failed cover with ask, and the worker is woken.
+// It returns how the long job ended and whether it stopped.
+func longJobWithARetry(t *testing.T, kind Kind, urgent bool, ask func(s *adminSite, id int64)) (jobRow, bool) {
+	t.Helper()
+	fx := newFixture(t, 2)
+	film, other := fx.videos[0], fx.videos[1]
+	failed := failedJob(t, fx, other, urgent)
+	fx.enqueue(t, film, kind)
+	s := newAdminSite(fx)
+	stopped := false
+	w := fx.worker(nil)
+	w.handlers = map[Kind]Handler{
+		kind: func(ctx context.Context, id int64) error {
+			if id != film {
+				return nil
+			}
+			ask(s, failed)
+			w.Wake()
+			select {
+			case <-ctx.Done():
+				stopped = true
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+				return nil
+			}
+		},
+		Cover: func(context.Context, int64) error { return nil },
+	}
+	runNext(t, w)
+	return fx.job(t, film, kind), stopped
+}
+
+func retryOne(t *testing.T) func(s *adminSite, id int64) {
+	return func(s *adminSite, id int64) {
+		s.do(t, "POST", "/api/jobs/"+itoa(id)+"/retry", http.StatusNoContent)
+	}
+}
+
+func retryAll(t *testing.T) func(s *adminSite, id int64) {
+	return func(s *adminSite, _ int64) {
+		s.do(t, "POST", "/api/jobs/retry", http.StatusOK)
+	}
+}
+
+// TestRetryDoesNotStopARunningTranscription: a job put first that failed, tried
+// again by hand, must not throw away hours of listening. On 06-11-2026 a
+// transcription stopped after 1h36m this way.
+func TestRetryDoesNotStopARunningTranscription(t *testing.T) {
+	for name, ask := range map[string]func(*testing.T) func(*adminSite, int64){"retry": retryOne, "retry all": retryAll} {
+		t.Run(name, func(t *testing.T) {
+			j, stopped := longJobWithARetry(t, Transcribe, true, ask(t))
+			if stopped || j.state != done || j.attempts != 0 {
+				t.Errorf("transcription = %+v, stopped %v; want done, never stopped", j, stopped)
+			}
+		})
+	}
+}
+
+// TestRetryDoesNotStopARunningConversionOrTranslation: a job tried again by
+// hand starts from zero attempts, but it is not new work: a conversion or a
+// translation goes on.
+func TestRetryDoesNotStopARunningConversionOrTranslation(t *testing.T) {
+	for _, kind := range []Kind{Convert, Translate} {
+		for name, ask := range map[string]func(*testing.T) func(*adminSite, int64){"retry": retryOne, "retry all": retryAll} {
+			for _, urgent := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/urgent=%v", kind, name, urgent), func(t *testing.T) {
+					j, stopped := longJobWithARetry(t, kind, urgent, ask(t))
+					if stopped || j.state != done || j.attempts != 0 {
+						t.Errorf("%s = %+v, stopped %v; want done, never stopped", kind, j, stopped)
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestPutFirstStillStopsALongJob: a job tried again by hand, then put first,
+// is one someone waits for: the long job gives way to it, as wanted.
+func TestPutFirstStillStopsALongJob(t *testing.T) {
+	for _, kind := range []Kind{Transcribe, Convert, Translate} {
+		t.Run(string(kind), func(t *testing.T) {
+			_, stopped := longJobWithARetry(t, kind, false, func(s *adminSite, id int64) {
+				s.do(t, "POST", "/api/jobs/"+itoa(id)+"/retry", http.StatusNoContent)
+				s.put(t, "/api/jobs/"+itoa(id)+"/priority", `{"priority":true}`, http.StatusNoContent)
+			})
+			if !stopped {
+				t.Errorf("%s did not give way to a job put first", kind)
+			}
+		})
+	}
+}
+
+// TestNewWorkStillStopsAConversion: a job asked for again (a scan, a folder)
+// is new work, even after a retry by hand: a conversion gives way to it.
+func TestNewWorkStillStopsAConversion(t *testing.T) {
+	_, stopped := longJobWithARetry(t, Convert, false, func(s *adminSite, id int64) {
+		s.do(t, "POST", "/api/jobs/"+itoa(id)+"/retry", http.StatusNoContent)
+		var video int64
+		if err := s.db.QueryRow(`SELECT video_id FROM jobs WHERE id = ?`, id).Scan(&video); err != nil {
+			t.Fatal(err)
+		}
+		if err := Enqueue(context.Background(), s.db, video, Cover, false, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !stopped {
+		t.Error("the conversion did not give way to new work")
+	}
+}
+
+// urgency reads whether a job is put first, since when, and whether it was
+// tried again by hand.
+func urgency(t *testing.T, fx *fixture, id int64) (urgent bool, urgentAt int64, retried bool) {
+	t.Helper()
+	if err := fx.db.QueryRow(`SELECT urgent, urgent_at, retried FROM jobs WHERE id = ?`, id).
+		Scan(&urgent, &urgentAt, &retried); err != nil {
+		t.Fatal(err)
+	}
+	return urgent, urgentAt, retried
+}

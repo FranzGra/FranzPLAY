@@ -560,10 +560,14 @@ func (a admin) listFrom(ctx context.Context, from, where string, args ...any) (_
 	return out, rows.Err()
 }
 
-// retry puts a failed job back in the queue, as if it were new.
+// retry puts a failed job back in the queue, with its attempts from zero. It
+// is not new work (retried): a long job running does not stop for it. Nor is
+// it a job someone waits for: it goes in the queue with its usual place, and
+// only "put first" or a person opening the video makes it urgent again.
 func (a admin) retry(ctx context.Context, id int64) error {
 	res, err := a.db.ExecContext(ctx, `
-		UPDATE jobs SET state = 'pending', attempts = 0, last_error = '', run_after = 0, updated_at = ?
+		UPDATE jobs SET state = 'pending', attempts = 0, last_error = '', run_after = 0, updated_at = ?,
+			urgent = 0, urgent_at = 0, retried = 1
 		WHERE id = ? AND state = 'failed'`, a.now().Unix(), id)
 	if err != nil {
 		return fmt.Errorf("retry job %d: %w", id, err)
@@ -583,10 +587,12 @@ func (a admin) retry(ctx context.Context, id int64) error {
 	return errNotFailed
 }
 
-// retryAll puts every failed job back in the queue and says how many.
+// retryAll puts every failed job back in the queue, as retry does, and says
+// how many.
 func (a admin) retryAll(ctx context.Context) (int, error) {
 	res, err := a.db.ExecContext(ctx, `
-		UPDATE jobs SET state = 'pending', attempts = 0, last_error = '', run_after = 0, updated_at = ?
+		UPDATE jobs SET state = 'pending', attempts = 0, last_error = '', run_after = 0, updated_at = ?,
+			urgent = 0, urgent_at = 0, retried = 1
 		WHERE state = 'failed'`, a.now().Unix())
 	if err != nil {
 		return 0, fmt.Errorf("retry failed jobs: %w", err)

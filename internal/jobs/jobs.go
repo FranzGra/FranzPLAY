@@ -125,7 +125,7 @@ func Enqueue(ctx context.Context, db execer, videoID int64, kind Kind, onlyIfNot
 		INSERT INTO jobs (video_id, kind, state, updated_at) VALUES (?, ?, 'pending', ?)
 		ON CONFLICT (video_id, kind) DO UPDATE
 		SET state = 'pending', attempts = 0, last_error = '', run_after = 0, urgent = 0, urgent_at = 0,
-		    updated_at = excluded.updated_at`
+		    retried = 0, updated_at = excluded.updated_at`
 	if onlyIfNotDone {
 		query += ` WHERE state != 'done'`
 	}

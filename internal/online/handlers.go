@@ -279,7 +279,7 @@ func (a api) change(ctx context.Context, askAll bool, save func(tx *sql.Tx) erro
 		INSERT INTO jobs (video_id, kind, state, updated_at)
 		SELECT id, ?, 'pending', ? FROM videos WHERE missing_since IS NULL
 		ON CONFLICT (video_id, kind) DO UPDATE
-		SET state = 'pending', attempts = 0, last_error = '', run_after = 0, updated_at = excluded.updated_at`,
+		SET state = 'pending', attempts = 0, last_error = '', run_after = 0, retried = 0, updated_at = excluded.updated_at`,
 		string(jobs.Online), a.now().Unix()); err != nil {
 		return fmt.Errorf("ask about every video: %w", err)
 	}
