@@ -828,3 +828,41 @@ func TestOnJobDoneIsCalledOnlyAfterASuccess(t *testing.T) {
 		t.Errorf("called for %v, want only video %d", got, fx.videos[0])
 	}
 }
+
+// TestFailedUrgentJobBecomesOrdinary: a job put first that fails, for good or
+// to try again later, is no longer one someone waits for; one that succeeds
+// keeps how it was asked for.
+func TestFailedUrgentJobBecomesOrdinary(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantState  state
+		wantUrgent bool
+	}{
+		{"failed for good", fmt.Errorf("not a video: %w", ErrPermanent), failed, false},
+		{"will try again", errors.New("disk busy"), pending, false},
+		{"done", nil, done, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fx := newFixture(t, 1)
+			fx.enqueue(t, fx.videos[0], Cover)
+			if _, err := Hurry(context.Background(), fx.db, fx.videos[0], Cover, fx.clock); err != nil {
+				t.Fatal(err)
+			}
+			w := fx.worker(map[Kind]Handler{Cover: func(context.Context, int64) error { return tt.err }})
+			runNext(t, w)
+			if j := fx.job(t, fx.videos[0], Cover); j.state != tt.wantState {
+				t.Fatalf("job = %+v, want %s", j, tt.wantState)
+			}
+			var urgent bool
+			var urgentAt int64
+			if err := fx.db.QueryRow(`SELECT urgent, urgent_at FROM jobs`).Scan(&urgent, &urgentAt); err != nil {
+				t.Fatal(err)
+			}
+			if urgent != tt.wantUrgent || (urgentAt != 0) != tt.wantUrgent {
+				t.Errorf("urgent %v, urgent_at %d; want urgent %v", urgent, urgentAt, tt.wantUrgent)
+			}
+		})
+	}
+}
