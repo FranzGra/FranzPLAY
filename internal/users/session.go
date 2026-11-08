@@ -12,8 +12,10 @@ import (
 )
 
 // A session lasts sessionLife after the last time it was used: someone who
-// watches FranzPLAY at least once a month never has to log in again.
-const sessionLife = 30 * 24 * time.Hour
+// watches FranzPLAY at least once every three months never has to log in
+// again. The browser's cookie gets the same new life at every touch (see
+// Protect), so it does not end before the session.
+const sessionLife = 90 * 24 * time.Hour
 
 // touchEvery limits how often a session's last use is written down, so
 // that watching a video does not write to the database at every request.
@@ -54,27 +56,29 @@ func (s store) createSession(ctx context.Context, userID int64, hash []byte, now
 }
 
 // sessionAccount returns the user of a valid session and keeps the session
-// alive.
-func (s store) sessionAccount(ctx context.Context, hash []byte, now time.Time) (storedAccount, error) {
+// alive. renewed is true when it got a new expiry now: the browser's cookie
+// should get it too.
+func (s store) sessionAccount(ctx context.Context, hash []byte, now time.Time) (a storedAccount, renewed bool, err error) {
 	var lastSeen int64
-	a, err := scanAccount(s.db.QueryRowContext(ctx, `
+	a, err = scanAccount(s.db.QueryRowContext(ctx, `
 		SELECT u.id, u.name, u.role, u.can_upload, u.can_share_public, u.upload_quota, coalesce(u.accent_color, ''), u.avatar, u.skip_seconds,
 			u.login_method, coalesce(u.allowed_methods, ''), s.last_seen
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ?`, hash, now.Unix()), &lastSeen)
 	if errors.Is(err, sql.ErrNoRows) {
-		return storedAccount{}, errNoSession
+		return storedAccount{}, false, errNoSession
 	}
 	if err != nil {
-		return storedAccount{}, fmt.Errorf("read session: %w", err)
+		return storedAccount{}, false, fmt.Errorf("read session: %w", err)
 	}
-	if needsTouch(time.Unix(lastSeen, 0), now) {
-		if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET last_seen = ?, expires_at = ? WHERE token_hash = ?`,
-			now.Unix(), now.Add(sessionLife).Unix(), hash); err != nil {
-			return storedAccount{}, fmt.Errorf("touch session: %w", err)
-		}
+	if !needsTouch(time.Unix(lastSeen, 0), now) {
+		return a, false, nil
 	}
-	return a, nil
+	if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET last_seen = ?, expires_at = ? WHERE token_hash = ?`,
+		now.Unix(), now.Add(sessionLife).Unix(), hash); err != nil {
+		return storedAccount{}, false, fmt.Errorf("touch session: %w", err)
+	}
+	return a, true, nil
 }
 
 func (s store) deleteSession(ctx context.Context, hash []byte) error {
