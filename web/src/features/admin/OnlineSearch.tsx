@@ -20,6 +20,9 @@ import { Chip, ui } from "./ui";
 
 const sourceNames: Record<KeySource, string> = { tmdb: "TMDB (film)", tpdb: "ThePornDB" };
 
+// sourcesTimeout is how long the sources are waited for, in milliseconds.
+const sourcesTimeout = 10_000;
+
 // readySources are the sources that can be searched: turned on, with a key.
 function readySources(status: OnlineStatus): KeySource[] {
   const ready: KeySource[] = [];
@@ -52,9 +55,20 @@ export function OnlineSearch({
   const [work, setWork] = useState<"search" | "pick" | null>(null);
   const [problem, setProblem] = useState("");
   const asking = useRef<AbortController | null>(null);
+  // attempt grows with every "Riprova": the sources are asked again.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    void attempt;
     const controller = new AbortController();
+    // The server answers in a moment. An answer that never comes is a
+    // browser out of connections or a network that dropped: say so, with a
+    // way to try again, instead of waiting forever.
+    let late = false;
+    const timer = setTimeout(() => {
+      late = true;
+      controller.abort();
+    }, sourcesTimeout);
     fetchSources(controller.signal)
       .then((status) => {
         const ready = readySources(status);
@@ -62,16 +76,28 @@ export function OnlineSearch({
         setSource(ready.length === 1 && ready[0] ? ready[0] : "all");
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted && !late) return;
         console.error(error);
         setSources([]);
-        setProblem("Non si riesce a sapere quali fonti sono accese. Riprova tra poco.");
-      });
+        setProblem(
+          late
+            ? "Il server non ha risposto in tempo. Se hai molte schede di FranzPLAY aperte, chiudine qualcuna e riprova."
+            : "Non si riesce a sapere quali fonti sono accese. Riprova tra poco.",
+        );
+      })
+      .finally(() => clearTimeout(timer));
     return () => {
+      clearTimeout(timer);
       controller.abort();
       asking.current?.abort();
     };
-  }, []);
+  }, [attempt]);
+
+  const retry = () => {
+    setSources(null);
+    setProblem("");
+    setAttempt((n) => n + 1);
+  };
 
   const search = (event: FormEvent) => {
     event.preventDefault();
@@ -111,7 +137,15 @@ export function OnlineSearch({
   }
   if (sources.length === 0) {
     return problem ? (
-      <p className={ui.cardText}>{problem}</p>
+      <div className={pages.noSources}>
+        <p role="alert" className={ui.cardText}>
+          {problem}
+        </p>
+        <button type="button" className={ui.btn} onClick={retry}>
+          <Icon name="refresh" size={16} />
+          Riprova
+        </button>
+      </div>
     ) : (
       <div className={pages.noSources}>
         <p className={ui.cardText}>

@@ -351,6 +351,40 @@ describe("choosing a cover", () => {
     expect(within(panel).queryByRole("button", { name: "Cerca" })).not.toBeInTheDocument();
   });
 
+  it("stops waiting for the sources after a while, and tries again", async () => {
+    // The first answer never comes, as when the browser has no connection
+    // left for it; the second comes at once.
+    let asked = 0;
+    const app = renderApp("/admin/video/7", {
+      ...signedIn(),
+      "GET /api/admin/videos/7": { body: adminVideo() },
+      "GET /api/online": (request) => {
+        asked++;
+        if (asked > 1) return Response.json(bothOn);
+        return new Promise<Response>((_, reject) => {
+          request.signal.addEventListener("abort", () => reject(request.signal.reason));
+        });
+      },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Mare 2024" });
+    const panel = screen.getByRole("region", { name: "Copertina di Mare 2024" });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      fireEvent.click(within(panel).getByRole("tab", { name: "Internet" }));
+      expect(within(panel).getByText("Un momento…")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await within(panel).findByRole("alert")).toHaveTextContent(/non ha risposto in tempo/);
+
+    await app.user.click(within(panel).getByRole("button", { name: "Riprova" }));
+    expect(await within(panel).findByRole("button", { name: "Cerca" })).toBeInTheDocument();
+    expect(asked).toBe(2);
+  });
+
   it("searches all the sources or only one", async () => {
     const { user, server, panel } = await openCover(
       {
