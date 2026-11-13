@@ -36,7 +36,8 @@ import (
 func Routes(db *sql.DB, root content.Root, newJobs func(), logger *slog.Logger) func(mux *http.ServeMux) {
 	client := &http.Client{Timeout: askTimeout}
 	a := api{db: db, root: root, newJobs: newJobs, logger: logger, now: time.Now, account: users.FromContext,
-		tmdb: newTMDB(client), tpdb: newTPDB(client)}
+		tmdb: newTMDB(client), tpdb: newTPDB(client),
+		pictures: newPictureCache(pictureCacheBytes, pictureCacheAge, time.Now)}
 	return a.routes
 }
 
@@ -63,6 +64,8 @@ type api struct {
 	account func(context.Context) (users.Account, bool)
 	tmdb    tmdb
 	tpdb    tpdb
+	// pictures keeps the pictures of the searches by hand: see picturecache.go.
+	pictures *pictureCache
 }
 
 // status is what the administrator sees of the settings.

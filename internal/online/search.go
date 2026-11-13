@@ -2,6 +2,7 @@ package online
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -243,6 +244,10 @@ func (a api) handlePicture(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusConflict, "turn this source on first")
 		return
 	}
+	if data, kind, ok := a.pictures.get(address); ok {
+		sendPicture(w, r, a.logger, data, kind)
+		return
+	}
 	data, status, err := get(r.Context(), client, address, nil, maxImage, "image/")
 	switch {
 	case err != nil:
@@ -261,11 +266,17 @@ func (a api) handlePicture(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, a.logger, http.StatusBadGateway, "the source did not send a picture")
 		return
 	}
+	a.pictures.put(address, data, kind)
+	sendPicture(w, r, a.logger, data, kind)
+}
+
+// sendPicture passes a picture of a search on to the browser.
+func sendPicture(w http.ResponseWriter, r *http.Request, logger *slog.Logger, data []byte, kind string) {
 	w.Header().Set("Content-Type", kind)
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if _, err := w.Write(data); err != nil {
-		a.logger.DebugContext(r.Context(), "picture not sent", "err", err)
+		logger.DebugContext(r.Context(), "picture not sent", "err", err)
 	}
 }
 

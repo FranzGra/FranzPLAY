@@ -20,6 +20,8 @@ type adminFixture struct {
 	who   users.Account
 	woken int
 	mux   *http.ServeMux
+	// pictures keeps the pictures of the searches by hand.
+	pictures *pictureCache
 }
 
 func newAdminFixture(t *testing.T) *adminFixture {
@@ -32,7 +34,9 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	a := api{db: fx.db, root: content.Root(fx.dataDir), newJobs: func() { fx.woken++ }, logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		now:     func() time.Time { return time.Unix(1000, 0) },
 		account: func(context.Context) (users.Account, bool) { return fx.who, true },
-		tmdb:    fx.f.tmdb, tpdb: fx.f.tpdb}
+		tmdb:    fx.f.tmdb, tpdb: fx.f.tpdb,
+		pictures: newPictureCache(pictureCacheBytes, pictureCacheAge, time.Now)}
+	fx.pictures = a.pictures
 	fx.mux = http.NewServeMux()
 	a.routes(fx.mux)
 	return fx
